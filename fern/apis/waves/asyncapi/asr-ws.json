@@ -76,24 +76,24 @@
                 "audioRequest": {
                         "action": "receive",
                         "channel": {
-                                "$ref": "#/channels/~1api~1v1~1asr"
+                                "$ref": "#/components/channels/asr"
                         },
                         "summary": "Send audio data for transcription",
                         "messages": [
                                 {
-                                        "$ref": "#/channels/~1api~1v1~1asr/messages/audioRequest.message"
+                                        "$ref": "#/components/messages/AudioRequest"
                                 }
                         ]
                 },
                 "transcriptionResponse": {
                         "action": "send",
                         "channel": {
-                                "$ref": "#/channels/~1api~1v1~1asr"
+                                "$ref": "#/components/channels/asr"
                         },
                         "summary": "Receive transcription results",
                         "messages": [
                                 {
-                                        "$ref": "#/channels/~1api~1v1~1asr/messages/transcriptionResponse.message"
+                                        "$ref": "#/components/messages/TranscriptionResponse"
                                 }
                         ]
                 }
@@ -141,6 +141,60 @@
                                                         }
                                                 }
                                         }
+                                }
+                        }
+                },
+                "channels": {
+                        "asr": {
+                                "address": "/api/v1/asr",
+                                "messages": {
+                                        "audioRequest": {
+                                                "$ref": "#/components/messages/AudioRequest"
+                                        },
+                                        "transcriptionResponse": {
+                                                "$ref": "#/components/messages/TranscriptionResponse"
+                                        }
+                                }
+                        }
+                },
+                "messages": {
+                        "AudioRequest": {
+                                "name": "AudioRequest",
+                                "contentType": "application/octet-stream",
+                                "payload": {
+                                        "type": "string",
+                                        "format": "binary",
+                                        "description": "Raw audio data in the specified encoding format",
+                                        "examples": [
+                                                "Binary audio data chunk"
+                                        ]
+                                }
+                        },
+                        "TranscriptionResponse": {
+                                "name": "TranscriptionResponse",
+                                "contentType": "application/json",
+                                "payload": {
+                                        "type": "object",
+                                        "properties": {
+                                                "text": {
+                                                        "type": "string",
+                                                        "description": "The transcribed text content"
+                                                },
+                                                "isEndOfTurn": {
+                                                        "type": "boolean",
+                                                        "description": "Indicates if this marks the end of a speech turn"
+                                                }
+                                        },
+                                        "examples": [
+                                                {
+                                                        "text": "Hello, how are you doing today?",
+                                                        "isEndOfTurn": false
+                                                },
+                                                {
+                                                        "text": "Thank you for using our service.",
+                                                        "isEndOfTurn": true
+                                                }
+                                        ]
                                 }
                         }
                 }
