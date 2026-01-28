@@ -1,0 +1,420 @@
+asyncapi: 3.0.0
+info:
+  title: Waves Lightning STT (Speech-to-Text) API
+  version: 1.0.0
+  description: WebSocket-based streaming automatic speech recognition API for real-time
+    speech transcription using the Lightning STT model
+  contact:
+    name: Waves API Support
+    url: https://waves-api.smallest.ai/support
+    email: support@smallest.ai
+  license:
+    name: Proprietary
+servers:
+  production:
+    host: waves-api.smallest.ai
+    pathname: /api/v1/lightning/get_text
+    protocol: wss
+    description: Production WebSocket Lightning STT endpoint
+    security:
+    - $ref: '#/components/securitySchemes/bearerAuth'
+    bindings:
+      ws:
+        query:
+          type: object
+          properties:
+            language:
+              type: string
+              enum:
+              - it
+              - es
+              - en
+              - pt
+              - hi
+              - de
+              - fr
+              - uk
+              - ru
+              - kn
+              - ml
+              - pl
+              - mr
+              - gu
+              - cs
+              - sk
+              - te
+              - or
+              - nl
+              - bn
+              - lv
+              - et
+              - ro
+              - pa
+              - fi
+              - sv
+              - bg
+              - ta
+              - hu
+              - da
+              - lt
+              - mt
+              - multi
+              default: en
+              description: Language code for transcription. Use 'multi' for automatic
+                language detection
+            encoding:
+              type: string
+              enum:
+              - linear16
+              - linear32
+              - alaw
+              - mulaw
+              - opus
+              - ogg_opus
+              default: linear16
+              description: Audio encoding format
+            sample_rate:
+              type: string
+              enum:
+              - '8000'
+              - '16000'
+              - '22050'
+              - '24000'
+              - '44100'
+              - '48000'
+              default: '16000'
+              description: Audio sample rate in Hz
+            word_timestamps:
+              type: string
+              enum:
+              - 'true'
+              - 'false'
+              default: 'true'
+              description: Include word-level timestamps in transcription
+            full_transcript:
+              type: string
+              enum:
+              - 'true'
+              - 'false'
+              default: 'false'
+              description: Include cumulative transcript received till now in responses
+                where is_final is true
+            sentence_timestamps:
+              type: string
+              enum:
+              - 'true'
+              - 'false'
+              default: 'false'
+              description: Include sentence-level timestamps (utterances) in transcription
+            redact_pii:
+              type: string
+              enum:
+              - 'true'
+              - 'false'
+              default: 'false'
+              description: Redact personally identifiable information (name, surname,
+                address, etc)
+            redact_pci:
+              type: string
+              enum:
+              - 'true'
+              - 'false'
+              default: 'false'
+              description: Redact payment card information (credit card, CVV, zip,
+                account number, etc)
+            keywords:
+              type: array
+              items:
+                type: string
+                pattern: ^[^:]+:[0-9]+(\.[0-9]+)?$
+              description: List of keywords to boost during transcription. Each keyword
+                is formatted as 'word:weight' where weight is a positive number indicating
+                boost intensity (e.g., ['word:5.0', 'name:4.0']). Higher weights increase
+                the likelihood of the keyword being recognized. Recommended weight
+                range is 1 to 10; extremely high values may degrade transcription
+                accuracy.
+              examples:
+              - - product:5.0
+                - company:4.0
+                - technical:3.5
+            numerals:
+              type: string
+              enum:
+              - 'true'
+              - 'false'
+              - auto
+              default: auto
+              description: Convert spoken numerals into digit form (e.g., 'twenty
+                five' to '25') and `auto` enables automatic detection based on context.
+            diarize:
+              type: string
+              enum:
+              - 'true'
+              - 'false'
+              default: 'false'
+              description: Enable speaker diarization to identify different speakers
+                in the audio.
+channels:
+  /api/v1/lightning/get_text:
+    address: /api/v1/lightning/get_text
+    messages:
+      audioData.message:
+        name: AudioData
+        contentType: application/octet-stream
+        payload:
+          type: string
+          format: binary
+          description: Raw audio data chunk, transmitted in binary format using the
+            selected encoding
+          examples:
+          - Binary audio data chunk (4096 bytes recommended)
+      endSignal.message:
+        name: EndSignal
+        contentType: application/json
+        payload:
+          type: object
+          required:
+          - type
+          properties:
+            type:
+              type: string
+              enum:
+              - end
+              description: Signal to indicate end of audio stream
+          examples:
+          - type: end
+      transcriptionResponse.message:
+        name: TranscriptionResponse
+        contentType: application/json
+        payload:
+          type: object
+          required:
+          - session_id
+          properties:
+            session_id:
+              type: string
+              description: Unique identifier for the transcription session
+            transcript:
+              type: string
+              description: Partial or complete transcription text for the current
+                segment
+            full_transcript:
+              type: string
+              description: Complete transcription text accumulated so far. Only included
+                when `full_transcript` query parameter is set to true AND is_final=true
+            is_final:
+              type: boolean
+              default: false
+              description: Indicates if this is the final transcription for the current
+                segment
+            is_last:
+              type: boolean
+              default: false
+              description: Indicates if this is the last transcription in the session
+            words:
+              type: array
+              description: Word-level timestamps (when word_timestamps=true)
+              items:
+                type: object
+                properties:
+                  word:
+                    type: string
+                    description: The transcribed word
+                  start:
+                    type: number
+                    description: Start time in seconds
+                  end:
+                    type: number
+                    description: End time in seconds
+                  confidence:
+                    type: number
+                    description: Confidence score for the word (0.0 to 1.0)
+                  speaker:
+                    type: integer
+                    description: Speaker label (when diarization is enabled)
+                  speaker_confidence:
+                    type: number
+                    description: Confidence score for the speaker assignment (0.0
+                      to 1.0)
+            utterances:
+              type: array
+              description: Sentence-level timestamps (when sentence_timestamps=true)
+              items:
+                type: object
+                properties:
+                  text:
+                    type: string
+                    description: The transcribed sentence
+                  start:
+                    type: number
+                    description: Start time in seconds
+                  end:
+                    type: number
+                    description: End time in seconds
+                  speaker:
+                    type: integer
+                    description: Speaker label (when diarization is enabled)
+            language:
+              type: string
+              description: Detected primary language code, only returned when `is_final=True`
+            languages:
+              type: array
+              description: List of codes of languages detected in the audio, only
+                returned when `is_final=True`
+              items:
+                type: string
+            redacted_entities:
+              type: array
+              description: List of redacted entity placeholders (when redact_pii or
+                redact_pci is enabled)
+              items:
+                type: string
+          examples:
+          - session_id: sess_12345abcde
+            transcript: Hello, how are you?
+            is_final: true
+            is_last: false
+            language: en
+          - session_id: session_id_12346abcde
+            transcript: I paid using my card [CREDITCARDCVV_1] with expiry [TIME_2].
+            is_final: true
+            is_last: true
+            full_transcript: Hello, my name is [FIRSTNAME_1] [FIRSTNAME_2]. I paid
+              using my card [CREDITCARDCVV_1] with expiry [TIME_2].
+            language: en
+            languages:
+            - en
+            words:
+            - word: I
+              start: 0.0
+              end: 0.2
+              confidence: 0.98
+              speaker: 0
+              speaker_confidence: 0.95
+            - word: paid
+              start: 0.2
+              end: 0.5
+              confidence: 1.0
+              speaker: 0
+              speaker_confidence: 0.59
+            - word: using
+              start: 0.5
+              end: 0.8
+              confidence: 0.73
+              speaker: 0
+              speaker_confidence: 0.74
+            - word: my
+              start: 0.8
+              end: 1.0
+              confidence: 0.88
+              speaker: 0
+              speaker_confidence: 0.92
+            - word: card
+              start: 1.0
+              end: 1.3
+              confidence: 0.95
+              speaker: 0
+              speaker_confidence: 0.91
+            - word: '[creditcardcvv_1]'
+              start: 1.3
+              end: 1.8
+              confidence: 0.99
+              speaker: 0
+              speaker_confidence: 0.85
+            - word: with
+              start: 1.8
+              end: 2.0
+              confidence: 0.85
+              speaker: 0
+              speaker_confidence: 0.87
+            - word: expiry
+              start: 2.0
+              end: 2.4
+              confidence: 0.9
+              speaker: 0
+              speaker_confidence: 0.67
+            - word: '[time_2]'
+              start: 2.4
+              end: 2.7
+              confidence: 0.97
+              speaker: 0
+              speaker_confidence: 0.76
+            utterances:
+            - text: Hello, my name is [FIRSTNAME_1] [FIRSTNAME_2].
+              start: 0.0
+              end: 2.2
+              speaker: 0
+            - text: I paid using my card [CREDITCARDCVV_1] with expiry [TIME_2].
+              start: 2.2
+              end: 5.0
+              speaker: 0
+            redacted_entities:
+            - '[FIRSTNAME_1]'
+            - '[FIRSTNAME_2]'
+            - '[CREDITCARDCVV_1]'
+            - '[TIME_2]'
+operations:
+  sendAudioData:
+    action: receive
+    channel:
+      $ref: '#/channels/~1api~1v1~1lightning~1get_text'
+    summary: Send audio data for transcription
+    description: Stream audio data in chunks for real-time transcription
+    messages:
+    - $ref: '#/channels/~1api~1v1~1lightning~1get_text/messages/audioData.message'
+  sendEndSignal:
+    action: receive
+    channel:
+      $ref: '#/channels/~1api~1v1~1lightning~1get_text'
+    summary: Send end of stream signal
+    description: Signal that audio streaming is complete
+    messages:
+    - $ref: '#/channels/~1api~1v1~1lightning~1get_text/messages/endSignal.message'
+  receiveTranscription:
+    action: send
+    channel:
+      $ref: '#/channels/~1api~1v1~1lightning~1get_text'
+    summary: Receive transcription results
+    description: Get real-time transcription results as audio is processed
+    messages:
+    - $ref: '#/channels/~1api~1v1~1lightning~1get_text/messages/transcriptionResponse.message'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Bearer token authentication using Smallest AI API key
+  schemas:
+    TranscriptionResult:
+      type: object
+      properties:
+        session_id:
+          type: string
+          description: Unique identifier for the transcription session
+        transcript:
+          type: string
+          description: Transcribed text
+        full_transcript:
+          type: string
+          description: Complete transcription accumulated
+        is_final:
+          type: boolean
+          description: Final transcription flag
+        is_last:
+          type: boolean
+          description: Last transcription flag
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - error
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+            code:
+              type: string

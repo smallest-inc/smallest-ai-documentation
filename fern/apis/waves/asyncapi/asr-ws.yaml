@@ -1,0 +1,96 @@
+asyncapi: 3.0.0
+info:
+  title: Waves ASR (Speech-to-Text) API
+  version: 1.0.0
+  description: WebSocket-based streaming automatic speech recognition API for real-time
+    speech transcription
+  contact:
+    name: Waves API Support
+    url: https://waves-api.smallest.ai/support
+    email: support@smallest.ai
+  license:
+    name: Proprietary
+servers:
+  production:
+    host: waves-api.smallest.ai
+    pathname: /api/v1/asr
+    protocol: wss
+    description: Production WebSocket ASR endpoint
+    security:
+    - $ref: '#/components/securitySchemes/bearerAuth'
+channels:
+  /api/v1/asr:
+    address: /api/v1/asr
+    messages:
+      audioRequest.message:
+        name: AudioRequest
+        contentType: application/octet-stream
+        payload:
+          type: string
+          format: binary
+          description: Raw audio data in the specified encoding format
+          examples:
+          - Binary audio data chunk
+      transcriptionResponse.message:
+        name: TranscriptionResponse
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            text:
+              type: string
+              description: The transcribed text content
+            isEndOfTurn:
+              type: boolean
+              description: Indicates if this marks the end of a speech turn
+          examples:
+          - text: Hello, how are you doing today?
+            isEndOfTurn: false
+          - text: Thank you for using our service.
+            isEndOfTurn: true
+operations:
+  audioRequest:
+    action: receive
+    channel:
+      $ref: '#/channels/~1api~1v1~1asr'
+    summary: Send audio data for transcription
+    messages:
+    - $ref: '#/channels/~1api~1v1~1asr/messages/audioRequest.message'
+  transcriptionResponse:
+    action: send
+    channel:
+      $ref: '#/channels/~1api~1v1~1asr'
+    summary: Receive transcription results
+    messages:
+    - $ref: '#/channels/~1api~1v1~1asr/messages/transcriptionResponse.message'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Bearer token authentication using Smallest AI API key
+  schemas:
+    TranscriptionResult:
+      type: object
+      properties:
+        text:
+          type: string
+          description: The transcribed text content
+        isEndOfTurn:
+          type: boolean
+          description: Indicates if this marks the end of a speech turn
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - error
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+            code:
+              type: string

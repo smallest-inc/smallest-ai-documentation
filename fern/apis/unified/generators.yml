@@ -1,0 +1,76 @@
+# yaml-language-server: $schema=https://schema.buildwithfern.dev/generators-yml.json
+# Unified SDK configuration that combines both atoms and waves APIs as sub-resources
+
+api:
+  specs:
+    # Atoms API - Agent Management
+    - namespace: atoms
+      openapi: ../atoms/openapi/openapi.yaml
+
+    # Waves API - Speech/TTS endpoints
+    - namespace: waves
+      openapi: ../waves/openapi/waves-api.yaml
+    - namespace: waves
+      openapi: ../waves/openapi/get-voices-openapi.yaml
+    - namespace: waves
+      openapi: ../waves/openapi/add-voice-openapi.yaml
+    - namespace: waves
+      openapi: ../waves/openapi/get-cloned-voices-openapi.yaml
+    - namespace: waves
+      openapi: ../waves/openapi/delete-cloned-voice-openapi.yaml
+    - namespace: waves
+      openapi: ../waves/openapi/asr-openapi.yaml
+      overrides: ../waves/openapi/asr-openapi-overrides.yaml
+
+    # Waves AsyncAPI specs - WebSocket streaming
+    - namespace: waves
+      asyncapi: ../waves/asyncapi/stream-tts-ws.yaml
+      overrides: ../waves/asyncapi/stream-tts-ws-overrides.yml
+    - namespace: waves
+      asyncapi: ../waves/asyncapi/asr-ws.yaml
+      overrides: ../waves/asyncapi/asr-ws-overrides.yml
+    - namespace: waves
+      asyncapi: ../waves/asyncapi/lightning-asr-ws.yaml
+      overrides: ../waves/asyncapi/lightning-asr-ws-overrides.yml
+    - namespace: waves
+      asyncapi: ../waves/asyncapi/lightning-v2-ws.yaml
+      overrides: ../waves/asyncapi/lightning-v2-ws-overrides.yml
+
+groups:
+  python-sdk:
+    generators:
+      - name: fernapi/fern-python-sdk
+        version: 4.25.6
+        output:
+          location: pypi
+          package-name: smallest-ai
+        github:
+          repository: fern-demo/smallest-ai-python-sdk
+        config:
+          client:
+            class_name: SmallestAI
+            filename: client.py
+          pydantic_config:
+            skip_validation: true
+          exclude_types_from_init_exports: true
+
+  ts-sdk:
+    generators:
+      - name: fernapi/fern-typescript-node-sdk
+        version: 2.6.3
+        output:
+          location: npm
+          package-name: smallest-ai
+        github:
+          repository: fern-demo/smallest-ai-ts-sdk
+        config:
+          namespaceExport: SmallestAI
+
+  go-sdk:
+    generators:
+      - name: fernapi/fern-go-sdk
+        version: 1.1.0
+        github:
+          repository: fern-demo/smallest-ai-go-sdk
+        config:
+          packageName: smallestai
