@@ -16,15 +16,16 @@ servers:
     protocol: wss
     description: Production WebSocket API endpoint
     security:
-      - $ref: '#/components/securitySchemes/bearerAuth'
+      - $ref: "#/components/securitySchemes/bearerAuth"
 channels:
-  /api/v1/lightning-v3.1/get_speech/stream:
+  lightningV31Stream:
     address: /api/v1/lightning-v3.1/get_speech/stream
     messages:
-      ttsRequest.message:
-        name: TTSRequest
+      ttsRequest:
+        name: LightningV31TtsRequest
         contentType: application/json
         payload:
+          x-fern-type-name: LightningV31TtsRequest
           type: object
           required:
             - voice_id
@@ -58,7 +59,7 @@ channels:
               maximum: 10000
             language:
               type: string
-              description: 'The language code, available options: `en`, `hi`'
+              description: "The language code, available options: `en`, `hi`"
               default: en
               enum:
                 - en
@@ -90,22 +91,25 @@ channels:
               consistency: 0.5
               enhancement: 1
               similarity: 0
-      ttsResponse.message:
-        name: TTSResponse
+      ttsResponse:
+        name: LightningV31TtsResponse
         contentType: application/json
         payload:
+          x-fern-type-name: LightningV31TtsResponse
           type: object
           properties:
             request_id:
               type: string
               description: Unique identifier for the TTS request
             status:
+              x-fern-type-name: LightningV31TtsResponseStatus
               type: string
               enum:
                 - chunk
                 - complete
               description: Status of the TTS request, `chunk` indicates incoming audio chunk, `complete` indicates completion.
             data:
+              x-fern-type-name: LightningV31TtsResponseData
               type: object
               properties:
                 audio:
@@ -113,19 +117,19 @@ channels:
                   description: Base64-encoded audio chunk
 operations:
   ttsRequest:
-    action: receive
-    channel:
-      $ref: '#/channels/~1api~1v1~1lightning-v3.1~1get_speech~1stream'
-    summary: Send text-to-speech request
-    messages:
-      - $ref: '#/channels/~1api~1v1~1lightning-v3.1~1get_speech~1stream/messages/ttsRequest.message'
-  ttsResponse:
     action: send
     channel:
-      $ref: '#/channels/~1api~1v1~1lightning-v3.1~1get_speech~1stream'
+      $ref: "#/channels/lightningV31Stream"
+    summary: Send text-to-speech request
+    messages:
+      - $ref: "#/channels/lightningV31Stream/messages/ttsRequest"
+  ttsResponse:
+    action: receive
+    channel:
+      $ref: "#/channels/lightningV31Stream"
     summary: Receive audio stream chunks
     messages:
-      - $ref: '#/channels/~1api~1v1~1lightning-v3.1~1get_speech~1stream/messages/ttsResponse.message'
+      - $ref: "#/channels/lightningV31Stream/messages/ttsResponse"
 components:
   securitySchemes:
     bearerAuth:
