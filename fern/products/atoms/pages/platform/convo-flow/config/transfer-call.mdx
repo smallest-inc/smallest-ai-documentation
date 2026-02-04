@@ -1,0 +1,215 @@
+---
+title: "Transfer Call"
+sidebarTitle: "Transfer Call"
+description: "Configure call transfers to human agents."
+---
+
+In Conversational Flow, transfers happen when the conversation reaches a **Transfer Call node**. This hands the call to a human agent via cold or warm transfer.
+
+---
+
+## How Transfers Work
+
+Transfer Call nodes route callers to human agents when the AI can't (or shouldn't) handle the situation.
+
+```
+[Conversation Flow]
+    ↓
+[Handle Request]
+├── AI can resolve → Continue flow
+├── Needs human → [Transfer Call: Support]
+└── VIP customer → [Transfer Call: Premium Line]
+```
+
+---
+
+## Transfer Call Node Configuration
+
+Click a Transfer Call node to configure it.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| **Name** | Yes | Identifier (e.g., `transfer_to_sales`) |
+| **Description** | Yes | Internal note about when this transfer triggers |
+| **Phone Number** | Yes | Transfer destination with country code |
+| **Transfer Type** | Yes | Cold or Warm |
+
+---
+
+## Transfer Types
+
+<Tabs>
+  <Tab title="Cold Transfer">
+    **Immediate handoff.** The caller is connected directly to the destination without any briefing to the receiving agent.
+    
+    | Pros | Cons |
+    |------|------|
+    | Fast | No context for receiving agent |
+    | Simple | Caller may repeat themselves |
+    
+    **Best for:**
+    - Simple escalations
+    - When context isn't needed
+    - Time-sensitive transfers
+    - High call volume scenarios
+  </Tab>
+  
+  <Tab title="Warm Transfer">
+    **AI briefs the agent first.** The receiving agent gets context before the caller joins.
+    
+    | Pros | Cons |
+    |------|------|
+    | Human has context | Slightly longer |
+    | Better experience | More configuration |
+    
+    **Best for:**
+    - Complex issues needing context
+    - VIP callers
+    - When continuity matters
+    
+    ### Warm Transfer Options
+    
+    | Setting | Description |
+    |---------|-------------|
+    | **On-hold Music** | What the caller hears while waiting for connection |
+    | **Transfer if Human** | Skip transfer if voicemail detected (coming soon) |
+    | **Whisper Message** | Private message only the agent hears before connecting |
+    | **Handoff Message** | What the AI says to brief the receiving agent |
+    | **Three-way Message** | Message both parties hear when connected |
+  </Tab>
+</Tabs>
+
+---
+
+## Warm Transfer Messages
+
+### Whisper Message
+
+Only the agent hears this — give them everything they need:
+
+```
+Incoming transfer: Customer {{customer_name}} calling about 
+a billing dispute. They've been charged twice for order #{{order_id}}. 
+Identity already verified.
+```
+
+### Handoff Message
+
+What the AI says to brief the agent (can include variables):
+
+```
+Hi, I'm transferring a customer who needs help with a technical 
+issue. They've tried restarting their device without success.
+```
+
+### Three-way Message
+
+Both parties hear this — use it for smooth introductions:
+
+```
+I've connected you with Sarah from our billing team. 
+Sarah, {{customer_name}} is calling about a duplicate charge.
+```
+
+---
+
+## Multiple Transfer Destinations
+
+Create multiple Transfer Call nodes for different scenarios:
+
+| Transfer Node | Destination | When |
+|---------------|-------------|------|
+| `Transfer - Sales` | Sales team | Purchase interest, demo requests |
+| `Transfer - Support` | Support team | Technical issues |
+| `Transfer - Billing` | Billing team | Payment questions |
+| `Transfer - Manager` | Manager line | Escalations, complaints |
+
+---
+
+## Examples
+
+<Tabs>
+  <Tab title="Sales Transfer">
+    | Field | Value |
+    |-------|-------|
+    | **Name** | `transfer_sales` |
+    | **Description** | "Transfer when caller expresses strong purchase intent" |
+    | **Phone Number** | +1-555-SALES |
+    | **Type** | Cold |
+  </Tab>
+  
+  <Tab title="Support Escalation">
+    | Field | Value |
+    |-------|-------|
+    | **Name** | `transfer_support` |
+    | **Description** | "Transfer when issue requires manual intervention" |
+    | **Phone Number** | +1-555-SUPPORT |
+    | **Type** | Warm |
+    | **Whisper** | "Technical issue: {{issue_type}}. Customer: {{customer_name}}" |
+  </Tab>
+  
+  <Tab title="Manager Escalation">
+    | Field | Value |
+    |-------|-------|
+    | **Name** | `transfer_manager` |
+    | **Description** | "Transfer when caller is upset and requests a manager" |
+    | **Phone Number** | +1-555-MANAGER |
+    | **Type** | Warm |
+    | **Whisper** | "Escalation: Customer is frustrated about {{issue_summary}}" |
+  </Tab>
+</Tabs>
+
+---
+
+## Best Practices
+
+<Accordion title="Set expectations before transferring">
+  Tell the caller what's happening:
+  
+  ```
+  I'm going to connect you with one of our billing specialists 
+  who can help resolve this. It may take just a moment to connect. 
+  Is that okay?
+  ```
+</Accordion>
+
+<Accordion title="Use warm transfers for complex issues">
+  When context matters, always use warm transfer:
+  
+  - The caller has explained a complex problem
+  - You've already verified their identity
+  - The issue requires sensitive handling
+  - The caller is frustrated
+</Accordion>
+
+<Accordion title="Include relevant context in whisper messages">
+  Make whisper messages actionable:
+  
+  | Good | Bad |
+  |------|-----|
+  | "Billing dispute: double-charged $150, order #12345" | "Billing issue" |
+  | "Technical: Can't log in, tried password reset 3x" | "Login problem" |
+  | "VIP customer, account value $50k/year" | "Important customer" |
+</Accordion>
+
+<Accordion title="Handle transfer failures">
+  What happens if the transfer line is busy or doesn't answer?
+  
+  Consider adding a branch that handles transfer failure:
+  - Offer to schedule a callback
+  - Provide an alternative contact method
+  - Return to AI handling with apology
+</Accordion>
+
+---
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Node Types" icon="shapes" href="/platform/convo-flow/node-types">
+    Complete node reference
+  </Card>
+  <Card title="End Call" icon="phone-slash" href="/platform/convo-flow/config/end-call">
+    Configure call termination
+  </Card>
+</CardGroup>

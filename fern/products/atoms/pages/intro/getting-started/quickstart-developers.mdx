@@ -1,0 +1,180 @@
+---
+title: "Quickstart for Developers"
+description: "Get API access and make your first programmatic call in minutes"
+---
+
+# Quickstart for Developers
+
+Get your API keys, install the SDK, and create your first voice agent programmatically.
+
+## Prerequisites
+
+- Python 3.8+ or Node.js 16+
+- An Atoms account ([sign up here](https://atoms.smallest.ai))
+
+---
+
+## Step 1: Get Your API Key
+
+1. Log in to your [Atoms Dashboard](https://atoms.smallest.ai)
+2. Go to **Settings** → **API Keys**
+3. Click **Generate New Key**
+4. Copy and save your key securely
+
+<Warning>Never commit your API key to version control. Use environment variables.</Warning>
+
+```bash
+export SMALLEST_API_KEY="your-api-key-here"
+```
+
+---
+
+## Step 2: Install the SDK
+
+<CodeGroup>
+```bash Python
+pip install smallestai
+```
+
+```bash Node.js
+npm install @smallest/atoms
+```
+</CodeGroup>
+
+---
+
+## Step 3: Create Your First Agent
+
+<CodeGroup>
+```python Python
+from smallestai.atoms import AtomsClient
+
+client = AtomsClient()
+
+# Create a new agent
+agent = client.new_agent(
+    name="My First Agent",
+    system_prompt="""You are a helpful customer support agent for Acme Corp.
+    Be friendly, professional, and helpful.
+    If you don't know something, offer to transfer to a human.""",
+    voice_id="emily",  # Choose a voice
+    language="en-US"
+)
+
+print(f"Agent created! ID: {agent.id}")
+```
+
+```javascript Node.js
+import { AtomsClient } from '@smallest/atoms';
+
+const client = new AtomsClient();
+
+const agent = await client.newAgent({
+  name: "My First Agent",
+  systemPrompt: `You are a helpful customer support agent for Acme Corp.
+    Be friendly, professional, and helpful.
+    If you don't know something, offer to transfer to a human.`,
+  voiceId: "emily",
+  language: "en-US"
+});
+
+console.log(`Agent created! ID: ${agent.id}`);
+```
+</CodeGroup>
+
+---
+
+## Step 4: Make an Outbound Call
+
+<CodeGroup>
+```python Python
+# Start an outbound call
+call = client.start_outbound_call(
+    agent_id=agent.id,
+    phone_number="+1234567890",
+    from_number="+0987654321"  # Your Atoms number
+)
+
+print(f"Call started! Call ID: {call.id}")
+```
+
+```javascript Node.js
+const call = await client.startOutboundCall({
+  agentId: agent.id,
+  phoneNumber: "+1234567890",
+  fromNumber: "+0987654321"
+});
+
+console.log(`Call started! Call ID: ${call.id}`);
+```
+</CodeGroup>
+
+---
+
+## Step 5: Get Call Results
+
+<CodeGroup>
+```python Python
+from smallestai.atoms import Call
+
+call_manager = Call()
+
+# Get call details
+call_data = call_manager.get_call(call_id=call.id)
+
+print(f"Status: {call_data['status']}")
+print(f"Duration: {call_data['duration']}s")
+print(f"Transcript: {call_data['transcript']}")
+```
+
+```javascript Node.js
+const callData = await client.getCall(call.id);
+
+console.log(`Status: ${callData.status}`);
+console.log(`Duration: ${callData.duration}s`);
+console.log(`Transcript: ${callData.transcript}`);
+```
+</CodeGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="SDK Reference" icon="book" href="/dev/introduction/core-concepts/overview">
+    Deep dive into SDK concepts
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Full REST API documentation
+  </Card>
+  <Card title="Knowledge Base API" icon="brain" href="/dev/build/knowledge-base/usage">
+    Add RAG capabilities to agents
+  </Card>
+  <Card title="Campaigns API" icon="megaphone" href="/dev/build/campaigns/creating-campaigns">
+    Scale to thousands of calls
+  </Card>
+</CardGroup>
+
+---
+
+## Common Patterns
+
+```python
+# List all agents
+agents = client.get_agents()
+
+# Update an agent
+client.update_agent(agent_id=agent.id, system_prompt="New prompt...")
+
+# Delete an agent
+client.delete_agent(agent_id=agent.id)
+
+# Search call logs
+from smallestai.atoms import Call
+call_manager = Call()
+calls = call_manager.search_calls(agent_id=agent.id, limit=100)
+```
+
+<Tip>
+  Check out our [Cookbooks](/dev/cookbooks/examples) for complete working examples of common use cases.
+</Tip>

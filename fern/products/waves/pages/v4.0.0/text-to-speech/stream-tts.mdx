@@ -1,0 +1,98 @@
+---
+title: "How to use Streaming Text to Speech (TTS) with websockets"
+description: "Learn how to convert text to speech with real-time streaming synthesis."
+icon: "bars-staggered"
+---  
+
+## Real-time Text to Speech Synthesis
+
+The `WavesStreamingTTS` class provides high-performance text-to-speech conversion with configurable streaming parameters. This implementation is optimized for low-latency applications where immediate audio feedback is critical, such as voice assistants, live narration, or interactive applications.
+
+### Configuration Setup
+
+The streaming TTS system uses a `TTSConfig` object to manage synthesis parameters:
+
+```python
+from smallestai.waves import TTSConfig, WavesStreamingTTS
+
+config = TTSConfig(
+    voice_id="aditi",
+    api_key="YOUR_SMALLEST_API_KEY", 
+    sample_rate=24000,
+    speed=1.0,
+    max_buffer_flush_ms=100
+)
+
+streaming_tts = WavesStreamingTTS(config)
+```
+
+### Basic Text Synthesis
+
+For straightforward text-to-speech conversion, use the `synthesize` method:
+
+```python
+text = "Hello world, this is a test of the Smallest AI streaming TTS SDK."
+audio_chunks = []
+
+for chunk in streaming_tts.synthesize(text):
+    audio_chunks.append(chunk)
+```
+
+### Streaming Text Input
+
+For real-time applications where text arrives incrementally, use `synthesize_streaming`:
+
+```python
+def text_stream():
+    text = "Streaming synthesis with chunked text input for Smallest SDK."
+    for word in text.split():
+        yield word + " "
+
+audio_chunks = []
+for chunk in streaming_tts.synthesize_streaming(text_stream()):
+    audio_chunks.append(chunk)
+```
+
+### Saving Audio to WAV File
+
+Convert the raw PCM audio chunks to a standard WAV file:
+
+```python
+import wave
+from io import BytesIO
+
+def save_audio_chunks_to_wav(audio_chunks, filename="output.wav"):
+    with wave.open(filename, 'wb') as wf:
+        wf.setnchannels(1)        # Mono
+        wf.setsampwidth(2)        # 16-bit
+        wf.setframerate(24000)    # 24kHz
+        wf.writeframes(b''.join(audio_chunks))
+
+text = "Your text to synthesize here."
+audio_chunks = list(streaming_tts.synthesize(text))
+save_audio_chunks_to_wav(audio_chunks, "speech_output.wav")
+```
+
+
+### Configuration Parameters
+
+- **`voice_id`**: Voice identifier (e.g., "aditi", "male-1", "female-2")
+- **`api_key`**: Your Smallest AI API key
+- **`language`**: Language code for synthesis (default: "en")
+- **`sample_rate`**: Audio sample rate in Hz (default: 24000)
+- **`speed`**: Speech speed multiplier (default: 1.0 - normal speed, 0.5 = half speed, 2.0 = double speed)
+- **`consistency`**: Voice consistency parameter (default: 0.5, range: 0.0-1.0)
+- **`enhancement`**: Audio enhancement level (default: 1)
+- **`similarity`**: Voice similarity parameter (default: 0, range: 0.0-1.0)  
+- **`max_buffer_flush_ms`**: Maximum buffer time in milliseconds before forcing audio output (default: 0)
+
+### Output Format
+
+The streaming TTS returns raw PCM audio data as bytes objects. Each chunk represents a portion of the synthesized audio that can be:
+
+- Played directly through audio hardware
+- Saved to audio files (WAV, MP3, etc.)
+- Streamed over network protocols
+- Processed with additional audio effects
+
+The raw format ensures minimal latency and maximum flexibility for real-time applications where immediate audio feedback is essential.

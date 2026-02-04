@@ -1,0 +1,109 @@
+---
+title: 'Response Format'
+description: 'Understanding the structure and fields of real-time transcription responses'
+---
+
+For every chunk sent on the WebSocket, the server responds with a JSON message. Users can structure response handling according to their needs. Users can choose to read quick responses with lower accuracy or wait until the server sends larger responses that are highly accurate. 
+
+## Example Response
+
+```json
+{
+  "type": "transcription",
+  "status": "success",
+  "session_id": "00000000-0000-0000-0000-000000000000",
+  "transcript": "Hello, how are you?",
+  "is_final": false,
+  "is_last": false
+}
+```
+
+## Response Fields
+
+- **`type`**: Message type identifier, set to `"transcription"` for transcription results.
+- **`status`**: Status of the transcription request, typically `"success"` for valid responses.
+- **`session_id`**: Unique identifier for the transcription session.
+- **`transcript`**: Partial or complete transcription text for the current segment.
+- **`is_final`**: Indicates if this is the final transcription for the current segment. `false` indicates a partial/interim transcript; `true` indicates a final transcript.
+- **`is_last`**: Indicates if this is the last transcription in the session. `true` when the session is complete.
+
+### Optional Fields
+
+The following fields may be included in responses under certain conditions:
+
+- **`full_transcript`**: Complete transcription text accumulated so far. Only included when `full_transcript=true` query parameter is set AND `is_final=true`.
+- **`language`**: Detected primary language code. Only returned when `is_final=true`.
+- **`languages`**: Array of language codes detected in the audio. Only returned when `is_final=true`.
+- **`words`**: Array of word-level timestamps (only included when `word_timestamps=true` in query parameters). Each word object contains `word`, `start`, `end`, and `confidence` fields. When `diarize=true`, also includes `speaker` (integer ID) and `speaker_confidence` (0.0 to 1.0) fields.
+- **`utterances`**: Array of sentence-level timestamps (only included when `sentence_timestamps=true` in query parameters). Each utterance object contains `text`, `start`, and `end` fields. When `diarize=true`, also includes `speaker` (integer ID) field.
+- **`redacted_entities`**: Array of redacted entity placeholders (only included when `redact_pii=true` or `redact_pci=true`). Examples: `[FIRSTNAME_1]`, `[CREDITCARDCVV_1]`.
+
+## Handling Responses
+
+We maintain an internal server-side buffer that collects chunked audio sent by the user. Once this buffer reaches a specific size, the server sends a special response with the `is_final` parameter set to `true` that contains the transcription of user audio collected since the last such response.
+
+### `is_final = true`
+
+We recommend processing responses of this kind for optimal transcription accuracy. The internal buffer size is calibrated to optimize response times and accuracy.
+
+```json
+{
+  "type": "transcription",
+  "status": "success",
+  "session_id": "00000000-0000-0000-0000-000000000000",
+  "transcript": "Should I do it? ",
+  "is_final": true,
+  "is_last": false,
+  "full_transcript": "Hello. Should I do it?",
+  "language": "en",
+  "languages": ["en"]
+}
+```
+
+- Additionally, the `language` field is set to the specified language, or the detected language if the language parameter is set to `multi`. Other responses will not include the `language` field.
+- The `full_transcript` is non-empty if the user sends the end token `{"type":"end"}` to signal end of session.
+
+### `is_final = false`
+
+These are interim transcript responses sent for each chunk. They provide quick feedback for low latency use cases.
+
+```json
+{
+  "type": "transcription",
+  "status": "success",
+  "session_id": "00000000-0000-0000-0000-000000000001",
+  "transcript": "Yeah.",
+  "is_final": false,
+  "is_last": false
+}
+```
+
+- These responses may provide inaccurate results for the most recent words. This occurs when the audio for these words is not fully sent to the server in the respective chunk.
+
+<Note>
+The `full_transcript` field is a feature that requires the `full_transcript` query parameter to be set to `true`. Learn more about the [Full Transcript feature](/v4.0.0/content/speech-to-text/features/full-transcript).
+</Note>
+
+### `is_last = true`
+
+This response is similar to an `is_final=true` response, but it is the final response received after the user sends the end token `{"type":"end"}`. When `is_last=true`, the server has finished processing all audio and the session is complete.
+
+```json
+{
+  "type": "transcription",
+  "status": "success",
+  "session_id": "00000000-0000-0000-0000-000000000000",
+  "transcript": "Goodbye!",
+  "is_final": true,
+  "is_last": true,
+  "full_transcript": "Hello. Should I do it? Goodbye!",
+  "language": "en",
+  "languages": ["en"]
+}
+```
+
+- This is the last response of the live transcription session and contains all the fields of the `is_final=true` response.
+
+<Warning>
+Do not close the WebSocket connection immediately after sending the end token. Wait for this `is_last=true` response to ensure all audio has been processed and you receive the complete transcript.
+</Warning>

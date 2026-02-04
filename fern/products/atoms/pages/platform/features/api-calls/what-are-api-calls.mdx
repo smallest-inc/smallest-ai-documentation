@@ -1,0 +1,202 @@
+---
+title: "API Calls"
+sidebarTitle: "What Are API Calls?"
+description: "Connect your agent to external systems — fetch data, trigger actions, and integrate with your tools."
+---
+
+**API Calls** let your agent communicate with external systems during conversations. Fetch customer data from your CRM, book appointments in your calendar, process payments, or trigger any action in your backend.
+
+---
+
+## Why Use API Calls?
+
+<Tabs>
+  <Tab title="Without API Calls">
+    Your agent is limited to:
+    - Information in its prompt
+    - Data in the knowledge base
+    - What the caller tells it
+    
+    It can't check real-time data or take actions in your systems.
+  </Tab>
+  <Tab title="With API Calls">
+    Your agent can:
+    - Fetch real-time customer data
+    - Check inventory or availability
+    - Book appointments
+    - Create support tickets
+    - Process orders
+    - Update CRM records
+    
+    ...and anything else your APIs support.
+  </Tab>
+</Tabs>
+
+---
+
+## Types of API Calls
+
+Atoms supports several types of API calls, each for different points in the conversation:
+
+| Type | When It Runs | Best For |
+|------|--------------|----------|
+| **Pre-Call API** | Before the call starts | Loading customer context |
+| **In-Call API** | During the conversation | Checking availability, booking |
+| **Post-Call API** | After the call ends | Logging, follow-up triggers |
+
+---
+
+## How API Calls Work
+
+<Steps>
+  ### Configure the Request
+  
+  You define:
+  - **URL** — Where to send the request
+  - **Method** — GET, POST, PUT, DELETE
+  - **Headers** — Authentication, content type
+  - **Body** — Data to send (for POST/PUT)
+
+  ### Include Variables
+  
+  Use variables in your request:
+  ```
+  GET https://api.yourcrm.com/customers?phone={{caller_phone}}
+  ```
+
+  ### Map the Response
+  
+  Extract data from the API response into variables:
+  ```json
+  Response: { "name": "Sarah", "balance": "$150" }
+  
+  Maps to:
+  {{customer_name}} = "Sarah"
+  {{account_balance}} = "$150"
+  ```
+
+  ### Use in Conversation
+  
+  Your agent can now use this data:
+  ```
+  "Hi {{customer_name}}, I see your current balance is {{account_balance}}."
+  ```
+</Steps>
+
+---
+
+## Simple Example: Customer Lookup
+
+**Scenario:** When a customer calls, look up their info based on phone number.
+
+**Pre-Call API Configuration:**
+
+```
+URL: https://api.yourcrm.com/customers
+Method: GET
+Query Parameters: phone={{caller_phone}}
+```
+
+**Response:**
+```json
+{
+  "name": "Sarah Johnson",
+  "account_number": "ACC-12345",
+  "status": "active",
+  "balance": 150.00
+}
+```
+
+**Variable Mapping:**
+| Response Field | Variable |
+|----------------|----------|
+| `name` | `{{customer_name}}` |
+| `account_number` | `{{account_number}}` |
+| `status` | `{{account_status}}` |
+| `balance` | `{{account_balance}}` |
+
+**Agent prompt uses these:**
+```
+Customer: {{customer_name}} (Account: {{account_number}})
+Status: {{account_status}}
+Balance: ${{account_balance}}
+
+Greet them by name and ask how you can help.
+```
+
+---
+
+## What You Can Build
+
+<AccordionGroup>
+  <Accordion title="Real-Time Data Lookup" icon="search">
+    - Customer account information
+    - Order status
+    - Appointment details
+    - Inventory levels
+    - Pricing and availability
+  </Accordion>
+  
+  <Accordion title="Booking & Scheduling" icon="calendar">
+    - Check calendar availability
+    - Book appointments
+    - Reschedule existing bookings
+    - Cancel reservations
+  </Accordion>
+  
+  <Accordion title="CRM Integration" icon="users">
+    - Create new leads
+    - Update contact records
+    - Log call activities
+    - Trigger follow-up tasks
+  </Accordion>
+  
+  <Accordion title="Payment & Billing" icon="credit-card">
+    - Check account balance
+    - Process payments
+    - Send payment links
+    - Update billing info
+  </Accordion>
+  
+  <Accordion title="Ticketing & Support" icon="ticket">
+    - Create support tickets
+    - Check ticket status
+    - Update existing tickets
+    - Escalate to human agents
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Single Prompt vs. Convo Flow
+
+API calls work differently depending on your agent type:
+
+| Aspect | Single Prompt | Convo Flow |
+|--------|---------------|------------|
+| **Pre-Call API** | ✓ Available | ✓ Available |
+| **In-Call API** | Tool-based (agent decides when) | Node-based (you control when) |
+| **Post-Call API** | ✓ Available | ✓ Available |
+| **Control** | AI decides when to call | You design exact flow |
+
+<CardGroup cols={2}>
+  <Card title="API Calls in Single Prompt" icon="terminal" href="/platform/features/api-calls/single-prompt">
+    How to set up API calls for Single Prompt agents
+  </Card>
+  <Card title="API Calls in Convo Flow" icon="diagram-project" href="/platform/features/api-calls/convo-flow">
+    Using API Call nodes in workflows
+  </Card>
+</CardGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Creating API Calls" icon="plus" href="/platform/features/api-calls/creating">
+    Step-by-step setup guide
+  </Card>
+  <Card title="Common Integrations" icon="plug" href="/platform/features/api-calls/common-integrations">
+    Pre-built patterns for popular services
+  </Card>
+</CardGroup>

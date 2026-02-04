@@ -1,0 +1,171 @@
+---
+title: "API Calls Configuration"
+sidebarTitle: "API Calls"
+description: "Connect to external services during conversations."
+---
+
+API Calls let your agent interact with external systems — look up customer data, check order status, book appointments, or update records mid-conversation.
+
+---
+
+## Location
+
+**Configuration Panel (right sidebar) → API Calls**
+
+---
+
+## What API Calls Enable
+
+| Use Case | Example |
+|----------|---------|
+| Customer lookup | Fetch account details by phone number |
+| Order status | Get real-time order information |
+| Appointment booking | Check availability and create bookings |
+| CRM updates | Log call information to Salesforce |
+| Data verification | Verify customer information |
+| Ticket creation | Create support tickets |
+
+---
+
+## How It Works
+
+1. **Define the API endpoint** — URL, method, headers, body
+2. **Set trigger conditions** — When should the call happen?
+3. **Map responses to variables** — Store returned data
+4. **Use variables in conversation** — Reference the data
+
+---
+
+## Configuration
+
+→ **NEEDS PLATFORM INFO:** Detailed API configuration interface
+
+Basic configuration includes:
+
+| Field | Description |
+|-------|-------------|
+| **Endpoint URL** | The API URL to call |
+| **Method** | GET, POST, PUT, DELETE |
+| **Headers** | Authentication tokens, content-type |
+| **Body** | Request payload (for POST/PUT) |
+| **Response Mapping** | Map response fields to variables |
+
+---
+
+## Example: Customer Lookup
+
+### API Configuration
+
+```
+URL: https://api.yourcrm.com/customers
+Method: GET
+Headers:
+  Authorization: Bearer {{api_key}}
+  Content-Type: application/json
+Query Parameters:
+  phone: {{caller_phone}}
+```
+
+### Response
+
+```json
+{
+  "id": "cust_12345",
+  "name": "Jane Smith",
+  "status": "active",
+  "tier": "premium"
+}
+```
+
+### Response Mapping
+
+| API Field | Variable |
+|-----------|----------|
+| name | `{{api.customer_name}}` |
+| status | `{{api.account_status}}` |
+| tier | `{{api.tier}}` |
+
+### Using in Conversation
+
+```
+Hi {{api.customer_name}}! I see you're a {{api.tier}} member.
+How can I help you today?
+```
+
+---
+
+## In Conversational Flow
+
+Conversational Flow agents have dedicated **API Call Nodes**:
+
+- **Pre-Call API** — Runs before conversation starts
+- **API Call Node** — Runs mid-conversation
+- **Post-Call API** — Runs after conversation ends
+
+→ See: [Node Types Reference](/platform/building-agents/convo-flow/node-types)
+
+---
+
+## Error Handling
+
+What happens when API calls fail?
+
+| Scenario | Recommendation |
+|----------|----------------|
+| Timeout | Have fallback responses ready |
+| 404 Not Found | "I couldn't find that information" |
+| 500 Server Error | "I'm having trouble accessing that right now" |
+| Invalid Data | Validate before using |
+
+Build graceful handling into your prompts:
+```
+If you cannot retrieve customer information, apologize and 
+offer to help in other ways or transfer to a human agent.
+```
+
+---
+
+## Security Considerations
+
+- **Never expose API keys in prompts** — Use secure configuration
+- **Validate inputs** — Don't pass unvalidated user input to APIs
+- **Use HTTPS** — Encrypt all API traffic
+- **Limit permissions** — API keys should have minimal required access
+
+---
+
+## Best Practices
+
+### Test API Calls Thoroughly
+
+Use the test modes to verify:
+- Calls execute at the right time
+- Responses map correctly to variables
+- Errors are handled gracefully
+
+### Keep Latency in Mind
+
+API calls add latency to conversations. Optimize for speed:
+- Use fast endpoints
+- Cache when possible
+- Only call when necessary
+
+### Log for Debugging
+
+Check conversation logs to see:
+- Request sent
+- Response received
+- Variables set
+
+---
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="API Calls Reference" icon="book" href="/platform/features/api-calls-reference">
+    Complete API documentation
+  </Card>
+  <Card title="Voice Tab" icon="microphone" href="/platform/configuring-agents/agent-settings/voice-tab">
+    Configure voice settings
+  </Card>
+</CardGroup>

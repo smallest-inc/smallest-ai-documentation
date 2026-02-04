@@ -1,0 +1,314 @@
+---
+title: Configuration
+description: Advanced configuration options for TTS Docker deployments
+---
+
+## Overview
+
+This guide covers advanced configuration options for customizing your TTS Docker deployment. Learn how to optimize resources, configure external services, and tune performance.
+
+## Environment Variables
+
+All configuration is managed through environment variables in the `.env` file.
+
+### Core Configuration
+
+<ParamField path="LICENSE_KEY" type="string" required>
+  Your Smallest.ai license key for validation and usage reporting
+</ParamField>
+
+### API Server Configuration
+
+<ParamField path="API_SERVER_PORT" type="integer" default="7100">
+  Port for the API server to listen on
+  
+  ```bash
+  API_SERVER_PORT=8080
+  ```
+</ParamField>
+
+<ParamField path="API_BASE_URL" type="string" default="http://license-proxy:3369">
+  Internal URL for license proxy communication
+</ParamField>
+
+<ParamField path="LIGHTNING_TTS_BASE_URL" type="string" default="http://lightning-tts:8876">
+  Internal URL for Lightning TTS communication
+</ParamField>
+
+### Lightning TTS Configuration
+
+<ParamField path="TTS_PORT" type="integer" default="8876">
+  Port for Lightning TTS to listen on
+  
+  ```bash
+  TTS_PORT=8876
+  ```
+</ParamField>
+
+<ParamField path="REDIS_URL" type="string" default="redis://redis:6379">
+  Redis connection URL for caching and state management
+  
+  For external Redis:
+  ```bash
+  REDIS_URL=redis://external-redis.example.com:6379
+  ```
+  
+  With password:
+  ```bash
+  REDIS_URL=redis://:password@redis:6379
+  ```
+</ParamField>
+
+<ParamField path="GPU_DEVICE_ID" type="string" default="0">
+  GPU device ID to use (for multi-GPU systems)
+  
+  ```bash
+  GPU_DEVICE_ID=0
+  ```
+</ParamField>
+
+## Resource Configuration
+
+### GPU Allocation
+
+For systems with multiple GPUs, you can specify which GPU to use:
+
+```yaml docker-compose.yml
+lightning-tts:
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            device_ids: ['0']
+            capabilities: [gpu]
+```
+
+For multiple GPUs per container:
+
+```yaml docker-compose.yml
+lightning-tts:
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 2
+            capabilities: [gpu]
+```
+
+### Memory Limits
+
+Set memory limits to prevent resource exhaustion:
+
+```yaml docker-compose.yml
+services:
+  lightning-tts:
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          memory: 12G
+```
+
+### CPU Limits
+
+Control CPU allocation:
+
+```yaml docker-compose.yml
+services:
+  lightning-tts:
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
+        reservations:
+          cpus: '4'
+```
+
+## External Services
+
+### External Redis
+
+Use an external Redis instance instead of the embedded one:
+
+```yaml docker-compose.yml
+services:
+  api-server:
+    environment:
+      - REDIS_HOST=external-redis.example.com
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+
+  lightning-tts:
+    environment:
+      - REDIS_HOST=external-redis.example.com
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+```
+
+Remove the Redis service from docker-compose.yml.
+
+### Custom Network
+
+Use a custom Docker network:
+
+```yaml docker-compose.yml
+networks:
+  custom-network:
+    driver: bridge
+    name: my-custom-network
+
+services:
+  api-server:
+    networks:
+      - custom-network
+```
+
+## Performance Tuning
+
+### Voice Configuration
+
+Configure voice parameters:
+
+```yaml docker-compose.yml
+lightning-tts:
+  environment:
+    - DEFAULT_VOICE=default
+    - VOICE_SPEED=1.0
+    - VOICE_PITCH=1.0
+```
+
+### Batch Processing
+
+Optimize for batch processing:
+
+```yaml docker-compose.yml
+lightning-tts:
+  environment:
+    - BATCH_SIZE=8
+    - MAX_QUEUE_SIZE=100
+```
+
+### Model Precision
+
+Control model precision for performance:
+
+```yaml docker-compose.yml
+lightning-tts:
+  environment:
+    - MODEL_PRECISION=fp16
+```
+
+Options: `fp32`, `fp16`, `int8`
+
+## Volume Mounts
+
+### Persistent Model Cache
+
+Cache models to avoid re-downloading:
+
+```yaml docker-compose.yml
+services:
+  lightning-tts:
+    volumes:
+      - tts-models:/app/models
+
+volumes:
+  tts-models:
+```
+
+### Log Persistence
+
+Persist logs for debugging:
+
+```yaml docker-compose.yml
+services:
+  api-server:
+    volumes:
+      - ./logs/api-server:/app/logs
+  
+  lightning-tts:
+    volumes:
+      - ./logs/tts:/app/logs
+```
+
+## Health Checks
+
+Add health checks for better monitoring:
+
+```yaml docker-compose.yml
+services:
+  lightning-tts:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8876/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  api-server:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+```
+
+## Security Configuration
+
+### Read-Only Root Filesystem
+
+Enhance security with read-only root filesystem:
+
+```yaml docker-compose.yml
+services:
+  api-server:
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/tmp
+```
+
+### Non-Root User
+
+Run containers as non-root:
+
+```yaml docker-compose.yml
+services:
+  api-server:
+    user: "1000:1000"
+```
+
+## Environment File Example
+
+Complete `.env` file example:
+
+```bash .env
+LICENSE_KEY=your-license-key-here
+
+API_SERVER_PORT=7100
+TTS_PORT=8876
+
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+GPU_DEVICE_ID=0
+
+DEFAULT_VOICE=default
+VOICE_SPEED=1.0
+```
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="TTS Services Overview" icon="layer-group" href="/docker/tts/services-overview">
+    Learn about each TTS service component
+  </Card>
+
+  <Card title="TTS Troubleshooting" icon="wrench" href="/docker/tts/docker-troubleshooting">
+    Debug configuration issues
+  </Card>
+</CardGroup>
+

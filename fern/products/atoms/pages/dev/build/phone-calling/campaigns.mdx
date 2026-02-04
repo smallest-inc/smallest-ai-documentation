@@ -18,173 +18,240 @@ Create → Start → Running → Pause/Complete → Delete
 
 Before creating a campaign, you need:
 
-1. **Agent** — With a phone number linked (configured in Dashboard)
-2. **Audience** — A contact list uploaded in Dashboard
-3. **Phone Number** — Assigned to your agent in Dashboard → Phone Numbers
+1. **Agent** — Created via SDK or Dashboard
+2. **Audience** — Contact list with phone numbers
+3. **Phone Number ID** — From `get_phone_numbers()`
 
 <Tip>
-  Link a phone number to your agent in the [Dashboard](https://atoms.smallest.ai) under **Phone Numbers**. Campaigns use the phone number assigned to the agent as the caller ID.
+  Get your phone number ID using `client.get_phone_numbers()` — the `_id` field is what you pass to campaigns.
 </Tip>
 
-<Note>
-  Create audiences by uploading a CSV with columns:
-  `phoneNumber`, `Name`, `Address`, `Email`, `CustomerID`
-</Note>
-
-## Creating a Campaign
-
-### Basic Campaign
+## Quick Start
 
 ```python
 from smallestai.atoms import AtomsClient
+from smallestai.atoms.audience import Audience
+from smallestai.atoms.campaign import Campaign
 
 client = AtomsClient()
+audience = Audience()
+campaign = Campaign()
 
-campaign = client.create_campaign(
-    campaign_post_request={
-        "name": "January Lead Follow-up",
-        "description": "Follow up with leads from webinar",
-        "agentId": "your-agent-id",  # Must have phone linked
-        "audienceId": "your-audience-id"
-    }
+# 1. Get phone number
+phones = client.get_phone_numbers()
+phone_id = phones["data"][0]["_id"]
+
+# 2. Create agent
+agent = client.new_agent(
+    name="Campaign Agent",
+    prompt="You are a friendly assistant.",
+    description="Agent for outreach"
 )
+agent_id = agent.data
 
-campaign_id = campaign.data.get('_id')
-print(f"Created campaign: {campaign_id}")
+# 3. Create audience
+aud = audience.create(
+    name="My Contacts",
+    phone_numbers=["+916366821717", "+919353662554"],
+    names=[("John", "Doe"), ("Jane", "Smith")]
+)
+audience_id = aud["data"]["_id"]
+
+# 4. Create campaign
+camp = campaign.create(
+    name="Outreach Campaign",
+    agent_id=agent_id,
+    audience_id=audience_id,
+    phone_ids=[phone_id],
+    description="Follow-up calls",
+    max_retries=2,
+    retry_delay=15
+)
+campaign_id = camp["data"]["_id"]
+
+# 5. Start campaign
+campaign.start(campaign_id)
+print(f"Campaign started: {campaign_id}")
 ```
 
-### With Retry and Schedule Settings
+## Creating an Audience
 
 ```python
-import requests
-import os
-from datetime import datetime, timedelta, timezone
+from smallestai.atoms.audience import Audience
 
-API_KEY = os.getenv("SMALLEST_API_KEY")
+audience = Audience()
 
-# Schedule for tomorrow at 9 AM UTC
-scheduled_time = datetime.now(timezone.utc).replace(
-    hour=9, minute=0, second=0
-) + timedelta(days=1)
-
-response = requests.post(
-    "https://atoms.smallest.ai/api/v1/campaign",
-    headers={
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    },
-    json={
-        "name": "Summer Sale Campaign",
-        "description": "Promotional calls",
-        "agentId": "agent-with-phone",
-        "audienceId": "summer-leads",
-        "maxRetries": 3,           # Retry unanswered (0-10)
-        "retryDelay": 15,          # Minutes between retries (1-1440)
-        "scheduledAt": scheduled_time.isoformat()
-    }
+# Create with phone numbers and names
+result = audience.create(
+    name="January Leads",
+    phone_numbers=["+916366821717", "+919353662554"],
+    names=[("John", "Doe"), ("Jane", "Smith")]
 )
 
-result = response.json()
+audience_id = result["data"]["_id"]
+print(f"Created audience: {audience_id}")
+```
+
+### Adding Contacts Later
+
+```python
+# Add more contacts to existing audience
+audience.add_contacts(
+    audience_id=audience_id,
+    phone_numbers=["+919876543210"],
+    names=[("New", "User")]
+)
+```
+
+## Creating a Campaign
+
+```python
+from smallestai.atoms.campaign import Campaign
+
+campaign = Campaign()
+
+result = campaign.create(
+    name="Follow-up Campaign",
+    agent_id="your-agent-id",
+    audience_id="your-audience-id",
+    phone_ids=["your-phone-id"],
+    description="Following up with leads",
+    max_retries=3,
+    retry_delay=15
+)
+
 campaign_id = result["data"]["_id"]
-print(f"Scheduled campaign: {campaign_id}")
 ```
 
 ### Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `name` | string | Yes | Campaign name (max 40 chars) |
-| `description` | string | No | Notes about the campaign |
-| `agentId` | string | Yes | Agent ID (must have phone linked) |
-| `audienceId` | string | Yes | Contact list to dial |
-| `maxRetries` | int | No | Retry unanswered (0-10, default: 3) |
-| `retryDelay` | int | No | Minutes between retries (1-1440, default: 15) |
-| `scheduledAt` | string | No | ISO timestamp to auto-start |
+| `name` | string | Yes | Campaign name |
+| `agent_id` | string | Yes | Agent ID |
+| `audience_id` | string | Yes | Contact list ID |
+| `phone_ids` | list | Yes | Phone number IDs (from `get_phone_numbers()`) |
+| `description` | string | No | Campaign description |
+| `max_retries` | int | No | Retry unanswered (0-10, default: 3) |
+| `retry_delay` | int | No | Minutes between retries (default: 15) |
 
 ## Starting a Campaign
 
 ```python
-client.start_campaign(id=campaign_id)
-print("Campaign started")
+campaign.start(campaign_id)
+print("Campaign started!")
 ```
 
-Scheduled campaigns start automatically at the specified time.
-
-## Checking Campaign Status
+## Monitoring Progress
 
 ```python
-import requests
-import os
+import time
 
-API_KEY = os.getenv("SMALLEST_API_KEY")
-
-response = requests.get(
-    f"https://atoms.smallest.ai/api/v1/campaign/{campaign_id}",
-    headers={"Authorization": f"Bearer {API_KEY}"}
-)
-data = response.json()
-
-campaign = data["data"]["campaign"]
-metrics = data["data"]["metrics"]
-
-print(f"Status: {campaign['status']}")
-print(f"Total: {metrics['total_participants']}")
-print(f"Called: {metrics['contacts_called']}")
-print(f"Connected: {metrics['contacts_connected']}")
+for i in range(10):
+    time.sleep(10)
+    
+    status = campaign.get(campaign_id)
+    campaign_data = status["data"]["campaign"]
+    metrics = status["data"]["metrics"]
+    
+    print(f"Status: {campaign_data['status']}")
+    print(f"Called: {metrics['contacts_called']}/{metrics['total_participants']}")
+    
+    if campaign_data["status"] in ["completed", "failed"]:
+        break
 ```
 
-## Pausing a Campaign
+## Stopping a Running Campaign
 
 ```python
-client.pause_campaign(id=campaign_id)
+# Only works for running campaigns
+status = campaign.get(campaign_id)
+if status["data"]["campaign"]["status"] in ["running", "active"]:
+    campaign.stop(campaign_id)
+    print("Campaign stopped")
+else:
+    print("Campaign already completed")
+```
+
+## Listing Campaigns
+
+```python
+campaigns = campaign.list()
+
+for c in campaigns["data"]["campaigns"]:
+    print(f"{c['name']}: {c['status']}")
 ```
 
 ## Deleting a Campaign
 
 ```python
-client.delete_campaign(id=campaign_id)
+campaign.delete(campaign_id)
 ```
 
 ## Complete Example
 
 ```python
-import requests
-import os
 import time
 from smallestai.atoms import AtomsClient
+from smallestai.atoms.audience import Audience
+from smallestai.atoms.campaign import Campaign
 
-API_KEY = os.getenv("SMALLEST_API_KEY")
-BASE_URL = "https://atoms.smallest.ai/api/v1"
-headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
-
-# 1. Create
-resp = requests.post(f"{BASE_URL}/campaign", headers=headers, json={
-    "name": f"Outreach {int(time.time())}",
-    "agentId": "your-agent-id",
-    "audienceId": "your-audience-id",
-    "maxRetries": 2,
-    "retryDelay": 30
-})
-campaign_id = resp.json()["data"]["_id"]
-print(f"Created: {campaign_id}")
-
-# 2. Start
 client = AtomsClient()
-client.start_campaign(id=campaign_id)
-print("Started")
+audience = Audience()
+campaign = Campaign()
 
-# 3. Monitor
-for _ in range(10):
-    time.sleep(30)
-    resp = requests.get(f"{BASE_URL}/campaign/{campaign_id}", headers=headers)
-    status = resp.json()["data"]["campaign"]["status"]
-    print(f"Status: {status}")
-    if status in ["completed", "failed"]:
+# 1. Get phone number
+phones = client.get_phone_numbers()
+phone_id = phones["data"][0]["_id"]
+print(f"Using phone: {phones['data'][0]['attributes']['phoneNumber']}")
+
+# 2. Create agent
+agent = client.new_agent(
+    name=f"Campaign Agent {int(time.time())}",
+    prompt="You are a friendly survey agent. Ask about interest and get their name.",
+    description="Test agent"
+)
+agent_id = agent.data
+print(f"Agent: {agent_id}")
+
+# 3. Create audience
+aud = audience.create(
+    name=f"Test Audience {int(time.time())}",
+    phone_numbers=["+916366821717"],
+    names=[("Test", "User")]
+)
+audience_id = aud["data"]["_id"]
+print(f"Audience: {audience_id}")
+
+# 4. Create campaign
+camp = campaign.create(
+    name=f"Test Campaign {int(time.time())}",
+    agent_id=agent_id,
+    audience_id=audience_id,
+    phone_ids=[phone_id],
+    max_retries=1,
+    retry_delay=5
+)
+campaign_id = camp["data"]["_id"]
+print(f"Campaign: {campaign_id}")
+
+# 5. Start
+campaign.start(campaign_id)
+print("Campaign started!")
+
+# 6. Monitor
+for i in range(6):
+    time.sleep(10)
+    status = campaign.get(campaign_id)
+    print(f"Status: {status['data']['campaign']['status']}")
+    if status['data']['campaign']['status'] in ['completed', 'failed']:
         break
 
-# 4. Delete
-client.delete_campaign(id=campaign_id)
-print("Deleted")
+# 7. Cleanup
+campaign.delete(campaign_id)
+audience.delete(audience_id)
+client.delete_agent(id=agent_id)
+print("Cleanup complete")
 ```
 
 ## Campaign States
@@ -202,23 +269,20 @@ print("Deleted")
 
 | Error | Solution |
 |-------|----------|
-| "No phone numbers available" | Link a phone number to your agent in Dashboard → Phone Numbers |
-| Campaign stays "draft" | Call `start_campaign()` |
-| Campaign fails immediately | Check agent has valid phone and audience has contacts |
+| "No phone numbers available" | Pass `phone_ids` from `get_phone_numbers()` |
+| Campaign stays "draft" | Call `campaign.start(campaign_id)` |
+| Campaign fails immediately | Verify agent and audience IDs are valid |
 
 ## Best Practices
 
 <AccordionGroup>
-  <Accordion title="Configure phone number first">
-    In Dashboard → Phone Numbers, link a phone to your agent before creating campaigns.
-  </Accordion>
   <Accordion title="Test with small audience">
-    Start with 5-10 contacts to verify before scaling.
+    Start with 1-2 contacts to verify before scaling.
   </Accordion>
   <Accordion title="Use reasonable retry settings">
     2-3 retries with 15-30 minute delays balances persistence and respect.
   </Accordion>
-  <Accordion title="Schedule for appropriate times">
-    Call during 9am-8pm local time.
+  <Accordion title="Check campaign status">
+    Monitor with `campaign.get()` and stop if needed.
   </Accordion>
 </AccordionGroup>

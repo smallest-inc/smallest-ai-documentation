@@ -1,0 +1,44 @@
+---
+title: 'Emotion detection'
+description: 'Capture per-emotion confidence scores from Pulse STT responses'
+---
+
+<Badge color="green">Pre-Recorded</Badge>
+
+## Enabling emotion detection
+
+Include `emotion_detection=true` in your Pulse STT query parameters.
+
+### Sample request
+
+```bash
+curl --request POST \
+  --url "https://waves-api.smallest.ai/api/v1/pulse/get_text?model=pulse&language=en&emotion_detection=true" \
+  --header "Authorization: Bearer $SMALLEST_API_KEY" \
+  --header "Content-Type: audio/wav" \
+  --data-binary "@/path/to/audio.wav"
+```
+
+<Note>
+Emotion detection is currently supported only for Pre-Recorded API. Real-Time API support is coming soon.
+</Note>
+
+## Output format & field of interest
+
+The response adds an `emotions` object containing floating-point scores (0–1) for happiness, sadness, disgust, fear, and anger. Use these fields to monitor sentiment, trigger QA alerts, or enrich customer analytics.
+
+### Sample response
+
+```json
+{
+  "transcription": "Hello world.",
+  "emotions": {
+    "happiness": 0.80,
+    "sadness": 0.15,
+    "disgust": 0.02,
+    "fear": 0.03,
+    "anger": 0.05
+  }
+}
+```
+

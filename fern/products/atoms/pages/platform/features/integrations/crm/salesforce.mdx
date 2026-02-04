@@ -1,0 +1,208 @@
+---
+title: "Salesforce Integration"
+sidebarTitle: "Salesforce"
+description: "Connect Atoms to Salesforce for customer lookup and activity logging."
+---
+
+Integrate your Atoms agents with Salesforce to look up customer data, log call activities, and keep your CRM updated automatically.
+
+---
+
+## What You Can Do
+
+| Capability | Description |
+|------------|-------------|
+| **Contact Lookup** | Find customers by phone, populate agent with context |
+| **Activity Logging** | Automatically create Tasks for completed calls |
+| **Lead Creation** | Create new leads for unknown callers |
+| **Record Updates** | Update contact fields based on call outcomes |
+
+---
+
+## Prerequisites
+
+Before connecting:
+- Salesforce account with API access
+- Admin permissions (or contact your Salesforce admin)
+- API usage within your org limits
+
+---
+
+## Connecting Salesforce
+
+<Steps>
+  ### Navigate to Integrations
+  
+  Go to **Settings** → **Integrations** → **Salesforce**.
+
+  ### Click "Connect Salesforce"
+  
+  You'll be redirected to Salesforce login.
+
+  ### Authorize Access
+  
+  Log in and click **Allow** to grant Atoms access to:
+  - Read contacts and leads
+  - Create and update tasks
+  - Access custom objects (if configured)
+
+  ### Verify Connection
+  
+  You should see "Connected" status with your Salesforce org name.
+</Steps>
+
+---
+
+## Configuration Options
+
+### Contact Lookup
+
+Configure how Atoms finds customers:
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Search Field** | Which field to match phone numbers | Phone, MobilePhone |
+| **Object Type** | Contact, Lead, or Both | Contact |
+| **Fields to Retrieve** | What data to fetch | Name, Email, Account |
+
+### Activity Logging
+
+Configure what gets logged after calls:
+
+| Setting | Description | Options |
+|---------|-------------|---------|
+| **Create Task** | Log calls as Tasks | Yes/No |
+| **Task Subject** | Template for subject line | "Voice Call - {{disposition}}" |
+| **Include Summary** | Add call summary to description | Yes/No |
+| **Task Status** | Status of created task | Completed |
+
+---
+
+## Using Salesforce Data in Agents
+
+### Pre-Call Lookup
+
+When a call connects, Atoms can automatically query Salesforce:
+
+```
+Query: SELECT Name, Email, Account.Name, Owner.Name 
+       FROM Contact 
+       WHERE Phone = '{{caller_phone}}' 
+       OR MobilePhone = '{{caller_phone}}'
+```
+
+**Variables populated:**
+- `{{customer_name}}` — Contact's full name
+- `{{customer_email}}` — Contact's email
+- `{{account_name}}` — Related account name
+- `{{owner_name}}` — Contact owner (for transfers)
+
+### In Your Prompt
+
+```
+CUSTOMER CONTEXT (from Salesforce):
+- Name: {{customer_name}}
+- Company: {{account_name}}
+- Account Owner: {{owner_name}}
+
+Greet them by name. If they ask to speak with their rep, 
+you can reference {{owner_name}}.
+```
+
+---
+
+## Post-Call Activity Logging
+
+After each call, Atoms creates a Task in Salesforce:
+
+```json
+{
+  "Subject": "Voice Call - Resolved",
+  "WhoId": "003XXXXXXXXXXXXXXX",
+  "Description": "Call Summary:\nCustomer called about billing question. Explained invoice charges. Issue resolved.\n\nDuration: 3 minutes 45 seconds\nAgent: Support Bot",
+  "Status": "Completed",
+  "CallType": "Inbound",
+  "CallDurationInSeconds": 225
+}
+```
+
+### Customizing the Log
+
+You can customize what's included:
+
+| Field | Source | Example |
+|-------|--------|---------|
+| Subject | Template | "Voice Call - {{disposition}}" |
+| Description | Call summary + metadata | Call details |
+| WhoId | Matched contact ID | Contact record |
+| CallDurationInSeconds | System variable | 225 |
+| Custom fields | Your variables | As configured |
+
+---
+
+## Advanced: Custom Objects
+
+If you use custom Salesforce objects, you can configure Atoms to:
+
+1. **Query custom objects** — Look up data from any object
+2. **Create custom records** — Log to custom objects instead of Tasks
+3. **Update custom fields** — Write call data to custom fields
+
+<Info>
+Custom object configuration requires some Salesforce knowledge. Contact support if you need help.
+</Info>
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Connection Failed" icon="xmark">
+    **Possible causes:**
+    - Salesforce org requires IP whitelisting
+    - User lacks API permissions
+    - OAuth token expired
+    
+    **Solutions:**
+    1. Check Salesforce IP restrictions
+    2. Verify user has "API Enabled" permission
+    3. Reconnect the integration
+  </Accordion>
+  
+  <Accordion title="Contact Not Found" icon="search">
+    **Possible causes:**
+    - Phone number format mismatch
+    - Contact doesn't exist
+    - Searching wrong object type
+    
+    **Solutions:**
+    1. Ensure phone formats match (with/without country code)
+    2. Verify contact exists in Salesforce
+    3. Check object type setting (Contact vs Lead)
+  </Accordion>
+  
+  <Accordion title="Activity Not Logged" icon="list">
+    **Possible causes:**
+    - Contact not found (can't link activity)
+    - Task creation disabled
+    - API error
+    
+    **Solutions:**
+    1. Check that contact was found during lookup
+    2. Verify activity logging is enabled
+    3. Check Salesforce API limits
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="HubSpot Integration" icon="hubspot" href="/platform/features/integrations/crm/hubspot">
+    Set up HubSpot instead
+  </Card>
+  <Card title="Custom API Calls" icon="code" href="/platform/features/api-calls/common-integrations">
+    Advanced Salesforce queries
+  </Card>
+</CardGroup>

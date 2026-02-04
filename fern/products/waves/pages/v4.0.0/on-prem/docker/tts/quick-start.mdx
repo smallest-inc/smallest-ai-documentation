@@ -1,0 +1,344 @@
+---
+title: Quick Start
+description: Deploy Smallest Self-Host Text-to-Speech with Docker Compose in under 15 minutes
+---
+
+## Overview
+
+This guide walks you through deploying Smallest Self-Host Text-to-Speech (TTS) using Docker Compose. You'll have a fully functional text-to-speech service running in under 15 minutes.
+
+<Note>
+Ensure you've completed all [prerequisites](/docker/tts/prerequisites) before starting this guide.
+</Note>
+
+## Step 1: Create Project Directory
+
+Create a directory for your deployment:
+
+```bash
+mkdir -p ~/smallest-tts
+cd ~/smallest-tts
+```
+
+## Step 2: Login to Container Registry
+
+Authenticate with the Smallest container registry using credentials provided by support:
+
+```bash
+docker login quay.io
+```
+
+Enter your username and password when prompted.
+
+<Tip>
+Save your credentials securely. You'll need them if you restart or redeploy the containers.
+</Tip>
+
+## Step 3: Create Environment File
+
+Create a `.env` file with your license key:
+
+```bash
+cat > .env << 'EOF'
+LICENSE_KEY=your-license-key-here
+EOF
+```
+
+Replace `your-license-key-here` with the actual license key provided by Smallest.ai.
+
+<Warning>
+Never commit your `.env` file to version control. Add it to `.gitignore` if using git.
+</Warning>
+
+## Step 4: Create Docker Compose File
+
+Create a `docker-compose.yml` file for TTS deployment:
+
+```yaml docker-compose.yml
+version: "3.8"
+
+services:
+  lightning-tts:
+    image: quay.io/smallestinc/lightning-tts:latest
+    ports:
+      - "8876:8876"
+    environment:
+      - LICENSE_KEY=${LICENSE_KEY}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=8876
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - smallest-network
+
+  api-server:
+    image: quay.io/smallestinc/self-hosted-api-server:latest
+    container_name: api-server
+    environment:
+      - LICENSE_KEY=${LICENSE_KEY}
+      - LIGHTNING_TTS_BASE_URL=http://lightning-tts:8876
+      - API_BASE_URL=http://license-proxy:3369
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - "7100:7100"
+    networks:
+      - smallest-network
+    restart: unless-stopped
+    depends_on:
+      - lightning-tts
+      - license-proxy
+
+  license-proxy:
+    image: quay.io/smallestinc/license-proxy:latest
+    container_name: license-proxy
+    environment:
+      - LICENSE_KEY=${LICENSE_KEY}
+      - PORT=3369
+    networks:
+      - smallest-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis-server
+    ports:
+      - "6379:6379"
+    networks:
+      - smallest-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+networks:
+  smallest-network:
+    driver: bridge
+    name: smallest-network
+```
+
+## Step 5: Start Services
+
+Launch all services with Docker Compose:
+
+```bash
+docker compose up -d
+```
+
+<Tabs>
+  <Tab title="First Time Startup">
+    First startup will take 3-5 minutes as the system:
+    1. Pulls container images (~15-25 GB, includes TTS models)
+    2. Initializes GPU and loads models
+    
+    Models are embedded in the container - no separate download needed.
+  </Tab>
+
+  <Tab title="Subsequent Startups">
+    After the first run, startup takes 30-60 seconds as images are cached.
+  </Tab>
+</Tabs>
+
+## Step 6: Monitor Startup
+
+Watch the logs to monitor startup progress:
+
+```bash
+docker compose logs -f
+```
+
+Look for these success indicators:
+
+<Steps>
+  <Step title="Redis Ready">
+    ```
+    redis-server  | Ready to accept connections
+    ```
+  </Step>
+
+  <Step title="License Proxy Ready">
+    ```
+    license-proxy  | License validated successfully
+    license-proxy  | Server listening on port 3369
+    ```
+  </Step>
+
+  <Step title="Lightning TTS Ready">
+    ```
+    lightning-tts  | Model loaded successfully
+    lightning-tts  | Server ready on port 8876
+    ```
+  </Step>
+
+  <Step title="API Server Ready">
+    ```
+    api-server  | Connected to Lightning TTS
+    api-server  | API server listening on port 7100
+    ```
+  </Step>
+</Steps>
+
+Press `Ctrl+C` to stop following logs.
+
+## Step 7: Verify Installation
+
+Check that all containers are running:
+
+```bash
+docker compose ps
+```
+
+Expected output:
+
+```
+NAME                IMAGE                                         STATUS
+api-server          quay.io/smallestinc/self-hosted-api-server    Up
+license-proxy       quay.io/smallestinc/license-proxy             Up
+lightning-tts        quay.io/smallestinc/lightning-tts             Up
+redis-server        redis:7-alpine                                Up (healthy)
+```
+
+## Step 8: Test API
+
+Test the API with a sample request:
+
+```bash
+curl -X POST http://localhost:7100/v1/speak \
+  -H "Authorization: Token ${LICENSE_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Hello, this is a test of the text-to-speech service.",
+    "voice": "default"
+  }'
+```
+
+<Tip>
+Or use the health check endpoint first:
+
+```bash
+curl http://localhost:7100/health
+```
+
+Expected response: `{"status": "healthy"}`
+</Tip>
+
+## Common Startup Issues
+
+<AccordionGroup>
+  <Accordion title="GPU Not Found" icon="triangle-exclamation">
+    **Error:** `could not select device driver "nvidia"`
+    
+    **Solution:**
+    ```bash
+    sudo systemctl restart docker
+    docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
+    ```
+    
+    If this fails, reinstall NVIDIA Container Toolkit.
+  </Accordion>
+
+  <Accordion title="License Validation Failed" icon="key">
+    **Error:** `License validation failed`
+    
+    **Solution:**
+    - Verify LICENSE_KEY in `.env` is correct
+    - Check internet connectivity
+    - Ensure firewall allows HTTPS to console-api.smallest.ai
+  </Accordion>
+
+  <Accordion title="Port Already in Use" icon="network-wired">
+    **Error:** `port is already allocated`
+    
+    **Solution:**
+    Check what's using the port:
+    ```bash
+    sudo lsof -i :7100
+    ```
+    
+    Either stop the conflicting service or change the port in docker-compose.yml
+  </Accordion>
+</AccordionGroup>
+
+## Managing Your Deployment
+
+### Stop Services
+
+```bash
+docker compose stop
+```
+
+### Restart Services
+
+```bash
+docker compose restart
+```
+
+### View Logs
+
+```bash
+docker compose logs -f [service-name]
+```
+
+Examples:
+```bash
+docker compose logs -f api-server
+docker compose logs -f lightning-tts
+```
+
+### Update Images
+
+Pull latest images and restart:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+### Remove Deployment
+
+Stop and remove all containers:
+
+```bash
+docker compose down
+```
+
+Remove containers and volumes:
+
+```bash
+docker compose down -v
+```
+
+<Warning>
+Using `-v` flag will delete all data. Models will need to be re-downloaded on next startup.
+</Warning>
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="TTS Configuration" icon="gear" href="/docker/tts/configuration">
+    Customize your TTS deployment with advanced configuration options
+  </Card>
+
+  <Card title="TTS Services Overview" icon="layer-group" href="/docker/tts/services-overview">
+    Learn about each TTS service component in detail
+  </Card>
+
+  <Card title="TTS Troubleshooting" icon="wrench" href="/docker/tts/docker-troubleshooting">
+    Debug common issues and optimize performance
+  </Card>
+
+  <Card title="API Reference" icon="code" href="/api-reference/authentication">
+    Integrate with your applications using the API
+  </Card>
+</CardGroup>
+

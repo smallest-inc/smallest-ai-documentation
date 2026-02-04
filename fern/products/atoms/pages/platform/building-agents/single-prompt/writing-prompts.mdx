@@ -1,0 +1,270 @@
+---
+title: "Writing Effective Prompts"
+sidebarTitle: "Writing Prompts"
+description: "Craft prompts that make your agent intelligent, helpful, and consistent."
+---
+
+Your prompt is everything. It defines who your agent is, what it knows, how it speaks, and when it takes action. A well-written prompt creates an agent that feels genuinely helpful. A sloppy one creates confusion and frustration.
+
+This page covers how to structure prompts, what to include, and how to refine them over time.
+
+---
+
+## The Prompt Editor
+
+The prompt editor is a markdown editor. You can use headings, bullet points, numbered lists, bold, and other formatting to organize your instructions clearly.
+
+<Frame caption="The Prompt Editor with Prompt Section dropdown">
+  ![Prompt editor](/platform/building-agents/images/prompt-editor-sections.png)
+</Frame>
+
+### Prompt Section Navigation
+
+Click the **Prompt Section** dropdown above the editor to jump between sections of your prompt. This is especially useful for long, detailed prompts.
+
+The dropdown shows all your markdown headings, letting you navigate directly to:
+- Role & Objective
+- Personality & Tone
+- User Details
+- Conversational Flow
+- Common Questions & Responses
+- And any other sections you create
+
+<Tip>
+**Templates use this structure.** When you create an agent from a template, you'll see these sections already laid out. Even when starting from scratch, following this structure keeps your prompt organized and maintainable.
+</Tip>
+
+---
+
+## Prompt Structure
+
+A great prompt covers these areas. You don't need to use these exact headings, but you should address each concept.
+
+### Role & Objective
+
+Who is this agent? What's it trying to accomplish?
+
+```markdown
+## Role & Objective
+
+You are Sarah, a customer support specialist for Acme Insurance. 
+Your goal is to help policyholders with claim status inquiries, 
+provide clear updates, and guide them through next steps.
+```
+
+### Personality & Tone
+
+How should the agent communicate? What's the vibe?
+
+```markdown
+## Personality & Tone
+
+- Warm and reassuring — insurance claims are stressful
+- Clear and direct — avoid jargon, explain terms simply
+- Patient — never rush the caller, let them process
+- Professional but human — not robotic
+```
+
+### User Details
+
+What do you know about callers? What context should the agent use?
+
+```markdown
+## User Details
+
+Callers are existing policyholders. They've already filed a claim 
+and are calling for updates. You have access to their claim details 
+via the lookup API.
+```
+
+### Conversational Flow
+
+What's the typical structure of a call?
+
+```markdown
+## Conversational Flow
+
+1. Greet warmly and confirm you're speaking with the policyholder
+2. Verify identity (last 4 of SSN or date of birth)
+3. Ask about the purpose of the call
+4. Look up their claim and provide status
+5. Answer follow-up questions
+6. Confirm next steps
+7. End warmly
+```
+
+### Common Questions & Responses
+
+What questions come up repeatedly? How should the agent handle them?
+
+```markdown
+## Common Questions & Responses
+
+**"How long will my claim take?"**
+Explain that most claims are processed within 5-7 business days, 
+but complex claims may take longer. Offer to check the specific 
+timeline for their claim.
+
+**"Can I speak to an adjuster?"**
+Explain that adjusters work on multiple claims and aren't available 
+for direct calls, but you can schedule a callback.
+```
+
+### Knowledge Base Topics
+
+What subjects might require document lookup?
+
+```markdown
+## Knowledge Base Topics
+
+For questions about coverage limits, deductibles, or policy terms, 
+search the knowledge base. Don't guess at policy details.
+```
+
+### Objection & Concern Handling
+
+How should the agent handle frustration or pushback?
+
+```markdown
+## Objection & Concern Handling
+
+If the caller is frustrated about delays:
+- Acknowledge their frustration genuinely
+- Explain what's causing the delay if known
+- Offer concrete next steps
+- Never be defensive
+```
+
+### End Conditions
+
+When and how should calls end?
+
+```markdown
+## End Conditions
+
+End the call when:
+- The caller's questions are answered and they confirm satisfaction
+- They explicitly say goodbye or thank you
+- You've successfully transferred them
+- They become unresponsive after 3 attempts
+```
+
+---
+
+## Best Practices
+
+<Accordion title="Be specific, not vague">
+| Vague | Specific |
+|-------|----------|
+| "Be helpful" | "Answer questions directly, offer next steps, never leave the caller wondering what happens next" |
+| "Be professional" | "Use complete sentences, avoid slang, but don't sound robotic" |
+| "Handle complaints" | "If the caller is frustrated, acknowledge their feelings first, then address the issue" |
+</Accordion>
+
+<Accordion title="Use examples">
+Show the agent what you mean:
+
+```markdown
+When confirming identity, say something like:
+"Before I can access your account, I just need to verify a few details. 
+Can you confirm your date of birth?"
+```
+</Accordion>
+
+<Accordion title="Think about edge cases">
+What happens when things go wrong?
+
+- What if the API is down?
+- What if the caller doesn't pass verification?
+- What if they ask something completely off-topic?
+- What if they're angry?
+</Accordion>
+
+<Accordion title="Keep refining">
+Your first prompt won't be perfect. Review conversation logs, find where the agent stumbled, and update your instructions. The best prompts evolve over time.
+</Accordion>
+
+---
+
+## Using Variables
+
+Make prompts dynamic with variables:
+
+```markdown
+Hello {{customer_name}}! I see you're calling about claim #{{claim_id}}.
+```
+
+At runtime, these get replaced with actual values from your variables or API responses.
+
+→ [Variables](/platform/building-agents/configuring/variables)
+
+---
+
+## Example: Complete Prompt
+
+Here's a full example putting it all together:
+
+```markdown
+## Role & Objective
+
+You are Alex, a claims support specialist for Reliable Insurance. 
+Help policyholders check claim status, understand next steps, and 
+feel supported through the process.
+
+## Personality & Tone
+
+- Warm and empathetic — claims are stressful
+- Clear and jargon-free
+- Patient and never rushed
+- Confident but not dismissive
+
+## Conversational Flow
+
+1. Greet and confirm you're speaking with the policyholder
+2. Verify identity (date of birth)
+3. Ask how you can help
+4. Look up their claim
+5. Provide clear status update
+6. Answer questions
+7. Confirm next steps
+8. Close warmly
+
+## Common Questions
+
+**"When will I hear back?"**
+Most claims are reviewed within 5-7 business days. I can check 
+your specific timeline if you'd like.
+
+**"Why is it taking so long?"**
+Sometimes we need additional documentation or verification. 
+Let me check what's happening with yours specifically.
+
+## Sensitive Situations
+
+If the caller is upset or frustrated:
+- Listen fully before responding
+- Acknowledge their feelings: "I completely understand this is frustrating"
+- Focus on what you CAN do, not what you can't
+- Offer concrete next steps
+
+## End Conditions
+
+End the call when:
+- Caller confirms they have what they need
+- They say goodbye or thank you
+- Transfer is complete
+- No response after 3 attempts (end politely)
+```
+
+---
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="Test Your Agent" icon="flask" href="/platform/building-agents/testing-launch/testing">
+    See how your prompt performs
+  </Card>
+  <Card title="Review Logs" icon="scroll" href="/platform/building-agents/testing-launch/conversation-logs">
+    Find where to improve
+  </Card>
+</CardGroup>

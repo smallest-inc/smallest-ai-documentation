@@ -1,0 +1,141 @@
+---
+title: "System Variables"
+sidebarTitle: "System Variables"
+description: "Automatic variables that Atoms provides for every call."
+---
+
+System variables are automatically populated by Atoms. You don't need to set them up — they're available in every call.
+
+---
+
+## Available System Variables
+
+### Caller Information
+
+| Variable | Description | Example Value |
+|----------|-------------|---------------|
+| `{{caller_phone}}` | Caller's phone number | `+14155551234` |
+| `{{caller_country}}` | Country code (if detectable) | `US` |
+
+### Call Timing
+
+| Variable | Description | Example Value |
+|----------|-------------|---------------|
+| `{{call_start_time}}` | When the call began | `2024-01-20T14:30:00Z` |
+| `{{current_time}}` | Current time during call | `2024-01-20T14:32:15Z` |
+| `{{current_date}}` | Today's date | `2024-01-20` |
+| `{{call_duration}}` | How long the call has lasted | `125` (seconds) |
+
+### Agent Information
+
+| Variable | Description | Example Value |
+|----------|-------------|---------------|
+| `{{agent_name}}` | Name of the agent | `Customer Support Bot` |
+| `{{agent_id}}` | Unique agent identifier | `agt_abc123` |
+
+### Call Metadata
+
+| Variable | Description | Example Value |
+|----------|-------------|---------------|
+| `{{call_id}}` | Unique call identifier | `call_xyz789` |
+| `{{call_direction}}` | Inbound or outbound | `inbound` |
+| `{{phone_number}}` | Your Atoms phone number | `+18005551234` |
+
+---
+
+## Using System Variables
+
+### In Prompts
+
+```
+You are a support agent. The caller's phone number is {{caller_phone}}.
+
+When ending the call, say: "This call started at {{call_start_time}} 
+and your reference number is {{call_id}}."
+```
+
+### In API Calls
+
+```json
+{
+  "phone": "{{caller_phone}}",
+  "call_id": "{{call_id}}",
+  "timestamp": "{{call_start_time}}"
+}
+```
+
+### In Webhooks
+
+System variables are automatically included in webhook payloads for call events.
+
+---
+
+## Common Use Cases
+
+<AccordionGroup>
+  <Accordion title="Caller ID Lookup" icon="search">
+    Use `{{caller_phone}}` in a Pre-Call API to fetch customer data:
+    
+    ```
+    GET https://api.yourcrm.com/customers?phone={{caller_phone}}
+    ```
+    
+    Response populates user variables like `{{customer_name}}`.
+  </Accordion>
+  
+  <Accordion title="Call Reference Numbers" icon="hashtag">
+    Give callers a reference number for follow-up:
+    
+    ```
+    "Your reference number for this call is {{call_id}}. 
+    Please save this in case you need to follow up."
+    ```
+  </Accordion>
+  
+  <Accordion title="Time-Based Greetings" icon="clock">
+    While you can't do complex logic with variables alone, you can reference time:
+    
+    ```
+    "Thanks for calling at {{current_time}}. 
+    Let me check our current availability..."
+    ```
+  </Accordion>
+  
+  <Accordion title="Post-Call Logging" icon="list">
+    Include call data in your Post-Call API:
+    
+    ```json
+    {
+      "call_id": "{{call_id}}",
+      "duration": "{{call_duration}}",
+      "caller": "{{caller_phone}}",
+      "agent": "{{agent_name}}"
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Important Notes
+
+<Warning>
+**Privacy:** System variables may contain personally identifiable information (PII) like phone numbers. Handle them according to your privacy policies.
+</Warning>
+
+<Info>
+**Formatting:** Date/time variables use ISO 8601 format. You may need to format them in your backend systems.
+</Info>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="User Variables" icon="user" href="/platform/features/variables/user-variables">
+    Create your own custom variables
+  </Card>
+  <Card title="API Calls" icon="bolt" href="/platform/features/api-calls/what-are-api-calls">
+    Use variables in API integrations
+  </Card>
+</CardGroup>

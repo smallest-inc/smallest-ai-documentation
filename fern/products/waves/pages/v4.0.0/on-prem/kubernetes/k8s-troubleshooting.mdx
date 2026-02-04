@@ -1,0 +1,508 @@
+---
+title: Kubernetes Troubleshooting
+description: Debug common issues in Kubernetes deployments
+---
+
+## Overview
+
+This guide covers common issues encountered when deploying Smallest Self-Host on Kubernetes and how to resolve them.
+
+## Diagnostic Commands
+
+### Quick Status Check
+
+```bash
+kubectl get all -n smallest
+kubectl get pods -n smallest --show-labels
+kubectl top pods -n smallest
+kubectl top nodes
+```
+
+### Detailed Pod Information
+
+```bash
+kubectl describe pod <pod-name> -n smallest
+kubectl logs <pod-name> -n smallest
+kubectl logs <pod-name> -n smallest --previous
+kubectl logs <pod-name> -c <container-name> -n smallest -f
+```
+
+### Events
+
+```bash
+kubectl get events -n smallest --sort-by='.lastTimestamp'
+kubectl get events -n smallest --field-selector type=Warning
+```
+
+## Common Issues
+
+### Pods Stuck in Pending
+
+**Symptoms**:
+```
+NAME                READY   STATUS    RESTARTS   AGE
+lightning-asr-xxx   0/1     Pending   0          5m
+```
+
+**Causes and Solutions**:
+
+<AccordionGroup>
+  <Accordion title="Insufficient GPU Resources" icon="server">
+    **Check**:
+    ```bash
+    kubectl describe pod lightning-asr-xxx -n smallest
+    ```
+    
+    Look for: `0/3 nodes are available: 3 Insufficient nvidia.com/gpu`
+    
+    **Solutions**:
+    - Add GPU nodes to cluster
+    - Check GPU nodes are ready: `kubectl get nodes -l nvidia.com/gpu=true`
+    - Verify GPU device plugin: `kubectl get pods -n kube-system -l name=nvidia-device-plugin`
+    - Reduce requested GPUs or add more nodes
+  </Accordion>
+
+  <Accordion title="Node Selector Mismatch" icon="filter">
+    **Check**:
+    ```bash
+    kubectl get nodes --show-labels
+    kubectl describe pod lightning-asr-xxx -n smallest | grep "Node-Selectors"
+    ```
+    
+    **Solutions**:
+    - Update nodeSelector in values.yaml to match actual node labels
+    - Remove nodeSelector if not needed
+    - Add labels to nodes: `kubectl label nodes <node-name> workload=gpu`
+  </Accordion>
+
+  <Accordion title="Tolerations Missing" icon="shield-halved">
+    **Check**:
+    ```bash
+    kubectl describe pod lightning-asr-xxx -n smallest | grep -A5 "Tolerations"
+    kubectl describe node <node-name> | grep "Taints"
+    ```
+    
+    **Solutions**:
+    Update tolerations in values.yaml:
+    ```yaml
+    lightningAsr:
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+    ```
+  </Accordion>
+
+  <Accordion title="PVC Not Bound" icon="hard-drive">
+    **Check**:
+    ```bash
+    kubectl get pvc -n smallest
+    ```
+    
+    Look for: `STATUS: Pending`
+    
+    **Solutions**:
+    - Check storage class exists: `kubectl get storageclass`
+    - Verify sufficient storage: `kubectl describe pvc <pvc-name> -n smallest`
+    - Check EFS/EBS CSI driver running: `kubectl get pods -n kube-system -l app=efs-csi-controller`
+  </Accordion>
+</AccordionGroup>
+
+### ImagePullBackOff
+
+**Symptoms**:
+```
+NAME                READY   STATUS             RESTARTS   AGE
+lightning-asr-xxx   0/1     ImagePullBackOff   0          2m
+```
+
+**Diagnosis**:
+
+```bash
+kubectl describe pod lightning-asr-xxx -n smallest
+```
+
+Look for errors in Events section.
+
+**Solutions**:
+
+<AccordionGroup>
+  <Accordion title="Invalid Credentials" icon="key">
+    **Error**: `unauthorized: authentication required`
+    
+    **Solutions**:
+    - Verify imageCredentials in values.yaml
+    - Check secret created: `kubectl get secrets -n smallest | grep registry`
+    - Test credentials locally: `docker login quay.io`
+    - Recreate secret:
+      ```bash
+      kubectl delete secret <pull-secret> -n smallest
+      helm upgrade smallest-self-host ... -f values.yaml
+      ```
+  </Accordion>
+
+  <Accordion title="Image Not Found" icon="image">
+    **Error**: `manifest unknown` or `not found`
+    
+    **Solutions**:
+    - Verify image name in values.yaml
+    - Check image exists: `docker pull quay.io/smallestinc/lightning-asr:latest`
+    - Contact support@smallest.ai for access
+  </Accordion>
+
+  <Accordion title="Rate Limited" icon="gauge-high">
+    **Error**: `rate limit exceeded`
+    
+    **Solutions**:
+    - Wait and retry
+    - Use authenticated pulls (imageCredentials)
+  </Accordion>
+</AccordionGroup>
+
+### CrashLoopBackOff
+
+**Symptoms**:
+```
+NAME                READY   STATUS             RESTARTS   AGE
+lightning-asr-xxx   0/1     CrashLoopBackOff   5          5m
+```
+
+**Diagnosis**:
+
+```bash
+kubectl logs lightning-asr-xxx -n smallest
+kubectl logs lightning-asr-xxx -n smallest --previous
+kubectl describe pod lightning-asr-xxx -n smallest
+```
+
+**Common Causes**:
+
+<AccordionGroup>
+  <Accordion title="License Validation Failed" icon="certificate">
+    **Error**: `License validation failed` or `Invalid license key`
+    
+    **Solutions**:
+    - Check License Proxy is running: `kubectl get pods -l app=license-proxy -n smallest`
+    - Verify license key in values.yaml
+    - Check License Proxy logs: `kubectl logs -l app=license-proxy -n smallest`
+    - Test License Proxy: `kubectl exec -it <api-server-pod> -- curl http://license-proxy:3369/health`
+  </Accordion>
+
+  <Accordion title="Model Download Failed" icon="download">
+    **Error**: `Failed to download model` or `Connection timeout`
+    
+    **Solutions**:
+    - Verify MODEL_URL in values.yaml
+    - Check network connectivity
+    - Check disk space: `kubectl exec -it <pod> -- df -h`
+    - Test URL: `kubectl run test --rm -it --image=curlimages/curl -- curl -I $MODEL_URL`
+  </Accordion>
+
+  <Accordion title="Out of Memory" icon="memory">
+    **Error**: Pod killed, exit code 137
+    
+    **Solutions**:
+    - Check memory limits:
+      ```bash
+      kubectl describe pod lightning-asr-xxx -n smallest | grep -A5 Limits
+      ```
+    - Increase memory:
+      ```yaml
+      lightningAsr:
+        resources:
+          limits:
+            memory: 16Gi
+      ```
+    - Check node capacity: `kubectl describe node <node-name>`
+  </Accordion>
+
+  <Accordion title="GPU Not Accessible" icon="display">
+    **Error**: `No CUDA-capable device` or `GPU not found`
+    
+    **Solutions**:
+    - Verify GPU available on node: `kubectl describe node <node-name> | grep nvidia.com/gpu`
+    - Check NVIDIA device plugin: `kubectl get pods -n kube-system -l name=nvidia-device-plugin`
+    - Restart device plugin: `kubectl delete pod -n kube-system -l name=nvidia-device-plugin`
+    - Verify GPU driver on node
+  </Accordion>
+</AccordionGroup>
+
+### Service Not Accessible
+
+**Symptoms**:
+- Cannot connect to API server
+- Connection refused errors
+- Timeouts
+
+**Diagnosis**:
+
+```bash
+kubectl get svc -n smallest
+kubectl describe svc api-server -n smallest
+kubectl get endpoints -n smallest
+```
+
+**Solutions**:
+
+<AccordionGroup>
+  <Accordion title="No Endpoints" icon="circle-xmark">
+    **Issue**: Service has no endpoints
+    
+    **Check**:
+    ```bash
+    kubectl get endpoints api-server -n smallest
+    ```
+    
+    **Solutions**:
+    - Verify pods are running: `kubectl get pods -l app=api-server -n smallest`
+    - Check pod labels match service selector
+    - Check pods are ready: `kubectl get pods -l app=api-server -o wide`
+  </Accordion>
+
+  <Accordion title="Wrong Port" icon="network-wired">
+    **Solutions**:
+    - Verify service port:
+      ```bash
+      kubectl get svc api-server -n smallest -o yaml
+      ```
+    - Use correct port in connections (7100 for API Server)
+  </Accordion>
+
+  <Accordion title="Network Policy Blocking" icon="shield">
+    **Check**:
+    ```bash
+    kubectl get networkpolicy -n smallest
+    ```
+    
+    **Solutions**:
+    - Review network policies
+    - Temporarily disable to test:
+      ```bash
+      kubectl delete networkpolicy <policy-name> -n smallest
+      ```
+  </Accordion>
+</AccordionGroup>
+
+### HPA Not Scaling
+
+**Symptoms**:
+- HPA shows `<unknown>` for metrics
+- Pods not scaling despite high load
+
+**Diagnosis**:
+
+```bash
+kubectl get hpa -n smallest
+kubectl describe hpa lightning-asr -n smallest
+kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1" | jq .
+```
+
+**Solutions**:
+
+<AccordionGroup>
+  <Accordion title="Metrics Not Available" icon="chart-simple">
+    **Check**:
+    ```bash
+    kubectl get servicemonitor -n smallest
+    kubectl logs -n kube-system -l app.kubernetes.io/name=prometheus-adapter
+    ```
+    
+    **Solutions**:
+    - Enable ServiceMonitor:
+      ```yaml
+      scaling:
+        auto:
+          lightningAsr:
+            servicemonitor:
+              enabled: true
+      ```
+    - Verify Prometheus is scraping:
+      ```bash
+      kubectl port-forward svc/smallest-prometheus-stack-prometheus 9090:9090
+      ```
+      Query: `asr_active_requests`
+  </Accordion>
+
+  <Accordion title="Already at Max Replicas" icon="gauge-max">
+    **Check**:
+    ```bash
+    kubectl get hpa lightning-asr -n smallest
+    ```
+    
+    **Solutions**:
+    - Increase maxReplicas:
+      ```yaml
+      scaling:
+        auto:
+          lightningAsr:
+            hpa:
+              maxReplicas: 20
+      ```
+  </Accordion>
+
+  <Accordion title="Insufficient Cluster Resources" icon="server">
+    **Solutions**:
+    - Add more nodes
+    - Enable Cluster Autoscaler
+    - Check pending pods: `kubectl get pods --field-selector=status.phase=Pending`
+  </Accordion>
+</AccordionGroup>
+
+### Persistent Volume Issues
+
+**Symptoms**:
+- PVC stuck in Pending
+- Mount failures
+- Permission denied
+
+**Solutions**:
+
+<AccordionGroup>
+  <Accordion title="No Storage Class" icon="hard-drive">
+    **Check**:
+    ```bash
+    kubectl get storageclass
+    ```
+    
+    **Solutions**:
+    - Install EBS CSI driver (AWS)
+    - Install EFS CSI driver (AWS)
+    - Create storage class
+  </Accordion>
+
+  <Accordion title="EFS Mount Failed" icon="folder">
+    **Check**:
+    ```bash
+    kubectl describe pod <pod-name> | grep -A10 "Events"
+    ```
+    
+    **Solutions**:
+    - Verify EFS file system ID
+    - Check security group allows NFS (port 2049)
+    - Verify EFS CSI driver: `kubectl get pods -n kube-system -l app=efs-csi-controller`
+  </Accordion>
+
+  <Accordion title="Permission Denied" icon="lock">
+    **Solutions**:
+    - Check volume permissions
+    - Add fsGroup to pod securityContext:
+      ```yaml
+      securityContext:
+        fsGroup: 1000
+      ```
+  </Accordion>
+</AccordionGroup>
+
+## Performance Issues
+
+### Slow Response Times
+
+**Check**:
+
+```bash
+kubectl top pods -n smallest
+kubectl top nodes
+kubectl logs -l app=lightning-asr -n smallest | grep -i "latency\|duration"
+```
+
+**Solutions**:
+
+- Increase pod resources
+- Scale up replicas
+- Check GPU utilization: `kubectl exec -it <lightning-asr-pod> -- nvidia-smi`
+- Review model configuration
+- Check network latency
+
+### High CPU/Memory Usage
+
+**Check**:
+
+```bash
+kubectl top pods -n smallest
+kubectl describe pod <pod-name> -n smallest | grep -A5 "Limits"
+```
+
+**Solutions**:
+
+- Increase resource limits
+- Scale horizontally (more pods)
+- Investigate memory leaks in logs
+- Enable monitoring with Grafana
+
+## Debugging Tools
+
+### Interactive Shell
+
+```bash
+kubectl exec -it <pod-name> -n smallest -- /bin/sh
+```
+
+### Debug Container
+
+```bash
+kubectl debug <pod-name> -n smallest -it --image=ubuntu -- bash
+```
+
+### Network Debugging
+
+```bash
+kubectl run netdebug --rm -it --restart=Never \
+  --image=nicolaka/netshoot \
+  --namespace=smallest
+```
+
+Inside the debug pod:
+```bash
+nslookup api-server
+curl http://api-server:7100/health
+traceroute lightning-asr
+```
+
+### Copy Files
+
+```bash
+kubectl cp <pod-name>:/path/to/file ./local-file -n smallest
+kubectl cp ./local-file <pod-name>:/path/to/file -n smallest
+```
+
+## Getting Help
+
+### Collect Diagnostic Information
+
+Before contacting support, collect:
+
+```bash
+kubectl get all -n smallest > status.txt
+kubectl describe pods -n smallest > pods.txt
+kubectl logs -l app=lightning-asr -n smallest --tail=500 > asr-logs.txt
+kubectl logs -l app=api-server -n smallest --tail=500 > api-logs.txt
+kubectl logs -l app=license-proxy -n smallest --tail=500 > license-logs.txt
+kubectl get events -n smallest --sort-by='.lastTimestamp' > events.txt
+kubectl top nodes > nodes.txt
+kubectl top pods -n smallest > pod-resources.txt
+helm get values smallest-self-host -n smallest > values.txt
+```
+
+### Contact Support
+
+Email: **support@smallest.ai**
+
+Include:
+- Description of the issue
+- Steps to reproduce
+- Diagnostic files collected above
+- Cluster information (EKS version, node types, etc.)
+- Helm chart version
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="General Troubleshooting" icon="wrench" href="/troubleshooting/common-issues">
+    Platform-agnostic troubleshooting guide
+  </Card>
+
+  <Card title="API Reference" icon="code" href="/api-reference/authentication">
+    API integration documentation
+  </Card>
+</CardGroup>
+

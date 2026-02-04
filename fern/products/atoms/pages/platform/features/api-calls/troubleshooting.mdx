@@ -1,0 +1,268 @@
+---
+title: "Troubleshooting API Calls"
+sidebarTitle: "Troubleshooting"
+description: "Fix common API integration issues."
+---
+
+API calls not working? Here's how to diagnose and fix the most common issues.
+
+---
+
+## Quick Diagnostic
+
+<Steps>
+  ### Check the Basics
+  
+  - [ ] Is the URL correct?
+  - [ ] Is authentication configured?
+  - [ ] Are required headers set?
+  - [ ] Is the request body valid JSON?
+
+  ### Test Outside Atoms
+  
+  Use a tool like Postman or curl to test your API:
+  ```bash
+  curl -X GET "https://api.example.com/endpoint" \
+    -H "Authorization: Bearer your_key"
+  ```
+  
+  If it works there but not in Atoms, it's likely a configuration issue.
+
+  ### Check Call Logs
+  
+  In your agent's **Conversation Logs**, look for API activity:
+  - Request sent
+  - Response received
+  - Errors encountered
+</Steps>
+
+---
+
+## Common Errors
+
+<AccordionGroup>
+  <Accordion title="401 Unauthorized" icon="lock">
+    **What it means:** Authentication failed.
+    
+    **Common causes:**
+    - Expired API key
+    - Wrong API key
+    - Missing `Authorization` header
+    - Incorrect auth format
+    
+    **Solutions:**
+    1. Verify your API key is correct and not expired
+    2. Check the header format:
+       - `Authorization: Bearer sk_live_...` (most APIs)
+       - `Authorization: Basic base64(user:pass)` (basic auth)
+       - `X-API-Key: your_key` (some APIs)
+    3. Regenerate the API key if needed
+  </Accordion>
+  
+  <Accordion title="403 Forbidden" icon="ban">
+    **What it means:** Authenticated, but not authorized for this action.
+    
+    **Common causes:**
+    - API key lacks required permissions
+    - IP address not whitelisted
+    - Rate limit exceeded
+    - Resource belongs to different account
+    
+    **Solutions:**
+    1. Check API key permissions/scopes
+    2. Whitelist Atoms IP addresses (if required)
+    3. Wait if rate limited; consider reducing call frequency
+  </Accordion>
+  
+  <Accordion title="404 Not Found" icon="circle-question">
+    **What it means:** Endpoint doesn't exist or resource not found.
+    
+    **Common causes:**
+    - Typo in URL
+    - Wrong API version
+    - Resource doesn't exist (e.g., customer not in system)
+    
+    **Solutions:**
+    1. Double-check the URL against API documentation
+    2. Verify API version (e.g., `/v1/` vs `/v2/`)
+    3. For lookups, handle "not found" as a valid response
+  </Accordion>
+  
+  <Accordion title="408 Request Timeout" icon="clock">
+    **What it means:** Request took too long.
+    
+    **Common causes:**
+    - Slow external API
+    - Network issues
+    - Complex query taking too long
+    
+    **Solutions:**
+    1. Simplify the request if possible
+    2. Increase timeout setting (if available)
+    3. Implement retry logic
+    4. Design fallback behavior for timeouts
+  </Accordion>
+  
+  <Accordion title="500 Internal Server Error" icon="server">
+    **What it means:** External API had an error.
+    
+    **Common causes:**
+    - Bug in the external system
+    - Invalid request data
+    - External service is down
+    
+    **Solutions:**
+    1. Verify request body is valid JSON
+    2. Check external service status page
+    3. Try again later
+    4. Implement retry logic with backoff
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Request Issues
+
+### Invalid JSON Body
+
+**Symptom:** 400 Bad Request
+
+**Problem:**
+```json
+{
+  "name": {{customer_name}},  // Missing quotes around variable
+  "phone": "{{caller_phone}}"
+}
+```
+
+**Solution:**
+```json
+{
+  "name": "{{customer_name}}",  // Variables need quotes for strings
+  "phone": "{{caller_phone}}"
+}
+```
+
+### Missing Required Fields
+
+**Symptom:** 400 Bad Request with message about missing fields
+
+**Solution:** Check API documentation for required fields and ensure all are included.
+
+### Wrong Content-Type
+
+**Symptom:** 415 Unsupported Media Type or garbled response
+
+**Solution:** Set correct Content-Type header:
+- JSON APIs: `Content-Type: application/json`
+- Form data: `Content-Type: application/x-www-form-urlencoded`
+
+---
+
+## Response Issues
+
+### Variables Not Populated
+
+**Symptom:** Variables show as empty or literal `{{variable_name}}`
+
+**Causes:**
+1. Response mapping path is wrong
+2. API returned different structure
+3. Field is null in response
+
+**Debug:**
+1. Check actual response in logs
+2. Verify JSON path matches response structure
+3. Example: If response is `{"data": {"name": "Sarah"}}`, path is `$.data.name`, not `$.name`
+
+### Wrong Data Type
+
+**Symptom:** Numbers show as strings, or vice versa
+
+**Solution:** Most variables are strings. If you need numbers:
+- For display: String is fine
+- For calculations: May need backend processing
+
+---
+
+## Timing Issues
+
+### Pre-Call API Taking Too Long
+
+**Symptom:** Caller waits several seconds before greeting
+
+**Solutions:**
+1. Optimize the external API (faster queries)
+2. Reduce data fetched (only get what you need)
+3. Set aggressive timeout (5 seconds max)
+4. Have fallback greeting for timeout cases
+
+### Mid-Call API Causing Awkward Pause
+
+**Symptom:** Silence during API call
+
+**Solutions:**
+1. Add filler phrase: "Let me check that for you..."
+2. Design flow to keep talking while API runs
+3. Optimize API speed
+4. Consider Pre-Call API for predictable data
+
+---
+
+## Testing API Calls
+
+### Use the Test Panel
+
+1. Go to your API call configuration
+2. Click **Test**
+3. Enter test values for variables
+4. Click **Send Request**
+5. Verify response and mapping
+
+### Test with Real Call
+
+1. Make a test call to your agent
+2. Trigger the API call scenario
+3. Check **Conversation Logs** for:
+   - API request details
+   - Response received
+   - Variables populated
+
+### Check External Logs
+
+Your external system likely has logs too:
+- API gateway logs
+- Application logs
+- Error tracking (Sentry, etc.)
+
+---
+
+## Still Having Issues?
+
+<Steps>
+  ### Gather Information
+  
+  Before contacting support, collect:
+  - API endpoint URL
+  - Request method and headers
+  - Request body (sanitize secrets)
+  - Error message
+  - Call ID where issue occurred
+
+  ### Check External Service
+  
+  - Is the external API working?
+  - Check their status page
+  - Test the API directly
+
+  ### Contact Support
+  
+  If you've tried everything:
+  - Provide the information above
+  - Include screenshots of configuration
+  - Share relevant call logs
+</Steps>
+
+<Card title="Get Help" icon="headset" href="/platform/troubleshooting/getting-help">
+  Contact the Atoms support team
+</Card>

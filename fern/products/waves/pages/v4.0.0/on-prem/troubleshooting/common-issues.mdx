@@ -1,0 +1,469 @@
+---
+title: Common Issues
+description: Quick solutions to frequently encountered problems
+---
+
+## Overview
+
+This guide provides quick solutions to the most common issues encountered with Smallest Self-Host across Docker and Kubernetes deployments.
+
+## Installation Issues
+
+### License Key Invalid
+
+**Symptoms**:
+- `License validation failed`
+- `Invalid license key`
+- Services fail to start
+
+**Quick Fix**:
+
+<Steps>
+  <Step title="Verify License Key">
+    Check for extra spaces, quotes, or line breaks
+    
+    ```bash
+    echo $LICENSE_KEY | wc -c
+    ```
+    
+    Should be exact length without whitespace
+  </Step>
+
+  <Step title="Test Manually">
+    Contact license server directly:
+    
+    ```bash
+    curl -H "Authorization: Bearer ${LICENSE_KEY}" https://console-api.smallest.ai/validate
+    ```
+  </Step>
+
+  <Step title="Contact Support">
+    If key appears correct:
+    
+    Email: **support@smallest.ai**
+    
+    Include: License key, error logs
+  </Step>
+</Steps>
+
+### Image Pull Failed
+
+**Symptoms**:
+- `ImagePullBackOff`
+- `unauthorized: authentication required`
+- `manifest unknown`
+
+**Quick Fix**:
+
+<Tabs>
+  <Tab title="Docker">
+    ```bash
+    docker login quay.io
+    Username: your-username
+    Password: your-password
+    
+    docker pull quay.io/smallestinc/lightning-asr:latest
+    ```
+  </Tab>
+
+  <Tab title="Kubernetes">
+    Verify secret exists:
+    ```bash
+    kubectl get secrets -n smallest | grep registry
+    ```
+    
+    Recreate if needed:
+    ```bash
+    kubectl create secret docker-registry registry-secret \
+      --docker-server=quay.io \
+      --docker-username=your-username \
+      --docker-password=your-password \
+      --docker-email=your-email \
+      -n smallest
+    ```
+  </Tab>
+</Tabs>
+
+### Model Download Failed
+
+**Symptoms**:
+- Lightning ASR stuck at startup
+- `Failed to download model`
+- `Connection timeout`
+
+**Quick Fix**:
+
+1. **Verify URL**:
+   ```bash
+   curl -I $MODEL_URL
+   ```
+
+2. **Check disk space**:
+   ```bash
+   df -h
+   ```
+   Need at least 30 GB free
+
+3. **Test network**:
+   ```bash
+   wget --spider $MODEL_URL
+   ```
+
+4. **Increase timeout** (Kubernetes):
+   ```yaml
+   lightningAsr:
+     env:
+       - name: DOWNLOAD_TIMEOUT
+         value: "3600"
+   ```
+
+## Runtime Issues
+
+### High Latency
+
+**Symptoms**:
+- Requests taking >1 second
+- Slow transcription
+- Timeouts
+
+**Quick Fix**:
+
+<AccordionGroup>
+  <Accordion title="Check GPU Utilization" icon="display">
+    ```bash
+    nvidia-smi
+    kubectl exec -it <lightning-asr-pod> -- nvidia-smi
+    ```
+    
+    **If GPU util < 50%**:
+    - Model not loaded properly
+    - CPU bottleneck
+    - Check logs for errors
+    
+    **If GPU util > 90%**:
+    - Scale up replicas
+    - Add more GPU nodes
+  </Accordion>
+
+  <Accordion title="Check Resource Limits" icon="gauge">
+    ```bash
+    kubectl describe pod <pod-name> | grep -A5 "Limits"
+    ```
+    
+    Increase if needed:
+    ```yaml
+    lightningAsr:
+      resources:
+        limits:
+          memory: 16Gi
+          cpu: 8
+    ```
+  </Accordion>
+
+  <Accordion title="Enable GPU Persistence Mode" icon="bolt">
+    ```bash
+    sudo nvidia-smi -pm 1
+    ```
+    
+    Or in Kubernetes:
+    ```yaml
+    gpu-operator:
+      driver:
+        env:
+          - name: NVIDIA_DRIVER_CAPABILITIES
+            value: "compute,utility"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Out of Memory
+
+**Symptoms**:
+- Pod killed (exit code 137)
+- `OOMKilled` status
+- Memory errors in logs
+
+**Quick Fix**:
+
+1. **Increase memory limit**:
+   ```yaml
+   lightningAsr:
+     resources:
+       limits:
+         memory: 20Gi
+       requests:
+         memory: 16Gi
+   ```
+
+2. **Check memory leaks**:
+   ```bash
+   kubectl top pod <pod-name>
+   ```
+
+3. **Restart pod**:
+   ```bash
+   kubectl delete pod <pod-name>
+   ```
+
+### Connection Refused
+
+**Symptoms**:
+- Cannot connect to API
+- `Connection refused`
+- Service unavailable
+
+**Quick Fix**:
+
+<Tabs>
+  <Tab title="Check Services Running">
+    ```bash
+    kubectl get pods -n smallest
+    docker compose ps
+    ```
+    
+    All should be `Running` or `Up`
+  </Tab>
+
+  <Tab title="Verify Endpoints">
+    ```bash
+    kubectl get endpoints -n smallest
+    curl http://localhost:7100/health
+    ```
+  </Tab>
+
+  <Tab title="Check Firewall">
+    ```bash
+    sudo iptables -L
+    netstat -tuln | grep 7100
+    ```
+  </Tab>
+</Tabs>
+
+## Performance Issues
+
+### Slow Autoscaling
+
+**Symptoms**:
+- HPA not scaling fast enough
+- Pods stuck in Pending
+- Cluster Autoscaler delayed
+
+**Quick Fix**:
+
+1. **Reduce HPA stabilization**:
+   ```yaml
+   scaling:
+     auto:
+       lightningAsr:
+         hpa:
+           scaleUpStabilizationWindowSeconds: 0
+   ```
+
+2. **Check metrics available**:
+   ```bash
+   kubectl get hpa
+   kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1"
+   ```
+
+3. **Verify node capacity**:
+   ```bash
+   kubectl describe nodes | grep -A5 "Allocated resources"
+   ```
+
+### Request Queue Building Up
+
+**Symptoms**:
+- Increasing active requests
+- Users experiencing delays
+- HPA shows high metrics
+
+**Quick Fix**:
+
+1. **Manual scale up**:
+   ```bash
+   kubectl scale deployment lightning-asr --replicas=10
+   ```
+
+2. **Check autoscaling limits**:
+   ```yaml
+   scaling:
+     auto:
+       lightningAsr:
+         hpa:
+           maxReplicas: 20
+   ```
+
+3. **Add cluster capacity**:
+   ```bash
+   eksctl scale nodegroup --cluster=smallest-cluster --name=gpu-nodes --nodes=5
+   ```
+
+## Data Issues
+
+### Transcription Quality Poor
+
+**Symptoms**:
+- Low confidence scores
+- Incorrect transcriptions
+- Missing words
+
+**Quick Fix**:
+
+1. **Check audio quality**:
+   - Sample rate: 16 kHz minimum (44.1 kHz recommended)
+   - Format: WAV or FLAC preferred
+   - Channels: Mono for best results
+
+2. **Enable punctuation**:
+   ```json
+   {
+     "url": "...",
+     "punctuate": true,
+     "language": "en"
+   }
+   ```
+
+3. **Verify correct language**:
+   ```json
+   {
+     "url": "...",
+     "language": "es"
+   }
+   ```
+
+### Missing Timestamps
+
+**Symptoms**:
+- No word-level timing data
+- Unable to sync with video
+
+**Quick Fix**:
+
+Enable timestamps in request:
+
+```json
+{
+  "url": "...",
+  "timestamps": true
+}
+```
+
+Response will include:
+```json
+{
+  "words": [
+    {"word": "Hello", "start": 0.0, "end": 0.5}
+  ]
+}
+```
+
+## Network Issues
+
+### Cannot Reach License Server
+
+**Symptoms**:
+- `Grace period activated`
+- `Connection to license server failed`
+- Services still working but warnings
+
+**Quick Fix**:
+
+1. **Test connectivity**:
+   ```bash
+   curl -v https://console-api.smallest.ai
+   ```
+
+2. **Check firewall rules**:
+   - Allow outbound HTTPS (port 443)
+   - Whitelist `console-api.smallest.ai`
+
+3. **Review network policies** (Kubernetes):
+   ```bash
+   kubectl get networkpolicy -n smallest
+   ```
+
+4. **Monitor grace period**:
+   ```bash
+   kubectl logs -l app=license-proxy | grep -i "grace"
+   ```
+
+### Slow Downloads
+
+**Symptoms**:
+- Model download taking >30 minutes
+- Audio file upload slow
+
+**Quick Fix**:
+
+1. **Use faster network**:
+   - AWS S3 in same region
+   - CloudFront CDN
+
+2. **Enable parallel downloads**:
+   ```yaml
+   lightningAsr:
+     env:
+       - name: DOWNLOAD_WORKERS
+         value: "4"
+   ```
+
+3. **Use shared storage** (Kubernetes):
+   ```yaml
+   models:
+     volumes:
+       aws:
+         efs:
+           enabled: true
+   ```
+
+## Quick Diagnostics
+
+### One-Command Health Check
+
+```bash
+curl http://localhost:7100/health && \
+  kubectl get pods -n smallest && \
+  kubectl top nodes && \
+  kubectl top pods -n smallest
+```
+
+### Collect All Logs
+
+```bash
+kubectl logs -l app=lightning-asr -n smallest --tail=100 > asr-logs.txt
+kubectl logs -l app=api-server -n smallest --tail=100 > api-logs.txt
+kubectl logs -l app=license-proxy -n smallest --tail=100 > license-logs.txt
+```
+
+### Test Transcription
+
+```bash
+curl -X POST http://localhost:7100/v1/listen \
+  -H "Authorization: Token ${LICENSE_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www2.cs.uic.edu/~i101/SoundFiles/StarWars60.wav"}'
+```
+
+## Getting Help
+
+If issues persist:
+
+<CardGroup cols={2}>
+  <Card title="Debugging Guide" icon="bug" href="/troubleshooting/debugging-guide">
+    Advanced debugging techniques
+  </Card>
+
+  <Card title="Logs Analysis" icon="file-lines" href="/troubleshooting/logs-analysis">
+    Interpret logs and error messages
+  </Card>
+
+  <Card title="Contact Support" icon="envelope">
+    Email: **support@smallest.ai**
+    
+    Include:
+    - Error logs
+    - System information
+    - Steps to reproduce
+  </Card>
+</CardGroup>
+

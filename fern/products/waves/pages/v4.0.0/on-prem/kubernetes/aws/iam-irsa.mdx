@@ -1,0 +1,567 @@
+---
+title: IAM & IRSA
+description: Configure IAM Roles for Service Accounts in EKS
+---
+
+## Overview
+
+IAM Roles for Service Accounts (IRSA) allows Kubernetes service accounts to assume AWS IAM roles, enabling secure access to AWS services without storing credentials in the cluster.
+
+This guide covers setting up IRSA for:
+- Cluster Autoscaler
+- EFS CSI Driver
+- EBS CSI Driver
+
+## Prerequisites
+
+<Steps>
+  <Step title="OIDC Provider">
+    Your EKS cluster must have an OIDC provider enabled
+    
+    Check if enabled:
+    ```bash
+    aws eks describe-cluster \
+      --name smallest-cluster \
+      --region us-east-1 \
+      --query "cluster.identity.oidc.issuer" \
+      --output text
+    ```
+  </Step>
+
+  <Step title="Enable OIDC (if needed)">
+    ```bash
+    eksctl utils associate-iam-oidc-provider \
+      --cluster smallest-cluster \
+      --region us-east-1 \
+      --approve
+    ```
+  </Step>
+</Steps>
+
+## Cluster Autoscaler IRSA
+
+The Cluster Autoscaler needs permissions to modify Auto Scaling Groups.
+
+### Create IAM Policy
+
+Create a policy document:
+
+```json cluster-autoscaler-policy.json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeAutoScalingInstances",
+        "autoscaling:DescribeLaunchConfigurations",
+        "autoscaling:DescribeScalingActivities",
+        "autoscaling:DescribeTags",
+        "ec2:DescribeInstanceTypes",
+        "ec2:DescribeLaunchTemplateVersions"
+      ],
+      "Resource": ["*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:SetDesiredCapacity",
+        "autoscaling:TerminateInstanceInAutoScalingGroup",
+        "ec2:DescribeImages",
+        "ec2:GetInstanceTypesFromInstanceRequirements",
+        "eks:DescribeNodegroup"
+      ],
+      "Resource": ["*"]
+    }
+  ]
+}
+```
+
+Create the policy:
+
+```bash
+aws iam create-policy \
+  --policy-name AmazonEKSClusterAutoscalerPolicy \
+  --policy-document file://cluster-autoscaler-policy.json
+```
+
+Note the policy ARN from the output.
+
+### Create Service Account with IAM Role
+
+Using eksctl:
+
+```bash
+eksctl create iamserviceaccount \
+  --cluster=smallest-cluster \
+  --region=us-east-1 \
+  --namespace=kube-system \
+  --name=cluster-autoscaler \
+  --attach-policy-arn=arn:aws:iam::YOUR_ACCOUNT_ID:policy/AmazonEKSClusterAutoscalerPolicy \
+  --override-existing-serviceaccounts \
+  --approve
+```
+
+Replace `YOUR_ACCOUNT_ID` with your AWS account ID.
+
+### Verify Service Account
+
+```bash
+kubectl describe sa cluster-autoscaler -n kube-system
+```
+
+Look for the annotation:
+```
+Annotations:  eks.amazonaws.com/role-arn: arn:aws:iam::YOUR_ACCOUNT_ID:role/eksctl-smallest-cluster-addon-iamserviceaccount-...
+```
+
+### Update Helm Values
+
+Configure the Cluster Autoscaler to use this service account:
+
+```yaml values.yaml
+cluster-autoscaler:
+  enabled: true
+  rbac:
+    serviceAccount:
+      name: cluster-autoscaler
+      annotations:
+        eks.amazonaws.com/role-arn: arn:aws:iam::YOUR_ACCOUNT_ID:role/eksctl-smallest-cluster-addon-iamserviceaccount-...
+  autoDiscovery:
+    clusterName: smallest-cluster
+  awsRegion: us-east-1
+```
+
+## EFS CSI Driver IRSA
+
+Required for shared file storage (model caching).
+
+### Create IAM Policy
+
+Download the policy:
+
+```bash
+curl -o efs-iam-policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-efs-csi-driver/master/docs/iam-policy-example.json
+```
+
+Create the policy:
+
+```bash
+aws iam create-policy \
+  --policy-name AmazonEKS_EFS_CSI_Driver_Policy \
+  --policy-document file://efs-iam-policy.json
+```
+
+### Create Service Account with IAM Role
+
+```bash
+eksctl create iamserviceaccount \
+  --cluster=smallest-cluster \
+  --region=us-east-1 \
+  --namespace=kube-system \
+  --name=efs-csi-controller-sa \
+  --attach-policy-arn=arn:aws:iam::YOUR_ACCOUNT_ID:policy/AmazonEKS_EFS_CSI_Driver_Policy \
+  --override-existing-serviceaccounts \
+  --approve
+```
+
+### Install EFS CSI Driver
+
+```bash
+kubectl apply -k "github.com/kubernetes-sigs/aws-efs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.7"
+```
+
+Update the deployment to use the service account:
+
+```bash
+kubectl patch deployment efs-csi-controller \
+  -n kube-system \
+  -p '{"spec":{"template":{"spec":{"serviceAccountName":"efs-csi-controller-sa"}}}}'
+```
+
+### Verify
+
+```bash
+kubectl get pods -n kube-system -l app=efs-csi-controller
+kubectl describe sa efs-csi-controller-sa -n kube-system
+```
+
+## EBS CSI Driver IRSA
+
+Required for block storage (PersistentVolumes).
+
+### Create IAM Policy
+
+The policy is available from AWS:
+
+```bash
+aws iam create-policy \
+  --policy-name AmazonEKS_EBS_CSI_Driver_Policy \
+  --policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": [
+          "ec2:CreateSnapshot",
+          "ec2:AttachVolume",
+          "ec2:DetachVolume",
+          "ec2:ModifyVolume",
+          "ec2:DescribeAvailabilityZones",
+          "ec2:DescribeInstances",
+          "ec2:DescribeSnapshots",
+          "ec2:DescribeTags",
+          "ec2:DescribeVolumes",
+          "ec2:DescribeVolumesModifications"
+        ],
+        "Resource": "*"
+      },
+      {
+        "Effect": "Allow",
+        "Action": [
+          "ec2:CreateTags"
+        ],
+        "Resource": [
+          "arn:aws:ec2:*:*:volume/*",
+          "arn:aws:ec2:*:*:snapshot/*"
+        ],
+        "Condition": {
+          "StringEquals": {
+            "ec2:CreateAction": [
+              "CreateVolume",
+              "CreateSnapshot"
+            ]
+          }
+        }
+      },
+      {
+        "Effect": "Allow",
+        "Action": [
+          "ec2:DeleteTags"
+        ],
+        "Resource": [
+          "arn:aws:ec2:*:*:volume/*",
+          "arn:aws:ec2:*:*:snapshot/*"
+        ]
+      },
+      {
+        "Effect": "Allow",
+        "Action": [
+          "ec2:CreateVolume"
+        ],
+        "Resource": "*",
+        "Condition": {
+          "StringLike": {
+            "aws:RequestTag/ebs.csi.aws.com/cluster": "true"
+          }
+        }
+      },
+      {
+        "Effect": "Allow",
+        "Action": [
+          "ec2:CreateVolume"
+        ],
+        "Resource": "*",
+        "Condition": {
+          "StringLike": {
+            "aws:RequestTag/CSIVolumeName": "*"
+          }
+        }
+      },
+      {
+        "Effect": "Allow",
+        "Action": [
+          "ec2:DeleteVolume"
+        ],
+        "Resource": "*",
+        "Condition": {
+          "StringLike": {
+            "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
+          }
+        }
+      },
+      {
+        "Effect": "Allow",
+        "Action": [
+          "ec2:DeleteVolume"
+        ],
+        "Resource": "*",
+        "Condition": {
+          "StringLike": {
+            "ec2:ResourceTag/CSIVolumeName": "*"
+          }
+        }
+      },
+      {
+        "Effect": "Allow",
+        "Action": [
+          "ec2:DeleteVolume"
+        ],
+        "Resource": "*",
+        "Condition": {
+          "StringLike": {
+            "ec2:ResourceTag/kubernetes.io/created-for/pvc/name": "*"
+          }
+        }
+      },
+      {
+        "Effect": "Allow",
+        "Action": [
+          "ec2:DeleteSnapshot"
+        ],
+        "Resource": "*",
+        "Condition": {
+          "StringLike": {
+            "ec2:ResourceTag/CSIVolumeSnapshotName": "*"
+          }
+        }
+      },
+      {
+        "Effect": "Allow",
+        "Action": [
+          "ec2:DeleteSnapshot"
+        ],
+        "Resource": "*",
+        "Condition": {
+          "StringLike": {
+            "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
+          }
+        }
+      }
+    ]
+  }'
+```
+
+### Create Service Account with IAM Role
+
+```bash
+eksctl create iamserviceaccount \
+  --cluster=smallest-cluster \
+  --region=us-east-1 \
+  --namespace=kube-system \
+  --name=ebs-csi-controller-sa \
+  --attach-policy-arn=arn:aws:iam::YOUR_ACCOUNT_ID:policy/AmazonEKS_EBS_CSI_Driver_Policy \
+  --override-existing-serviceaccounts \
+  --approve
+```
+
+### Install EBS CSI Driver Addon
+
+```bash
+eksctl create addon \
+  --cluster smallest-cluster \
+  --region us-east-1 \
+  --name aws-ebs-csi-driver \
+  --service-account-role-arn arn:aws:iam::YOUR_ACCOUNT_ID:role/eksctl-smallest-cluster-addon-iamserviceaccount-...
+```
+
+## Verify IRSA Configuration
+
+### Check Service Accounts
+
+List all service accounts with IAM role annotations:
+
+```bash
+kubectl get sa -A -o jsonpath='{range .items[?(@.metadata.annotations.eks\.amazonaws\.com/role-arn)]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{.metadata.annotations.eks\.amazonaws\.com/role-arn}{"\n"}{end}'
+```
+
+### Test IAM Role Assumption
+
+Create a test pod:
+
+```yaml test-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-irsa
+  namespace: kube-system
+spec:
+  serviceAccountName: cluster-autoscaler
+  containers:
+  - name: aws-cli
+    image: amazon/aws-cli
+    command: ['sleep', '3600']
+```
+
+Apply and exec:
+
+```bash
+kubectl apply -f test-pod.yaml
+kubectl exec -it test-irsa -n kube-system -- aws sts get-caller-identity
+```
+
+Should show the assumed role ARN.
+
+## Troubleshooting
+
+### Role Not Assumed
+
+**Check service account annotation**:
+
+```bash
+kubectl describe sa <service-account-name> -n <namespace>
+```
+
+Should show:
+```
+Annotations:  eks.amazonaws.com/role-arn: arn:aws:iam::...
+```
+
+### Permission Denied
+
+**Verify IAM policy**:
+
+```bash
+aws iam get-policy-version \
+  --policy-arn arn:aws:iam::YOUR_ACCOUNT_ID:policy/PolicyName \
+  --version-id v1
+```
+
+Check trust relationship:
+
+```bash
+aws iam get-role --role-name RoleName
+```
+
+Should include trust policy for OIDC provider.
+
+### OIDC Provider Issues
+
+**Verify OIDC provider exists**:
+
+```bash
+aws iam list-open-id-connect-providers
+```
+
+**Re-associate if needed**:
+
+```bash
+eksctl utils associate-iam-oidc-provider \
+  --cluster smallest-cluster \
+  --region us-east-1 \
+  --approve
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Principle of Least Privilege" icon="shield">
+    Grant only the minimum permissions required for each service account.
+    
+    Review and audit IAM policies regularly.
+  </Accordion>
+
+  <Accordion title="Use Separate Roles" icon="users">
+    Create separate IAM roles for each service account rather than sharing roles.
+    
+    This improves security and auditability.
+  </Accordion>
+
+  <Accordion title="Enable CloudTrail" icon="list">
+    Monitor IAM role usage via CloudTrail:
+    
+    ```bash
+    aws cloudtrail lookup-events \
+      --lookup-attributes AttributeKey=ResourceName,AttributeValue=role-name
+    ```
+  </Accordion>
+
+  <Accordion title="Tag Resources" icon="tag">
+    Tag IAM roles and policies for easier management:
+    
+    ```bash
+    aws iam tag-role \
+      --role-name role-name \
+      --tags Key=Environment,Value=production Key=Application,Value=smallest-self-host
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Complete Example
+
+Here's a complete script to set up all IRSA roles:
+
+```bash setup-irsa.sh
+#!/bin/bash
+
+CLUSTER_NAME="smallest-cluster"
+REGION="us-east-1"
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+echo "Setting up IRSA for cluster: $CLUSTER_NAME"
+echo "AWS Account: $ACCOUNT_ID"
+echo "Region: $REGION"
+
+eksctl utils associate-iam-oidc-provider \
+  --cluster $CLUSTER_NAME \
+  --region $REGION \
+  --approve
+
+echo "Creating Cluster Autoscaler policy..."
+cat > cluster-autoscaler-policy.json <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeAutoScalingInstances",
+        "autoscaling:DescribeLaunchConfigurations",
+        "autoscaling:DescribeScalingActivities",
+        "autoscaling:DescribeTags",
+        "autoscaling:SetDesiredCapacity",
+        "autoscaling:TerminateInstanceInAutoScalingGroup",
+        "ec2:DescribeInstanceTypes",
+        "ec2:DescribeLaunchTemplateVersions"
+      ],
+      "Resource": ["*"]
+    }
+  ]
+}
+EOF
+
+aws iam create-policy \
+  --policy-name AmazonEKSClusterAutoscalerPolicy \
+  --policy-document file://cluster-autoscaler-policy.json
+
+eksctl create iamserviceaccount \
+  --cluster=$CLUSTER_NAME \
+  --region=$REGION \
+  --namespace=kube-system \
+  --name=cluster-autoscaler \
+  --attach-policy-arn=arn:aws:iam::${ACCOUNT_ID}:policy/AmazonEKSClusterAutoscalerPolicy \
+  --override-existing-serviceaccounts \
+  --approve
+
+echo "IRSA setup complete!"
+echo ""
+echo "Update your values.yaml with:"
+echo "cluster-autoscaler:"
+echo "  rbac:"
+echo "    serviceAccount:"
+echo "      name: cluster-autoscaler"
+echo "      annotations:"
+echo "        eks.amazonaws.com/role-arn: arn:aws:iam::${ACCOUNT_ID}:role/eksctl-${CLUSTER_NAME}-addon-iamserviceaccount-..."
+```
+
+Make executable and run:
+
+```bash
+chmod +x setup-irsa.sh
+./setup-irsa.sh
+```
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="GPU Nodes" icon="server" href="/kubernetes/aws/gpu-nodes">
+    Optimize GPU node configuration
+  </Card>
+
+  <Card title="Cluster Autoscaler" icon="chart-line" href="/kubernetes/autoscaling/cluster-autoscaler">
+    Configure cluster autoscaling
+  </Card>
+</CardGroup>
+

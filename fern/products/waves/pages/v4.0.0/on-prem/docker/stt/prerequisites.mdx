@@ -1,0 +1,308 @@
+---
+title: Prerequisites
+description: System requirements and setup needed before deploying Speech-to-Text with Docker
+---
+
+## Overview
+
+Before deploying Smallest Self-Host with Docker, ensure your system meets the hardware and software requirements. This guide walks you through everything you need to prepare your environment.
+
+## Hardware Requirements
+
+### Minimum Specifications
+
+<CardGroup cols={2}>
+  <Card title="CPU" icon="microchip">
+    **4 cores** minimum
+    
+    8+ cores recommended for production
+  </Card>
+
+  <Card title="RAM" icon="memory">
+    **16 GB** minimum
+    
+    32+ GB recommended for production
+  </Card>
+
+  <Card title="GPU" icon="server">
+    **NVIDIA GPU required**
+    
+    - L4 or L40s (recommended)
+    - A10, A100, H100, T4 (supported)
+    - Minimum 16GB VRAM
+  </Card>
+
+  <Card title="Storage" icon="hard-drive">
+    **100 GB** minimum
+    
+    - 50 GB for models
+    - 50 GB for logs and data
+  </Card>
+</CardGroup>
+
+## Software Requirements
+
+### Operating System
+
+Smallest Self-Host supports the following operating systems:
+
+<Tabs>
+  <Tab title="Ubuntu/Debian">
+    ```bash
+    Ubuntu 20.04 LTS or later
+    Ubuntu 22.04 LTS (recommended)
+    Debian 11 or later
+    ```
+  </Tab>
+
+  <Tab title="CentOS/RHEL">
+    ```bash
+    CentOS 8 or later
+    RHEL 8 or later
+    Rocky Linux 8 or later
+    ```
+  </Tab>
+
+  <Tab title="Other Linux">
+    Most modern Linux distributions with kernel 4.15+
+  </Tab>
+</Tabs>
+
+### Required Software
+
+<Steps>
+  <Step title="Docker">
+    Docker Engine 20.10 or later
+    
+    ```bash
+    docker --version
+    ```
+    
+    Expected output: `Docker version 20.10.0 or higher`
+  </Step>
+
+  <Step title="Docker Compose">
+    Docker Compose 2.0 or later
+    
+    ```bash
+    docker compose version
+    ```
+    
+    Expected output: `Docker Compose version v2.0.0 or higher`
+  </Step>
+
+  <Step title="NVIDIA Driver">
+    NVIDIA Driver 525+ for newer GPUs (A10, A100, L4)
+    
+    NVIDIA Driver 470+ for older GPUs (T4, V100)
+    
+    ```bash
+    nvidia-smi
+    ```
+    
+    Should display GPU information without errors
+  </Step>
+
+  <Step title="NVIDIA Container Toolkit">
+    Required for GPU access in containers
+    
+    ```bash
+    nvidia-container-cli --version
+    ```
+  </Step>
+</Steps>
+
+## Installation Guides
+
+### Install Docker
+
+<Tabs>
+  <Tab title="Ubuntu">
+    ```bash
+    sudo apt-get update
+    sudo apt-get install -y ca-certificates curl gnupg
+    
+    sudo install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+      sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    sudo chmod a+r /etc/apt/keyrings/docker.gpg
+    
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+      https://download.docker.com/linux/ubuntu \
+      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    
+    sudo apt-get update
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io \
+      docker-buildx-plugin docker-compose-plugin
+    
+    sudo usermod -aG docker $USER
+    newgrp docker
+    ```
+  </Tab>
+
+  <Tab title="CentOS/RHEL">
+    ```bash
+    sudo yum install -y yum-utils
+    sudo yum-config-manager --add-repo \
+      https://download.docker.com/linux/centos/docker-ce.repo
+    
+    sudo yum install -y docker-ce docker-ce-cli containerd.io \
+      docker-buildx-plugin docker-compose-plugin
+    
+    sudo systemctl start docker
+    sudo systemctl enable docker
+    
+    sudo usermod -aG docker $USER
+    newgrp docker
+    ```
+  </Tab>
+</Tabs>
+
+### Install NVIDIA Driver
+
+<Tabs>
+  <Tab title="Ubuntu">
+    ```bash
+    sudo apt-get update
+    sudo apt-get install -y ubuntu-drivers-common
+    
+    sudo ubuntu-drivers autoinstall
+    
+    sudo reboot
+    ```
+    
+    After reboot, verify:
+    ```bash
+    nvidia-smi
+    ```
+  </Tab>
+
+  <Tab title="CentOS/RHEL">
+    ```bash
+    sudo yum install -y kernel-devel kernel-headers gcc make
+    
+    distribution=$(. /etc/os-release;echo $ID$VERSION_ID | sed -e 's/\.//g')
+    
+    sudo yum-config-manager --add-repo \
+      http://developer.download.nvidia.com/compute/cuda/repos/$distribution/x86_64/cuda-$distribution.repo
+    
+    sudo yum clean all
+    sudo yum -y install nvidia-driver-latest-dkms
+    
+    sudo reboot
+    ```
+  </Tab>
+</Tabs>
+
+### Install NVIDIA Container Toolkit
+
+```bash
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -s -L https://nvidia.github.io/libnvidia-container/gpgkey | \
+  sudo apt-key add -
+curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+
+sudo systemctl restart docker
+```
+
+### Verify GPU Access
+
+Test that Docker can access the GPU:
+
+```bash
+docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
+```
+
+You should see your GPU information displayed.
+
+## Credentials
+
+Before installation, obtain the following from Smallest.ai:
+
+<AccordionGroup>
+  <Accordion title="License Key" icon="key">
+    Your unique license key for validation
+    
+    Contact: **support@smallest.ai**
+  </Accordion>
+
+  <Accordion title="Container Registry Access" icon="docker">
+    Credentials to pull Docker images:
+    - Registry URL: `quay.io`
+    - Username
+    - Password
+    - Email
+    
+    Contact: **support@smallest.ai**
+  </Accordion>
+
+  <Accordion title="Model URLs" icon="download">
+    Download URLs for ASR models
+    
+    Contact: **support@smallest.ai**
+  </Accordion>
+</AccordionGroup>
+
+## Network Requirements
+
+Ensure the following ports are available:
+
+| Port | Service | Purpose |
+|------|---------|---------|
+| 7100 | API Server | Client API requests |
+| 2233 | Lightning ASR | Internal ASR processing |
+| 6699 | License Proxy | Internal license validation |
+| 6379 | Redis | Internal caching |
+
+<Warning>
+The License Proxy requires outbound HTTPS access to Smallest's license servers for validation. Ensure your firewall allows outbound connections to:
+- `console-api.smallest.ai` (port 443)
+</Warning>
+
+## Verification Checklist
+
+Before proceeding to installation, verify:
+
+<Steps>
+  <Step title="Docker Running">
+    ```bash
+    docker ps
+    ```
+    Should execute without errors
+  </Step>
+
+  <Step title="GPU Accessible">
+    ```bash
+    docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
+    ```
+    Should display GPU information
+  </Step>
+
+  <Step title="Credentials Ready">
+    - [ ] License key obtained
+    - [ ] Container registry username and password
+    - [ ] Model download URLs
+  </Step>
+
+  <Step title="Ports Available">
+    ```bash
+    sudo netstat -tuln | grep -E '(7100|2233|6699|6379)'
+    ```
+    Should return no results (ports free)
+  </Step>
+</Steps>
+
+## What's Next?
+
+Once all prerequisites are met, proceed to the quick start guide:
+
+<Card title="STT Quick Start" icon="rocket" href="/docker/stt/quick-start">
+  Deploy Smallest Self-Host STT with Docker Compose
+</Card>
+

@@ -1,0 +1,532 @@
+---
+title: Metrics Setup
+description: Configure Prometheus, ServiceMonitor, and custom metrics for autoscaling
+---
+
+## Overview
+
+The metrics setup enables autoscaling by collecting Lightning ASR metrics with Prometheus and exposing them to Kubernetes HPA through the Prometheus Adapter.
+
+## Architecture
+
+```mermaid
+graph LR
+    ASR[Lightning ASR] -->|Exports| Metrics
+    Metrics[/metrics Endpoint/] -->|Discovered By| SM[ServiceMonitor]
+    SM -->|Scraped By| Prom[Prometheus]
+    Prom -->|Queried By| Adapter[Prometheus Adapter]
+    Adapter -->|Supplies Metrics| HPA[HPA Controller]
+    HPA -->|Scales| ASR
+
+    style Prom fill:#E6522C
+    style ASR fill:#0D9373
+```
+/* The original had a syntax error in Mermaid—edges must connect nodes, not labels. 
+"Metrics" is now a node, and edge directions/names are consistent.
+*/
+
+## Components
+
+### Prometheus
+
+Collects and stores metrics from Lightning ASR pods.
+
+**Included in chart**:
+```yaml values.yaml
+scaling:
+  auto:
+    enabled: true
+
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      serviceMonitorSelectorNilUsesHelmValues: false
+      retention: 7d
+      resources:
+        requests:
+          memory: 2Gi
+```
+
+### ServiceMonitor
+
+CRD that tells Prometheus which services to scrape.
+
+**Enabled for Lightning ASR**:
+```yaml values.yaml
+scaling:
+  auto:
+    lightningAsr:
+      servicemonitor:
+        enabled: true
+```
+
+### Prometheus Adapter
+
+Converts Prometheus metrics to Kubernetes custom metrics API.
+
+**Configuration**:
+```yaml values.yaml
+prometheus-adapter:
+  prometheus:
+    url: http://smallest-prometheus-stack-prometheus.default.svc
+    port: 9090
+  rules:
+    custom:
+      - seriesQuery: "asr_active_requests"
+        resources:
+          overrides:
+            namespace: {resource: "namespace"}
+            pod: {resource: "pod"}
+        name:
+          matches: "^(.*)$"
+          as: "${1}"
+        metricsQuery: "asr_active_requests{<<.LabelMatchers>>}"
+```
+
+## Available Metrics
+
+Lightning ASR exposes the following metrics:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `asr_active_requests` | Gauge | Current number of active transcription requests |
+| `asr_total_requests` | Counter | Total requests processed |
+| `asr_failed_requests` | Counter | Total failed requests |
+| `asr_request_duration_seconds` | Histogram | Request processing time |
+| `asr_model_load_time_seconds` | Gauge | Time to load model on startup |
+| `asr_gpu_utilization` | Gauge | GPU utilization percentage |
+| `asr_gpu_memory_used_bytes` | Gauge | GPU memory used |
+
+## Verify Metrics Setup
+
+### Check Prometheus
+
+Forward Prometheus port:
+
+```bash
+kubectl port-forward -n default svc/smallest-prometheus-stack-prometheus 9090:9090
+```
+
+Open http://localhost:9090 and verify:
+
+1. **Status → Targets**: Lightning ASR endpoints should be "UP"
+2. **Graph**: Query `asr_active_requests` - should return data
+3. **Status → Service Discovery**: Should show ServiceMonitor
+
+### Check ServiceMonitor
+
+```bash
+kubectl get servicemonitor -n smallest
+```
+
+Expected output:
+```
+NAME            AGE
+lightning-asr   5m
+```
+
+Describe ServiceMonitor:
+
+```bash
+kubectl describe servicemonitor lightning-asr -n smallest
+```
+
+Should show:
+```yaml
+Spec:
+  Endpoints:
+    Port: metrics
+    Path: /metrics
+  Selector:
+    Match Labels:
+      app: lightning-asr
+```
+
+### Check Prometheus Adapter
+
+Verify custom metrics are available:
+
+```bash
+kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1" | jq -r '.resources[].name' | grep asr
+```
+
+Expected output:
+```
+pods/asr_active_requests
+pods/asr_total_requests
+pods/asr_failed_requests
+```
+
+Query specific metric:
+
+```bash
+kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1/namespaces/smallest/pods/*/asr_active_requests" | jq .
+```
+
+## Custom Metric Configuration
+
+### Add New Custom Metrics
+
+To expose additional metrics to HPA:
+
+```yaml values.yaml
+prometheus-adapter:
+  rules:
+    custom:
+      - seriesQuery: "asr_active_requests"
+        resources:
+          overrides:
+            namespace: {resource: "namespace"}
+            pod: {resource: "pod"}
+        name:
+          matches: "^(.*)$"
+          as: "${1}"
+        metricsQuery: "asr_active_requests{<<.LabelMatchers>>}"
+      
+      - seriesQuery: "asr_gpu_utilization"
+        resources:
+          overrides:
+            namespace: {resource: "namespace"}
+            pod: {resource: "pod"}
+        name:
+          as: "gpu_utilization"
+        metricsQuery: "avg_over_time(asr_gpu_utilization{<<.LabelMatchers>>}[2m])"
+```
+
+### External Metrics
+
+For cluster-wide metrics:
+
+```yaml values.yaml
+prometheus-adapter:
+  rules:
+    external:
+      - seriesQuery: 'kube_deployment_status_replicas{deployment="lightning-asr"}'
+        metricsQuery: 'sum(kube_deployment_status_replicas{deployment="lightning-asr"})'
+        name:
+          as: "lightning_asr_replica_count"
+        resources:
+          overrides:
+            namespace: {resource: "namespace"}
+```
+
+Use in HPA:
+
+```yaml
+spec:
+  metrics:
+    - type: External
+      external:
+        metric:
+          name: lightning_asr_replica_count
+        target:
+          type: Value
+          value: "5"
+```
+
+## Prometheus Configuration
+
+### Retention Policy
+
+Configure how long metrics are stored:
+
+```yaml values.yaml
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      retention: 15d
+      retentionSize: "50GB"
+```
+
+### Storage
+
+Persist Prometheus data:
+
+```yaml values.yaml
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: gp3
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 100Gi
+```
+
+### Scrape Interval
+
+Adjust how frequently metrics are collected:
+
+```yaml values.yaml
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      scrapeInterval: 30s
+      evaluationInterval: 30s
+```
+
+<Tip>
+Lower intervals (e.g., 15s) provide faster HPA response but increase storage.
+</Tip>
+
+## Recording Rules
+
+Pre-compute expensive queries:
+
+```yaml
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      additionalScrapeConfigs:
+        - job_name: 'lightning-asr-aggregated'
+          scrape_interval: 15s
+          static_configs:
+            - targets: ['lightning-asr:2269']
+      
+      additionalPrometheusRulesMap:
+        asr-rules:
+          groups:
+            - name: asr_aggregations
+              interval: 30s
+              rules:
+                - record: asr:requests:rate5m
+                  expr: rate(asr_total_requests[5m])
+                
+                - record: asr:requests:active_avg
+                  expr: avg(asr_active_requests) by (namespace)
+                
+                - record: asr:gpu:utilization_avg
+                  expr: avg(asr_gpu_utilization) by (namespace)
+```
+
+Use recording rules in HPA for better performance.
+
+## Alerting Rules
+
+Create alerts for anomalies:
+
+```yaml
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      additionalPrometheusRulesMap:
+        asr-alerts:
+          groups:
+            - name: asr_alerts
+              rules:
+                - alert: HighErrorRate
+                  expr: rate(asr_failed_requests[5m]) > 0.1
+                  for: 5m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "High ASR error rate"
+                    description: "Error rate is {{ $value }} errors/sec"
+                
+                - alert: HighQueueLength
+                  expr: asr_active_requests > 50
+                  for: 2m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "ASR queue backing up"
+                    description: "{{ $value }} requests queued"
+                
+                - alert: GPUMemoryHigh
+                  expr: asr_gpu_memory_used_bytes / 24000000000 > 0.9
+                  for: 5m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "GPU memory usage high"
+                    description: "GPU memory at {{ $value | humanizePercentage }}"
+```
+
+## Debugging Metrics
+
+### Check Metrics Endpoint
+
+Directly query Lightning ASR metrics:
+
+```bash
+kubectl port-forward -n smallest svc/lightning-asr 2269:2269
+curl http://localhost:2269/metrics
+```
+
+Expected output:
+```
+# HELP asr_active_requests Current active requests
+# TYPE asr_active_requests gauge
+asr_active_requests{pod="lightning-asr-xxx"} 3
+
+# HELP asr_total_requests Total requests processed
+# TYPE asr_total_requests counter
+asr_total_requests{pod="lightning-asr-xxx"} 1523
+
+...
+```
+
+### Test Prometheus Query
+
+Access Prometheus UI and test queries:
+
+```promql
+asr_active_requests
+rate(asr_total_requests[5m])
+histogram_quantile(0.95, asr_request_duration_seconds_bucket)
+```
+
+### Check Prometheus Targets
+
+```bash
+kubectl port-forward -n default svc/smallest-prometheus-stack-prometheus 9090:9090
+```
+
+Navigate to: http://localhost:9090/targets
+
+Verify Lightning ASR targets are "UP"
+
+### View Prometheus Logs
+
+```bash
+kubectl logs -n default -l app.kubernetes.io/name=prometheus --tail=100
+```
+
+Look for scrape errors.
+
+## Troubleshooting
+
+### Metrics Not Appearing
+
+**Check ServiceMonitor is created**:
+
+```bash
+kubectl get servicemonitor -n smallest
+```
+
+**Check Prometheus is discovering**:
+
+```bash
+kubectl logs -n default -l app.kubernetes.io/name=prometheus | grep lightning-asr
+```
+
+**Check service has metrics port**:
+
+```bash
+kubectl get svc lightning-asr -n smallest -o yaml
+```
+
+Should show:
+```yaml
+ports:
+  - name: metrics
+    port: 2269
+```
+
+### Custom Metrics Not Available
+
+**Check Prometheus Adapter logs**:
+
+```bash
+kubectl logs -n kube-system -l app.kubernetes.io/name=prometheus-adapter
+```
+
+**Verify adapter configuration**:
+
+```bash
+kubectl get configmap prometheus-adapter -n kube-system -o yaml
+```
+
+**Test API manually**:
+
+```bash
+kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1" | jq .
+```
+
+### High Cardinality Issues
+
+If Prometheus is using too much memory:
+
+1. Reduce label cardinality
+2. Increase retention limits
+3. Use recording rules for complex queries
+
+```yaml
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      resources:
+        requests:
+          memory: 4Gi
+        limits:
+          memory: 8Gi
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Recording Rules" icon="clock">
+    Pre-compute expensive queries:
+    
+    ```yaml
+    - record: asr:requests:rate5m
+      expr: rate(asr_total_requests[5m])
+    ```
+    
+    Then use in HPA instead of raw query
+  </Accordion>
+
+  <Accordion title="Set Appropriate Scrape Intervals" icon="stopwatch">
+    Balance responsiveness vs storage:
+    
+    - Fast autoscaling: 15s
+    - Normal: 30s
+    - Cost-optimized: 60s
+  </Accordion>
+
+  <Accordion title="Enable Persistence" icon="database">
+    Always persist Prometheus data:
+    
+    ```yaml
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          resources:
+            requests:
+              storage: 100Gi
+    ```
+  </Accordion>
+
+  <Accordion title="Monitor Prometheus Itself" icon="chart-bar">
+    Track Prometheus performance:
+    
+    - Query duration
+    - Scrape duration
+    - Memory usage
+    - TSDB size
+  </Accordion>
+
+  <Accordion title="Use Grafana for Visualization" icon="chart-line">
+    Don't rely on Prometheus UI
+    
+    Use Grafana dashboards for ops
+    
+    See [Grafana Dashboards](/kubernetes/autoscaling/grafana-dashboards)
+  </Accordion>
+</AccordionGroup>
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="HPA Configuration" icon="chart-line" href="/kubernetes/autoscaling/hpa-configuration">
+    Use metrics for autoscaling
+  </Card>
+
+  <Card title="Grafana Dashboards" icon="dashboard" href="/kubernetes/autoscaling/grafana-dashboards">
+    Visualize metrics
+  </Card>
+</CardGroup>
+

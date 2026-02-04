@@ -1,0 +1,470 @@
+---
+title: EFS Configuration
+description: Set up Amazon EFS for shared storage in AWS EKS
+---
+
+## Overview
+
+Amazon Elastic File System (EFS) provides shared, persistent file storage for Kubernetes pods. This is ideal for storing AI models that can be shared across multiple Lightning ASR pods, eliminating duplicate downloads and reducing startup time.
+
+## Benefits of EFS
+
+<CardGroup cols={2}>
+  <Card title="Shared Storage" icon="share-nodes">
+    Multiple pods can read/write simultaneously (ReadWriteMany)
+  </Card>
+
+  <Card title="Automatic Scaling" icon="arrows-up-down">
+    Storage grows and shrinks automatically
+  </Card>
+
+  <Card title="Fast Startup" icon="bolt">
+    Models cached once, used by all pods
+  </Card>
+
+  <Card title="Cost Effective" icon="dollar-sign">
+    Pay only for storage used, no upfront provisioning
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+<Steps>
+  <Step title="EFS CSI Driver">
+    Install the EFS CSI driver (see [IAM & IRSA](/kubernetes/aws/iam-irsa) guide)
+    
+    ```bash
+    kubectl get pods -n kube-system -l app=efs-csi-controller
+    ```
+  </Step>
+
+  <Step title="VPC and Subnets">
+    Note your EKS cluster's VPC ID and subnet IDs:
+    
+    ```bash
+    aws eks describe-cluster \
+      --name smallest-cluster \
+      --region us-east-1 \
+      --query 'cluster.resourcesVpcConfig.{vpcId:vpcId,subnetIds:subnetIds}'
+    ```
+  </Step>
+
+  <Step title="Security Group">
+    Note your cluster security group ID:
+    
+    ```bash
+    aws eks describe-cluster \
+      --name smallest-cluster \
+      --region us-east-1 \
+      --query 'cluster.resourcesVpcConfig.clusterSecurityGroupId'
+    ```
+  </Step>
+</Steps>
+
+## Create EFS File System
+
+### Using AWS Console
+
+<Steps>
+  <Step title="Navigate to EFS">
+    Go to AWS Console → EFS → Create file system
+  </Step>
+
+  <Step title="Configure File System">
+    - **Name**: `smallest-models`
+    - **VPC**: Select your EKS cluster VPC
+    - **Availability and Durability**: Regional (recommended)
+    - Click "Customize"
+  </Step>
+
+  <Step title="File System Settings">
+    - **Performance mode**: General Purpose
+    - **Throughput mode**: Bursting (or Elastic for production)
+    - **Encryption**: Enable encryption at rest
+    - Click "Next"
+  </Step>
+
+  <Step title="Network Access">
+    - Select all subnets where EKS nodes run
+    - Security group: Select cluster security group
+    - Click "Next"
+  </Step>
+
+  <Step title="Review and Create">
+    Review settings and click "Create"
+    
+    Note the **File system ID** (e.g., `fs-0123456789abcdef`)
+  </Step>
+</Steps>
+
+### Using AWS CLI
+
+```bash
+VPC_ID=$(aws eks describe-cluster \
+  --name smallest-cluster \
+  --region us-east-1 \
+  --query 'cluster.resourcesVpcConfig.vpcId' \
+  --output text)
+
+SG_ID=$(aws eks describe-cluster \
+  --name smallest-cluster \
+  --region us-east-1 \
+  --query 'cluster.resourcesVpcConfig.clusterSecurityGroupId' \
+  --output text)
+
+FILE_SYSTEM_ID=$(aws efs create-file-system \
+  --region us-east-1 \
+  --performance-mode generalPurpose \
+  --throughput-mode bursting \
+  --encrypted \
+  --tags Key=Name,Value=smallest-models \
+  --query 'FileSystemId' \
+  --output text)
+
+echo "Created EFS: $FILE_SYSTEM_ID"
+
+SUBNET_IDS=$(aws eks describe-cluster \
+  --name smallest-cluster \
+  --region us-east-1 \
+  --query 'cluster.resourcesVpcConfig.subnetIds[*]' \
+  --output text)
+
+for subnet in $SUBNET_IDS; do
+  aws efs create-mount-target \
+    --file-system-id $FILE_SYSTEM_ID \
+    --subnet-id $subnet \
+    --security-groups $SG_ID \
+    --region us-east-1
+done
+
+echo "EFS File System ID: $FILE_SYSTEM_ID"
+```
+
+## Configure Security Group
+
+Ensure the security group allows NFS traffic (port 2049) from cluster nodes:
+
+```bash
+SG_ID=$(aws eks describe-cluster \
+  --name smallest-cluster \
+  --region us-east-1 \
+  --query 'cluster.resourcesVpcConfig.clusterSecurityGroupId' \
+  --output text)
+
+aws ec2 authorize-security-group-ingress \
+  --group-id $SG_ID \
+  --protocol tcp \
+  --port 2049 \
+  --source-group $SG_ID \
+  --region us-east-1
+```
+
+<Note>
+If the rule already exists, you'll see an error. This is safe to ignore.
+</Note>
+
+## Deploy with EFS in Helm
+
+Update your `values.yaml` to enable EFS:
+
+```yaml values.yaml
+models:
+  asrModelUrl: "your-model-url-here"
+  volumes:
+    aws:
+      efs:
+        enabled: true
+        fileSystemId: "fs-0123456789abcdef"
+        namePrefix: "models"
+```
+
+Replace `fs-0123456789abcdef` with your actual EFS file system ID.
+
+### Deploy or Upgrade
+
+```bash
+helm upgrade --install smallest-self-host smallest-self-host/smallest-self-host \
+  -f values.yaml \
+  --namespace smallest
+```
+
+## Verify EFS Configuration
+
+### Check Storage Class
+
+```bash
+kubectl get storageclass
+```
+
+Should show:
+```
+NAME                        PROVISIONER        RECLAIMPOLICY   VOLUMEBINDINGMODE   AGE
+models-aws-efs-sc           efs.csi.aws.com    Delete          Immediate           1m
+```
+
+### Check Persistent Volume
+
+```bash
+kubectl get pv
+```
+
+Should show:
+```
+NAME                   CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM
+models-aws-efs-pv      5Gi        RWX            Retain           Bound    smallest/models-aws-efs-pvc
+```
+
+### Check Persistent Volume Claim
+
+```bash
+kubectl get pvc -n smallest
+```
+
+Should show:
+```
+NAME                  STATUS   VOLUME              CAPACITY   ACCESS MODES   STORAGECLASS        AGE
+models-aws-efs-pvc    Bound    models-aws-efs-pv   5Gi        RWX            models-aws-efs-sc   1m
+```
+
+### Verify Mount in Pod
+
+```bash
+kubectl get pods -l app=lightning-asr -n smallest
+kubectl exec -it <lightning-asr-pod> -n smallest -- df -h | grep efs
+```
+
+Should show the EFS mount:
+```
+fs-0123456789abcdef.efs.us-east-1.amazonaws.com:/  8.0E   0  8.0E   0% /app/models
+```
+
+## Test EFS
+
+Create a test file in one pod and verify it's visible in another:
+
+### Write test file:
+
+```bash
+kubectl exec -it <lightning-asr-pod-1> -n smallest -- sh -c "echo 'test' > /app/models/test.txt"
+```
+
+### Read from another pod:
+
+```bash
+kubectl exec -it <lightning-asr-pod-2> -n smallest -- cat /app/models/test.txt
+```
+
+Should output: `test`
+
+## How Model Caching Works
+
+With EFS enabled:
+
+1. **First Pod Startup**:
+   - Pod downloads model from `asrModelUrl`
+   - Saves model to `/app/models` (EFS mount)
+   - Takes 5-10 minutes (one-time download)
+
+2. **Subsequent Pod Startups**:
+   - Pod checks `/app/models` for existing model
+   - Finds model already downloaded
+   - Skips download, loads from EFS
+   - Takes 30-60 seconds
+
+<Note>
+This is especially valuable when using autoscaling, as new pods start much faster.
+</Note>
+
+## Performance Tuning
+
+### Choose Throughput Mode
+
+<Tabs>
+  <Tab title="Bursting (Default)">
+    **Best for**: Development, testing, variable workloads
+    
+    - Throughput scales with storage size
+    - 50 MB/s per TB of storage
+    - Bursting to 100 MB/s
+    - Most cost-effective
+  </Tab>
+
+  <Tab title="Elastic">
+    **Best for**: Production with unpredictable load
+    
+    - Automatically scales throughput
+    - Up to 3 GB/s for reads
+    - Up to 1 GB/s for writes
+    - Pay for throughput used
+    
+    Update via console or CLI:
+    ```bash
+    aws efs update-file-system \
+      --file-system-id fs-0123456789abcdef \
+      --throughput-mode elastic
+    ```
+  </Tab>
+
+  <Tab title="Provisioned">
+    **Best for**: Production with consistent high throughput
+    
+    - Fixed throughput independent of size
+    - Up to 1 GB/s throughput
+    - Higher cost
+    
+    ```bash
+    aws efs update-file-system \
+      --file-system-id fs-0123456789abcdef \
+      --throughput-mode provisioned \
+      --provisioned-throughput-in-mibps 100
+    ```
+  </Tab>
+</Tabs>
+
+### Enable Lifecycle Management
+
+Automatically move infrequently accessed files to lower-cost storage:
+
+```bash
+aws efs put-lifecycle-configuration \
+  --file-system-id fs-0123456789abcdef \
+  --lifecycle-policies \
+    '[{"TransitionToIA":"AFTER_30_DAYS"},{"TransitionToPrimaryStorageClass":"AFTER_1_ACCESS"}]'
+```
+
+## Cost Optimization
+
+### Monitor EFS Usage
+
+```bash
+aws efs describe-file-systems \
+  --file-system-id fs-0123456789abcdef \
+  --query 'FileSystems[0].SizeInBytes'
+```
+
+### Estimate Costs
+
+EFS pricing (us-east-1):
+- **Standard storage**: ~$0.30/GB/month
+- **Infrequent Access**: ~$0.025/GB/month
+- **Data transfer**: Free within same AZ
+
+For 50 GB model:
+- Standard: ~$15/month
+- With IA (after 30 days): ~$1.25/month
+
+<Tip>
+Use lifecycle policies to automatically move old models to Infrequent Access storage.
+</Tip>
+
+## Backup and Recovery
+
+### Enable AWS Backup
+
+```bash
+aws backup create-backup-plan \
+  --backup-plan '{
+    "BackupPlanName": "smallest-efs-backup",
+    "Rules": [{
+      "RuleName": "daily-backup",
+      "TargetBackupVaultName": "Default",
+      "ScheduleExpression": "cron(0 2 * * ? *)",
+      "Lifecycle": {
+        "DeleteAfterDays": 30
+      }
+    }]
+  }'
+```
+
+### Manual Backup
+
+EFS automatically creates point-in-time backups. Access via AWS Console → EFS → Backups.
+
+## Troubleshooting
+
+### Mount Failed
+
+**Check EFS CSI driver**:
+
+```bash
+kubectl get pods -n kube-system -l app=efs-csi-controller
+kubectl logs -n kube-system -l app=efs-csi-controller
+```
+
+**Verify security group rules**:
+
+```bash
+aws ec2 describe-security-groups --group-ids $SG_ID
+```
+
+Ensure port 2049 is open.
+
+### Slow Performance
+
+**Check throughput mode**:
+
+```bash
+aws efs describe-file-systems \
+  --file-system-id fs-0123456789abcdef \
+  --query 'FileSystems[0].ThroughputMode'
+```
+
+Consider upgrading to Elastic or Provisioned.
+
+**Monitor CloudWatch metrics**:
+- `PermittedThroughput`
+- `BurstCreditBalance`
+- `ClientConnections`
+
+### Permission Denied
+
+**Check mount options** in PV:
+
+```bash
+kubectl get pv models-aws-efs-pv -o yaml
+```
+
+Should include:
+```yaml
+mountOptions:
+  - tls
+```
+
+## Alternative: EBS for Single Pod
+
+If you don't need shared storage (single replica only):
+
+```yaml values.yaml
+models:
+  volumes:
+    aws:
+      efs:
+        enabled: false
+
+scaling:
+  replicas:
+    lightningAsr: 1
+
+lightningAsr:
+  persistence:
+    enabled: true
+    storageClass: gp3
+    size: 100Gi
+```
+
+<Warning>
+EBS volumes can only be attached to one pod at a time. This prevents horizontal scaling.
+</Warning>
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Model Storage" icon="database" href="/kubernetes/storage/model-storage">
+    Optimize model storage and caching strategies
+  </Card>
+
+  <Card title="HPA Configuration" icon="chart-line" href="/kubernetes/autoscaling/hpa-configuration">
+    Enable autoscaling with shared model storage
+  </Card>
+</CardGroup>
+

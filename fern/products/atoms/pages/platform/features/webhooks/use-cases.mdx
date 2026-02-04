@@ -1,0 +1,244 @@
+---
+title: "Webhook Use Cases"
+sidebarTitle: "Use Cases"
+description: "Common patterns for using webhooks effectively."
+---
+
+Webhooks enable powerful integrations. Here are common patterns and how to implement them.
+
+---
+
+## CRM Integration
+
+### Goal
+
+Automatically log calls and update contact records in your CRM.
+
+### Implementation
+
+**On `call.end`:**
+
+1. Receive webhook with transcript and outcome
+2. Look up contact by phone number
+3. Create/update contact record
+4. Add call notes with summary
+5. Create follow-up tasks if needed
+
+### Example Flow
+
+```
+call.end webhook received
+        ↓
+Parse caller_phone from payload
+        ↓
+Search CRM for matching contact
+        ↓
+If exists: Update record
+If not: Create new contact
+        ↓
+Add activity: "Voice call - {duration}min - {disposition}"
+        ↓
+If follow_up_needed: Create task
+```
+
+---
+
+## Real-Time Dashboard
+
+### Goal
+
+Show live call activity and metrics on a dashboard.
+
+### Implementation
+
+**On `call.start`:**
+- Add to "active calls" count
+- Show caller info in live feed
+
+**On `call.end`:**
+- Remove from active calls
+- Update completed calls count
+- Recalculate metrics
+
+**On `analytics.completed`:**
+- Update satisfaction scores
+- Refresh aggregate statistics
+
+### Technology Options
+
+- WebSocket connection to frontend
+- Push notifications
+- Server-sent events
+- Polling from dashboard
+
+---
+
+## Email Follow-Up
+
+### Goal
+
+Send personalized follow-up emails based on call outcomes.
+
+### Implementation
+
+**On `analytics.completed`:**
+
+1. Receive metrics (satisfaction, resolution, etc.)
+2. Determine email template:
+   - Satisfied + Resolved → "Thank you" email
+   - Unsatisfied → "We're sorry" + escalation
+   - Unresolved → "Additional resources" email
+3. Queue or send email
+
+### Example Logic
+
+```javascript
+if (metrics.satisfaction_score >= 4 && metrics.issue_resolved) {
+  sendEmail('thank_you_template', caller_email);
+} else if (metrics.satisfaction_score <= 2) {
+  sendEmail('escalation_template', caller_email);
+  notifyManager(call_id);
+}
+```
+
+---
+
+## Ticket Creation
+
+### Goal
+
+Automatically create support tickets from calls.
+
+### Implementation
+
+**On `call.end`:**
+
+1. Check if issue was resolved
+2. If unresolved, create ticket:
+   - Title: Issue type
+   - Description: Transcript summary
+   - Priority: Based on sentiment
+   - Customer: Caller info
+3. Assign to appropriate queue
+
+---
+
+## Data Warehouse
+
+### Goal
+
+Store all call data for analytics and reporting.
+
+### Implementation
+
+**On `call.end` and `analytics.completed`:**
+
+1. Receive payload
+2. Transform to your schema
+3. Insert into data warehouse
+4. Available for BI tools
+
+### Data Points to Capture
+
+- Call metadata (time, duration, direction)
+- Transcript (full or summarized)
+- Outcome (disposition)
+- Metrics (satisfaction, resolution)
+- Variables (customer data collected)
+
+---
+
+## Slack Notifications
+
+### Goal
+
+Alert team members about important call events.
+
+### Implementation
+
+**On `call.end`:**
+
+If certain conditions:
+- Escalation requested
+- Low satisfaction
+- High-value customer
+
+Send Slack message with:
+- Call summary
+- Customer info
+- Action needed
+
+### Example Triggers
+
+| Condition | Notification |
+|-----------|--------------|
+| Transfer requested | "#support - Transfer requested by [customer]" |
+| Satisfaction ≤ 2 | "#alerts - Unhappy customer: [summary]" |
+| VIP customer | "#vip - VIP call completed: [outcome]" |
+
+---
+
+## Multi-System Sync
+
+### Goal
+
+Keep multiple systems updated with call data.
+
+### Implementation
+
+Your webhook endpoint fans out to multiple services:
+
+```
+Webhook received
+        ↓
+    Process payload
+        ↓
+    ├── Update CRM
+    ├── Update Analytics
+    ├── Update Helpdesk
+    └── Log to Database
+```
+
+Use async processing so one slow system doesn't block others.
+
+---
+
+## Best Practices
+
+### Acknowledge Quickly
+
+Return 200 immediately, process asynchronously:
+
+```javascript
+app.post('/webhook', (req, res) => {
+  res.status(200).send('OK');  // Acknowledge immediately
+  processAsync(req.body);       // Process in background
+});
+```
+
+### Handle Failures
+
+What if your processing fails?
+- Log the failure
+- Queue for retry
+- Alert if persistent
+
+### Idempotency
+
+Webhooks may be sent more than once. Handle duplicates:
+- Track `call_id` to detect duplicates
+- Use upsert operations
+- Design for idempotency
+
+---
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="Variables Reference" icon="brackets-curly" href="/platform/features/variables-reference">
+    Dynamic values in prompts
+  </Card>
+  <Card title="API Calls Reference" icon="cloud" href="/platform/features/api-calls-reference">
+    External API integration
+  </Card>
+</CardGroup>

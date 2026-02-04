@@ -1,0 +1,382 @@
+---
+title: "Node Types Reference"
+sidebarTitle: "Node Types"
+description: "Complete guide to every node type in Conversational Flow."
+---
+
+Nodes are the building blocks of your conversation flow. Each type serves a specific purpose in guiding the conversation.
+
+<Frame caption="All node types in the palette">
+  [IMAGE: Node palette showing all six node types with icons]
+</Frame>
+
+---
+
+## Node Types at a Glance
+
+| Node | Icon | Purpose | When to Use |
+|------|------|---------|-------------|
+| [Default](#default-node) | 🔷 | Conversation step | Each conversation point |
+| [Transfer Call](#transfer-call-node) | 📞 | Handoff to human | Connect to live agent |
+| [API Call](#api-call-node) | ⬆️ | External data | Fetch/send mid-conversation |
+| [End Call](#end-call-node) | ✂️ | Terminate call | Natural endings |
+| [Pre-Call API](#pre-call-api-node) | 🔵🟠 | Load context | Get data before call starts |
+| [Post-Call API](#post-call-api-node) | 🟠🔵 | Save data | Send data after call ends |
+
+---
+
+## Default Node
+
+The workhorse of your flow. Each Default node represents one step in the conversation.
+
+<Frame caption="Default node on canvas">
+  [IMAGE: Default node card showing title and connection points]
+</Frame>
+
+### Configuration
+
+<Frame caption="Default node configuration panel">
+  [IMAGE: Panel showing all Default node settings]
+</Frame>
+
+| Field | Purpose |
+|-------|---------|
+| **Name** | Identifier shown on canvas |
+| **Prompt** | What the agent says at this step |
+| **Branches** | Output paths based on caller response |
+
+### Example Prompts
+
+<Tabs>
+  <Tab title="Greeting">
+    ```
+    Hi! Thanks for calling Acme Support. My name is Alex. 
+    How can I help you today?
+    ```
+  </Tab>
+  
+  <Tab title="Question">
+    ```
+    I'd be happy to help with that. First, could you tell 
+    me your account number or the email on file?
+    ```
+  </Tab>
+  
+  <Tab title="Confirmation">
+    ```
+    Just to confirm — you'd like to schedule a demo for 
+    next Tuesday at 2pm. Is that correct?
+    ```
+  </Tab>
+</Tabs>
+
+### Branching
+
+Default nodes can have multiple output branches:
+
+<Frame caption="Default node with branches">
+  [IMAGE: Node showing three output connections with condition labels]
+</Frame>
+
+→ See: [Conditions & Branching](/platform/building-agents/convo-flow/conditions)
+
+---
+
+## Transfer Call Node
+
+Hands the conversation to a human agent via phone transfer.
+
+<Frame caption="Transfer Call node on canvas">
+  [IMAGE: Transfer Call node card with phone icon]
+</Frame>
+
+### Configuration
+
+<Frame caption="Transfer Call configuration">
+  [IMAGE: Transfer settings panel showing all options]
+</Frame>
+
+| Field | Purpose |
+|-------|---------|
+| **Name** | Identifier |
+| **Description** | When this transfer should trigger |
+| **Phone Number** | Transfer destination (with country code) |
+| **Transfer Type** | Cold or Warm |
+
+### Transfer Types
+
+<Tabs>
+  <Tab title="Cold Transfer">
+    <Frame caption="Cold transfer visualization">
+      [IMAGE: Diagram showing immediate handoff]
+    </Frame>
+    
+    **Immediate handoff.** The caller is connected directly without any briefing to the receiving agent.
+    
+    **Best for:**
+    - Simple escalations
+    - When context isn't needed
+    - Time-sensitive transfers
+  </Tab>
+  
+  <Tab title="Warm Transfer">
+    <Frame caption="Warm transfer visualization">
+      [IMAGE: Diagram showing AI briefing the human, then connecting caller]
+    </Frame>
+    
+    **AI briefs the agent first.** The receiving agent gets context before the caller joins.
+    
+    **Additional Options:**
+    
+    | Option | Description |
+    |--------|-------------|
+    | On-hold Music | What caller hears while waiting |
+    | Transfer if Human | Skip if voicemail (coming soon) |
+    | Whisper Message | Private message to agent only |
+    | Handoff Message | What the agent hears |
+    | Three-way Message | What both parties hear |
+    
+    **Best for:**
+    - Complex issues needing context
+    - VIP callers
+    - When continuity matters
+  </Tab>
+</Tabs>
+
+---
+
+## API Call Node
+
+Makes external API requests during the conversation.
+
+<Frame caption="API Call node on canvas">
+  [IMAGE: API Call node card with arrow icon]
+</Frame>
+
+### Configuration
+
+<Frame caption="API Call configuration">
+  [IMAGE: API settings panel with all fields]
+</Frame>
+
+| Field | Purpose |
+|-------|---------|
+| **Name** | Identifier |
+| **URL** | Endpoint to call |
+| **Method** | GET, POST, PUT, DELETE |
+| **Headers** | Request headers |
+| **Body** | Request payload |
+| **Response Mapping** | Map response to variables |
+
+### Example: Customer Lookup
+
+<Frame caption="Customer lookup API configuration">
+  [IMAGE: API node configured for customer lookup]
+</Frame>
+
+```
+URL: https://api.example.com/customers
+Method: GET
+Query: ?phone={{caller_phone}}
+
+Response Mapping:
+  data.name → {{api.customer_name}}
+  data.tier → {{api.account_tier}}
+```
+
+Then use in a later node:
+
+```
+"Hello {{api.customer_name}}! I see you're a {{api.account_tier}} 
+member. How can I help you today?"
+```
+
+→ Learn more: [API Calls](/platform/building-agents/configuring/api-calls)
+
+---
+
+## End Call Node
+
+Terminates the conversation.
+
+<Frame caption="End Call node on canvas">
+  [IMAGE: End Call node card with scissors icon]
+</Frame>
+
+### Configuration
+
+<Frame caption="End Call configuration">
+  [IMAGE: End Call settings panel]
+</Frame>
+
+| Field | Purpose |
+|-------|---------|
+| **Name** | Identifier |
+| **Closing Message** | Final words before hanging up |
+
+### Example Closings
+
+<Tabs>
+  <Tab title="Successful">
+    ```
+    Great! You're all set. Is there anything else I can 
+    help you with today? ... Perfect, thank you for calling 
+    Acme. Have a wonderful day!
+    ```
+  </Tab>
+  
+  <Tab title="Transferred">
+    ```
+    I'm connecting you now. Thanks for calling Acme, and 
+    have a great day!
+    ```
+  </Tab>
+  
+  <Tab title="Not Qualified">
+    ```
+    Thanks so much for your interest. I'll have someone 
+    send over some resources that might be helpful. Take care!
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+**Every path must end.** Make sure all branches eventually reach an End Call or Transfer node.
+</Warning>
+
+---
+
+## Pre-Call API Node
+
+Fetches data before the conversation begins.
+
+<Frame caption="Pre-Call API node on canvas">
+  [IMAGE: Pre-Call API node with distinctive coloring]
+</Frame>
+
+### When It Runs
+
+<Frame caption="Pre-Call API timing diagram">
+  [IMAGE: Timeline showing API call happening before Start node]
+</Frame>
+
+The Pre-Call API runs:
+1. Phone rings
+2. **Pre-Call API executes** ← Here
+3. Data available
+4. Conversation starts
+
+### Use Cases
+
+| Scenario | API Call |
+|----------|----------|
+| **CRM Lookup** | Get caller history before greeting |
+| **Account Status** | Check if caller has issues |
+| **Personalization** | Load name, preferences |
+| **Routing** | Determine which flow to use |
+
+### Example
+
+<Frame caption="Pre-Call API for CRM lookup">
+  [IMAGE: Pre-Call API configured for customer lookup]
+</Frame>
+
+```
+URL: https://crm.example.com/lookup?phone={{caller_phone}}
+
+Response:
+  customer_name → {{api.name}}
+  last_issue → {{api.last_ticket}}
+  tier → {{api.tier}}
+```
+
+First node can now say:
+
+```
+"Hi {{api.name}}! Thanks for calling back. Are you still 
+having trouble with {{api.last_ticket}}?"
+```
+
+---
+
+## Post-Call API Node
+
+Sends data after the conversation ends.
+
+<Frame caption="Post-Call API node on canvas">
+  [IMAGE: Post-Call API node with distinctive coloring]
+</Frame>
+
+### When It Runs
+
+<Frame caption="Post-Call API timing diagram">
+  [IMAGE: Timeline showing API call happening after End Call]
+</Frame>
+
+The Post-Call API runs:
+1. Conversation ends
+2. Call terminates
+3. **Post-Call API executes** ← Here
+4. Data saved externally
+
+### Use Cases
+
+| Scenario | What to Send |
+|----------|--------------|
+| **CRM Update** | Call summary, outcome |
+| **Ticket Creation** | Issue details, priority |
+| **Lead Capture** | Collected qualification data |
+| **Analytics** | Custom metrics, disposition |
+
+### Example
+
+<Frame caption="Post-Call API for CRM update">
+  [IMAGE: Post-Call API configured to update CRM]
+</Frame>
+
+```
+URL: https://crm.example.com/calls
+Method: POST
+Body:
+{
+  "phone": "{{caller_phone}}",
+  "duration": "{{call_duration}}",
+  "outcome": "{{disposition}}",
+  "notes": "{{call_summary}}",
+  "collected": {
+    "name": "{{collected.name}}",
+    "budget": "{{collected.budget}}",
+    "timeline": "{{collected.timeline}}"
+  }
+}
+```
+
+---
+
+## Choosing the Right Node
+
+<Frame caption="Decision flowchart for node selection">
+  [IMAGE: Flowchart: "What do you need?" → branches to different nodes]
+</Frame>
+
+| If you need to... | Use |
+|-------------------|-----|
+| Ask a question or give info | Default Node |
+| Transfer to a human | Transfer Call Node |
+| Get external data mid-conversation | API Call Node |
+| End the conversation | End Call Node |
+| Load data before call starts | Pre-Call API Node |
+| Save data after call ends | Post-Call API Node |
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Conditions & Branching" icon="code-branch" href="/platform/building-agents/convo-flow/conditions">
+    Create complex conversation paths
+  </Card>
+  <Card title="Configure Your Agent" icon="sliders" href="/platform/building-agents/configuring/editor-overview">
+    Voice, model, and more settings
+  </Card>
+</CardGroup>

@@ -1,6 +1,177 @@
 ---
-title: "Managing Audiences"
-description: "Audience lists and segmentation"
+title: "Audiences"
+sidebarTitle: "Audiences"
+description: "Create and manage contact lists for outbound campaigns."
 ---
 
-# Managing Audiences
+An **Audience** is a curated list of phone numbers your campaigns will dial. Think of it as a segment—leads to call, customers to survey, appointments to confirm.
+
+## Creating an Audience
+
+Use `create_audience` with a list of phone numbers and optional contact names:
+
+```python
+from smallestai.atoms.audience import Audience
+
+audience = Audience()
+
+response = audience.create(
+    name="Q1 Sales Leads",
+    phone_numbers=["+916366821717", "+919353662554"],
+    names=[("John", "Doe"), ("Jane", "Smith")]
+)
+
+audience_id = response["data"]["_id"]
+```
+
+The response confirms creation with the audience ID:
+
+```json
+{
+  "status": true,
+  "data": {
+    "name": "Q1 Sales Leads",
+    "phoneNumberColumnName": "phoneNumber",
+    "_id": "696ddd56b905442f52b71392"
+  }
+}
+```
+
+<Note>
+Phone numbers must use E.164 format: `+` followed by country code and number. Example: `+916366821717`
+</Note>
+
+---
+
+## Listing Audiences
+
+`list()` returns all audiences with their campaign associations:
+
+```python
+audiences = audience.list()
+```
+
+Each audience includes campaign associations and member counts:
+
+```json
+{
+  "status": true,
+  "data": [
+    {
+      "_id": "696ddd56b905442f52b71392",
+      "name": "Q1 Sales Leads",
+      "memberCount": 2,
+      "hasCampaigns": true,
+      "campaigns": [
+        {"_id": "...", "name": "January Outreach", "status": "completed"}
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## Viewing Members
+
+`get_members()` returns a paginated list of contacts in the audience:
+
+```python
+members = audience.get_members(
+    audience_id=audience_id,
+    page=1,
+    offset=10
+)
+```
+
+Each member stores their contact data:
+
+```json
+{
+  "status": true,
+  "data": {
+    "members": [
+      {
+        "_id": "696ddd56b905442f52b71394",
+        "data": {
+          "firstName": "John",
+          "lastName": "Doe",
+          "phoneNumber": "+916366821717"
+        }
+      }
+    ],
+    "totalCount": 2,
+    "totalPages": 1,
+    "hasMore": false
+  }
+}
+```
+
+---
+
+## Adding Members
+
+`add_contacts()` appends new contacts to an existing audience:
+
+```python
+audience.add_contacts(
+    audience_id=audience_id,
+    phone_numbers=["+919876543210"],
+    names=[("New", "Contact")]
+)
+```
+
+The response reports how many were added:
+
+```json
+{
+  "status": true,
+  "data": [{"message": "1 members added successfully", "data": {"added": 1, "skipped": 0}}]
+}
+```
+
+---
+
+## Deleting an Audience
+
+`delete()` removes the audience and all its members:
+
+```python
+audience.delete(audience_id=audience_id)
+```
+
+<Warning>
+Audiences with active campaigns cannot be deleted. Complete or delete the campaigns first.
+</Warning>
+
+---
+
+## SDK Reference
+
+| Method | Description |
+|--------|-------------|
+| `create(name, phone_numbers, names)` | Create a new audience |
+| `list()` | List all audiences |
+| `get(id)` | Get a single audience |
+| `get_members(id, page, offset)` | Paginated member list |
+| `add_contacts(id, phone_numbers, names)` | Append contacts |
+| `delete(id)` | Remove an audience |
+
+---
+
+## Tips
+
+<AccordionGroup>
+  <Accordion title="What phone number format should I use?">
+    E.164 format is required: `+` followed by country code and number with no spaces or dashes. Example: `+14155551234` for US, `+916366821717` for India.
+  </Accordion>
+  <Accordion title="Can I update existing member data?">
+    Currently, you can add new members but not update existing ones. To change a contact's info, delete and recreate the audience or add the corrected record (duplicates are skipped).
+  </Accordion>
+  <Accordion title="How many members can an audience have?">
+    Audiences can scale to thousands of contacts. For very large lists, consider splitting into segments for easier management.
+  </Accordion>
+  <Accordion title="Why was my member skipped?">
+    Members with duplicate phone numbers within the same audience are skipped. Check that each phone number is unique.
+  </Accordion>
+</AccordionGroup>

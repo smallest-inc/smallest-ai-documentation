@@ -1,0 +1,384 @@
+---
+title: "Common Integrations"
+sidebarTitle: "Common Integrations"
+description: "Ready-to-use API patterns for popular services and use cases."
+---
+
+Here are pre-built API configurations for common integrations. Copy and customize for your needs.
+
+---
+
+## CRM Integrations
+
+### Salesforce
+
+<Tabs>
+  <Tab title="Lookup Contact">
+    ```
+    GET https://yourinstance.salesforce.com/services/data/v58.0/query
+    
+    Query: SELECT Id, Name, Email, Phone, Account.Name 
+           FROM Contact 
+           WHERE Phone = '{{caller_phone}}'
+    
+    Headers:
+      Authorization: Bearer {{salesforce_token}}
+      Content-Type: application/json
+    
+    Response Mapping:
+      $.records[0].Name → customer_name
+      $.records[0].Email → customer_email
+      $.records[0].Account.Name → company_name
+    ```
+  </Tab>
+  <Tab title="Log Activity">
+    ```
+    POST https://yourinstance.salesforce.com/services/data/v58.0/sobjects/Task
+    
+    Headers:
+      Authorization: Bearer {{salesforce_token}}
+      Content-Type: application/json
+    
+    Body:
+    {
+      "Subject": "Voice Call - {{disposition}}",
+      "WhoId": "{{contact_id}}",
+      "Description": "{{call_summary}}",
+      "Status": "Completed",
+      "CallDurationInSeconds": {{call_duration}},
+      "CallType": "{{call_direction}}"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### HubSpot
+
+<Tabs>
+  <Tab title="Lookup Contact">
+    ```
+    GET https://api.hubapi.com/crm/v3/objects/contacts/search
+    
+    Headers:
+      Authorization: Bearer {{hubspot_api_key}}
+      Content-Type: application/json
+    
+    Body:
+    {
+      "filterGroups": [{
+        "filters": [{
+          "propertyName": "phone",
+          "operator": "EQ",
+          "value": "{{caller_phone}}"
+        }]
+      }],
+      "properties": ["firstname", "lastname", "email", "company"]
+    }
+    
+    Response Mapping:
+      $.results[0].properties.firstname → first_name
+      $.results[0].properties.lastname → last_name
+      $.results[0].properties.company → company_name
+    ```
+  </Tab>
+  <Tab title="Create Note">
+    ```
+    POST https://api.hubapi.com/crm/v3/objects/notes
+    
+    Headers:
+      Authorization: Bearer {{hubspot_api_key}}
+      Content-Type: application/json
+    
+    Body:
+    {
+      "properties": {
+        "hs_timestamp": "{{call_start_time}}",
+        "hs_note_body": "Call Summary: {{call_summary}}\nDuration: {{call_duration}}s\nOutcome: {{disposition}}"
+      },
+      "associations": [{
+        "to": {"id": "{{contact_id}}"},
+        "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 202}]
+      }]
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Calendar / Booking
+
+### Google Calendar
+
+<Tabs>
+  <Tab title="Check Availability">
+    ```
+    GET https://www.googleapis.com/calendar/v3/freeBusy
+    
+    Headers:
+      Authorization: Bearer {{google_oauth_token}}
+      Content-Type: application/json
+    
+    Body:
+    {
+      "timeMin": "{{requested_date}}T09:00:00Z",
+      "timeMax": "{{requested_date}}T17:00:00Z",
+      "items": [{"id": "{{calendar_id}}"}]
+    }
+    
+    Response Mapping:
+      $.calendars.{{calendar_id}}.busy → busy_times
+    ```
+  </Tab>
+  <Tab title="Create Event">
+    ```
+    POST https://www.googleapis.com/calendar/v3/calendars/{{calendar_id}}/events
+    
+    Headers:
+      Authorization: Bearer {{google_oauth_token}}
+      Content-Type: application/json
+    
+    Body:
+    {
+      "summary": "Appointment - {{customer_name}}",
+      "start": {
+        "dateTime": "{{appointment_datetime}}",
+        "timeZone": "America/New_York"
+      },
+      "end": {
+        "dateTime": "{{appointment_end_datetime}}",
+        "timeZone": "America/New_York"
+      },
+      "attendees": [{"email": "{{customer_email}}"}],
+      "description": "Booked via voice agent. Phone: {{caller_phone}}"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Calendly
+
+```
+GET https://api.calendly.com/scheduled_events
+
+Headers:
+  Authorization: Bearer {{calendly_api_key}}
+  Content-Type: application/json
+
+Query Parameters:
+  user: {{calendly_user_uri}}
+  min_start_time: {{start_date}}
+  max_start_time: {{end_date}}
+
+Response Mapping:
+  $.collection[0].start_time → next_appointment
+  $.collection[0].name → event_name
+```
+
+---
+
+## Payment / Billing
+
+### Stripe
+
+<Tabs>
+  <Tab title="Get Customer Balance">
+    ```
+    GET https://api.stripe.com/v1/customers/{{stripe_customer_id}}
+    
+    Headers:
+      Authorization: Bearer {{stripe_secret_key}}
+    
+    Response Mapping:
+      $.balance → account_balance
+      $.email → customer_email
+      $.name → customer_name
+    ```
+  </Tab>
+  <Tab title="Create Payment Link">
+    ```
+    POST https://api.stripe.com/v1/payment_links
+    
+    Headers:
+      Authorization: Bearer {{stripe_secret_key}}
+      Content-Type: application/x-www-form-urlencoded
+    
+    Body:
+      line_items[0][price]: {{price_id}}
+      line_items[0][quantity]: 1
+      metadata[call_id]: {{call_id}}
+      metadata[customer_phone]: {{caller_phone}}
+    
+    Response Mapping:
+      $.url → payment_link
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Support / Ticketing
+
+### Zendesk
+
+<Tabs>
+  <Tab title="Search User">
+    ```
+    GET https://{{subdomain}}.zendesk.com/api/v2/users/search
+    
+    Headers:
+      Authorization: Basic {{zendesk_credentials}}
+    
+    Query: query=phone:{{caller_phone}}
+    
+    Response Mapping:
+      $.users[0].name → customer_name
+      $.users[0].id → zendesk_user_id
+    ```
+  </Tab>
+  <Tab title="Create Ticket">
+    ```
+    POST https://{{subdomain}}.zendesk.com/api/v2/tickets
+    
+    Headers:
+      Authorization: Basic {{zendesk_credentials}}
+      Content-Type: application/json
+    
+    Body:
+    {
+      "ticket": {
+        "subject": "Voice Call - {{issue_type}}",
+        "description": "{{call_summary}}",
+        "requester_id": {{zendesk_user_id}},
+        "priority": "normal",
+        "tags": ["voice_agent", "{{disposition}}"],
+        "custom_fields": [
+          {"id": 123, "value": "{{call_id}}"},
+          {"id": 456, "value": "{{call_duration}}"}
+        ]
+      }
+    }
+    
+    Response Mapping:
+      $.ticket.id → ticket_number
+    ```
+  </Tab>
+</Tabs>
+
+### Intercom
+
+```
+POST https://api.intercom.io/conversations
+
+Headers:
+  Authorization: Bearer {{intercom_token}}
+  Content-Type: application/json
+
+Body:
+{
+  "from": {
+    "type": "user",
+    "id": "{{intercom_user_id}}"
+  },
+  "body": "Voice call summary:\n\n{{call_summary}}\n\nDuration: {{call_duration}}s"
+}
+```
+
+---
+
+## Notifications
+
+### Slack
+
+```
+POST https://hooks.slack.com/services/{{webhook_path}}
+
+Headers:
+  Content-Type: application/json
+
+Body:
+{
+  "text": "📞 New call completed",
+  "blocks": [
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Caller:* {{caller_phone}}\n*Duration:* {{call_duration}}s\n*Outcome:* {{disposition}}"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Summary:*\n{{call_summary}}"
+      }
+    }
+  ]
+}
+```
+
+### Email (via SendGrid)
+
+```
+POST https://api.sendgrid.com/v3/mail/send
+
+Headers:
+  Authorization: Bearer {{sendgrid_api_key}}
+  Content-Type: application/json
+
+Body:
+{
+  "personalizations": [{
+    "to": [{"email": "{{customer_email}}"}],
+    "dynamic_template_data": {
+      "customer_name": "{{customer_name}}",
+      "appointment_date": "{{appointment_date}}",
+      "appointment_time": "{{appointment_time}}"
+    }
+  }],
+  "from": {"email": "noreply@yourcompany.com"},
+  "template_id": "{{sendgrid_template_id}}"
+}
+```
+
+---
+
+## Custom Webhooks
+
+For any system with an API:
+
+```
+POST https://your-system.com/api/webhook
+
+Headers:
+  Authorization: Bearer {{your_api_key}}
+  Content-Type: application/json
+  X-Webhook-Source: atoms-voice-agent
+
+Body:
+{
+  "event": "call_completed",
+  "call_id": "{{call_id}}",
+  "caller_phone": "{{caller_phone}}",
+  "customer_name": "{{customer_name}}",
+  "duration": {{call_duration}},
+  "outcome": "{{disposition}}",
+  "summary": "{{call_summary}}",
+  "timestamp": "{{call_start_time}}",
+  "agent": "{{agent_name}}"
+}
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Integrations Overview" icon="plug" href="/platform/features/integrations/overview">
+    Set up pre-built integrations
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/platform/features/api-calls/troubleshooting">
+    Fix common API issues
+  </Card>
+</CardGroup>

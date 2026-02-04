@@ -1,0 +1,290 @@
+---
+title: "API Calls in Convo Flow"
+sidebarTitle: "Convo Flow"
+description: "Use API Call nodes to integrate external systems into your workflow."
+---
+
+Convo Flow agents use **API Call Nodes** to make requests at specific points in your workflow. This gives you precise control over when and how your agent interacts with external systems.
+
+---
+
+## API Call Node Types
+
+| Node Type | When It Runs | Use Case |
+|-----------|--------------|----------|
+| **Pre-Call API** | Before call connects | Load customer context |
+| **API Call Node** | When flow reaches it | Real-time data, booking |
+| **Post-Call API** | After call ends | Logging, follow-ups |
+
+---
+
+## Adding an API Call Node
+
+<Steps>
+  ### Drag the Node
+  
+  From the left panel, drag **API Call** onto your canvas.
+
+  ### Position in Flow
+  
+  Connect it where you need the API call to happen:
+  
+  ```
+  Greeting → Collect Info → [API Call] → Confirm Result
+  ```
+
+  ### Configure the Request
+  
+  Click the node and configure in the right panel:
+  
+  | Field | Description |
+  |-------|-------------|
+  | **Name** | Descriptive label (e.g., "Check Availability") |
+  | **URL** | API endpoint |
+  | **Method** | GET, POST, PUT, DELETE |
+  | **Headers** | Authentication, content-type |
+  | **Body** | Request data (for POST/PUT) |
+
+  ### Map Response Variables
+  
+  Define which response fields become variables:
+  
+  | Response Path | Variable |
+  |---------------|----------|
+  | `$.available_slots` | `available_times` |
+  | `$.next_available` | `suggested_time` |
+
+  ### Configure Branches
+  
+  Create branches for different outcomes:
+  
+  | Condition | Next Node |
+  |-----------|-----------|
+  | API success + slots available | → Offer Times |
+  | API success + no slots | → Offer Waitlist |
+  | API failure | → Apologize & Transfer |
+</Steps>
+
+---
+
+## Pre-Call API Node
+
+Runs before your first greeting — perfect for loading context.
+
+### Setup
+
+1. Find **Pre-Call API** in the nodes panel
+2. It automatically connects to the start of your flow
+3. Configure like a regular API call
+
+### Example: Customer Lookup
+
+```
+GET https://crm.example.com/contacts?phone={{caller_phone}}
+
+Response:
+{
+  "name": "Sarah Johnson",
+  "vip": true,
+  "last_interaction": "2024-01-15"
+}
+
+Variables:
+{{customer_name}} = "Sarah Johnson"
+{{is_vip}} = true
+{{last_contact}} = "2024-01-15"
+```
+
+### Using Pre-Call Data
+
+In your **Greeting Node**:
+
+```
+"Hi {{customer_name}}! Thanks for calling. How can I help you today?"
+```
+
+If VIP:
+```
+"Hi {{customer_name}}! As one of our valued customers, I'll make sure 
+we take great care of you today. What can I help with?"
+```
+
+---
+
+## Mid-Flow API Calls
+
+### Example: Checking Appointment Availability
+
+**Flow:**
+```
+[Greeting] → [Collect Date] → [API: Check Availability] → [Offer Times]
+```
+
+**API Call Node Configuration:**
+
+```
+Name: Check Availability
+URL: https://api.calendar.com/availability
+Method: GET
+Query Parameters:
+  - date: {{requested_date}}
+  - provider: {{provider_id}}
+```
+
+**Response Mapping:**
+
+```json
+{
+  "available": true,
+  "slots": ["9:00 AM", "2:00 PM", "4:30 PM"],
+  "provider": "Dr. Johnson"
+}
+```
+
+| Path | Variable |
+|------|----------|
+| `$.available` | `has_availability` |
+| `$.slots` | `available_times` |
+| `$.provider` | `provider_name` |
+
+**Branching:**
+
+| Condition | Route |
+|-----------|-------|
+| `has_availability == true` | → Offer Times Node |
+| `has_availability == false` | → Suggest Alternatives Node |
+
+---
+
+## Post-Call API Node
+
+Runs after the call ends — for logging and triggering follow-ups.
+
+### Setup
+
+1. Add **Post-Call API** node
+2. It automatically runs after any End Call node
+
+### Example: CRM Logging
+
+```
+POST https://crm.example.com/activities
+
+Body:
+{
+  "contact_phone": "{{caller_phone}}",
+  "contact_name": "{{customer_name}}",
+  "call_type": "{{call_direction}}",
+  "duration": {{call_duration}},
+  "outcome": "{{disposition}}",
+  "notes": "{{call_summary}}",
+  "agent_id": "{{agent_id}}",
+  "timestamp": "{{call_start_time}}"
+}
+```
+
+---
+
+## Handling API Failures
+
+Always plan for API failures:
+
+### Timeout Handling
+
+```
+[API Call: Check Availability]
+    ├── Success → [Offer Times]
+    ├── Timeout → [Apologize Node]
+    └── Error → [Transfer to Human]
+```
+
+### Apologize Node Script
+
+```
+"I'm having trouble checking our system right now. 
+Let me connect you with someone who can help directly."
+```
+
+### Retry Logic
+
+For critical APIs, you can configure:
+- **Retry count:** 1-3 attempts
+- **Retry delay:** 1-5 seconds
+- **Fallback:** What to do after all retries fail
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Minimize Wait Time" icon="clock">
+    API calls can cause brief pauses. Minimize impact:
+    
+    - Use Pre-Call API for initial context (caller doesn't notice)
+    - Keep mid-call APIs fast (< 5 seconds)
+    - Fill wait time: "Let me check that for you..."
+  </Accordion>
+  
+  <Accordion title="Validate Before Calling" icon="check">
+    Before making an API call, ensure you have required data:
+    
+    ```
+    Before API Call Node:
+    - Collect all required inputs in previous nodes
+    - Validate format (dates, phone numbers, etc.)
+    - Handle missing data gracefully
+    ```
+  </Accordion>
+  
+  <Accordion title="Always Branch on Results" icon="code-branch">
+    Every API call should have branches for:
+    - **Success** — Expected result
+    - **Empty result** — Valid but no data (e.g., no appointments)
+    - **Error** — API failed
+    
+    Never assume success.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Example: Complete Booking Flow
+
+```
+[Pre-Call API: Get Customer]
+           ↓
+   [Greeting Node]
+   "Hi {{customer_name}}!"
+           ↓
+   [Collect Date Node]
+   "What date works for you?"
+           ↓
+[API: Check Availability]
+     ↓         ↓
+  Success    No Slots
+     ↓         ↓
+ [Offer Times] [Suggest Alternatives]
+     ↓
+[API: Book Appointment]
+     ↓         ↓
+  Success    Failed
+     ↓         ↓
+[Confirm Booking] [Apologize & Transfer]
+           ↓
+     [End Call]
+           ↓
+[Post-Call API: Log to CRM]
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Common Integrations" icon="plug" href="/platform/features/api-calls/common-integrations">
+    Pre-built patterns for popular services
+  </Card>
+  <Card title="Working with Nodes" icon="sitemap" href="/platform/building-agents/convo-flow/nodes">
+    Deep dive into all node types
+  </Card>
+</CardGroup>

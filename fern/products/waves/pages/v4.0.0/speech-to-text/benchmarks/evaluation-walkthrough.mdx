@@ -1,0 +1,140 @@
+---
+title: 'Evaluation Walkthrough'
+description: 'Step-by-step guide to evaluate Pulse STT accuracy and performance'
+---
+
+Our evaluation guide outlines a repeatable process: choose representative audio, generate transcripts, compute WER/CER/latency, and document findings. Use the streamlined steps below (with ready-to-run snippets) to mirror that workflow.
+
+## 1. Assemble your dataset matrix
+
+- Collect 50–200 files per use case (support calls, meetings, media, etc.).
+- Produce verified transcripts plus optional speaker labels and timestamps.
+- Track metadata for accent, language, and audio quality so you can pivot metrics later.
+
+```python
+dataset = [
+    {"audio": "samples/en_agent01.wav", "reference": "Thank you for calling.", "language": "en"},
+    {"audio": "samples/es_call02.wav", "reference": "Hola, ¿en qué puedo ayudarte?", "language": "es"},
+]
+```
+
+## 2. Install the evaluation toolkit
+
+```bash
+pip install smallestai jiwer whisper-normalizer pandas
+```
+
+- `smallestai` → Pulse STT client
+- `jiwer` → WER/CER computation
+- `whisper-normalizer` → normalization that matches the official guidance
+
+## 3. Transcribe + normalize
+
+```python
+import os
+from jiwer import wer, cer
+from whisper_normalizer.english import EnglishTextNormalizer
+from smallestai.waves import WavesClient
+
+client = WavesClient(api_key=os.environ["SMALLEST_AI_API_KEY"])
+normalizer = EnglishTextNormalizer()
+
+def run_sample(sample):
+    response = client.transcribe(
+        audio_file=sample["audio"],
+        language=sample["language"],
+        word_timestamps=True,
+        diarize=True
+    )
+    ref = normalizer(sample["reference"])
+    hyp = normalizer(response.transcription)
+    return {
+        "path": sample["audio"],
+        "wer": wer(ref, hyp),
+        "cer": cer(ref, hyp),
+        "latency_ms": response.metrics["latency_ms"],
+        "rtf": response.metrics["real_time_factor"],
+        "transcription": response.transcription
+    }
+```
+
+## 4. Batch evaluation + aggregation
+
+```python
+import pandas as pd
+
+results = [run_sample(s) for s in dataset]
+df = pd.DataFrame(results)
+
+summary = {
+    "samples": len(df),
+    "avg_wer": df.wer.mean(),
+    "p95_wer": df.wer.quantile(0.95),
+    "avg_latency_ms": df.latency_ms.mean(),
+    "avg_rtf": df.rtf.mean()
+}
+```
+
+### Recommended metrics to report
+
+- **WER / CER** per use case and language.
+- **Time to first result** and **RTF** from `response.metrics`.
+- **Diarization coverage**: % of `utterances` entries with `speaker`.
+
+## 5. Error analysis
+
+```python
+def breakdown(df):
+    worst = df.sort_values("wer", ascending=False).head(5)[["path", "wer", "transcription"]]
+    return worst.to_dict(orient="records")
+
+outliers = breakdown(df)
+```
+
+- Classify errors into substitutions, deletions, insertions.
+- Highlight audio traits (noise, accent) that correlate with higher WER.
+
+## 6. Compare configurations
+
+```python
+configs = [
+    {"language": "en", "word_timestamps": True},
+    {"language": "multi", "word_timestamps": True, "diarize": True}
+]
+
+def evaluate_config(config):
+    return [run_sample({**s, **config}) for s in dataset]
+
+for config in configs:
+    cfg_results = pd.DataFrame(evaluate_config(config))
+    print(config, cfg_results.wer.mean())
+```
+
+Use this to decide whether to enable diarization, sentence-level timestamps, or enrichment features; the official evaluation doc recommends capturing cost/latency impact alongside accuracy.
+
+## 7. Publish the report
+
+Include:
+
+1. Dataset description + rationale
+2. Metrics table (WER/CER/TTFR/RTF, p50/p90/p95)
+3. Error taxonomy with audio snippets
+4. Configuration recommendation (e.g., `language=multi`, `word_timestamps=true`, `diarize=true`)
+5. Follow-up experiments or model versions to track
+
+### Example JSON summary
+
+```json
+{
+  "dataset": "contact-center-q1",
+  "samples": 120,
+  "average_wer": 0.064,
+  "average_cer": 0.028,
+  "average_latency_ms": 61.3,
+  "average_rtf": 0.41,
+  "p95_latency_ms": 88.2,
+  "timestamp": "2025-01-15T10:00:00Z"
+}
+```
+
+This completes the process of self metric evaluation. With these steps, you can identify strengths and weaknesses in any STT model.

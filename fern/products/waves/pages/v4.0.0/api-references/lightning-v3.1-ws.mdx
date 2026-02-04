@@ -1,0 +1,53 @@
+---
+title: "Lightning v3.1 WebSocket"
+description: The Lightning v3.1 WebSocket API provides real-time text-to-speech streaming capabilities with natural, expressive voice synthesis. This API uses WebSocket to deliver audio chunks as they're generated, enabling low-latency audio playback without waiting for the entire audio file to process.
+asyncapi: "/asyncapi-spec/lightning-v3.1-ws.json /api/v1/lightning-v3.1/get_speech/stream"
+---
+
+## Overview
+
+The Lightning v3.1 WebSocket API delivers state-of-the-art text-to-speech synthesis through a persistent WebSocket connection, providing ultra-low latency audio streaming for applications that demand real-time voice generation. Unlike traditional HTTP-based TTS APIs, this WebSocket implementation streams audio chunks as they're processed, significantly reducing perceived latency and enabling seamless user experiences.
+
+Lightning v3.1 is a 44 kHz model that produces natural, expressive, and realistic speech, with support for voice cloning.
+
+## Key Benefits
+
+- **Ultra-Low Latency**: Audio chunks delivered as soon as they're generated
+- **Real-Time Streaming**: Continuous audio delivery without waiting for complete text processing
+- **Natural Speech**: Expressive synthesis that sounds realistic
+- **Voice Cloning Support**: Compatible with cloned voices
+- **Persistent Connection**: Maintains connection for multiple requests, reducing connection overhead
+- **Interactive Applications**: Perfect for chatbots, voice assistants, and live communication systems
+
+## Use Cases
+
+- **Voice Assistants**: Real-time response generation for conversational AI
+- **Interactive Chatbots**: Immediate audio feedback for user interactions
+- **Live Streaming**: Real-time narration and commentary
+- **Accessibility Tools**: Screen readers and text-to-speech applications
+- **Gaming**: Dynamic voice generation for characters and narration
+- **Customer Service**: Automated voice responses with natural speech patterns
+
+## Concurrency and Rate Limits
+
+This WebSocket API is subject to concurrency limits to ensure optimal performance for all users. Here's how it works:
+
+- **1 Concurrency Unit** = 1 active TTS request that can be processed at any given time
+- **5 WebSocket Connections** can be established per concurrency unit
+- **Total Connections** = Your concurrency limit × 5
+
+**Examples:**
+
+- **1 concurrency** = Up to 5 WebSocket connections, but only 1 active request
+- **3 concurrency** = Up to 15 WebSocket connections, but only 3 active requests simultaneously
+- **5 concurrency** = Up to 25 WebSocket connections, but only 5 active requests simultaneously
+
+While you can maintain multiple WebSocket connections, only your concurrency limit number of requests can be actively processed at once. Additional requests sent through any connection while at the concurrency limit will be rejected with an error.
+
+For detailed information about concurrency limits, rate limiting, and best practices for handling these constraints, see our [Concurrency and Limits](concurrency-and-limits) documentation.
+
+<Note>
+  When multiple requests are sent simultaneously beyond your concurrency limit,
+  additional requests will be rejected with an error. Implement proper error
+  handling and request queuing to manage concurrency effectively.
+</Note>

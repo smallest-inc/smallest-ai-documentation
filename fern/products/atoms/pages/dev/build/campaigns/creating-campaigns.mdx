@@ -1,6 +1,212 @@
 ---
-title: "Creating Campaigns"
-description: "Create outbound campaigns"
+title: "Running Campaigns"
+sidebarTitle: "Running Campaigns"
+description: "Create, start, monitor, and manage outbound call campaigns."
 ---
 
-# Creating Campaigns
+This guide walks through the complete campaign lifecycle—from setup to cleanup.
+
+## Prerequisites
+
+Before creating a campaign, you need:
+
+- **Agent ID** — Create one with `new_agent()` or use an existing agent
+- **Audience ID** — Create one with `create_audience()` ([see Audiences](/dev/build/campaigns/managing-audiences))
+- **Phone Number ID** — Retrieve available numbers with `get_phone_numbers()`
+
+---
+
+## Getting Your Phone Number
+
+`get_phone_numbers()` returns all outbound phone numbers available for campaigns:
+
+```python
+from smallestai.atoms import AtomsClient
+from smallestai.atoms.campaign import Campaign
+
+client = AtomsClient()
+campaign = Campaign()
+
+phones = client.get_phone_numbers()
+phone_id = phones["data"][0]["_id"]
+```
+
+Each phone includes provider details:
+
+```json
+{
+  "status": true,
+  "data": [
+    {
+      "_id": "6963d3a8862e1cb702da7244",
+      "attributes": {
+        "provider": "plivo",
+        "phoneNumber": "+912268093560"
+      },
+      "isActive": true
+    }
+  ]
+}
+```
+
+---
+
+## Creating a Campaign
+
+`create()` creates a campaign linking your agent, audience, and phone number:
+
+```python
+response = campaign.create(
+    name="January Outreach",
+    agent_id=agent_id,
+    audience_id=audience_id,
+    phone_ids=[phone_id],
+    max_retries=2,
+    retry_delay=30
+)
+
+campaign_id = response["data"]["_id"]
+```
+
+The response includes all campaign details:
+
+```json
+{
+  "status": true,
+  "data": {
+    "name": "January Outreach",
+    "agentId": "696ddd281ea16a73cb8aafbe",
+    "audienceId": "696ddd287f45bf7b27344e7c",
+    "participantsCount": 2,
+    "maxRetries": 2,
+    "retryDelay": 30,
+    "status": "draft",
+    "_id": "696ddd2a04ff172dbd8eddad"
+    // ...
+  }
+}
+```
+
+### Campaign Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | string | Campaign name (required) |
+| `agent_id` | string | Agent to handle calls (required) |
+| `audience_id` | string | Contacts to dial (required) |
+| `phone_ids` | list | Outbound phone number IDs (required) |
+| `max_retries` | int | Retry attempts for failed calls (0–10, default: 3) |
+| `retry_delay` | int | Minutes between retries (1–1440, default: 15) |
+
+---
+
+## Starting a Campaign
+
+`start()` begins dialing contacts in the audience:
+
+```python
+result = campaign.start(campaign_id)
+```
+
+The response confirms the campaign is processing:
+
+```json
+{
+  "status": true,
+  "data": {
+    "message": "Campaign is being processed",
+    "taskId": "081a5402-3f1f-4447-a257-6dd7bc6bad60",
+    "campaignId": "696ddd2a04ff172dbd8eddad"
+  }
+}
+```
+
+---
+
+## Monitoring Progress
+
+`get()` returns the campaign status, execution history, and metrics:
+
+```python
+status = campaign.get(campaign_id)
+
+data = status["data"]["campaign"]
+metrics = status["data"]["metrics"]
+
+print(f"Status: {data['status']}")
+print(f"Called: {metrics['contacts_called']}/{metrics['total_participants']}")
+print(f"Connected: {metrics['contacts_connected']}")
+```
+
+Full status response:
+
+```json
+{
+  "status": true,
+  "data": {
+    "campaign": {
+      "status": "running",
+      "executions": [
+        {
+          "executionNumber": 1,
+          "status": "completed",
+          "totalMembers": 2,
+          "processedMembers": 2
+        }
+      ]
+    },
+    // ...
+    "metrics": {
+      "total_participants": 2,
+      "contacts_called": 2,
+      "contacts_connected": 1
+    }
+  }
+}
+```
+
+---
+
+## Cleaning Up
+
+`delete()` removes the campaign and its execution history:
+
+```python
+campaign.delete(campaign_id)
+```
+
+<Note>
+Running campaigns should be paused before deletion. Use `pause(id)` first if needed.
+</Note>
+
+---
+
+## SDK Reference
+
+| Method | Description |
+|--------|-------------|
+| `get_phone_numbers()` | List available outbound numbers (via generic client) |
+| `create(...)` | Create a campaign |
+| `start(id)` | Begin dialing |
+| `get(id)` | Get status and metrics |
+| `pause(id)` | Pause a running campaign |
+| `delete(id)` | Remove a campaign |
+
+---
+
+## Tips
+
+<AccordionGroup>
+  <Accordion title="Why are contacts_called and contacts_connected different?">
+    `contacts_called` counts dial attempts. `contacts_connected` counts answered calls. The difference represents voicemail, busy signals, and no-answers.
+  </Accordion>
+  <Accordion title="What happens when a call fails?">
+    Failed calls enter the retry queue based on your `max_retries` and `retry_delay` settings. After all retries are exhausted, the contact is marked as failed.
+  </Accordion>
+  <Accordion title="Can I run multiple campaigns simultaneously?">
+    Yes. Each campaign operates independently. Just ensure you have sufficient phone capacity for parallel dialing.
+  </Accordion>
+  <Accordion title="How do I change an agent mid-campaign?">
+    Campaigns cannot change agents after creation. Create a new campaign with the desired agent and audience.
+  </Accordion>
+</AccordionGroup>

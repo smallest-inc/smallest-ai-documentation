@@ -1,0 +1,194 @@
+---
+title: "User Variables"
+sidebarTitle: "User Variables"
+description: "Create custom variables to personalize conversations with your own data."
+---
+
+User variables are custom variables you define and populate. Use them to bring in customer data, track information collected during calls, and personalize every interaction.
+
+---
+
+## Creating User Variables
+
+<Tabs>
+  <Tab title="In Agent Settings">
+    1. Open your agent in the editor
+    2. Look for **User Variables** in the right panel
+    3. Click **+ Add Variable**
+    4. Enter the variable name (e.g., `customer_name`)
+    5. Optionally set a default value
+    6. Save
+  </Tab>
+  <Tab title="In Convo Flow">
+    1. Select a node where you want to collect data
+    2. In node settings, find **Output Variables**
+    3. Define what the node should capture
+    4. The variable becomes available in subsequent nodes
+  </Tab>
+</Tabs>
+
+---
+
+## Populating User Variables
+
+User variables can get their values from several sources:
+
+### 1. Campaign Data (Outbound Calls)
+
+When running outbound campaigns, include variable values in your contact list:
+
+| phone | customer_name | appointment_date | appointment_time |
+|-------|---------------|------------------|------------------|
+| +14155551234 | Sarah Johnson | January 21, 2024 | 2:00 PM |
+| +14155555678 | Mike Chen | January 22, 2024 | 10:00 AM |
+
+Each call automatically uses that row's data.
+
+### 2. Pre-Call API (Inbound Calls)
+
+Fetch data based on caller ID before the conversation starts:
+
+```
+GET https://api.yourcrm.com/customers?phone={{caller_phone}}
+
+Response:
+{
+  "name": "Sarah Johnson",
+  "account_status": "active",
+  "loyalty_tier": "gold"
+}
+
+Maps to:
+{{customer_name}} = "Sarah Johnson"
+{{account_status}} = "active"
+{{loyalty_tier}} = "gold"
+```
+
+### 3. During the Conversation
+
+Collect information from what the caller says:
+
+**Convo Flow:** Use node output variables to capture responses.
+
+**Single Prompt:** The agent can be instructed to remember information:
+```
+When the caller provides their email address, 
+store it for use in the confirmation.
+```
+
+### 4. API Call Responses
+
+Mid-call API calls can populate variables:
+
+```
+GET https://api.calendar.com/availability?date={{requested_date}}
+
+Response:
+{
+  "available_slots": ["9:00 AM", "2:00 PM", "4:30 PM"]
+}
+
+Maps to:
+{{available_slots}} = ["9:00 AM", "2:00 PM", "4:30 PM"]
+```
+
+---
+
+## Common User Variables
+
+Here are variables commonly used across different agent types:
+
+<Tabs>
+  <Tab title="Customer Support">
+    | Variable | Purpose |
+    |----------|---------|
+    | `{{customer_name}}` | Personalized greeting |
+    | `{{account_number}}` | Reference their account |
+    | `{{last_order_date}}` | Context for inquiries |
+    | `{{support_tier}}` | Determine escalation path |
+  </Tab>
+  <Tab title="Sales">
+    | Variable | Purpose |
+    |----------|---------|
+    | `{{lead_name}}` | Personal connection |
+    | `{{company_name}}` | B2B context |
+    | `{{interest_area}}` | Focus the pitch |
+    | `{{lead_score}}` | Qualification routing |
+  </Tab>
+  <Tab title="Appointments">
+    | Variable | Purpose |
+    |----------|---------|
+    | `{{customer_name}}` | Personalized greeting |
+    | `{{appointment_date}}` | Confirm details |
+    | `{{appointment_time}}` | Confirm details |
+    | `{{provider_name}}` | Who they're seeing |
+    | `{{location}}` | Where to go |
+  </Tab>
+  <Tab title="Collections">
+    | Variable | Purpose |
+    |----------|---------|
+    | `{{customer_name}}` | Required for compliance |
+    | `{{amount_due}}` | What they owe |
+    | `{{due_date}}` | When it's due |
+    | `{{account_number}}` | Reference |
+  </Tab>
+</Tabs>
+
+---
+
+## Using User Variables in Prompts
+
+Once defined, use variables anywhere in your prompts:
+
+```
+You are a scheduling assistant for Premier Dental.
+
+IMPORTANT CONTEXT:
+- Customer name: {{customer_name}}
+- Appointment date: {{appointment_date}}
+- Appointment time: {{appointment_time}}
+- Provider: {{provider_name}}
+
+GREETING:
+"Hi {{customer_name}}! I'm calling from Premier Dental 
+to confirm your appointment with {{provider_name}} on 
+{{appointment_date}} at {{appointment_time}}."
+```
+
+---
+
+## Variable Defaults
+
+Set default values for when data isn't available:
+
+| Variable | Default | Result if Empty |
+|----------|---------|-----------------|
+| `{{customer_name}}` | `"there"` | "Hi there!" |
+| `{{appointment_time}}` | `"your scheduled time"` | "...at your scheduled time" |
+
+<Tip>
+**Always set defaults** for variables that might be empty. Otherwise, the agent might say things like "Hi {{customer_name}}!" literally.
+</Tip>
+
+---
+
+## Variable Scope
+
+<Info>
+**Single Prompt:** Variables are available throughout the entire conversation.
+
+**Convo Flow:** Variables defined in a node are available in that node and all subsequent nodes in the flow.
+</Info>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Best Practices" icon="star" href="/platform/features/variables/best-practices">
+    Tips for effective variable usage
+  </Card>
+  <Card title="Pre-Call API" icon="bolt" href="/platform/features/api-calls/what-are-api-calls">
+    Fetch variables before calls start
+  </Card>
+</CardGroup>

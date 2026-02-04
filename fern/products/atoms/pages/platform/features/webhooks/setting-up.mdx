@@ -1,0 +1,270 @@
+---
+title: "Setting Up Webhooks"
+sidebarTitle: "Setting Up"
+description: "Configure webhook endpoints to receive real-time event notifications."
+---
+
+This guide walks you through setting up webhooks to receive real-time notifications from your Atoms agents.
+
+---
+
+## Prerequisites
+
+Before setting up webhooks, you need:
+- An HTTPS endpoint that can receive POST requests
+- Ability to respond with 200 status within 30 seconds
+- (Recommended) Way to verify webhook signatures
+
+---
+
+## Creating a Webhook
+
+<Steps>
+  ### Navigate to Webhooks
+  
+  Go to **Settings** → **Webhooks** in your dashboard.
+
+  ### Click "Add Webhook"
+  
+  Click the **+ Add Webhook** button.
+
+  ### Configure Endpoint
+  
+  | Field | Description | Example |
+  |-------|-------------|---------|
+  | **Name** | Descriptive label | "CRM Sync Webhook" |
+  | **URL** | Your HTTPS endpoint | `https://api.yoursite.com/webhooks/atoms` |
+  | **Description** | What it's for | "Syncs call data to Salesforce" |
+
+  ### Select Events
+  
+  Choose which events trigger this webhook:
+  
+  - [ ] `call.started` — Call connects
+  - [x] `call.ended` — Call completes
+  - [ ] `call.transferred` — Transfer initiated
+  - [x] `recording.ready` — Recording available
+  - [x] `transcript.ready` — Transcript ready
+
+  ### Configure Authentication (Optional)
+  
+  Add headers your endpoint requires:
+  
+  | Header | Value |
+  |--------|-------|
+  | `Authorization` | `Bearer your-secret-token` |
+  | `X-Custom-Header` | `custom-value` |
+
+  ### Save and Test
+  
+  Click **Save**, then use **Test Webhook** to verify it works.
+</Steps>
+
+---
+
+## Endpoint Requirements
+
+Your webhook endpoint must:
+
+### Accept POST Requests
+
+```
+POST https://your-endpoint.com/webhook
+Content-Type: application/json
+
+{...webhook payload...}
+```
+
+### Respond Quickly
+
+- Return `200 OK` within **30 seconds**
+- Do heavy processing asynchronously
+- Queue data for later if needed
+
+### Handle Retries
+
+If your endpoint fails, Atoms retries:
+
+| Attempt | Delay |
+|---------|-------|
+| 1st retry | 1 minute |
+| 2nd retry | 5 minutes |
+| 3rd retry | 30 minutes |
+| 4th retry | 2 hours |
+| 5th retry | 24 hours |
+
+After 5 failures, the webhook is paused.
+
+---
+
+## Verifying Webhook Signatures
+
+Atoms signs all webhooks so you can verify they're authentic.
+
+### Signature Header
+
+Each request includes:
+```
+X-Atoms-Signature: sha256=abc123...
+```
+
+### Verification Code
+
+```javascript
+const crypto = require('crypto');
+
+function verifySignature(payload, signature, secret) {
+  const expected = 'sha256=' + crypto
+    .createHmac('sha256', secret)
+    .update(payload)
+    .digest('hex');
+  
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expected)
+  );
+}
+
+// In your handler:
+app.post('/webhook', (req, res) => {
+  const signature = req.headers['x-atoms-signature'];
+  const isValid = verifySignature(
+    JSON.stringify(req.body),
+    signature,
+    process.env.WEBHOOK_SECRET
+  );
+  
+  if (!isValid) {
+    return res.status(401).send('Invalid signature');
+  }
+  
+  // Process webhook...
+  res.status(200).send('OK');
+});
+```
+
+### Getting Your Secret
+
+Find your webhook signing secret in **Settings** → **Webhooks** → **Signing Secret**.
+
+---
+
+## Testing Webhooks
+
+### Use the Test Button
+
+1. Go to your webhook configuration
+2. Click **Test Webhook**
+3. Select an event type
+4. Click **Send Test**
+
+### Check Recent Deliveries
+
+View webhook delivery history:
+- Successful deliveries ✓
+- Failed attempts ✗
+- Request/response details
+
+### Use a Testing Tool
+
+For development, try:
+- [webhook.site](https://webhook.site) — Free public endpoints
+- [ngrok](https://ngrok.com) — Tunnel to localhost
+- [Beeceptor](https://beeceptor.com) — Mock endpoints
+
+---
+
+## Example Endpoint (Node.js)
+
+```javascript
+const express = require('express');
+const app = express();
+
+app.use(express.json());
+
+app.post('/webhooks/atoms', async (req, res) => {
+  // Respond immediately
+  res.status(200).send('OK');
+  
+  // Process asynchronously
+  const { event, data, call_id } = req.body;
+  
+  switch (event) {
+    case 'call.ended':
+      await processCallEnded(data);
+      break;
+    case 'recording.ready':
+      await storeRecording(data.recording_url);
+      break;
+    case 'transcript.ready':
+      await processTranscript(data.transcript_url);
+      break;
+  }
+});
+
+async function processCallEnded(data) {
+  // Log to your CRM
+  await crm.createActivity({
+    phone: data.caller_phone,
+    duration: data.duration_seconds,
+    summary: data.summary,
+    outcome: data.disposition
+  });
+}
+
+app.listen(3000);
+```
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Webhook Not Receiving" icon="xmark">
+    **Check:**
+    1. Endpoint URL is correct and HTTPS
+    2. Endpoint is publicly accessible
+    3. Firewall allows incoming requests
+    4. Events are selected
+    
+    **Test:** Use the Test button and check delivery logs
+  </Accordion>
+  
+  <Accordion title="Signature Verification Failing" icon="lock">
+    **Check:**
+    1. Using correct signing secret
+    2. Payload isn't modified before verification
+    3. Using raw request body (not parsed JSON)
+  </Accordion>
+  
+  <Accordion title="Timeouts" icon="clock">
+    **Fix:**
+    - Respond with 200 immediately
+    - Process webhook data asynchronously
+    - Don't do heavy work in the request handler
+  </Accordion>
+  
+  <Accordion title="Duplicate Events" icon="clone">
+    **Why:** Retries can cause duplicates
+    
+    **Fix:** Use `call_id` as idempotency key:
+    ```javascript
+    if (await alreadyProcessed(call_id)) {
+      return res.status(200).send('Already processed');
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Use Cases" icon="lightbulb" href="/platform/features/webhooks/use-cases">
+    Implementation examples
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/platform/features/webhooks/troubleshooting">
+    Fix common issues
+  </Card>
+</CardGroup>

@@ -1,0 +1,589 @@
+---
+title: Redis Persistence
+description: Configure Redis data persistence and high availability
+---
+
+## Overview
+
+Redis provides caching and state management for Smallest Self-Host. This guide covers configuring Redis persistence, high availability, and performance optimization.
+
+## Redis Deployment Options
+
+### Option 1: Embedded Redis (Default)
+
+Smallest Self-Host includes Redis as a subchart.
+
+**Advantages**:
+- Simple setup
+- Automatic configuration
+- Included in Helm chart
+
+**Disadvantages**:
+- Single point of failure
+- No data persistence by default
+- Limited to cluster resources
+
+**Configuration**:
+
+```yaml values.yaml
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "your-secure-password"
+  master:
+    persistence:
+      enabled: false
+  replica:
+    replicaCount: 1
+    persistence:
+      enabled: false
+```
+
+### Option 2: External Redis
+
+Use Amazon ElastiCache or self-managed Redis.
+
+**Advantages**:
+- Managed service (ElastiCache)
+- High availability
+- Better performance
+- Independent scaling
+
+**Disadvantages**:
+- Additional cost
+- More complex setup
+
+**Configuration**:
+
+```yaml values.yaml
+redis:
+  enabled: false
+  externalHost: "my-redis.abc123.0001.use1.cache.amazonaws.com"
+  port: 6379
+  ssl: false
+  auth:
+    enabled: true
+    password: "redis-password"
+```
+
+## Enable Redis Persistence
+
+### With Embedded Redis
+
+Enable AOF (Append-Only File) persistence:
+
+```yaml values.yaml
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "your-secure-password"
+  master:
+    persistence:
+      enabled: true
+      storageClass: "gp3"
+      size: 8Gi
+      accessModes:
+        - ReadWriteOnce
+  replica:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      storageClass: "gp3"
+      size: 8Gi
+```
+
+This creates:
+- 1 master pod with persistent volume
+- 2 replica pods with persistent volumes
+- Automatic failover
+
+### Verify Persistence
+
+Check PVCs created:
+
+```bash
+kubectl get pvc -n smallest | grep redis
+```
+
+Expected output:
+```
+redis-data-smallest-redis-master-0    Bound    8Gi
+redis-data-smallest-redis-replicas-0  Bound    8Gi
+redis-data-smallest-redis-replicas-1  Bound    8Gi
+```
+
+## High Availability
+
+### Sentinel Mode
+
+Redis Sentinel provides automatic failover:
+
+```yaml values.yaml
+redis:
+  enabled: true
+  sentinel:
+    enabled: true
+    quorum: 2
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+  replica:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      size: 8Gi
+```
+
+### Cluster Mode
+
+For very high throughput:
+
+```yaml values.yaml
+redis:
+  enabled: true
+  architecture: replication
+  master:
+    count: 3
+  replica:
+    replicaCount: 2
+```
+
+## AWS ElastiCache Integration
+
+### Create ElastiCache Cluster
+
+Using AWS Console:
+
+<Steps>
+  <Step title="Navigate to ElastiCache">
+    AWS Console → ElastiCache → Redis → Create
+  </Step>
+
+  <Step title="Cluster Settings">
+    - **Cluster mode**: Disabled (for simplicity)
+    - **Name**: smallest-redis
+    - **Engine version**: 7.0+
+    - **Node type**: cache.r6g.large (or larger)
+  </Step>
+
+  <Step title="Subnet Group">
+    Select subnet group in same VPC as EKS cluster
+  </Step>
+
+  <Step title="Security">
+    - **Security group**: Allow port 6379 from EKS cluster
+    - **Encryption in transit**: Enabled
+    - **Encryption at rest**: Enabled
+  </Step>
+
+  <Step title="Backup">
+    - **Automatic backups**: Enabled
+    - **Retention**: 7 days
+  </Step>
+
+  <Step title="Create">
+    Review and create (takes 10-15 minutes)
+    
+    Note the **Primary endpoint**
+  </Step>
+</Steps>
+
+### Configure Helm Chart
+
+```yaml values.yaml
+redis:
+  enabled: false
+  externalHost: "smallest-redis.abc123.0001.use1.cache.amazonaws.com"
+  port: 6379
+  ssl: true
+  auth:
+    enabled: false
+
+lightningAsr:
+  env:
+    - name: REDIS_URL
+      value: "rediss://smallest-redis.abc123.0001.use1.cache.amazonaws.com:6379"
+    - name: REDIS_TLS
+      value: "true"
+```
+
+## Performance Tuning
+
+### Memory Configuration
+
+Set memory limits for embedded Redis:
+
+```yaml values.yaml
+redis:
+  master:
+    resources:
+      limits:
+        memory: 2Gi
+      requests:
+        memory: 1Gi
+  replica:
+    resources:
+      limits:
+        memory: 2Gi
+      requests:
+        memory: 1Gi
+```
+
+### Eviction Policy
+
+Configure memory eviction:
+
+```yaml values.yaml
+redis:
+  master:
+    configuration: |
+      maxmemory-policy allkeys-lru
+      maxmemory 1gb
+```
+
+### Disable Persistence for Performance
+
+For non-critical data (faster performance):
+
+```yaml values.yaml
+redis:
+  master:
+    configuration: |
+      save ""
+      appendonly no
+    persistence:
+      enabled: false
+```
+
+<Warning>
+Without persistence, all data is lost if Redis restarts. Only use for truly ephemeral data.
+</Warning>
+
+## Monitoring Redis
+
+### Check Redis Status
+
+```bash
+kubectl get pods -l app.kubernetes.io/name=redis -n smallest
+```
+
+### Connect to Redis CLI
+
+```bash
+kubectl exec -it <redis-pod> -n smallest -- redis-cli
+```
+
+Inside redis-cli:
+
+```redis
+AUTH your-password
+INFO
+DBSIZE
+KEYS *
+```
+
+### Monitor Memory Usage
+
+```bash
+kubectl exec -it <redis-pod> -n smallest -- redis-cli INFO memory
+```
+
+### Monitor Performance
+
+```bash
+kubectl exec -it <redis-pod> -n smallest -- redis-cli INFO stats
+```
+
+## Backup and Recovery
+
+### Manual Backup
+
+Create snapshot:
+
+```bash
+kubectl exec -it <redis-master-pod> -n smallest -- redis-cli BGSAVE
+```
+
+Copy RDB file:
+
+```bash
+kubectl cp <redis-master-pod>:/data/dump.rdb ./redis-backup.rdb -n smallest
+```
+
+### Scheduled Backups
+
+Create CronJob for automatic backups:
+
+```yaml redis-backup-cronjob.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: redis-backup
+  namespace: smallest
+spec:
+  schedule: "0 2 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backup
+            image: redis:7-alpine
+            command:
+              - sh
+              - -c
+              - |
+                redis-cli -h smallest-redis-master BGSAVE
+                sleep 60
+                kubectl cp smallest-redis-master-0:/data/dump.rdb /backup/redis-$(date +%Y%m%d).rdb
+            volumeMounts:
+              - name: backup
+                mountPath: /backup
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: redis-backup-pvc
+          restartPolicy: OnFailure
+```
+
+### Restore from Backup
+
+```bash
+kubectl cp ./redis-backup.rdb <redis-master-pod>:/data/dump.rdb -n smallest
+
+kubectl exec -it <redis-master-pod> -n smallest -- redis-cli SHUTDOWN NOSAVE
+
+kubectl delete pod <redis-master-pod> -n smallest
+```
+
+Pod will restart and load from backup.
+
+## Security
+
+### Enable Authentication
+
+Always use password authentication:
+
+```yaml values.yaml
+redis:
+  auth:
+    enabled: true
+    password: "strong-random-password"
+```
+
+Or use existing secret:
+
+```yaml values.yaml
+redis:
+  auth:
+    enabled: true
+    existingSecret: "redis-secret"
+    existingSecretPasswordKey: "redis-password"
+```
+
+### Enable TLS
+
+For embedded Redis:
+
+```yaml values.yaml
+redis:
+  tls:
+    enabled: true
+    authClients: true
+    certFilename: "tls.crt"
+    certKeyFilename: "tls.key"
+    certCAFilename: "ca.crt"
+```
+
+### Network Policies
+
+Restrict access to Redis:
+
+```yaml redis-network-policy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-policy
+  namespace: smallest
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: lightning-asr
+        - podSelector:
+            matchLabels:
+              app: api-server
+      ports:
+        - protocol: TCP
+          port: 6379
+```
+
+## Scaling Redis
+
+### Vertical Scaling
+
+Increase resources:
+
+```yaml values.yaml
+redis:
+  master:
+    resources:
+      limits:
+        memory: 4Gi
+        cpu: 2
+```
+
+Restart pods:
+
+```bash
+kubectl rollout restart statefulset smallest-redis-master -n smallest
+```
+
+### Horizontal Scaling
+
+Add more replicas:
+
+```yaml values.yaml
+redis:
+  replica:
+    replicaCount: 3
+```
+
+## Troubleshooting
+
+### Connection Refused
+
+Check Redis pod is running:
+
+```bash
+kubectl get pods -l app.kubernetes.io/name=redis -n smallest
+kubectl logs -l app.kubernetes.io/name=redis -n smallest
+```
+
+Test connection:
+
+```bash
+kubectl run redis-test --rm -it --restart=Never \
+  --image=redis:7-alpine \
+  --command -- redis-cli -h smallest-redis-master -a your-password ping
+```
+
+### Out of Memory
+
+Check memory usage:
+
+```bash
+kubectl exec -it <redis-pod> -n smallest -- redis-cli INFO memory
+```
+
+Increase memory limit or enable eviction:
+
+```yaml
+redis:
+  master:
+    resources:
+      limits:
+        memory: 4Gi
+    configuration: |
+      maxmemory-policy allkeys-lru
+```
+
+### Slow Performance
+
+Check latency:
+
+```bash
+kubectl exec -it <redis-pod> -n smallest -- redis-cli --latency
+```
+
+Check slow queries:
+
+```bash
+kubectl exec -it <redis-pod> -n smallest -- redis-cli SLOWLOG GET 10
+```
+
+### Data Loss
+
+Check if persistence is enabled:
+
+```bash
+kubectl exec -it <redis-pod> -n smallest -- redis-cli CONFIG GET save
+kubectl exec -it <redis-pod> -n smallest -- redis-cli CONFIG GET appendonly
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always Use Authentication" icon="lock">
+    Enable password authentication even for internal Redis:
+    
+    ```yaml
+    redis:
+      auth:
+        enabled: true
+        password: "strong-password"
+    ```
+  </Accordion>
+
+  <Accordion title="Enable Persistence for Production" icon="database">
+    Use AOF for maximum durability:
+    
+    ```yaml
+    redis:
+      master:
+        persistence:
+          enabled: true
+        configuration: |
+          appendonly yes
+          appendfsync everysec
+    ```
+  </Accordion>
+
+  <Accordion title="Use Replicas for HA" icon="clone">
+    At least 2 replicas for high availability:
+    
+    ```yaml
+    redis:
+      replica:
+        replicaCount: 2
+    ```
+  </Accordion>
+
+  <Accordion title="Monitor Redis Metrics" icon="chart-line">
+    Use Redis exporter for Prometheus:
+    
+    ```bash
+    helm install redis-exporter prometheus-community/prometheus-redis-exporter \
+      --set redisAddress=redis://smallest-redis-master:6379
+    ```
+  </Accordion>
+
+  <Accordion title="Regular Backups" icon="floppy-disk">
+    Schedule automatic backups:
+    
+    - ElastiCache: Enable automatic backups
+    - Self-managed: Use CronJob for BGSAVE
+  </Accordion>
+</AccordionGroup>
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="HPA Configuration" icon="chart-line" href="/kubernetes/autoscaling/hpa-configuration">
+    Configure autoscaling for Lightning ASR
+  </Card>
+
+  <Card title="Metrics Setup" icon="chart-bar" href="/kubernetes/autoscaling/metrics-setup">
+    Set up Prometheus metrics collection
+  </Card>
+</CardGroup>
+

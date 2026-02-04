@@ -1,0 +1,278 @@
+---
+title: "Integrations with Convo Flow"
+sidebarTitle: "Convo Flow"
+description: "How to use integrations in Convo Flow agents with precise control."
+---
+
+Convo Flow agents give you precise control over when and how integrations are triggered. Use API nodes at specific points in your workflow for predictable, reliable integration behavior.
+
+---
+
+## Integration Points
+
+```
+[Pre-Call API] → Load context before greeting
+       ↓
+[Greeting Node] → Use loaded context
+       ↓
+[API Node: Check Data] → Mid-conversation lookups
+       ↓
+[API Node: Take Action] → Book, create, update
+       ↓
+[End Call Node]
+       ↓
+[Post-Call API] → Log and sync
+```
+
+---
+
+## Pre-Call Integration
+
+Load customer context before the conversation starts.
+
+### Setup
+
+1. Add **Pre-Call API Node** to your flow
+2. It runs automatically when call connects
+3. Variables are available in all subsequent nodes
+
+### Example: CRM Lookup
+
+**Configuration:**
+```
+URL: https://crm.example.com/contacts?phone={{caller_phone}}
+Method: GET
+```
+
+**Response Mapping:**
+```
+$.name → customer_name
+$.account_status → account_status
+$.last_order → last_order_date
+```
+
+**Use in Greeting Node:**
+```
+"Hi {{customer_name}}! Thanks for calling. How can I help you today?"
+```
+
+---
+
+## Mid-Flow Integration Nodes
+
+Use API Call nodes at strategic points in your flow.
+
+### Pattern: Check → Branch → Act
+
+```
+[Collect Information]
+        ↓
+[API: Check System]
+    ↓       ↓
+ Found   Not Found
+    ↓       ↓
+[Process] [Handle Missing]
+```
+
+### Example: Appointment Booking Flow
+
+```
+[Ask for Date]
+"What day works best for you?"
+        ↓
+[Capture Date] → {{requested_date}}
+        ↓
+[API: Check Calendar Availability]
+GET /availability?date={{requested_date}}
+        ↓
+     ┌──┴──┐
+  Slots  No Slots
+     ↓      ↓
+[Offer Options] [Suggest Alternatives]
+"I have 9 AM and 2 PM   "That day is fully booked.
+available."              How about Wednesday?"
+     ↓
+[Capture Selection] → {{selected_time}}
+        ↓
+[API: Book Appointment]
+POST /appointments
+{date: {{requested_date}}, time: {{selected_time}}}
+        ↓
+     ┌──┴──┐
+ Success  Failed
+     ↓      ↓
+[Confirm Booking] [Apologize & Offer Help]
+```
+
+---
+
+## Node Configuration
+
+### API Call Node Settings
+
+| Setting | Description | Example |
+|---------|-------------|---------|
+| **Name** | Descriptive label | "Check Calendar" |
+| **URL** | Endpoint | `https://api.calendar.com/availability` |
+| **Method** | HTTP verb | GET, POST, PUT, DELETE |
+| **Headers** | Auth & content type | `Authorization: Bearer {{token}}` |
+| **Query/Body** | Request data | `date={{requested_date}}` |
+
+### Response Handling
+
+Map response fields to variables:
+
+| Response Path | Variable | Example Value |
+|---------------|----------|---------------|
+| `$.available` | `has_availability` | `true` |
+| `$.slots[0]` | `first_available` | `"9:00 AM"` |
+| `$.slots` | `all_slots` | `["9:00 AM", "2:00 PM"]` |
+
+### Branching on Results
+
+Create branches for different outcomes:
+
+| Condition | Route To |
+|-----------|----------|
+| `has_availability == true` | Offer Options Node |
+| `has_availability == false` | No Availability Node |
+| `API Error` | Error Handler Node |
+
+---
+
+## Post-Call Integration
+
+Log call data after the conversation ends.
+
+### Setup
+
+1. Add **Post-Call API Node** to your flow
+2. It runs after any End Call node
+3. Include all relevant call data
+
+### Example: CRM Activity Log
+
+```
+URL: https://crm.example.com/activities
+Method: POST
+
+Body:
+{
+  "contact_phone": "{{caller_phone}}",
+  "contact_name": "{{customer_name}}",
+  "call_duration": {{call_duration}},
+  "outcome": "{{disposition}}",
+  "summary": "{{call_summary}}",
+  "appointment_booked": "{{appointment_date}}",
+  "nodes_visited": "{{conversation_path}}"
+}
+```
+
+---
+
+## Integration Patterns
+
+### Pattern 1: Personalized Greeting
+
+```
+[Pre-Call: CRM Lookup] → {{customer_name}}, {{account_type}}
+         ↓
+    ┌────┴────┐
+ VIP Customer  Standard
+    ↓           ↓
+[VIP Greeting]  [Standard Greeting]
+"Hi {{name}},   "Hi {{name}}, thanks
+as a valued     for calling. How
+customer..."    can I help?"
+```
+
+### Pattern 2: Data Collection → API Action
+
+```
+[Collect Name]
+     ↓
+[Collect Email]
+     ↓
+[Collect Issue]
+     ↓
+[API: Create Ticket]
+POST /tickets
+{name, email, issue}
+     ↓
+[Confirm Ticket Number]
+"Your ticket number is {{ticket_id}}"
+```
+
+### Pattern 3: Lookup → Conditional Logic
+
+```
+[API: Check Order Status]
+GET /orders?phone={{caller_phone}}
+          ↓
+    ┌─────┼─────┐
+No Order  Shipped  Processing
+    ↓        ↓        ↓
+[No Order] [Track]  [Status]
+Found      Shipment  Update
+```
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Validate Before API Calls" icon="check">
+    Don't call APIs with missing data. Add validation:
+    
+    ```
+    [Collect Date]
+          ↓
+    [Validate Format] → If invalid → [Ask Again]
+          ↓
+    [API: Check Availability]
+    ```
+  </Accordion>
+  
+  <Accordion title="Always Have Error Branches" icon="code-branch">
+    Every API node should handle failures:
+    
+    - **Success** → Continue flow
+    - **Not Found** → Handle gracefully
+    - **Error** → Apologize, offer alternative
+    
+    Never leave API nodes without error handling.
+  </Accordion>
+  
+  <Accordion title="Minimize API Calls" icon="bolt">
+    Each API call adds latency. Optimize:
+    
+    - **Batch when possible** — One call for multiple data points
+    - **Pre-call for context** — Load once, use throughout
+    - **Cache where appropriate** — Don't re-fetch unchanged data
+  </Accordion>
+  
+  <Accordion title="Fill Wait Time" icon="clock">
+    If API calls take time, keep the caller engaged:
+    
+    ```
+    [Say: "Let me check that for you..."]
+            ↓
+    [API: Long Running Call]
+            ↓
+    [Say: "I found it! Here's what I have..."]
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Call Nodes" icon="bolt" href="/platform/features/api-calls/convo-flow">
+    Deep dive into API nodes
+  </Card>
+  <Card title="Working with Nodes" icon="sitemap" href="/platform/building-agents/convo-flow/nodes">
+    All node types explained
+  </Card>
+</CardGroup>

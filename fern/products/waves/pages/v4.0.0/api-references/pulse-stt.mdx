@@ -1,0 +1,188 @@
+---
+title: "Pulse (Pre-Recorded)"
+description: "Convert speech to text using file upload with the Pulse STT POST API"
+openapi: "POST /api/v1/pulse/get_text"
+---
+
+The STT POST API allows you to convert speech to text using two different input methods:
+
+1. **Raw Audio Bytes** (`application/octet-stream`) - Send raw audio data with all parameters as query parameters
+2. **Audio URL** (`application/json`) - Provide only a URL to an audio file in the JSON body, with all other parameters as query parameters
+
+Both methods use our Pulse STT model with automatic language detection across 30+ languages.
+
+## Authentication
+
+This endpoint requires authentication using a Bearer token in the Authorization header:
+
+```bash
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Input Methods
+
+Choose the input method that best fits your use case:
+
+| Method        | Content Type               | Use Case                                   | Parameters       |
+| ------------- | -------------------------- | ------------------------------------------ | ---------------- |
+| **Raw Bytes** | `application/octet-stream` | Streaming audio data, real-time processing | Query parameters |
+| **Audio URL** | `application/json`         | Remote audio files, webhook processing     | Query parameters |
+
+## Code Examples
+
+### Method 1: Raw Audio Bytes (application/octet-stream)
+
+<CodeGroup>
+
+```bash cURL - Raw Bytes
+curl --request POST \
+  --url "https://waves-api.smallest.ai/api/v1/pulse/get_text?model=pulse&language=en&word_timestamps=true&diarize=true&age_detection=true&gender_detection=true&emotion_detection=true" \
+  --header 'Authorization: Bearer <token>' \
+  --header 'Content-Type: audio/wav' \
+  --data-binary '@/path/to/your/audio.wav'
+```
+
+```python Python - Raw Bytes
+import requests
+
+url = "https://waves-api.smallest.ai/api/v1/pulse/get_text"
+headers = {
+    "Authorization": "Bearer YOUR_API_KEY",
+    "Content-Type": "audio/wav"
+}
+params = {
+    "model": "pulse",
+    "language": "en",
+    "word_timestamps": "true",
+    "diarize": "true",
+    "age_detection": "true",
+    "gender_detection": "true",
+    "emotion_detection": "true"
+}
+
+with open("path/to/your/audio.wav", "rb") as audio_file:
+    audio_data = audio_file.read()
+
+response = requests.post(url, headers=headers, params=params, data=audio_data)
+result = response.json()
+print(f"Transcription: {result['transcription']}")
+```
+
+```javascript JavaScript - Raw Bytes
+const audioFile = await fetch("/path/to/audio.wav");
+const audioBuffer = await audioFile.arrayBuffer();
+
+const params = new URLSearchParams({
+  model: "pulse",
+  language: "en",
+  word_timestamps: "true",
+  diarize: "true",
+  age_detection: "true",
+  gender_detection: "true",
+  emotion_detection: "true",
+});
+
+const response = await fetch(
+  `https://waves-api.smallest.ai/api/v1/pulse/get_text?${params}`,
+  {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer YOUR_API_KEY",
+      "Content-Type": "audio/wav",
+    },
+    body: audioBuffer,
+  }
+);
+
+const result = await response.json();
+console.log("Transcription:", result.transcription);
+```
+
+</CodeGroup>
+
+### Method 2: Audio URL (application/json)
+
+<CodeGroup>
+
+```bash cURL - Audio URL
+curl --request POST \
+  --url "https://waves-api.smallest.ai/api/v1/pulse/get_text?model=pulse&language=en&word_timestamps=true&diarize=true&age_detection=true&gender_detection=true&emotion_detection=true" \
+  --header 'Authorization: Bearer <token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "url": "https://example.com/audio.mp3"
+  }'
+```
+
+```python Python - Audio URL
+import requests
+import json
+
+url = "https://waves-api.smallest.ai/api/v1/pulse/get_text"
+headers = {
+    "Authorization": "Bearer YOUR_API_KEY",
+    "Content-Type": "application/json"
+}
+params = {
+    "model": "pulse",
+    "language": "en",
+    "word_timestamps": "true",
+    "diarize": "true",
+    "age_detection": "true",
+    "gender_detection": "true",
+    "emotion_detection": "true"
+}
+payload = {
+    "url": "https://example.com/audio.mp3"
+}
+
+response = requests.post(url, headers=headers, params=params, data=json.dumps(payload))
+result = response.json()
+print(f"Transcription: {result['transcription']}")
+```
+
+```javascript JavaScript - Audio URL
+const params = new URLSearchParams({
+  model: "pulse",
+  language: "en",
+  word_timestamps: "true",
+  diarize: "true",
+  age_detection: "true",
+  gender_detection: "true",
+  emotion_detection: "true",
+});
+
+const payload = {
+  url: "https://example.com/audio.mp3",
+};
+
+const response = await fetch(
+  `https://waves-api.smallest.ai/api/v1/pulse/get_text?${params}`,
+  {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer YOUR_API_KEY",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  }
+);
+
+const result = await response.json();
+console.log("Transcription:", result.transcription);
+```
+
+</CodeGroup>
+
+## Supported Languages
+
+The Pulse STT model supports **automatic language detection** and transcription across **30+ languages**.
+
+For the full list of supported languages, please check [**STT Supported Languages**](/v4.0.0/content/getting-started/models#model-overview-stt).
+
+<Info>
+  Specify the **language** of the input audio using its [ISO
+  639-1](https://en.wikipedia.org/wiki/ISO_639-1) code. Use **`multi`** to
+  enable automatic language detection from the supported list. The default is
+  **`en`** (English).
+</Info>

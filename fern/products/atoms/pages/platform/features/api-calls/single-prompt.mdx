@@ -1,0 +1,253 @@
+---
+title: "API Calls in Single Prompt"
+sidebarTitle: "Single Prompt"
+description: "Set up API integrations for Single Prompt agents."
+---
+
+Single Prompt agents can use API calls to fetch data and perform actions. Here's how to set them up effectively.
+
+---
+
+## Available API Types
+
+| Type | When It Runs | Use Case |
+|------|--------------|----------|
+| **Pre-Call API** | Before greeting | Load customer context |
+| **Tool Calls** | Agent decides during call | Check availability, book appointments |
+| **Post-Call API** | After call ends | Log to CRM, trigger follow-ups |
+
+---
+
+## Pre-Call API Setup
+
+Pre-Call APIs load data before your agent says hello.
+
+<Steps>
+  ### Access API Settings
+  
+  1. Open your Single Prompt agent
+  2. In the right panel, find **API Calls**
+  3. Click **Pre-Call API**
+
+  ### Configure the Lookup
+  
+  **Example: Customer lookup by phone**
+  
+  ```
+  URL: https://api.yourcrm.com/customers
+  Method: GET
+  Query: phone={{caller_phone}}
+  ```
+
+  ### Map Response to Variables
+  
+  ```json
+  Response: {
+    "name": "Sarah Johnson",
+    "tier": "gold",
+    "balance": 150.00
+  }
+  ```
+  
+  | Response Path | Variable |
+  |---------------|----------|
+  | `$.name` | `customer_name` |
+  | `$.tier` | `customer_tier` |
+  | `$.balance` | `account_balance` |
+
+  ### Use in Your Prompt
+  
+  ```
+  CUSTOMER CONTEXT:
+  - Name: {{customer_name}}
+  - Tier: {{customer_tier}}
+  - Balance: ${{account_balance}}
+  
+  Greet them by name. If they're a gold tier customer, 
+  thank them for their loyalty.
+  ```
+</Steps>
+
+---
+
+## Tool Calls (Mid-Conversation APIs)
+
+Tool calls let your agent make API requests during the conversation when it decides they're needed.
+
+### Defining Tools
+
+In your agent settings, define what tools are available:
+
+```json
+{
+  "name": "check_availability",
+  "description": "Check appointment availability for a given date",
+  "parameters": {
+    "date": {
+      "type": "string",
+      "description": "Date to check (YYYY-MM-DD)"
+    }
+  },
+  "endpoint": "https://api.calendar.com/availability",
+  "method": "GET"
+}
+```
+
+### Instructing the Agent
+
+In your prompt, tell the agent when to use tools:
+
+```
+AVAILABLE TOOLS:
+- check_availability: Use when customer asks about appointment times
+- book_appointment: Use when customer confirms they want to book
+- cancel_appointment: Use when customer wants to cancel
+
+When the customer asks about availability:
+1. Ask what date they're interested in
+2. Use check_availability to get open slots
+3. Present 2-3 options to the customer
+```
+
+### How It Works
+
+1. Customer asks: "Do you have anything available next Tuesday?"
+2. Agent extracts the date and calls `check_availability`
+3. API returns available slots
+4. Agent responds: "I have 9 AM, 2 PM, and 4:30 PM available. Which works for you?"
+
+---
+
+## Post-Call API Setup
+
+Post-Call APIs log data after the conversation ends.
+
+<Steps>
+  ### Add Post-Call API
+  
+  In API settings, click **Add Post-Call API**.
+
+  ### Configure the Request
+  
+  ```
+  URL: https://api.yourcrm.com/activities
+  Method: POST
+  Headers:
+    Content-Type: application/json
+    Authorization: Bearer {{api_key}}
+  ```
+
+  ### Define the Payload
+  
+  ```json
+  {
+    "contact_phone": "{{caller_phone}}",
+    "contact_name": "{{customer_name}}",
+    "call_duration": {{call_duration}},
+    "call_id": "{{call_id}}",
+    "outcome": "{{disposition}}",
+    "notes": "{{call_summary}}",
+    "agent": "{{agent_name}}"
+  }
+  ```
+</Steps>
+
+---
+
+## Example: Full Integration
+
+Here's a complete example for a support agent with CRM integration:
+
+### Pre-Call API (Customer Lookup)
+
+```
+GET https://crm.example.com/api/contacts?phone={{caller_phone}}
+
+Response → Variables:
+- customer_name
+- customer_email
+- account_status
+- open_tickets
+```
+
+### Prompt with Context
+
+```
+You are a support agent for TechCorp.
+
+CUSTOMER INFO:
+- Name: {{customer_name}}
+- Email: {{customer_email}}
+- Account: {{account_status}}
+- Open Tickets: {{open_tickets}}
+
+TOOLS AVAILABLE:
+- create_ticket: Create a new support ticket
+- update_ticket: Update an existing ticket
+- check_order_status: Look up order information
+
+INSTRUCTIONS:
+1. Greet {{customer_name}} by name
+2. If they have open tickets ({{open_tickets}} > 0), ask if they're 
+   calling about an existing issue
+3. For new issues, gather details and create_ticket
+4. Always confirm actions before taking them
+```
+
+### Post-Call API (Activity Log)
+
+```
+POST https://crm.example.com/api/activities
+
+{
+  "contact_phone": "{{caller_phone}}",
+  "type": "support_call",
+  "duration": {{call_duration}},
+  "summary": "{{call_summary}}",
+  "outcome": "{{disposition}}"
+}
+```
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Handle Missing Data" icon="question">
+    Not every caller will be in your system. Prepare for it:
+    
+    ```
+    If customer_name is empty (caller not found in CRM):
+    - Use "there" as a greeting ("Hi there!")
+    - Ask for their name early
+    - Offer to create an account
+    ```
+  </Accordion>
+  
+  <Accordion title="Set Reasonable Timeouts" icon="clock">
+    - **Pre-Call:** 5-10 seconds max (caller is waiting)
+    - **Tool Calls:** 10-15 seconds (agent can fill time)
+    - **Post-Call:** 30+ seconds OK (caller is gone)
+  </Accordion>
+  
+  <Accordion title="Log Everything" icon="list">
+    Use Post-Call API to log:
+    - Call outcome
+    - Actions taken
+    - Customer feedback
+    - Any issues for review
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Common Integrations" icon="plug" href="/platform/features/api-calls/common-integrations">
+    Pre-built patterns for popular services
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/platform/features/api-calls/troubleshooting">
+    Fix common API issues
+  </Card>
+</CardGroup>

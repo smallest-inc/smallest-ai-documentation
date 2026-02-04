@@ -1,0 +1,318 @@
+---
+title: "Troubleshooting Webhooks"
+sidebarTitle: "Troubleshooting"
+description: "Fix common webhook issues and debugging tips."
+---
+
+Webhooks not working? Here's how to diagnose and fix common issues.
+
+---
+
+## Checking Webhook Status
+
+### View Delivery Logs
+
+1. Go to **Settings** → **Webhooks**
+2. Click on your webhook
+3. View **Recent Deliveries**
+
+Each delivery shows:
+- Timestamp
+- Event type
+- Status (success/failure)
+- Response code
+- Request/response bodies
+
+---
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Webhook Not Triggering" icon="xmark">
+    **Symptoms:** No delivery attempts in logs
+    
+    **Check:**
+    1. **Webhook is active** — Not paused or disabled
+    2. **Events selected** — The event type you expect is checked
+    3. **Calls happening** — Verify calls are completing
+    4. **Agent linked** — Some webhooks are agent-specific
+    
+    **Fix:** Re-enable webhook, verify event selection, test with manual call
+  </Accordion>
+  
+  <Accordion title="Delivery Failing (4xx errors)" icon="ban">
+    **Symptoms:** 400, 401, 403, 404 errors
+    
+    **400 Bad Request:**
+    - Your endpoint doesn't like the payload
+    - Check your handler accepts JSON
+    
+    **401 Unauthorized:**
+    - Auth header not matching
+    - Check custom headers configuration
+    
+    **403 Forbidden:**
+    - IP restrictions on your endpoint
+    - Whitelist Atoms IPs or remove restrictions
+    
+    **404 Not Found:**
+    - URL is wrong
+    - Endpoint doesn't exist
+    - Check for typos in URL
+  </Accordion>
+  
+  <Accordion title="Delivery Failing (5xx errors)" icon="server">
+    **Symptoms:** 500, 502, 503, 504 errors
+    
+    **500 Internal Server Error:**
+    - Your code is throwing an error
+    - Check your server logs
+    - Handle edge cases in payload
+    
+    **502 Bad Gateway:**
+    - Upstream server issue
+    - Check your infrastructure
+    
+    **503 Service Unavailable:**
+    - Your server is overloaded
+    - Scale up or optimize
+    
+    **504 Gateway Timeout:**
+    - Response took > 30 seconds
+    - Respond immediately, process async
+  </Accordion>
+  
+  <Accordion title="Timeout Errors" icon="clock">
+    **Symptoms:** Delivery fails with timeout
+    
+    **Cause:** Endpoint takes > 30 seconds to respond
+    
+    **Fix:** Respond with 200 immediately, then process async:
+    
+    ```javascript
+    app.post('/webhook', (req, res) => {
+      // Respond immediately
+      res.status(200).send('OK');
+      
+      // Process in background
+      processWebhook(req.body).catch(console.error);
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Signature Verification Failing" icon="lock">
+    **Symptoms:** Your verification returns invalid
+    
+    **Check:**
+    1. **Correct secret** — Using the signing secret from settings
+    2. **Raw body** — Verify against raw body, not parsed JSON
+    3. **No modifications** — Body isn't altered before verification
+    
+    **Debug:**
+    ```javascript
+    console.log('Received signature:', req.headers['x-atoms-signature']);
+    console.log('Raw body:', JSON.stringify(req.body));
+    console.log('Computed:', computeSignature(req.body, secret));
+    ```
+  </Accordion>
+  
+  <Accordion title="Duplicate Events" icon="clone">
+    **Symptoms:** Same event received multiple times
+    
+    **Cause:** Retries due to:
+    - Timeout (you didn't respond in time)
+    - Server error (5xx response)
+    - Network issue
+    
+    **Fix:** Implement idempotency:
+    ```javascript
+    const processedEvents = new Set();
+    
+    app.post('/webhook', async (req, res) => {
+      const eventId = `${req.body.call_id}-${req.body.event}`;
+      
+      if (processedEvents.has(eventId)) {
+        return res.status(200).send('Already processed');
+      }
+      
+      processedEvents.add(eventId);
+      res.status(200).send('OK');
+      
+      // Process...
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Missing Data in Payload" icon="question">
+    **Symptoms:** Expected fields are null or missing
+    
+    **Causes:**
+    - Data not collected during call
+    - Field is optional
+    - Different event type
+    
+    **Fix:** Always check for field existence:
+    ```javascript
+    const customerName = data.customer_name || 'Unknown';
+    const summary = data.summary || 'No summary available';
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Testing Tips
+
+### Use webhook.site for Debugging
+
+1. Go to [webhook.site](https://webhook.site)
+2. Copy your unique URL
+3. Set as webhook endpoint temporarily
+4. Make a test call
+5. Inspect the payload
+
+### Local Development with ngrok
+
+```bash
+# Start your local server
+node server.js  # Running on port 3000
+
+# In another terminal, start ngrok
+ngrok http 3000
+
+# Use the ngrok URL as your webhook endpoint
+# https://abc123.ngrok.io/webhook
+```
+
+### Manual Test from Dashboard
+
+1. Go to webhook settings
+2. Click **Test Webhook**
+3. Select event type
+4. Click **Send**
+5. Check delivery logs
+
+---
+
+## Retry Behavior
+
+When delivery fails, Atoms retries:
+
+| Attempt | Delay After |
+|---------|-------------|
+| Initial | Immediate |
+| Retry 1 | 1 minute |
+| Retry 2 | 5 minutes |
+| Retry 3 | 30 minutes |
+| Retry 4 | 2 hours |
+| Retry 5 | 24 hours |
+
+After 5 failed retries:
+- Webhook is **paused**
+- You receive notification
+- Fix the issue and re-enable
+
+---
+
+## Best Practices for Reliability
+
+<AccordionGroup>
+  <Accordion title="Respond Fast" icon="bolt">
+    ```javascript
+    // ✅ Good - respond immediately
+    app.post('/webhook', (req, res) => {
+      res.status(200).send('OK');
+      processAsync(req.body);
+    });
+    
+    // ❌ Bad - blocking response
+    app.post('/webhook', async (req, res) => {
+      await saveToDatabase(req.body);  // Slow!
+      await sendEmail(req.body);       // Even slower!
+      res.status(200).send('OK');
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Use a Queue" icon="list">
+    For reliable processing, queue webhooks:
+    
+    ```javascript
+    app.post('/webhook', async (req, res) => {
+      await queue.add('process-webhook', req.body);
+      res.status(200).send('OK');
+    });
+    
+    // Worker processes queue
+    queue.process('process-webhook', async (job) => {
+      await processWebhook(job.data);
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle All Events" icon="code">
+    Don't fail on unexpected events:
+    
+    ```javascript
+    app.post('/webhook', (req, res) => {
+      res.status(200).send('OK');
+      
+      switch (req.body.event) {
+        case 'call.ended':
+          handleCallEnded(req.body);
+          break;
+        case 'recording.ready':
+          handleRecording(req.body);
+          break;
+        default:
+          // Ignore unknown events gracefully
+          console.log('Unknown event:', req.body.event);
+      }
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Log Everything" icon="file-lines">
+    Log for debugging:
+    
+    ```javascript
+    app.post('/webhook', (req, res) => {
+      console.log('Webhook received:', {
+        event: req.body.event,
+        call_id: req.body.call_id,
+        timestamp: req.body.timestamp
+      });
+      
+      res.status(200).send('OK');
+      
+      processWebhook(req.body).catch(err => {
+        console.error('Webhook processing error:', err);
+      });
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Getting Help
+
+If you've tried everything:
+
+1. **Gather info:**
+   - Webhook URL
+   - Event types selected
+   - Recent delivery logs
+   - Your server logs
+
+2. **Check status page:**
+   - Are there known issues?
+
+3. **Contact support:**
+   - Include webhook ID
+   - Include failed delivery IDs
+   - Describe expected vs actual behavior
+
+<Card title="Contact Support" icon="headset" href="/platform/troubleshooting/getting-help">
+  Get help from the Atoms team
+</Card>

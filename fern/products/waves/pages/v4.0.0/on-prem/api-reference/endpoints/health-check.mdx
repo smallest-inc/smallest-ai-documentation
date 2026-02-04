@@ -1,0 +1,396 @@
+---
+title: Health Check
+description: Monitor service health and availability
+---
+
+## Overview
+
+The health check endpoint provides a simple way to verify that the API server is running and responsive. Use this for monitoring, load balancer health checks, and readiness probes.
+
+## Endpoint
+
+```
+GET /health
+```
+
+## Authentication
+
+**No authentication required** - This endpoint is publicly accessible.
+
+## Request
+
+Simple GET request with no parameters:
+
+```bash
+curl http://localhost:7100/health
+```
+
+## Response
+
+### Healthy Response
+
+HTTP Status: `200 OK`
+
+```json
+{
+  "status": "healthy"
+}
+```
+
+### Unhealthy Response
+
+HTTP Status: `503 Service Unavailable`
+
+```json
+{
+  "status": "unhealthy",
+  "reason": "No ASR workers available"
+}
+```
+
+## Use Cases
+
+### Load Balancer Health Checks
+
+Configure your load balancer to use the health endpoint:
+
+<Tabs>
+  <Tab title="AWS ALB/NLB">
+    ```yaml
+    apiServer:
+      service:
+        type: LoadBalancer
+        healthCheckPath: /health
+        healthCheckInterval: 30
+        healthCheckTimeout: 5
+        healthyThreshold: 2
+        unhealthyThreshold: 3
+    ```
+  </Tab>
+
+  <Tab title="Kubernetes Service">
+    ```yaml
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: api-server
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-healthcheck-path: "/health"
+    spec:
+      type: LoadBalancer
+    ```
+  </Tab>
+</Tabs>
+
+### Kubernetes Liveness Probe
+
+Monitor pod health in Kubernetes:
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 7100
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+```
+
+### Kubernetes Readiness Probe
+
+Determine when pod is ready to receive traffic:
+
+```yaml
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 7100
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+```
+
+### Monitoring and Alerting
+
+Monitor service availability:
+
+<Tabs>
+  <Tab title="Prometheus">
+    ```yaml
+    - job_name: 'api-server-health'
+      metrics_path: '/health'
+      scrape_interval: 30s
+      static_configs:
+        - targets: ['api-server:7100']
+    ```
+  </Tab>
+
+  <Tab title="Python Script">
+    ```python
+    import requests
+    import time
+    
+    def check_health():
+        try:
+            response = requests.get(
+                "http://localhost:7100/health",
+                timeout=5
+            )
+            return response.status_code == 200
+        except Exception as e:
+            print(f"Health check failed: {e}")
+            return False
+    
+    while True:
+        if not check_health():
+            print("Service unhealthy!")
+        time.sleep(30)
+    ```
+  </Tab>
+
+  <Tab title="Bash Script">
+    ```bash
+    #!/bin/bash
+    
+    while true; do
+        STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7100/health)
+        
+        if [ "$STATUS" -ne 200 ]; then
+            echo "Health check failed: HTTP $STATUS"
+        fi
+        
+        sleep 30
+    done
+    ```
+  </Tab>
+</Tabs>
+
+### Uptime Monitoring
+
+Integration with uptime monitoring services:
+
+<Tabs>
+  <Tab title="UptimeRobot">
+    - **Monitor Type**: HTTP(s)
+    - **URL**: `https://api.example.com/health`
+    - **Keyword**: `healthy`
+    - **Interval**: 5 minutes
+  </Tab>
+
+  <Tab title="Pingdom">
+    - **Check Type**: HTTP
+    - **URL**: `https://api.example.com/health`
+    - **Expected Status**: 200
+    - **Check Interval**: 1 minute
+  </Tab>
+
+  <Tab title="Datadog">
+    ```yaml
+    init_config:
+    
+    instances:
+      - url: http://api-server:7100/health
+        name: smallest-api
+        timeout: 5
+        http_response_status_code: 200
+    ```
+  </Tab>
+</Tabs>
+
+## Advanced Health Checks
+
+### Detailed Health Status
+
+For more detailed health information, add query parameter:
+
+```bash
+curl http://localhost:7100/health?detailed=true
+```
+
+Response:
+```json
+{
+  "status": "healthy",
+  "components": {
+    "api_server": "healthy",
+    "lightning_asr": "healthy",
+    "license_proxy": "healthy",
+    "redis": "healthy"
+  },
+  "uptime_seconds": 86400,
+  "version": "1.0.0"
+}
+```
+
+### Component-Specific Checks
+
+Check individual components:
+
+```bash
+curl http://localhost:7100/health/asr
+curl http://localhost:7100/health/license
+curl http://localhost:7100/health/redis
+```
+
+## Integration Examples
+
+### Docker Compose Healthcheck
+
+```yaml docker-compose.yml
+services:
+  api-server:
+    image: quay.io/smallestinc/self-hosted-api-server:latest
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+```
+
+### Kubernetes Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+spec:
+  template:
+    spec:
+      containers:
+      - name: api-server
+        image: quay.io/smallestinc/self-hosted-api-server:latest
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 7100
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 7100
+          initialDelaySeconds: 10
+          periodSeconds: 5
+```
+
+### Automated Testing
+
+Include health checks in CI/CD:
+
+```yaml .github/workflows/deploy.yml
+- name: Wait for deployment
+  run: |
+    for i in {1..30}; do
+      if curl -f http://api.example.com/health; then
+        echo "Service is healthy"
+        exit 0
+      fi
+      sleep 10
+    done
+    echo "Service failed to become healthy"
+    exit 1
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Set Appropriate Timeouts" icon="clock">
+    Configure reasonable timeouts:
+    
+    - **Timeout**: 5 seconds max
+    - **Interval**: 10-30 seconds
+    - **Retries**: 3-5 attempts
+    
+    ```yaml
+    healthcheck:
+      timeout: 5s
+      interval: 30s
+      retries: 3
+    ```
+  </Accordion>
+
+  <Accordion title="Use in Load Balancers" icon="balance-scale">
+    Always configure health checks in load balancers:
+    
+    - Prevents traffic to unhealthy instances
+    - Enables automatic failover
+    - Reduces user-facing errors
+  </Accordion>
+
+  <Accordion title="Monitor Continuously" icon="chart-line">
+    Set up continuous monitoring:
+    
+    - External uptime monitoring
+    - Internal health checks
+    - Alerting on failures
+  </Accordion>
+
+  <Accordion title="Test Failure Scenarios" icon="flask">
+    Regularly test health check behavior:
+    
+    ```bash
+    kubectl delete pod api-server-xxx
+    ```
+    
+    Verify:
+    - Health check fails
+    - Load balancer stops routing
+    - New pod becomes ready
+    - Health check succeeds
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Health Check Failing
+
+**Check API server logs**:
+
+```bash
+kubectl logs -l app=api-server -n smallest
+```
+
+**Common causes**:
+- Lightning ASR not available
+- License proxy down
+- Redis connection failed
+
+**Solutions**:
+- Verify all components running
+- Check service connectivity
+- Review component logs
+
+### False Positives
+
+**Symptoms**: Health returns 200 but requests fail
+
+**Solutions**:
+- Use detailed health checks
+- Test actual transcription endpoint
+- Monitor error rates
+
+### Timeout Issues
+
+**Symptoms**: Health checks timing out
+
+**Solutions**:
+- Increase timeout values
+- Check network latency
+- Verify no network policies blocking
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Transcription API" icon="microphone" href="/api-reference/endpoints/transcription">
+    Learn about the transcription endpoint
+  </Card>
+
+  <Card title="Examples" icon="code" href="/api-reference/examples">
+    See complete integration examples
+  </Card>
+</CardGroup>
+

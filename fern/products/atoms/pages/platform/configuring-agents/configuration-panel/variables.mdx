@@ -1,0 +1,183 @@
+---
+title: "Variables Configuration"
+sidebarTitle: "Variables"
+description: "Use dynamic values in prompts and conversations."
+---
+
+Variables let you insert dynamic values into your prompts. Instead of hardcoding information, you use placeholders that get replaced with real data at runtime.
+
+<Frame caption="Variable Management panel showing three tabs">
+  [IMAGE: Variable Management panel showing three tabs]
+</Frame>
+
+---
+
+## Location
+
+**Configuration Panel (right sidebar) → Variables Management**
+
+---
+
+## Variable Syntax
+
+Use double curly braces:
+
+```
+{{variable_name}}
+```
+
+### Example in Prompt
+
+```
+Hello {{customer_name}}, I see you're calling about order {{order_id}}.
+Your order status is currently {{order_status}}.
+```
+
+At runtime, this becomes:
+```
+Hello John, I see you're calling about order #12345.
+Your order status is currently shipped.
+```
+
+---
+
+## Variable Types
+
+The Variable Management Panel has three tabs:
+
+| Tab | Source | Description |
+|-----|--------|-------------|
+| **User Defined** | You create them | Custom variables for your needs |
+| **System** | Platform provides | Built-in variables from Atoms |
+| **API** | API responses | Variables from API call results |
+
+---
+
+## User Defined Variables
+
+Variables you create and manage.
+
+### Empty State
+
+```
+{ }
+No user variables found
+Add variables to your prompt using
+{{variable_name}} syntax.
+```
+
+### Adding Variables
+
+Variables appear when you:
+1. Type `{{variable_name}}` in your prompt
+2. The system detects and lists it
+3. You can set default values if needed
+
+### Common User Variables
+
+| Variable | Example Use |
+|----------|-------------|
+| `{{company_name}}` | Your company name |
+| `{{product_name}}` | Product being discussed |
+| `{{promo_code}}` | Current promotion code |
+| `{{team_name}}` | Department name |
+
+---
+
+## System Variables
+
+Built-in variables provided by Atoms.
+
+| Variable | Contains |
+|----------|----------|
+| `{{caller_phone}}` | Caller's phone number |
+| `{{call_time}}` | When the call started |
+| `{{call_duration}}` | How long the call has lasted |
+| `{{current_date}}` | Today's date |
+| `{{current_time}}` | Current time |
+
+→ See: [Variables Reference](/platform/features/variables-reference) for complete list
+
+---
+
+## API Variables
+
+Variables populated from API call responses.
+
+When an API Call returns data, you can map response fields to variables:
+
+```json
+// API Response
+{
+  "customer_name": "Jane Smith",
+  "account_status": "active",
+  "balance": "$1,234.56"
+}
+
+// Mapped Variables
+{{api.customer_name}} → "Jane Smith"
+{{api.account_status}} → "active"
+{{api.balance}} → "$1,234.56"
+```
+
+Use these in subsequent prompts or nodes.
+
+---
+
+## Using Variables Effectively
+
+### Personalization
+
+```
+Hi {{customer_name}}! Thanks for being a {{membership_level}} member.
+```
+
+### Dynamic Information
+
+```
+Your order {{order_id}} is scheduled for delivery on {{delivery_date}}.
+```
+
+### Conditional Context
+
+Variables can inform behavior:
+```
+If {{account_type}} is "premium", offer priority support.
+```
+
+---
+
+## Best Practices
+
+### Use Descriptive Names
+
+- Good: `{{customer_first_name}}`
+- Bad: `{{n1}}`
+
+### Handle Missing Variables
+
+What if a variable isn't set? Have graceful fallbacks in your prompt:
+```
+Hi {{customer_name|there}}! (Uses "there" if name unknown)
+```
+
+### Test Variable Substitution
+
+Verify variables are replaced correctly in test conversations.
+
+### Keep Track
+
+Document your variables so team members understand what each one does.
+
+---
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="API Calls" icon="cloud" href="/platform/configuring-agents/configuration-panel/api-calls">
+    Fetch dynamic data
+  </Card>
+  <Card title="Variables Reference" icon="list" href="/platform/features/variables-reference">
+    Complete variable list
+  </Card>
+</CardGroup>

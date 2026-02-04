@@ -1,0 +1,202 @@
+---
+title: 'Quickstart'
+description: 'Get started with transcribing pre-recorded audio files using the Waves STT API'
+---
+
+This guide shows you how to convert an audio file into text using Smallest AI's Pulse STT model.
+
+# Pre-Recorded Audio
+
+> Transcribe pre-recorded audio files using synchronous HTTPS POST requests. Perfect for batch processing, archived media, and offline transcription workflows.
+
+The Pre-Recorded API allows you to upload audio files and receive complete transcripts in a single request. It can process an audio file uploaded as raw bytes or take a URL to retrieve one from a remote server.
+
+## When to Use Pre-Recorded Transcription
+
+- **Batch processing**: Transcribe multiple audio files at once
+- **Archived media**: Process existing recordings, podcasts, or videos
+- **Offline workflows**: Upload files that are already stored locally or in cloud storage
+- **Complete transcripts**: When you need the full transcription before proceeding
+
+## Endpoint
+
+```
+POST https://waves-api.smallest.ai/api/v1/pulse/get_text
+```
+
+## Authentication
+
+Head over to the [smallest console](https://console.smallest.ai/apikeys) to generate an API key, if not done previously. Also look at [Authentication guide](/v4.0.0/content/getting-started/authentication) for more information about API keys and their usage.
+
+
+Include your API key in the Authorization header:
+
+```http
+Authorization: Bearer SMALLEST_API_KEY
+```
+
+## Example Request
+
+The API supports two input methods: **Raw Audio Bytes** and **Audio URL**. For details on both methods, see the [Audio Specifications](/v4.0.0/content/speech-to-text/pre-recorded/audio-formats) guide.
+
+### Method 1: Raw Audio Bytes
+
+Upload audio files directly by sending raw audio data:
+
+<CodeGroup>
+```bash cURL
+curl --request POST \
+  --url "https://waves-api.smallest.ai/api/v1/pulse/get_text?model=pulse&language=en&word_timestamps=true" \
+  --header "Authorization: Bearer $SMALLEST_API_KEY" \
+  --header "Content-Type: audio/wav" \
+  --data-binary "@/path/to/audio.wav"
+```
+
+```python Python
+import os
+import requests
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+endpoint = "https://waves-api.smallest.ai/api/v1/pulse/get_text"
+params = {
+    "model": "pulse",
+    "language": "en",
+    "word_timestamps": "true",
+}
+headers = {
+    "Authorization": f"Bearer {API_KEY}",
+    "Content-Type": "audio/wav",
+}
+
+with open("sample.wav", "rb") as audio:
+    response = requests.post(endpoint, params=params, headers=headers, data=audio.read(), timeout=120)
+
+response.raise_for_status()
+result = response.json()
+print(result["transcription"])
+```
+
+```javascript JavaScript
+import fetch from "node-fetch";
+import fs from "fs";
+
+const endpoint = "https://waves-api.smallest.ai/api/v1/pulse/get_text";
+const params = new URLSearchParams({
+  model: "pulse",
+  language: "en",
+  word_timestamps: "true",
+});
+
+const audioBuffer = fs.readFileSync("sample.wav");
+
+const response = await fetch(`${endpoint}?${params}`, {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.SMALLEST_API_KEY}`,
+    "Content-Type": "audio/wav",
+  },
+  body: audioBuffer,
+});
+
+if (!response.ok) throw new Error(await response.text());
+const data = await response.json();
+console.log(data.transcription);
+```
+</CodeGroup>
+
+### Method 2: Audio URL
+
+Provide a URL to an audio file hosted remotely. This is useful when your audio files are stored in cloud storage (S3, Google Cloud Storage, etc.) or accessible via HTTP/HTTPS:
+
+<CodeGroup>
+```bash cURL
+curl --request POST \
+  --url "https://waves-api.smallest.ai/api/v1/pulse/get_text?model=pulse&language=en&word_timestamps=true" \
+  --header "Authorization: Bearer $SMALLEST_API_KEY" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "url": "https://example.com/audio.mp3"
+  }'
+```
+
+```python Python
+import os
+import requests
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+endpoint = "https://waves-api.smallest.ai/api/v1/pulse/get_text"
+params = {
+    "model": "pulse",
+    "language": "en",
+    "word_timestamps": "true",
+}
+headers = {
+    "Authorization": f"Bearer {API_KEY}",
+    "Content-Type": "application/json",
+}
+body = {
+    "url": "https://example.com/audio.mp3"
+}
+
+response = requests.post(endpoint, params=params, headers=headers, json=body, timeout=120)
+response.raise_for_status()
+result = response.json()
+print(result["transcription"])
+```
+
+```javascript JavaScript
+import fetch from "node-fetch";
+
+const endpoint = "https://waves-api.smallest.ai/api/v1/pulse/get_text";
+const params = new URLSearchParams({
+  model: "pulse",
+  language: "en",
+  word_timestamps: "true",
+});
+
+const response = await fetch(`${endpoint}?${params}`, {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.SMALLEST_API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    url: "https://example.com/audio.mp3"
+  }),
+});
+
+if (!response.ok) throw new Error(await response.text());
+const data = await response.json();
+console.log(data.transcription);
+```
+</CodeGroup>
+
+## Example Response
+
+A successful request returns a JSON object with the transcription:
+
+```json
+{
+  "status": "success",
+  "transcription": "Hello, this is a test transcription.",
+  "words": [
+    {"start": 0.48, "end": 1.12, "word": "Hello,"},
+    {"start": 1.12, "end": 1.28, "word": "this"},
+    {"start": 1.28, "end": 1.44, "word": "is"},
+    {"start": 1.44, "end": 2.16, "word": "a"},
+    {"start": 2.16, "end": 2.96, "word": "test"},
+    {"start": 2.96, "end": 3.76, "word": "transcription."}
+  ],
+  "utterances": [
+    {"start": 0.48, "end": 3.76, "text": "Hello, this is a test transcription."}
+  ]
+}
+```
+
+## Next Steps
+
+- Learn about [supported audio formats](/v4.0.0/content/speech-to-text/pre-recorded/audio-formats).
+- Decide which enrichment options to enable in the [features guide](/v4.0.0/content/speech-to-text/pre-recorded/features).
+- Configure asynchronous callbacks with [webhooks](/v4.0.0/content/speech-to-text/pre-recorded/webhooks).
+- Review a full [code example](/v4.0.0/content/speech-to-text/pre-recorded/code-examples) here.
+

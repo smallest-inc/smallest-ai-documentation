@@ -1,0 +1,461 @@
+---
+title: Model Storage
+description: Optimize model storage and caching strategies for Lightning ASR
+---
+
+## Overview
+
+AI models for Lightning ASR are large files (20-30 GB) that significantly impact startup time. This guide covers strategies for efficient model storage and caching to minimize download time and enable fast scaling.
+
+## Storage Strategies
+
+### Strategy 1: Shared EFS Volume (Recommended)
+
+Best for production with autoscaling.
+
+**Advantages**:
+- Models downloaded once, shared across all pods
+- New pods start in 30-60 seconds
+- No storage duplication
+- Enables horizontal scaling
+
+**Implementation**:
+
+```yaml values.yaml
+models:
+  asrModelUrl: "https://example.com/model.bin"
+  volumes:
+    aws:
+      efs:
+        enabled: true
+        fileSystemId: "fs-0123456789abcdef"
+        namePrefix: "models"
+
+scaling:
+  auto:
+    enabled: true
+    lightningAsr:
+      hpa:
+        enabled: true
+        maxReplicas: 10
+```
+
+See [EFS Configuration](/kubernetes/storage/efs-configuration) for setup.
+
+### Strategy 2: Container Image with Baked Model
+
+Best for fixed deployments with infrequent updates.
+
+**Advantages**:
+- Fastest startup (model pre-loaded)
+- No external download required
+- Works offline
+
+**Disadvantages**:
+- Very large container images (20+ GB)
+- Slow image pulls
+- Updates require new image build
+
+**Implementation**:
+
+Build custom image:
+
+```dockerfile Dockerfile
+FROM quay.io/smallestinc/lightning-asr:latest
+
+RUN wget -O /app/models/model.bin https://example.com/model.bin
+
+ENV MODEL_PATH=/app/models/model.bin
+```
+
+Build and push:
+
+```bash
+docker build -t myregistry/lightning-asr:with-model .
+docker push myregistry/lightning-asr:with-model
+```
+
+Update values:
+
+```yaml values.yaml
+lightningAsr:
+  image: "myregistry/lightning-asr:with-model"
+
+models:
+  asrModelUrl: ""
+```
+
+### Strategy 3: EmptyDir Volume
+
+Best for development/testing only.
+
+**Advantages**:
+- Simple configuration
+- No external storage required
+
+**Disadvantages**:
+- Model downloaded on every pod start
+- Cannot scale beyond single node
+- Data lost on pod restart
+
+**Implementation**:
+
+```yaml values.yaml
+models:
+  asrModelUrl: "https://example.com/model.bin"
+  volumes:
+    aws:
+      efs:
+        enabled: false
+
+lightningAsr:
+  persistence:
+    enabled: false
+```
+
+Each pod downloads the model independently.
+
+### Strategy 4: Init Container with S3
+
+Best for AWS deployments without EFS.
+
+**Advantages**:
+- Fast downloads from S3 within AWS
+- No EFS cost
+- Works with ReadWriteOnce volumes
+
+**Disadvantages**:
+- Each pod downloads independently
+- Slower scaling than EFS
+- Requires S3 bucket
+
+**Implementation**:
+
+Upload model to S3:
+
+```bash
+aws s3 cp model.bin s3://my-bucket/models/model.bin
+```
+
+Create custom deployment with init container:
+
+```yaml
+initContainers:
+  - name: download-model
+    image: amazon/aws-cli
+    command:
+      - sh
+      - -c
+      - |
+        if [ ! -f /models/model.bin ]; then
+          aws s3 cp s3://my-bucket/models/model.bin /models/model.bin
+        fi
+    volumeMounts:
+      - name: model-cache
+        mountPath: /models
+    env:
+      - name: AWS_REGION
+        value: us-east-1
+```
+
+## Model Download Optimization
+
+### Parallel Downloads
+
+For multiple model files, download in parallel:
+
+```yaml
+lightningAsr:
+  env:
+    - name: MODEL_DOWNLOAD_WORKERS
+      value: "4"
+```
+
+### Resume on Failure
+
+Enable download resume for interrupted downloads:
+
+```yaml
+lightningAsr:
+  env:
+    - name: MODEL_DOWNLOAD_RESUME
+      value: "true"
+```
+
+### CDN Acceleration
+
+Use CloudFront for faster downloads:
+
+```yaml
+models:
+  asrModelUrl: "https://d111111abcdef8.cloudfront.net/model.bin"
+```
+
+## Model Versioning
+
+### Multiple Models
+
+Support multiple model versions:
+
+```yaml values.yaml
+models:
+  asrModelUrl: "https://example.com/model-v1.bin"
+  
+lightningAsr:
+  env:
+    - name: MODEL_VERSION
+      value: "v1"
+    - name: MODEL_CACHE_DIR
+      value: "/app/models/v1"
+```
+
+### Blue-Green Deployments
+
+Deploy new model version alongside old:
+
+```bash
+helm install smallest-v2 smallest-self-host/smallest-self-host \
+  -f values.yaml \
+  --set models.asrModelUrl="https://example.com/model-v2.bin" \
+  --set lightningAsr.namePrefix="lightning-asr-v2" \
+  --namespace smallest
+```
+
+Test v2, then switch traffic:
+
+```yaml
+apiServer:
+  env:
+    - name: LIGHTNING_ASR_BASE_URL
+      value: "http://lightning-asr-v2:2269"
+```
+
+## Storage Quotas
+
+### Limit Model Cache Size
+
+Prevent unbounded growth:
+
+```yaml
+lightningAsr:
+  persistence:
+    enabled: true
+    size: 100Gi
+
+  env:
+    - name: MODEL_CACHE_MAX_SIZE
+      value: "50GB"
+    - name: MODEL_CACHE_EVICTION
+      value: "lru"
+```
+
+### Monitor Storage Usage
+
+Check PVC usage:
+
+```bash
+kubectl get pvc -n smallest
+kubectl describe pvc models-aws-efs-pvc -n smallest
+```
+
+Check actual usage in pod:
+
+```bash
+kubectl exec -it <lightning-asr-pod> -n smallest -- df -h /app/models
+```
+
+## Pre-warming Models
+
+### Pre-download Before Scaling
+
+Download models before peak traffic:
+
+```bash
+kubectl create job model-preload \
+  --image=quay.io/smallestinc/lightning-asr:latest \
+  --namespace=smallest \
+  -- sh -c "wget -O /app/models/model.bin $MODEL_URL && exit 0"
+```
+
+### Scheduled Pre-warming
+
+Use CronJob for regular pre-warming:
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: model-preload
+  namespace: smallest
+spec:
+  schedule: "0 8 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: preload
+            image: quay.io/smallestinc/lightning-asr:latest
+            command:
+              - sh
+              - -c
+              - wget -O /app/models/model.bin $MODEL_URL || true
+            env:
+              - name: MODEL_URL
+                value: "https://example.com/model.bin"
+            volumeMounts:
+              - name: models
+                mountPath: /app/models
+          volumes:
+            - name: models
+              persistentVolumeClaim:
+                claimName: models-aws-efs-pvc
+          restartPolicy: OnFailure
+```
+
+## Model Integrity
+
+### Checksum Validation
+
+Verify model integrity after download:
+
+```yaml
+lightningAsr:
+  env:
+    - name: MODEL_CHECKSUM
+      value: "sha256:abc123..."
+    - name: MODEL_VALIDATE
+      value: "true"
+```
+
+### Automatic Retry
+
+Retry failed downloads:
+
+```yaml
+lightningAsr:
+  env:
+    - name: MODEL_DOWNLOAD_RETRIES
+      value: "3"
+    - name: MODEL_DOWNLOAD_TIMEOUT
+      value: "3600"
+```
+
+## Performance Comparison
+
+| Strategy | First Start | Subsequent Starts | Scaling Speed | Cost |
+|----------|-------------|-------------------|---------------|------|
+| **EFS Shared** | 5-10 min | 30-60 sec | Fast | Medium |
+| **Baked Image** | 3-5 min | 3-5 min | Medium | Low |
+| **EmptyDir** | 5-10 min | 5-10 min | Slow | Low |
+| **S3 Init** | 2-5 min | 2-5 min | Medium | Low |
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use EFS for Production" icon="check">
+    Always use shared storage (EFS) for production deployments with autoscaling.
+    
+    The cost savings from reduced download time and faster scaling far outweigh EFS costs.
+  </Accordion>
+
+  <Accordion title="Monitor Download Progress" icon="chart-line">
+    Watch logs during first deployment:
+    
+    ```bash
+    kubectl logs -f -l app=lightning-asr -n smallest
+    ```
+    
+    Look for download progress indicators.
+  </Accordion>
+
+  <Accordion title="Set Resource Limits" icon="gauge">
+    Ensure sufficient storage for models:
+    
+    ```yaml
+    models:
+      volumes:
+        aws:
+          efs:
+            enabled: true
+    
+    lightningAsr:
+      resources:
+        ephemeral-storage: "50Gi"
+    ```
+  </Accordion>
+
+  <Accordion title="Test Model Updates" icon="flask">
+    Test new models in separate deployment before updating production:
+    
+    ```bash
+    helm install test smallest-self-host/smallest-self-host \
+      --set models.asrModelUrl="new-model-url" \
+      --namespace smallest-test
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Model Download Stalled
+
+Check pod logs:
+
+```bash
+kubectl logs -l app=lightning-asr -n smallest --tail=100
+```
+
+Check network connectivity:
+
+```bash
+kubectl exec -it <pod> -n smallest -- wget --spider $MODEL_URL
+```
+
+### Insufficient Storage
+
+Check available space:
+
+```bash
+kubectl exec -it <pod> -n smallest -- df -h
+```
+
+Increase PVC size:
+
+```yaml
+models:
+  volumes:
+    aws:
+      efs:
+        enabled: true
+
+lightningAsr:
+  persistence:
+    size: 200Gi
+```
+
+### Model Corruption
+
+Delete cached model and restart:
+
+```bash
+kubectl exec -it <pod> -n smallest -- rm -rf /app/models/*
+kubectl delete pod <pod> -n smallest
+```
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="EFS Configuration" icon="folder" href="/kubernetes/storage/efs-configuration">
+    Set up EFS for shared model storage
+  </Card>
+
+  <Card title="Redis Persistence" icon="database" href="/kubernetes/storage/redis-persistence">
+    Configure Redis data persistence
+  </Card>
+
+  <Card title="HPA Configuration" icon="chart-line" href="/kubernetes/autoscaling/hpa-configuration">
+    Enable autoscaling with fast pod startup
+  </Card>
+</CardGroup>
+

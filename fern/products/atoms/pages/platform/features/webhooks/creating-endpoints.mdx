@@ -1,0 +1,141 @@
+---
+title: "Creating Webhook Endpoints"
+sidebarTitle: "Creating Endpoints"
+description: "Set up endpoints to receive webhook data from Atoms."
+---
+
+Before you can receive webhooks, you need to create endpoint configurations in Atoms. This page walks you through the process.
+
+---
+
+## What You Need
+
+Before starting:
+
+1. **A URL that can receive POST requests** — Your server endpoint
+2. **HTTPS** — Required for security
+3. **200 OK response** — Endpoint must acknowledge receipt
+
+---
+
+## Creating an Endpoint
+
+→ **NEEDS PLATFORM INFO:** Detailed endpoint creation interface
+
+### Step 1: Navigate to Webhooks
+
+In your Atoms dashboard, find the Webhooks section.
+
+### Step 2: Click Create
+
+Click **"Create Endpoint"** or **"Add Webhook"**.
+
+### Step 3: Configure Endpoint
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| **Name** | Descriptive label | "CRM Integration" |
+| **URL** | Your endpoint URL | https://api.yoursite.com/webhooks/atoms |
+| **Secret** | (Optional) Signing secret | For payload verification |
+
+### Step 4: Save
+
+Save the endpoint configuration.
+
+---
+
+## Endpoint Requirements
+
+### HTTPS Required
+
+Your endpoint must use HTTPS. HTTP endpoints are not supported for security.
+
+### Respond with 200
+
+Your endpoint must return HTTP 200 to acknowledge receipt:
+
+```javascript
+// Example Node.js endpoint
+app.post('/webhooks/atoms', (req, res) => {
+  const payload = req.body;
+  
+  // Process the webhook...
+  processWebhook(payload);
+  
+  // Acknowledge receipt
+  res.status(200).send('OK');
+});
+```
+
+### Timeout Handling
+
+Atoms waits a limited time for response. If your processing takes long:
+1. Acknowledge immediately
+2. Process asynchronously
+
+---
+
+## Signing and Verification
+
+To verify webhooks are actually from Atoms:
+
+1. Set a **Secret** when creating the endpoint
+2. Atoms signs payloads with this secret
+3. Your endpoint verifies the signature
+
+→ **NEEDS PLATFORM INFO:** Signature verification details
+
+---
+
+## Testing Your Endpoint
+
+### Before Connecting
+
+1. Create your endpoint on your server
+2. Test it can receive POST requests
+3. Verify it returns 200
+
+### After Creating in Atoms
+
+1. Assign endpoint to an agent (Webhook Tab)
+2. Select events to subscribe
+3. Make a test call
+4. Check your endpoint received the data
+
+---
+
+## Multiple Endpoints
+
+You can create multiple endpoints for different purposes:
+
+| Endpoint | Purpose |
+|----------|---------|
+| CRM Integration | Send to Salesforce |
+| Analytics | Send to data warehouse |
+| Notifications | Trigger Slack alerts |
+
+Assign different endpoints to different agents as needed.
+
+---
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Not receiving webhooks | Verify endpoint URL, check firewall |
+| Getting 401/403 | Check authentication requirements |
+| Timeout errors | Process async, respond quickly |
+| Missing data | Verify correct events subscribed |
+
+---
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="Event Payloads" icon="code" href="/platform/features/webhooks/event-payloads">
+    Understand data schemas
+  </Card>
+  <Card title="Use Cases" icon="lightbulb" href="/platform/features/webhooks/use-cases">
+    Common webhook patterns
+  </Card>
+</CardGroup>

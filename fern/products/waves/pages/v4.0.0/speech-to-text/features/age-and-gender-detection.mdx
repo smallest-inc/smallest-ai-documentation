@@ -1,0 +1,40 @@
+---
+title: 'Age & gender detection'
+description: 'Predict demographic attributes alongside every transcription'
+---
+
+<Badge color="green">Pre-Recorded</Badge>
+
+## Enabling age & gender detection
+
+Append `age_detection=true` and/or `gender_detection=true` to your Pulse STT query string. You can toggle them independently as well.
+
+### Sample request
+
+```bash
+curl --request POST \
+  --url "https://waves-api.smallest.ai/api/v1/pulse/get_text?model=pulse&language=en&age_detection=true&gender_detection=true" \
+  --header "Authorization: Bearer $SMALLEST_API_KEY" \
+  --header "Content-Type: audio/wav" \
+  --data-binary "@/path/to/audio.wav"
+```
+
+<Note>
+Age and gender detection are currently supported only for Pre-Recorded API. Real-Time API support is coming soon.
+</Note>
+
+## Output format & field of interest
+
+Responses include top-level `age` (`infant`, `teenager`, `adult`, `old`) and `gender` (`male`, `female`) fields that describe the dominant speaker in the processed segment. Store these fields next to each transcript to power demographic analytics or routing logic.
+
+### Sample response
+
+```json
+{
+  "status": "success",
+  "transcription": "Hello world.",
+  "age": "adult",
+  "gender": "male"
+}
+```
+

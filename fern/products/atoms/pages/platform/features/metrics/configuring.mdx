@@ -1,0 +1,295 @@
+---
+title: "Configuring Metrics"
+sidebarTitle: "Configuring"
+description: "Set up custom post-call metrics to track what matters for your business."
+---
+
+This guide walks you through creating custom metrics that are automatically extracted from every call.
+
+---
+
+## Accessing Metric Configuration
+
+<Steps>
+  ### Open Your Agent
+  
+  Navigate to the agent you want to configure metrics for.
+
+  ### Find Post Call Metrics
+  
+  In the right panel (or settings), locate **Post Call Metrics**.
+
+  ### Add or Edit Metrics
+  
+  Click **+ Add Metric** or edit existing ones.
+</Steps>
+
+---
+
+## Creating a Metric
+
+<Steps>
+  ### Choose Metric Type
+  
+  | Type | Use When |
+  |------|----------|
+  | **Categorical** | Fixed set of possible values |
+  | **Numeric** | Number or score |
+  | **Boolean** | Yes/No question |
+  | **Text** | Free-form extraction |
+
+  ### Name Your Metric
+  
+  Give it a clear, descriptive name:
+  - ✅ "Lead Status"
+  - ✅ "Issue Resolved"
+  - ❌ "Metric1"
+  - ❌ "Status"
+
+  ### Define the Extraction Prompt
+  
+  Tell the AI what to look for. Be specific:
+  
+  ```
+  Based on the conversation, what is the caller's lead status?
+  
+  Consider:
+  - Did they express interest in purchasing?
+  - Do they have budget and timeline?
+  - Are they just researching?
+  
+  Respond with one of: Hot, Warm, Cold, Not Qualified
+  ```
+
+  ### Set Options (for Categorical)
+  
+  Define the possible values:
+  - Hot
+  - Warm
+  - Cold
+  - Not Qualified
+
+  ### Save
+  
+  Click **Save** to enable the metric.
+</Steps>
+
+---
+
+## Metric Configuration Examples
+
+### Lead Status (Categorical)
+
+```
+Name: Lead Status
+Type: Categorical
+Options: Hot, Warm, Cold, Not Qualified
+
+Extraction Prompt:
+Based on the conversation, classify this lead:
+
+HOT - Expressed strong interest, has budget, ready to buy soon
+WARM - Interested but needs more info or time
+COLD - Minimal interest, just gathering information  
+NOT QUALIFIED - Wrong fit, no budget, or not decision maker
+
+Only use one of these exact values.
+```
+
+### Issue Resolved (Boolean)
+
+```
+Name: Issue Resolved
+Type: Boolean
+
+Extraction Prompt:
+Was the caller's issue fully resolved during this call?
+
+Consider:
+- Did the agent provide a solution?
+- Did the caller confirm the issue was fixed?
+- Did the call end without resolution?
+
+Respond with: true or false
+```
+
+### Satisfaction Score (Numeric)
+
+```
+Name: Implied Satisfaction
+Type: Numeric (1-5)
+
+Extraction Prompt:
+Based on the caller's tone and statements, estimate their 
+satisfaction level from 1 to 5:
+
+1 - Very Dissatisfied (angry, complained, threatened to leave)
+2 - Dissatisfied (frustrated, unhappy with resolution)
+3 - Neutral (matter-of-fact, no strong feelings expressed)
+4 - Satisfied (thanked agent, issue resolved)
+5 - Very Satisfied (expressed gratitude, praised service)
+
+Respond with just the number.
+```
+
+### Issue Summary (Text)
+
+```
+Name: Issue Summary
+Type: Text
+
+Extraction Prompt:
+Summarize the main issue or reason for this call in 1-2 sentences.
+Focus on what the caller needed help with.
+Be concise and factual.
+```
+
+### Pain Points (Text)
+
+```
+Name: Pain Points
+Type: Text
+
+Extraction Prompt:
+What problems, frustrations, or challenges did the caller mention?
+List them as bullet points. If none mentioned, respond with "None identified."
+```
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Be Specific in Prompts" icon="bullseye">
+    Vague prompts → inconsistent results
+    
+    **Bad:**
+    ```
+    What's the lead status?
+    ```
+    
+    **Good:**
+    ```
+    Based on the conversation, classify the lead status:
+    - HOT: Strong buying signals, has budget, immediate need
+    - WARM: Interested but not urgent, may need nurturing
+    - COLD: Low interest, just researching
+    - NOT QUALIFIED: Wrong fit or no decision authority
+    ```
+  </Accordion>
+  
+  <Accordion title="Define Clear Categories" icon="list">
+    For categorical metrics:
+    - Use distinct, non-overlapping options
+    - Define what each option means
+    - Limit to 5-7 options max
+    
+    **Too many options:**
+    ```
+    Very Hot, Hot, Somewhat Hot, Warm, Lukewarm, 
+    Cool, Cold, Very Cold, Frozen, Not Qualified
+    ```
+    
+    **Just right:**
+    ```
+    Hot, Warm, Cold, Not Qualified
+    ```
+  </Accordion>
+  
+  <Accordion title="Include Edge Cases" icon="question">
+    Tell the AI what to do when things are unclear:
+    
+    ```
+    If the sentiment cannot be determined (call too short, 
+    no clear indicators), respond with "Neutral"
+    ```
+  </Accordion>
+  
+  <Accordion title="Test with Real Calls" icon="flask">
+    After creating a metric:
+    1. Process a few test calls
+    2. Review the extracted values
+    3. Adjust the prompt if needed
+    4. Repeat until accurate
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Metric Prompt Templates
+
+### Intent Classification
+
+```
+What was the primary reason for this call?
+
+BILLING - Questions about invoices, charges, payments
+SUPPORT - Technical issues, troubleshooting, how-to
+SALES - Product inquiries, pricing, purchasing
+ACCOUNT - Password, access, account changes
+GENERAL - Other inquiries
+
+Respond with one category.
+```
+
+### Sentiment Analysis
+
+```
+What was the caller's overall sentiment?
+
+POSITIVE - Happy, grateful, satisfied
+NEUTRAL - Matter-of-fact, no strong emotion
+NEGATIVE - Frustrated, angry, disappointed
+
+Consider their tone throughout the call, especially 
+at the end. Respond with one sentiment.
+```
+
+### Competitor Mentions
+
+```
+Did the caller mention any competitor products or companies?
+
+If yes, list the competitor names mentioned.
+If no competitors were mentioned, respond with "None"
+```
+
+### Next Steps
+
+```
+What follow-up action, if any, was agreed upon?
+
+DEMO_SCHEDULED - Demo meeting was booked
+SEND_INFO - Agent will send information
+CALLBACK - Agent or team will call back
+ESCALATED - Transferred to specialist/manager
+RESOLVED - No follow-up needed
+NONE - Call ended without clear next step
+
+Respond with one value.
+```
+
+---
+
+## Bulk Configuration
+
+If you have many metrics to set up:
+
+1. Configure on one agent
+2. Export the configuration
+3. Import to other agents
+
+Or use the API to programmatically create metrics across agents.
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="View Analytics" icon="chart-line" href="/platform/features/metrics/viewing-analytics">
+    See your metrics in the dashboard
+  </Card>
+  <Card title="Understanding Data" icon="database" href="/platform/features/metrics/understanding-data">
+    Interpret your metrics effectively
+  </Card>
+</CardGroup>

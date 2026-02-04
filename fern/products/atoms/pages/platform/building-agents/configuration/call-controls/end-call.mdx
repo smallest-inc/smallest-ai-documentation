@@ -1,0 +1,143 @@
+---
+title: "End Call Configuration"
+sidebarTitle: "End Call"
+description: "Configure how and when your agent ends conversations."
+---
+
+Every call needs to end eventually. How it ends matters — a graceful conclusion leaves callers satisfied, while an abrupt cutoff frustrates them.
+
+End call settings control when your agent concludes conversations and what happens when it does.
+
+---
+
+## How End Call Works
+
+### In Single Prompt Agents
+
+End call behavior is defined in your prompt's "End Call Conditions" section. You write natural language rules:
+
+```
+End the call when:
+- Customer confirms their issue is resolved
+- Customer explicitly asks to end the call
+- Customer says they have no more questions
+```
+
+The AI interprets these conditions and ends the call when appropriate.
+
+### In Convo Flow Agents
+
+You explicitly place **End Call** nodes in your workflow. When the conversation reaches one of these nodes, the call ends.
+
+```
+Confirmation → End Call (Disposition: Successful)
+Not Interested → End Call (Disposition: Unsuccessful)
+```
+
+---
+
+## Configuring End Behavior
+
+### Farewell Message
+
+What the agent says before hanging up. Make it warm and professional:
+
+```
+Thanks for calling TechStore! We hope we were able to help. 
+Have a wonderful day!
+```
+
+Avoid abrupt endings like "Goodbye" followed by immediate disconnection.
+
+### Disposition Tagging
+
+Tag call outcomes for analytics:
+
+| Disposition | Meaning |
+|-------------|---------|
+| **Successful** | Goal achieved — booking made, question answered, issue resolved |
+| **Unsuccessful** | Goal not achieved — not interested, couldn't help, wrong number |
+| **Transferred** | Handed off to a human agent |
+| **Voicemail** | Left a message (outbound only) |
+| **No Answer** | Caller didn't pick up (outbound only) |
+| **Callback Requested** | Caller asked for a follow-up call |
+
+Dispositions appear in your analytics and help measure agent performance.
+
+---
+
+## Automatic End Conditions
+
+Beyond explicit end triggers, calls can end automatically:
+
+### Silence Timeout
+
+If the caller stops responding for too long, the agent should handle it gracefully:
+
+```
+"Hello? Are you still there?"
+[Wait 5 seconds]
+"I haven't heard from you, so I'll let you go. 
+Feel free to call back if you need anything!"
+```
+
+Configure the timeout duration and the agent's response.
+
+### Max Call Duration
+
+Set a maximum call length as a safety net. Very long calls may indicate the conversation is stuck or the caller is not engaging productively.
+
+### Error Conditions
+
+What happens if something breaks — API failure, voice synthesis error, etc. Configure fallback behavior:
+
+```
+"I'm experiencing a technical issue. Let me transfer you to someone who can help."
+```
+
+---
+
+## Post-Call Actions
+
+After a call ends, you can trigger actions:
+
+**CRM Updates**
+Log the call outcome, duration, and summary to your CRM.
+
+**Follow-up Emails**
+Send confirmation emails or summaries to the caller.
+
+**Ticket Creation**
+Create support tickets for unresolved issues.
+
+**Analytics**
+Track custom metrics and conversion events.
+
+In Convo Flow agents, use **Post-Call API** nodes for these actions. In Single Prompt agents, configure them in the integrations panel.
+
+---
+
+<Accordion title="Best Practices">
+**Always give a proper goodbye.** Even if the caller says "thanks, bye" quickly, have the agent say something warm before disconnecting.
+
+**Don't end too early.** Make sure your conditions don't trigger on partial confirmations. "Yeah, I think so" isn't the same as "Yes, I'm all set."
+
+**Don't end too late.** If the caller clearly wants to go, let them. Repeated "is there anything else?" after they've said goodbye is annoying.
+
+**Handle silence gracefully.** Background noise, thinking pauses, and distractions happen. Give callers a chance before assuming they're gone.
+
+**Tag dispositions accurately.** Good analytics depend on honest categorization. Don't mark failed calls as successful.
+</Accordion>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Transfer Call" icon="phone-arrow-right" href="/platform/building-agents/configuration/call-controls/transfer-call">
+    Hand calls off to humans
+  </Card>
+  <Card title="Testing" icon="flask" href="/platform/building-agents/testing-management/testing">
+    Test your end call behavior
+  </Card>
+</CardGroup>

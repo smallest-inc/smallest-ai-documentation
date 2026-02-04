@@ -1,0 +1,527 @@
+---
+title: Logs Analysis
+description: Interpret logs and error messages from Smallest Self-Host
+---
+
+## Overview
+
+Understanding log messages is crucial for diagnosing issues. This guide helps you interpret logs from each component and identify common error patterns.
+
+## Log Levels
+
+All components use standard log levels:
+
+| Level | Description | Example |
+|-------|-------------|---------|
+| `DEBUG` | Detailed diagnostic info | Variable values, function calls |
+| `INFO` | Normal operation events | Request received, model loaded |
+| `WARNING` | Potential issues | Slow response, retry attempt |
+| `ERROR` | Error that needs attention | Failed request, connection error |
+| `CRITICAL` | Severe error | Service crash, unrecoverable error |
+
+## Lightning ASR Logs
+
+### Successful Startup
+
+```log
+INFO: Starting Lightning ASR v1.0.0
+INFO: GPU detected: NVIDIA A10 (24GB)
+INFO: Downloading model from URL...
+INFO: Model downloaded: 23.5GB
+INFO: Loading model into GPU memory...
+INFO: Model loaded successfully (5.2GB GPU memory)
+INFO: Warmup inference completed in 3.2s
+INFO: Server ready on port 2269
+```
+
+### Request Processing
+
+```log
+INFO: Request received: req_abc123
+DEBUG: Audio duration: 60.5s, sample_rate: 44100
+DEBUG: Preprocessing audio...
+DEBUG: Running inference...
+INFO: Transcription completed in 3.1s (RTF: 0.05x)
+INFO: Confidence: 0.95
+```
+
+### Common Errors
+
+<AccordionGroup>
+  <Accordion title="GPU Not Found" icon="display">
+    ```log
+    ERROR: No CUDA-capable device detected
+    ERROR: nvidia-smi command not found
+    CRITICAL: Cannot initialize GPU, exiting
+    ```
+    
+    **Cause**: GPU not available or drivers not installed
+    
+    **Solution**:
+    - Check `nvidia-smi` works
+    - Verify GPU device plugin (Kubernetes)
+    - Check NVIDIA Container Toolkit (Docker)
+  </Accordion>
+
+  <Accordion title="Out of GPU Memory" icon="memory">
+    ```log
+    ERROR: CUDA out of memory
+    ERROR: Tried to allocate 2.5GB but only 1.2GB available
+    WARNING: Reducing batch size
+    ```
+    
+    **Cause**: Not enough GPU memory
+    
+    **Solution**:
+    - Reduce concurrent requests
+    - Use larger GPU (A10 vs T4)
+    - Scale horizontally (more pods)
+  </Accordion>
+
+  <Accordion title="Model Download Failed" icon="download">
+    ```log
+    INFO: Downloading model from https://example.com/model.bin
+    WARNING: Download attempt 1 failed: Connection timeout
+    WARNING: Retrying download...
+    ERROR: Download failed after 3 attempts
+    ```
+    
+    **Cause**: Network issues, invalid URL, disk full
+    
+    **Solution**:
+    - Verify MODEL_URL
+    - Check disk space: `df -h`
+    - Test URL: `curl -I $MODEL_URL`
+    - Use shared storage (EFS)
+  </Accordion>
+
+  <Accordion title="Audio Processing Error" icon="waveform">
+    ```log
+    ERROR: Failed to process audio: req_xyz789
+    ERROR: Unsupported audio format: audio/webm
+    ERROR: Audio file corrupted or invalid
+    ```
+    
+    **Cause**: Invalid audio file
+    
+    **Solution**:
+    - Verify audio format (WAV, MP3, FLAC supported)
+    - Check file is not corrupted
+    - Ensure proper sample rate (16kHz+)
+  </Accordion>
+</AccordionGroup>
+
+## API Server Logs
+
+### Successful Startup
+
+```log
+INFO: Starting API Server v1.0.0
+INFO: Connecting to Lightning ASR at http://lightning-asr:2269
+INFO: Connected to Lightning ASR (2 replicas)
+INFO: Connecting to License Proxy at http://license-proxy:3369
+INFO: License validated
+INFO: API server listening on port 7100
+```
+
+### Request Handling
+
+```log
+INFO: POST /v1/listen from 10.0.1.5
+DEBUG: Request ID: req_abc123
+DEBUG: Audio URL: https://example.com/audio.wav
+DEBUG: Routing to Lightning ASR pod: lightning-asr-0
+INFO: Response time: 3.2s
+INFO: Status: 200 OK
+```
+
+### Common Errors
+
+<AccordionGroup>
+  <Accordion title="Authentication Failed" icon="key">
+    ```log
+    WARNING: Invalid license key from 10.0.1.5
+    WARNING: Missing Authorization header
+    ERROR: License validation failed: expired
+    ```
+    
+    **Cause**: Invalid, missing, or expired license key
+    
+    **Solution**:
+    - Verify `Authorization: Token <key>` header
+    - Check license key is correct
+    - Renew expired license
+  </Accordion>
+
+  <Accordion title="No ASR Workers" icon="server">
+    ```log
+    ERROR: No Lightning ASR workers available
+    WARNING: Request queued: req_abc123
+    WARNING: Queue size: 15
+    ```
+    
+    **Cause**: All Lightning ASR pods busy or down
+    
+    **Solution**:
+    - Check Lightning ASR pods: `kubectl get pods`
+    - Scale up replicas
+    - Check HPA configuration
+  </Accordion>
+
+  <Accordion title="Request Timeout" icon="clock">
+    ```log
+    ERROR: Request timeout after 300s
+    ERROR: Lightning ASR pod not responding: lightning-asr-0
+    WARNING: Retrying with different pod
+    ```
+    
+    **Cause**: Lightning ASR overloaded or crashed
+    
+    **Solution**:
+    - Check Lightning ASR logs
+    - Increase timeout
+    - Scale up pods
+  </Accordion>
+</AccordionGroup>
+
+## License Proxy Logs
+
+### Successful Validation
+
+```log
+INFO: Starting License Proxy v1.0.0
+INFO: License key loaded
+INFO: Connecting to console-api.smallest.ai
+INFO: License validated successfully
+INFO: License valid until: 2025-12-31T23:59:59Z
+INFO: Grace period: 24 hours
+INFO: Server listening on port 3369
+```
+
+### Usage Reporting
+
+```log
+DEBUG: Reporting usage batch: 150 requests
+DEBUG: Total duration: 3600s
+DEBUG: Features: [streaming, punctuation]
+INFO: Usage reported successfully
+```
+
+### Common Errors
+
+<AccordionGroup>
+  <Accordion title="License Validation Failed" icon="certificate">
+    ```log
+    ERROR: License validation failed: Invalid license key
+    ERROR: License server returned 401 Unauthorized
+    CRITICAL: Cannot start without valid license
+    ```
+    
+    **Cause**: Invalid or expired license
+    
+    **Solution**:
+    - Verify LICENSE_KEY is correct
+    - Check license hasn't expired
+    - Contact support@smallest.ai
+  </Accordion>
+
+  <Accordion title="Connection Failed" icon="network-wired">
+    ```log
+    WARNING: Connection to console-api.smallest.ai failed
+    WARNING: Connection timeout after 10s
+    INFO: Using cached validation
+    INFO: Grace period active (23h remaining)
+    ```
+    
+    **Cause**: Network connectivity issue
+    
+    **Solution**:
+    - Test: `curl https://console-api.smallest.ai`
+    - Check firewall allows HTTPS
+    - Restore connectivity before grace period expires
+  </Accordion>
+
+  <Accordion title="Grace Period Expiring" icon="hourglass-end">
+    ```log
+    WARNING: Grace period expires in 1 hour
+    WARNING: Cannot connect to license server
+    ERROR: Grace period expired
+    CRITICAL: Service will stop accepting requests
+    ```
+    
+    **Cause**: Extended network outage
+    
+    **Solution**:
+    - Restore network connectivity immediately
+    - Check firewall rules
+    - Contact support if persistent
+  </Accordion>
+</AccordionGroup>
+
+## Redis Logs
+
+### Normal Operation
+
+```log
+Ready to accept connections
+Client connected from 10.0.1.5:45678
+DB 0: 1523 keys (expires: 0)
+```
+
+### Common Errors
+
+<AccordionGroup>
+  <Accordion title="Memory Limit Reached" icon="memory">
+    ```log
+    WARNING: Memory usage: 95%
+    ERROR: OOM command not allowed when used memory > 'maxmemory'
+    ```
+    
+    **Solution**:
+    - Increase memory limit
+    - Enable eviction policy
+    - Clear old keys
+  </Accordion>
+
+  <Accordion title="Persistence Issues" icon="floppy-disk">
+    ```log
+    ERROR: Failed writing the RDB file
+    ERROR: Disk is full
+    ```
+    
+    **Solution**:
+    - Increase disk space
+    - Disable persistence if not needed
+    - Clean up old snapshots
+  </Accordion>
+</AccordionGroup>
+
+## Log Pattern Analysis
+
+### Error Rate Analysis
+
+Count errors in last 1000 lines:
+
+```bash
+kubectl logs <pod> --tail=1000 | grep -c "ERROR"
+```
+
+Group errors by type:
+
+```bash
+kubectl logs <pod> | grep "ERROR" | sort | uniq -c | sort -rn
+```
+
+### Performance Analysis
+
+Extract response times:
+
+```bash
+kubectl logs <pod> | grep "Response time" | awk '{print $NF}' | sort -n
+```
+
+Calculate average:
+
+```bash
+kubectl logs <pod> | grep "Response time" | awk '{sum+=$NF; count++} END {print sum/count}'
+```
+
+### Request Tracking
+
+Follow a specific request ID:
+
+```bash
+kubectl logs <pod> | grep "req_abc123"
+```
+
+Across all pods:
+
+```bash
+kubectl logs -l app=lightning-asr | grep "req_abc123"
+```
+
+## Log Aggregation
+
+### Using stern
+
+Install stern:
+
+```bash
+brew install stern
+```
+
+Follow logs from all Lightning ASR pods:
+
+```bash
+stern lightning-asr -n smallest
+```
+
+Filter by pattern:
+
+```bash
+stern lightning-asr -n smallest --grep "ERROR"
+```
+
+### Using Loki (if installed)
+
+Query logs via LogQL:
+
+```logql
+{app="lightning-asr"} |= "ERROR"
+{app="api-server"} |= "req_abc123"
+rate({app="lightning-asr"}[5m])
+```
+
+## Structured Logging
+
+### Parse JSON Logs
+
+If logs are in JSON format:
+
+```bash
+kubectl logs <pod> | jq 'select(.level=="ERROR")'
+kubectl logs <pod> | jq 'select(.duration > 1000)'
+kubectl logs <pod> | jq '.message' -r
+```
+
+### Filter by Field
+
+```bash
+kubectl logs <pod> | jq 'select(.request_id=="req_abc123")'
+kubectl logs <pod> | jq 'select(.component=="license_proxy")'
+```
+
+## Log Retention
+
+### Configure Log Rotation
+
+Docker:
+
+```yaml docker-compose.yml
+services:
+  lightning-asr:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+Kubernetes:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lightning-asr
+spec:
+  containers:
+  - name: lightning-asr
+    imagePullPolicy: Always
+```
+
+Kubernetes automatically rotates logs via kubelet.
+
+### Export Logs
+
+Save logs for analysis:
+
+```bash
+kubectl logs <pod> > logs.txt
+kubectl logs <pod> --since=1h > logs-last-hour.txt
+kubectl logs <pod> --since-time=2024-01-15T10:00:00Z > logs-since.txt
+```
+
+## Debugging Log Issues
+
+### No Logs Appearing
+
+Check pod is running:
+
+```bash
+kubectl get pods -n smallest
+kubectl describe pod <pod-name>
+```
+
+Check stdout/stderr:
+
+```bash
+kubectl exec -it <pod> -- sh -c "ls -la /proc/1/fd/"
+```
+
+### Logs Truncated
+
+Increase log size limits:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    kubernetes.io/psp: privileged
+spec:
+  containers:
+  - name: app
+    env:
+    - name: LOG_MAX_SIZE
+      value: "100M"
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Structured Logging" icon="code">
+    Prefer JSON format for easier parsing:
+    
+    ```json
+    {
+      "timestamp": "2024-01-15T10:30:00Z",
+      "level": "ERROR",
+      "message": "Request failed",
+      "request_id": "req_abc123",
+      "duration_ms": 3200
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Include Context" icon="info">
+    Always include relevant context in logs:
+    
+    - Request ID
+    - Component name
+    - Timestamp
+    - User/session info (if applicable)
+  </Accordion>
+
+  <Accordion title="Set Appropriate Levels" icon="layer-group">
+    Use correct log levels:
+    
+    - DEBUG: Development only
+    - INFO: Normal operation
+    - WARNING: Potential issues
+    - ERROR: Actual problems
+    - CRITICAL: Service-breaking issues
+  </Accordion>
+
+  <Accordion title="Aggregate Logs" icon="database">
+    Use centralized logging:
+    
+    - ELK Stack (Elasticsearch, Logstash, Kibana)
+    - Loki + Grafana
+    - CloudWatch Logs (AWS)
+    - Cloud Logging (GCP)
+  </Accordion>
+</AccordionGroup>
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Common Issues" icon="circle-question" href="/troubleshooting/common-issues">
+    Quick solutions to frequent problems
+  </Card>
+
+  <Card title="Debugging Guide" icon="bug" href="/troubleshooting/debugging-guide">
+    Advanced debugging techniques
+  </Card>
+</CardGroup>
+

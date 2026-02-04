@@ -1,0 +1,210 @@
+---
+title: "Quick Start"
+sidebarTitle: "Quick Start"
+description: "Create your first Convo Flow agent in under 15 minutes."
+---
+
+This guide walks you through creating a working Convo Flow agent. By the end, you'll have a multi-step conversation flow you can actually call and test.
+
+---
+
+## Step 1: Create Your Agent
+
+From your dashboard, click **Create Agent** in the top-right corner.
+
+<Frame caption="Dashboard with Create Agent button">
+  <img src="/images/homepage.png" alt="Create Agent button on dashboard" />
+</Frame>
+
+---
+
+## Step 2: Fill In Basic Details
+
+A modal appears asking for basic information:
+
+<Frame caption="Create Agent modal">
+  <img src="/images/agent-modal.png" alt="Create Agent modal" />
+</Frame>
+
+| Field | What to Enter |
+|-------|---------------|
+| **Agent Name** | Something descriptive — "Appointment Reminder", "Lead Qualifier", etc. |
+| **Call Type** | **Outbound** (agent makes calls) or **Inbound** (customers call in) |
+| **Voice** | Click to preview voices, pick one that matches your brand |
+| **Language** | Primary language for the conversation |
+
+---
+
+## Step 3: Select Conversational Flow
+
+Choose **Conversational flow agent** — it's labeled "For stronger guardrails".
+
+<Frame caption="Agent type selection">
+  <img src="/images/select-template.png" alt="Choosing Convo Flow" />
+</Frame>
+
+This gives you access to the visual workflow builder.
+
+---
+
+## Step 4: Choose a Starting Point
+
+**Start from Scratch**
+Opens a blank canvas with just a Start node. Best when you have a specific flow in mind.
+
+**Use a Template**
+Pick a pre-built flow for your industry — Healthcare, E-commerce, Real Estate, Banking, Sales. Templates come with nodes and branches already configured that you can customize.
+
+<Tip>
+Even if your use case is unique, starting from a template is often faster. Delete what you don't need, keep what works.
+</Tip>
+
+---
+
+## Step 5: Create the Agent
+
+Click **Create agent**. 
+
+Atoms processes your configuration (about 30 seconds), then drops you into the **Workflow Canvas**.
+
+---
+
+## Step 6: Explore the Canvas
+
+<Frame caption="The workflow canvas">
+  <img src="/images/workflow.png" alt="Workflow canvas interface" />
+</Frame>
+
+Take a moment to orient yourself:
+
+**Left Panel** — Node palette. This is where you drag nodes from.
+
+**Center** — Your workflow canvas. You'll see a Start node (or a template flow if you picked one).
+
+**Right Panel** — Node configuration. Click any node to see its settings here.
+
+**Top Bar** — Test Agent button, Conversation Logs, Lock Agent toggle.
+
+---
+
+## Step 7: Add Your First Node
+
+Let's build a simple greeting:
+
+1. From the left panel, drag a **Default Node** onto the canvas
+2. Click the node to select it
+3. In the right panel, find the **Prompt** field
+4. Write your greeting:
+
+```
+Hi, this is an automated call from Dr. Smith's office. 
+Am I speaking with {{customer_name}}?
+```
+
+The `{{customer_name}}` is a variable that gets replaced with actual data during the call.
+
+---
+
+## Step 8: Connect the Nodes
+
+Draw a line from your Start node to your greeting node:
+
+1. Hover over the Start node's output handle (small circle on the right)
+2. Click and drag to your greeting node's input handle (circle on the left)
+3. Release to create the connection
+
+Your flow now has a path: Start → Greeting.
+
+---
+
+## Step 9: Add Branches
+
+The caller will respond to your greeting. You need to handle different responses:
+
+1. With your greeting node selected, find **Branches** in the right panel
+2. Click **+ Add Branch**
+3. Configure the first branch:
+   - **Name:** "Confirmed"
+   - **Condition:** "User confirms their identity"
+   - **Next Node:** (we'll create this next)
+
+4. Add another branch:
+   - **Name:** "Wrong Person"
+   - **Condition:** "User says it's the wrong number"
+
+5. Add a fallback:
+   - **Name:** "Unclear"
+   - **Condition:** "Anything else"
+
+---
+
+## Step 10: Build Out the Flow
+
+Now add nodes for each branch:
+
+**For "Confirmed"** — Add a Default Node with the appointment details:
+```
+Great! I'm calling to remind you about your appointment on 
+{{appointment_date}} at {{appointment_time}}. 
+Would you like to confirm or reschedule?
+```
+
+**For "Wrong Person"** — Add an End Call Node with an apology:
+```
+I apologize for the confusion. I must have the wrong number. 
+Have a great day!
+```
+
+**For "Unclear"** — Loop back to the greeting with a clarification:
+```
+I'm sorry, I didn't quite catch that. 
+Am I speaking with {{customer_name}}?
+```
+
+Connect each branch to its corresponding node.
+
+---
+
+## Step 11: Add an End Point
+
+Every path needs to end somewhere. Drag an **End Call** node and connect it to successful conversation completions:
+
+```
+Perfect! Your appointment is confirmed for {{appointment_date}} 
+at {{appointment_time}}. We'll see you then. Have a wonderful day!
+```
+
+Set the **Disposition** to "Successful" so you can track outcomes.
+
+---
+
+## Step 12: Test Your Flow
+
+Click **Test Agent** in the top bar.
+
+1. Choose your testing method (web call or phone)
+2. Walk through the conversation as a customer would
+3. Try different paths — confirm identity, say wrong number, give unclear responses
+
+After testing, check **Conversation Logs** to see exactly how the AI interpreted responses and which paths it took.
+
+---
+
+## You're Live!
+
+Your Convo Flow agent is ready. From here, you can:
+
+<CardGroup cols={2}>
+  <Card title="Master Nodes" icon="sitemap" href="/platform/building-agents/convo-flow/nodes">
+    Deep dive into each node type
+  </Card>
+  <Card title="Add API Calls" icon="bolt" href="/platform/features/api-calls/what-are-api-calls">
+    Connect to external systems
+  </Card>
+  <Card title="Set Up Phone Number" icon="phone" href="/platform/deployment/phone-numbers/buying">
+    Make your agent live
+  </Card>
+  <Card title="Launch Campaign" icon="megaphone" href="/platform/deployment/campaigns/creating">
+    Run outbound calls at scale
+  </Card>
+</CardGroup>

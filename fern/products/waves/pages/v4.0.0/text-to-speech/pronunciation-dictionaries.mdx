@@ -1,0 +1,313 @@
+---
+title: "Pronunciation Dictionaries"
+icon: "speaker"
+description: "Learn how to create and use pronunciation dictionaries to control how specific words are pronounced in your text-to-speech synthesis"
+---
+
+Pronunciation dictionaries allow you to customize how specific words are pronounced in your text-to-speech synthesis. This is particularly useful for:
+
+- Brand names, product names, or proper nouns
+- Technical terms or acronyms
+- Words that should be pronounced differently than their standard pronunciation
+- Non-English words in English text (or vice versa)
+
+## How Pronunciation Dictionaries Work
+
+A pronunciation dictionary is a collection of word-pronunciation pairs that you create and manage through the Waves API. Each dictionary has a unique ID that you can reference in your TTS requests to ensure consistent pronunciation across your applications.
+
+### Key Concepts
+
+- **Word**: The text that appears in your input
+- **Pronunciation**: The way the word is written out in normal words to show how it sounds (not IPA)
+- **Dictionary ID**: A unique identifier for your pronunciation dictionary that you use in TTS requests
+
+## Creating a Pronunciation Dictionary
+
+### Step 1: Create Your Dictionary
+
+First, create a pronunciation dictionary with your custom word-pronunciation pairs:
+
+```bash
+curl -X POST "https://waves-api.smallest.ai/api/v1/pronunciation-dicts" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {
+        "word": "API",
+        "pronunciation": "ay-pee-eye"
+      },
+      {
+        "word": "GitHub",
+        "pronunciation": "git-hub"
+      },
+      {
+        "word": "SQL",
+        "pronunciation": "sequel"
+      }
+    ]
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "id": "64f1234567890abcdef12345",
+  "items": [
+    {
+      "word": "API",
+      "pronunciation": "ay-pee-eye"
+    },
+    {
+      "word": "GitHub",
+      "pronunciation": "git-hub"
+    },
+    {
+      "word": "SQL",
+      "pronunciation": "sequel"
+    }
+  ],
+  "createdAt": "2023-09-01T12:00:00.000Z"
+}
+```
+
+### Step 2: Save the Dictionary ID
+
+**Important:** Save the returned `id` from the response. You'll need this ID to reference your pronunciation dictionary in TTS requests and for future updates or deletions.
+
+```javascript
+const dictionaryId = "64f1234567890abcdef12345"; // Save this!
+```
+
+## Managing Your Pronunciation Dictionaries
+
+### List All Dictionaries
+
+Retrieve all your pronunciation dictionaries:
+
+```bash
+curl -X GET "https://waves-api.smallest.ai/api/v1/pronunciation-dicts" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Update a Dictionary
+
+Modify an existing pronunciation dictionary:
+
+```bash
+curl -X PUT "https://waves-api.smallest.ai/api/v1/pronunciation-dicts" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "64f1234567890abcdef12345",
+    "items": [
+      {
+        "word": "OpenAI",
+        "pronunciation": "open ay eye"
+      },
+    ]
+  }'
+```
+
+### Delete a Dictionary
+
+Remove a pronunciation dictionary:
+
+```bash
+curl -X DELETE "https://waves-api.smallest.ai/api/v1/pronunciation-dicts" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "64f1234567890abcdef12345"
+  }'
+```
+
+## Using Pronunciation Dictionaries in TTS Requests
+
+Once you have created a pronunciation dictionary and obtained its ID, you can use it in your TTS requests by including the `pronunciation_dicts` parameter. This parameter accepts an array of dictionary IDs, allowing you to use multiple pronunciation dictionaries in a single request:
+
+### Example
+
+```bash
+curl -X POST "https://waves-api.smallest.ai/api/v1/lightning-v3.1/get_speech" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Welcome to Waves API! Our TTS service integrates with GitHub.",
+    "voice_id": "your_voice_id",
+    "pronunciation_dicts": ["64f1234567890abcdef12345"],
+    "sample_rate": 24000,
+    "speed": 1.0,
+    "language": "en"
+  }'
+```
+
+### Using Multiple Dictionaries
+
+You can also use multiple pronunciation dictionaries in a single request by providing an array of dictionary IDs:
+
+```bash
+curl -X POST "https://waves-api.smallest.ai/api/v1/lightning-v3.1/get_speech" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Our API uses PostgreSQL and integrates with GitHub for CI/CD.",
+    "voice_id": "your_voice_id",
+    "pronunciation_dicts": [
+      "64f1234567890abcdef12345",
+      "64f9876543210fedcba09876"
+    ],
+    "sample_rate": 24000,
+    "speed": 1.0,
+    "language": "en",
+    "output_format": "wav"
+  }'
+```
+
+## Complete Workflow Example
+
+Here's a complete example showing the full workflow from creating a dictionary to using it in synthesis:
+
+```python
+import requests
+import json
+
+# Your API configuration
+API_KEY = "your_api_key_here"
+BASE_URL = "https://waves-api.smallest.ai/api/v1"
+headers = {
+    "Authorization": f"Bearer {API_KEY}",
+    "Content-Type": "application/json"
+}
+
+# Step 1: Create pronunciation dictionary
+pronunciation_data = {
+    "items": [
+        {"word": "PostgreSQL", "pronunciation": "post-gres"},
+        {"word": "Redis", "pronunciation": "red-iss"},
+        {"word": "Kubernetes", "pronunciation": "koo-ber-net-ees"},
+        {"word": "nginx", "pronunciation": "engine-x"}
+    ]
+}
+
+# Create the dictionary
+response = requests.post(
+    f"{BASE_URL}/pronunciation-dicts",
+    headers=headers,
+    json=pronunciation_data
+)
+
+dict_data = response.json()
+dictionary_id = dict_data["id"]
+print(f"Created pronunciation dictionary with ID: {dictionary_id}")
+
+# Step 2: Use the dictionary in TTS synthesis
+tts_request = {
+    "text": "Our infrastructure uses PostgreSQL, Redis, Kubernetes, and nginx.",
+    "voice_id": "your_voice_id",
+    "pronunciation_dicts": [dictionary_id],  # Use the dictionary ID here
+    "sample_rate": 24000,
+    "speed": 1.0,
+    "language": "en",
+    "output_format": "wav"
+}
+
+# Generate speech with custom pronunciations
+audio_response = requests.post(
+    f"{BASE_URL}/lightning-v3.1/get_speech",
+    headers=headers,
+    json=tts_request
+)
+
+# Save the audio file
+with open("speech_with_custom_pronunciations.wav", "wb") as f:
+    f.write(audio_response.content)
+
+print("Speech generated with custom pronunciations!")
+```
+
+### Tips for Creating Pronunciations
+
+1. **Break down complex words**: For multi-syllable words, separate syllables with hyphens
+
+   - "Kubernetes" → "koo-ber-net-ees"
+
+2. **Spell it how it sounds**: Write words the way you want them spoken, even if it’s not standard spelling
+
+   - "SQL" → "sequel"
+   - "API" → "ay-pee-eye"
+
+3. **Stay consistent**: Use the same style across your dictionary (e.g., always use hyphens for syllables).
+
+4. **Test and refine**: Generate a small dictionary first, test the pronunciations, and adjust until they sound natural.
+
+---
+
+## Best Practices
+
+### Dictionary Management
+
+- **Keep dictionaries focused**: Create separate dictionaries for different domains (e.g., one for technical terms, another for product names).
+- **Combine multiple dictionaries**: Use the array format to apply multiple pronunciation dictionaries in a single TTS request.
+- **Update regularly**: Add or refine pronunciations as your vocabulary grows.
+
+### Pronunciation Quality
+
+- **Verify pronunciations**: Listen to the output to confirm it matches expectations.
+- **Consider context**: Some words may have multiple valid pronunciations—pick the one that makes sense for your use case.
+- **Language consistency**: Ensure pronunciations match the language setting of your TTS requests.
+
+### Performance Considerations
+
+- **Cache dictionary IDs**: Store dictionary IDs in your application to avoid repeated API calls.
+- **Batch updates**: When possible, update multiple pronunciations in a single API call.
+- **Monitor usage**: Track which dictionaries are actively used in production.
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+**Dictionary not found**
+
+- Make sure you’re using the correct dictionary ID and that the dictionary hasn’t been deleted.
+
+**Pronunciations not applied**
+
+- Verify that the dictionary ID is included in your TTS request.
+- Ensure the words in your text match exactly (case-sensitive) with your dictionary entries.
+- Confirm the pronunciation is written in plain text (not IPA).
+
+**Unexpected pronunciations**
+
+- Simplify your spelling.
+- Test with shorter words first and adjust gradually.
+
+---
+
+### Error Responses
+
+The API will return specific error messages for common issues:
+
+```json
+{
+  "error": "Invalid request body",
+  "details": [
+    {
+      "code": "invalid_type",
+      "expected": "string",
+      "received": "undefined",
+      "path": ["items", 0, "pronunciation"],
+      "message": "Required"
+    }
+  ]
+}
+```
+
+## Next Steps
+
+- Explore the [API Reference](/v4.0.0/content/api-references/pronunciations-dict/create) for detailed parameter information
+- Check out [TTS Best Practices](/v4.0.0/content/best-practices/tts-best-practices) for optimization tips
+- Learn about [Voice Cloning](/v4.0.0/content/voice-cloning/how-to-vc) to create custom voices

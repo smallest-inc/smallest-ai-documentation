@@ -1,0 +1,382 @@
+---
+title: "Conditions & Branching"
+sidebarTitle: "Conditions & Branching"
+description: "Create dynamic conversation paths based on caller responses."
+---
+
+Branching is what makes Conversational Flow powerful. Instead of a linear script, your agent can take different paths based on what callers say.
+
+<Frame caption="A flow with multiple branches">
+  [IMAGE: Workflow showing one node splitting into three different paths]
+</Frame>
+
+---
+
+## How Branching Works
+
+<Frame caption="Branch decision visualization">
+  [IMAGE: Diagram showing caller response → condition evaluation → path selection]
+</Frame>
+
+<Steps>
+  <Step title="Agent Asks">
+    The current node poses a question or presents options.
+  </Step>
+  <Step title="Caller Responds">
+    The caller says something.
+  </Step>
+  <Step title="Conditions Evaluated">
+    The AI checks each condition against the response.
+  </Step>
+  <Step title="Path Selected">
+    The matching condition determines the next node.
+  </Step>
+</Steps>
+
+---
+
+## Condition Types
+
+<Tabs>
+  <Tab title="Text Matching">
+    <Frame caption="Text matching configuration">
+      [IMAGE: Condition panel with text match fields]
+    </Frame>
+    
+    Match specific words or phrases in the caller's response.
+    
+    | Condition | Matches |
+    |-----------|---------|
+    | "yes" | "yes", "yeah", "yep" |
+    | "billing" | "I have a billing question" |
+    | "cancel" | "I want to cancel" |
+    
+    <Tip>
+    The AI is smart about variations — "yes", "yeah", "sure", "absolutely" can all match a "yes" condition.
+    </Tip>
+  </Tab>
+  
+  <Tab title="Intent Detection">
+    <Frame caption="Intent condition configuration">
+      [IMAGE: Condition panel with intent selection]
+    </Frame>
+    
+    Match the caller's intent, not exact words.
+    
+    | Intent | Example Phrases |
+    |--------|-----------------|
+    | `wants_support` | "I need help", "something's broken" |
+    | `wants_sales` | "I'm interested in buying" |
+    | `is_frustrated` | "This is ridiculous", angry tone |
+    
+    <Note>
+    Intent detection uses AI understanding — callers don't need to say magic words.
+    </Note>
+  </Tab>
+  
+  <Tab title="Variable-Based">
+    <Frame caption="Variable condition configuration">
+      [IMAGE: Condition panel with variable comparison]
+    </Frame>
+    
+    Route based on variable values.
+    
+    | Condition | Logic |
+    |-----------|-------|
+    | `{{budget}} > 10000` | High-value path |
+    | `{{api.tier}} == "premium"` | VIP treatment |
+    | `{{attempts}} >= 3` | Escalation path |
+    
+    **Operators:**
+    - `==` equals
+    - `!=` not equals
+    - `>` greater than
+    - `<` less than
+    - `>=` greater or equal
+    - `<=` less or equal
+  </Tab>
+  
+  <Tab title="Default/Fallback">
+    <Frame caption="Default branch configuration">
+      [IMAGE: Condition panel with default/else option]
+    </Frame>
+    
+    Catch-all for when no other condition matches.
+    
+    **Always include a default branch.** It handles:
+    - Unexpected responses
+    - Unclear answers
+    - Edge cases you didn't anticipate
+    
+    ```
+    "I didn't quite catch that. Could you tell me again — 
+    are you calling about billing or technical support?"
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Creating Branches
+
+<Steps>
+  <Step title="Click the Source Node">
+    Open the node you want to branch from.
+    
+    <Frame caption="Node selected for branching">
+      [IMAGE: Node clicked with configuration panel opening]
+    </Frame>
+  </Step>
+  
+  <Step title="Add Branch Conditions">
+    Find the Branches section and click **Add Branch**.
+    
+    <Frame caption="Adding a branch">
+      [IMAGE: Branch section with Add Branch button]
+    </Frame>
+  </Step>
+  
+  <Step title="Configure Each Condition">
+    Set the condition type and value.
+    
+    <Frame caption="Branch condition form">
+      [IMAGE: Form showing condition type dropdown and value input]
+    </Frame>
+    
+    | Field | What to Enter |
+    |-------|---------------|
+    | **Label** | Name shown on canvas |
+    | **Type** | Text match, intent, variable, default |
+    | **Value** | What to match |
+  </Step>
+  
+  <Step title="Connect to Target Nodes">
+    Draw connections from each branch to its destination.
+    
+    <Frame caption="Branches connected to targets">
+      [IMAGE: Three branch lines going to three different nodes]
+    </Frame>
+  </Step>
+</Steps>
+
+---
+
+## Real-World Examples
+
+### Support Routing
+
+<Frame caption="Support routing flow">
+  [IMAGE: "How can I help?" node with branches to Billing, Technical, General, Fallback]
+</Frame>
+
+```
+[Ask Issue Type]
+"I'm here to help! Are you calling about billing, 
+technical support, or something else?"
+
+Branches:
+├── "billing" → [Billing Flow]
+├── "technical" / "tech" / "support" → [Technical Flow]
+├── "sales" / "buy" / "purchase" → [Sales Flow]
+└── default → [Clarify and Re-ask]
+```
+
+### Lead Qualification
+
+<Frame caption="Lead qualification branching">
+  [IMAGE: Budget question with branches based on value ranges]
+</Frame>
+
+```
+[Ask Budget]
+"What's your approximate budget for this project?"
+
+→ Store response as {{budget}}
+
+Branches:
+├── {{budget}} >= 50000 → [Enterprise Path]
+├── {{budget}} >= 10000 → [Professional Path]
+├── {{budget}} >= 1000 → [Starter Path]
+└── {{budget}} < 1000 → [Self-Serve Resources]
+```
+
+### Confirmation Flow
+
+<Frame caption="Confirmation branching">
+  [IMAGE: "Is that correct?" node with Yes/No/Unclear branches]
+</Frame>
+
+```
+[Confirm Details]
+"Just to confirm — you'd like to book a consultation 
+for Tuesday at 3pm. Is that correct?"
+
+Branches:
+├── yes / correct / "that's right" → [Complete Booking]
+├── no / "not quite" / wrong → [Correct Details]
+└── default → [Re-confirm]
+```
+
+---
+
+## Best Practices
+
+<Accordion title="Always include a fallback">
+  No matter how many conditions you define, something unexpected will happen.
+  
+  <Frame caption="Flow with proper fallback">
+    [IMAGE: Branches with default path highlighted]
+  </Frame>
+  
+  Your fallback should:
+  - Acknowledge the response
+  - Re-ask the question differently
+  - Offer options to clarify
+  
+  ```
+  "I want to make sure I understand. Are you calling about 
+  billing, technical issues, or something else entirely?"
+  ```
+</Accordion>
+
+<Accordion title="Keep conditions mutually exclusive">
+  Avoid overlapping conditions that could both match.
+  
+  | Overlapping (Bad) | Exclusive (Good) |
+  |-------------------|------------------|
+  | "support" AND "technical support" | "billing" OR "technical" OR "other" |
+  | `>10` AND `>50` | `10-50` AND `>50` |
+  
+  Order matters — conditions are evaluated top to bottom.
+</Accordion>
+
+<Accordion title="Test every branch">
+  It's easy to forget a branch while testing. Be systematic:
+  
+  1. List all possible paths
+  2. Test each one deliberately
+  3. Try edge cases (silence, gibberish, topic changes)
+  4. Review in Convo Logs
+</Accordion>
+
+<Accordion title="Limit branch depth">
+  Too many nested branches become impossible to manage.
+  
+  <Frame caption="Deep nesting vs flat structure">
+    [IMAGE: Side-by-side of deeply nested vs flatter flow]
+  </Frame>
+  
+  If your flow is getting too deep:
+  - Can you combine some branches?
+  - Should some paths be separate flows?
+  - Is Single Prompt better for this use case?
+</Accordion>
+
+<Accordion title="Use clear branch labels">
+  Labels appear on the canvas — make them meaningful.
+  
+  | Bad Labels | Good Labels |
+  |------------|-------------|
+  | "Option 1" | "Wants Billing Help" |
+  | "Path A" | "Budget > $10k" |
+  | "Yes" | "Confirmed Appointment" |
+</Accordion>
+
+---
+
+## Complex Branching Patterns
+
+### Multiple Conditions (AND)
+
+<Frame caption="AND condition visualization">
+  [IMAGE: Node checking two conditions before branching]
+</Frame>
+
+Sometimes you need multiple things to be true:
+
+```
+If {{api.tier}} == "premium" AND {{budget}} > 10000
+    → VIP Sales Path
+```
+
+Combine in a single variable-based condition:
+```
+{{api.tier}} == "premium" && {{budget}} > 10000
+```
+
+### Loop Back
+
+<Frame caption="Loop back pattern">
+  [IMAGE: Flow with arrow going back to earlier node]
+</Frame>
+
+For retry scenarios:
+
+```
+[Ask Budget]
+    ↓
+[Validate Budget]
+    ├── Valid → Continue
+    └── Invalid → Loop back to [Ask Budget]
+```
+
+<Warning>
+**Avoid infinite loops.** Add a counter variable and exit after N attempts.
+</Warning>
+
+### Parallel Paths That Merge
+
+<Frame caption="Merging paths pattern">
+  [IMAGE: Two branches that eventually connect to the same node]
+</Frame>
+
+Different paths can lead to the same destination:
+
+```
+[Qualify]
+├── High Budget → [Fast Track] → [Schedule Demo]
+└── Standard Budget → [Standard Process] → [Schedule Demo]
+```
+
+---
+
+## Debugging Branches
+
+When branches don't work as expected:
+
+<Frame caption="Conversation log showing branch evaluation">
+  [IMAGE: Convo log with branch decision highlighted]
+</Frame>
+
+<Steps>
+  <Step title="Check Convo Logs">
+    See exactly which conditions were evaluated and which matched.
+  </Step>
+  
+  <Step title="Verify Condition Syntax">
+    Typos in variable names or operators will fail silently.
+  </Step>
+  
+  <Step title="Test the Fallback">
+    If fallback triggers too often, your conditions may be too specific.
+  </Step>
+  
+  <Step title="Review Order">
+    Conditions are checked top to bottom — earlier matches win.
+  </Step>
+</Steps>
+
+→ Learn more: [Conversation Logs](/platform/building-agents/testing-launch/conversation-logs)
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configure Your Agent" icon="sliders" href="/platform/building-agents/configuring/editor-overview">
+    Voice, model, and features
+  </Card>
+  <Card title="Test Your Flow" icon="flask" href="/platform/building-agents/testing-launch/testing">
+    Validate every branch
+  </Card>
+</CardGroup>

@@ -1,0 +1,287 @@
+---
+title: "API Calls"
+sidebarTitle: "API Calls"
+description: "Connect your agent to external services and data."
+---
+
+API Calls let your agent fetch and send data during conversations. Look up customer information, check order status, book appointments, create tickets — all in real-time while the conversation is happening.
+
+In Conversational Flow, API calls are configured through dedicated nodes: **API Call**, **Pre-Call API**, and **Post-Call API**.
+
+---
+
+## API Nodes Overview
+
+| Node | When It Runs | Use Case |
+|------|--------------|----------|
+| **Pre-Call API** | Before conversation starts | Load customer data, set context |
+| **API Call** | During conversation | Fetch/send data mid-flow |
+| **Post-Call API** | After conversation ends | Log outcomes, trigger follow-ups |
+
+→ See: [Node Types](/platform/convo-flow/node-types) for full details on each node.
+
+---
+
+## Configuration
+
+All three API node types share the same configuration structure. Click the node to open its settings panel.
+
+<Tabs>
+  <Tab title="Request">
+    Select the HTTP method and enter the full API endpoint URL.
+    
+    | Field | Description |
+    |-------|-------------|
+    | **Method** | HTTP method (GET, POST, PUT, PATCH, DELETE) |
+    | **URL** | Full endpoint URL |
+    
+    Use variables in the URL for dynamic requests:
+    
+    ```
+    https://api.example.com/customers/{{caller_phone}}
+    ```
+  </Tab>
+  
+  <Tab title="Headers">
+    Add custom headers to your API request. These are key-value pairs, often used for Content-Type or API keys.
+    
+    | Common Headers | Example Value |
+    |----------------|---------------|
+    | `Content-Type` | `application/json` |
+    | `Authorization` | `Bearer {{api_key}}` |
+    | `X-API-Key` | `your-api-key-here` |
+    
+    Click **+ Add Header** to add each header.
+  </Tab>
+  
+  <Tab title="Body">
+    Construct the data payload for your request. Typically required for POST, PUT, or PATCH methods.
+    
+    ```json
+    {
+      "phone": "{{caller_phone}}",
+      "name": "{{customer_name}}",
+      "action": "lookup"
+    }
+    ```
+    
+    Variables are replaced with actual values at runtime.
+  </Tab>
+  
+  <Tab title="Extract Response Data">
+    Specify a variable name and JSONPath expression to extract values from the API response.
+    
+    | Field | Description |
+    |-------|-------------|
+    | **Variable Name** | Name to store the extracted value |
+    | **JSONPath** | Path to the value in the response |
+    
+    **Example:**
+    
+    API returns:
+    ```json
+    {
+      "data": {
+        "name": "John Smith",
+        "tier": "premium"
+      }
+    }
+    ```
+    
+    Extract mappings:
+    | Variable | JSONPath |
+    |----------|----------|
+    | `customer_name` | `$.data.name` |
+    | `account_tier` | `$.data.tier` |
+    
+    Use in later nodes: `"Hi {{customer_name}}, I see you're a {{account_tier}} member."`
+  </Tab>
+</Tabs>
+
+---
+
+## Requirements
+
+<Warning>
+**API Call nodes have connection requirements:**
+- Must have at least one incoming connection
+- Must have at least one outgoing connection
+- Must have an endpoint URL configured
+</Warning>
+
+Pre-Call API and Post-Call API nodes have different connection requirements since they run at specific points in the call lifecycle.
+
+---
+
+## Example: Customer Lookup (Pre-Call)
+
+Load customer data before the conversation starts.
+
+<Tabs>
+  <Tab title="Configuration">
+    | Field | Value |
+    |-------|-------|
+    | **Method** | GET |
+    | **URL** | `https://crm.example.com/api/customers?phone={{caller_phone}}` |
+  </Tab>
+  
+  <Tab title="Extract Response Data">
+    | JSONPath | Variable |
+    |----------|----------|
+    | `$.customer.name` | `customer_name` |
+    | `$.customer.tier` | `account_tier` |
+    | `$.customer.last_order` | `last_order` |
+  </Tab>
+  
+  <Tab title="First Node Prompt">
+    ```
+    Hello {{customer_name|there}}! I see you're a {{account_tier}} 
+    member. Your last order was {{last_order}}.
+    
+    How can I help you today?
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Example: Mid-Conversation Booking
+
+Book an appointment based on information collected during the call.
+
+<Tabs>
+  <Tab title="Flow">
+    ```
+    [Collect Preferred Time]
+        ↓
+    [API Call: Book Appointment]
+        ↓
+    [Confirm or Handle Error]
+    ```
+  </Tab>
+  
+  <Tab title="Configuration">
+    | Field | Value |
+    |-------|-------|
+    | **Method** | POST |
+    | **URL** | `https://calendar.example.com/api/appointments` |
+    | **Headers** | `Content-Type: application/json` |
+    | **Body** | See below |
+    
+    ```json
+    {
+      "customer_phone": "{{caller_phone}}",
+      "customer_name": "{{customer_name}}",
+      "preferred_time": "{{collected_time}}",
+      "service_type": "consultation"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Branching">
+    ```
+    [API Call: Book Appointment]
+    ├── {{booking_status}} == "confirmed" → [Confirmation Node]
+    ├── {{booking_status}} == "unavailable" → [Offer Alternative]
+    └── Error → [Fallback / Transfer]
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Example: Post-Call CRM Update
+
+Log the call outcome after the conversation ends.
+
+<Tabs>
+  <Tab title="Configuration">
+    | Field | Value |
+    |-------|-------|
+    | **Method** | POST |
+    | **URL** | `https://crm.example.com/api/call-logs` |
+  </Tab>
+  
+  <Tab title="Body">
+    ```json
+    {
+      "phone": "{{caller_phone}}",
+      "agent_id": "{{agent_id}}",
+      "call_id": "{{call_id}}",
+      "duration": "{{call_duration}}",
+      "outcome": "{{disposition}}",
+      "notes": "{{call_summary}}",
+      "collected_data": {
+        "budget": "{{collected_budget}}",
+        "timeline": "{{collected_timeline}}"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Using Variables in API Calls
+
+Variables work throughout your API configuration:
+
+**In URL:**
+```
+https://api.example.com/orders/{{order_id}}
+```
+
+**In Headers:**
+```
+Authorization: Bearer {{api_key}}
+```
+
+**In Body:**
+```json
+{
+  "phone": "{{caller_phone}}",
+  "query": "{{customer_question}}"
+}
+```
+
+→ See: [Variables](/platform/convo-flow/config/variables)
+
+---
+
+## Tips
+
+<Accordion title="Handle failures gracefully">
+  APIs can fail. Add branches to handle errors:
+  
+  ```
+  [API Call]
+  ├── Success → Continue
+  └── Error → [Fallback Response or Transfer]
+  ```
+  
+  In your fallback node: "I'm having trouble accessing that information right now. Let me connect you with someone who can help."
+</Accordion>
+
+<Accordion title="Use appropriate timeouts">
+  For slow APIs, ensure your timeout is adequate — but remember the caller is waiting. Keep API calls as fast as possible.
+</Accordion>
+
+<Accordion title="Test with real data">
+  Test your API calls with actual responses to ensure:
+  - JSONPath expressions extract correctly
+  - Variables populate as expected
+  - Error handling works
+</Accordion>
+
+---
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Node Types" icon="shapes" href="/platform/convo-flow/node-types">
+    Full reference for API nodes
+  </Card>
+  <Card title="Variables" icon="brackets-curly" href="/platform/convo-flow/config/variables">
+    Use API response data in prompts
+  </Card>
+</CardGroup>

@@ -1,0 +1,217 @@
+---
+title: "Variable Best Practices"
+sidebarTitle: "Best Practices"
+description: "Tips and patterns for using variables effectively in your agents."
+---
+
+Variables are powerful, but using them well takes some thought. Here are best practices learned from thousands of agent deployments.
+
+---
+
+## Naming Conventions
+
+<Tabs>
+  <Tab title="✅ Good Names">
+    | Variable | Why It's Good |
+    |----------|---------------|
+    | `{{customer_name}}` | Clear, lowercase, underscores |
+    | `{{appointment_date}}` | Descriptive, consistent format |
+    | `{{account_balance}}` | Obvious what it contains |
+    | `{{provider_first_name}}` | Specific when needed |
+  </Tab>
+  <Tab title="❌ Bad Names">
+    | Variable | Problem |
+    |----------|---------|
+    | `{{cn}}` | Too abbreviated |
+    | `{{CustomerName}}` | Inconsistent casing |
+    | `{{data1}}` | Meaningless |
+    | `{{the_customers_full_name}}` | Too long |
+  </Tab>
+</Tabs>
+
+**Rule of thumb:** Someone reading your prompt should understand what the variable contains without checking documentation.
+
+---
+
+## Always Set Defaults
+
+Never assume a variable will have a value. Set defaults for graceful fallbacks:
+
+<Tabs>
+  <Tab title="❌ Without Default">
+    ```
+    "Hi {{customer_name}}, thanks for calling!"
+    ```
+    
+    If `customer_name` is empty:
+    → "Hi , thanks for calling!" (awkward gap)
+    
+    Or worse:
+    → "Hi {{customer_name}}, thanks for calling!" (literal text)
+  </Tab>
+  <Tab title="✅ With Default">
+    ```
+    "Hi {{customer_name | default: 'there'}}, thanks for calling!"
+    ```
+    
+    If `customer_name` is empty:
+    → "Hi there, thanks for calling!" (natural)
+  </Tab>
+</Tabs>
+
+### Common Default Patterns
+
+| Variable | Good Default |
+|----------|--------------|
+| `{{customer_name}}` | `"there"` or `"friend"` |
+| `{{appointment_date}}` | `"your scheduled date"` |
+| `{{account_number}}` | `"your account"` |
+| `{{amount_due}}` | `"the amount"` |
+
+---
+
+## Keep Variables Contextual
+
+Don't just insert variables — provide context so the agent uses them naturally:
+
+<Tabs>
+  <Tab title="❌ Just Variables">
+    ```
+    Customer name: {{customer_name}}
+    Phone: {{phone}}
+    Balance: {{balance}}
+    
+    Help the customer.
+    ```
+    
+    Agent doesn't know *how* to use this info.
+  </Tab>
+  <Tab title="✅ Variables with Context">
+    ```
+    CUSTOMER CONTEXT:
+    - Name: {{customer_name}} (use to address them personally)
+    - Phone: {{phone}} (for verification if needed)
+    - Balance: {{balance}} (reference if they ask about billing)
+    
+    Greet them by name and ask how you can help.
+    If they have billing questions, you can reference their balance.
+    ```
+    
+    Agent knows when and how to use each piece.
+  </Tab>
+</Tabs>
+
+---
+
+## Validate Before Use
+
+For critical variables, add validation instructions:
+
+```
+IMPORTANT: Before discussing account details:
+1. Verify caller identity by asking for last 4 digits of SSN
+2. Only proceed if {{account_status}} is "active"
+3. If {{account_status}} is "suspended", explain they need to contact support directly
+```
+
+---
+
+## Handle Missing Data Gracefully
+
+Tell your agent what to do when data isn't available:
+
+```
+If you don't have the customer's name ({{customer_name}} is empty):
+- Use "there" instead ("Hi there!")
+- Ask for their name early in the conversation
+- Store it for the rest of the call
+
+If appointment information is missing:
+- Don't guess or make up details
+- Say "I don't see your appointment details. Can you tell me 
+  when your appointment was scheduled for?"
+```
+
+---
+
+## Avoid Variable Overload
+
+<Tabs>
+  <Tab title="❌ Too Many Variables">
+    ```
+    Hi {{first_name}} {{last_name}}, this is {{agent_name}} 
+    calling from {{company_name}} regarding your {{product_name}} 
+    {{product_model}} purchased on {{purchase_date}} from 
+    {{store_location}} with order number {{order_id}}...
+    ```
+    
+    Overwhelming for caller. Too much to process.
+  </Tab>
+  <Tab title="✅ Selective Use">
+    ```
+    Hi {{customer_name}}, this is Sarah from TechCorp 
+    calling about your recent order.
+    ```
+    
+    Personal but not overwhelming. Additional details 
+    available if the caller asks.
+  </Tab>
+</Tabs>
+
+**Rule:** Use 2-3 personalization variables in your opening. Keep the rest available for when needed.
+
+---
+
+## Test with Edge Cases
+
+Before going live, test what happens when:
+
+| Scenario | What to Test |
+|----------|--------------|
+| **Empty values** | All variables missing |
+| **Long values** | Very long customer name |
+| **Special characters** | Names with apostrophes, accents |
+| **Numbers** | Currency, dates, phone numbers |
+| **Null vs empty** | API returns null instead of "" |
+
+---
+
+## Security Considerations
+
+<Warning>
+**Never put sensitive data in prompts that might be logged or visible:**
+- Full SSN or government IDs
+- Complete credit card numbers
+- Passwords or security codes
+
+**Instead:** Use masked versions (`***-**-1234`) or reference without displaying.
+</Warning>
+
+---
+
+## Variable Documentation
+
+Keep a reference of your variables:
+
+| Variable | Source | Type | Example | Default |
+|----------|--------|------|---------|---------|
+| `customer_name` | CRM API | String | "Sarah Johnson" | "there" |
+| `account_balance` | Pre-call API | Currency | "$150.00" | "your balance" |
+| `appointment_date` | Campaign CSV | Date | "Jan 21, 2024" | "your appointment" |
+
+<Tip>
+Keep this documentation updated. When variables change, update your prompts too.
+</Tip>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Calls" icon="bolt" href="/platform/features/api-calls/what-are-api-calls">
+    Populate variables from external systems
+  </Card>
+  <Card title="Campaigns" icon="megaphone" href="/platform/deployment/campaigns/what-are-campaigns">
+    Use variables in outbound campaigns
+  </Card>
+</CardGroup>

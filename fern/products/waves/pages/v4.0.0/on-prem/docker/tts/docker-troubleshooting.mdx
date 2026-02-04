@@ -1,0 +1,513 @@
+---
+title: Docker Troubleshooting
+description: Debug common issues and optimize your TTS Docker deployment
+---
+
+## Common Issues
+
+### GPU Not Accessible
+
+**Symptoms:**
+- Error: `could not select device driver "nvidia"`
+- Error: `no NVIDIA GPU devices found`
+- Lightning TTS fails to start
+
+**Diagnosis:**
+
+```bash
+docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
+```
+
+<AccordionGroup>
+  <Accordion title="Solution 1: Restart Docker" icon="rotate">
+    ```bash
+    sudo systemctl restart docker
+    docker compose up -d
+    ```
+  </Accordion>
+
+  <Accordion title="Solution 2: Reinstall NVIDIA Container Toolkit" icon="download">
+    ```bash
+    sudo apt-get remove nvidia-container-toolkit
+    sudo apt-get update
+    sudo apt-get install -y nvidia-container-toolkit
+    
+    sudo systemctl restart docker
+    ```
+  </Accordion>
+
+  <Accordion title="Solution 3: Update NVIDIA Driver" icon="arrow-up">
+    ```bash
+    nvidia-smi
+    ```
+    
+    If driver version is below 470, update:
+    ```bash
+    sudo ubuntu-drivers autoinstall
+    sudo reboot
+    ```
+  </Accordion>
+
+  <Accordion title="Solution 4: Check Docker Daemon Configuration" icon="file-code">
+    Verify `/etc/docker/daemon.json` contains:
+    ```json
+    {
+      "runtimes": {
+        "nvidia": {
+          "path": "nvidia-container-runtime",
+          "runtimeArgs": []
+        }
+      }
+    }
+    ```
+    
+    Restart Docker after changes:
+    ```bash
+    sudo systemctl restart docker
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### License Validation Failed
+
+**Symptoms:**
+- Error: `License validation failed`
+- Error: `Invalid license key`
+- Services fail to start
+
+**Diagnosis:**
+
+Check license-proxy logs:
+```bash
+docker compose logs license-proxy
+```
+
+<AccordionGroup>
+  <Accordion title="Solution 1: Verify License Key" icon="key">
+    Check `.env` file:
+    ```bash
+    cat .env | grep LICENSE_KEY
+    ```
+    
+    Ensure there are no:
+    - Extra spaces
+    - Quotes around the key
+    - Line breaks
+    
+    Correct format:
+    ```bash
+    LICENSE_KEY=abc123def456
+    ```
+  </Accordion>
+
+  <Accordion title="Solution 2: Check Network Connectivity" icon="network-wired">
+    Test connection to license server:
+    ```bash
+    curl -v https://console-api.smallest.ai
+    ```
+    
+    If this fails, check:
+    - Firewall rules
+    - Proxy settings
+    - DNS resolution
+  </Accordion>
+
+  <Accordion title="Solution 3: Contact Support" icon="envelope">
+    If the key appears correct and network is accessible, your license may be:
+    - Expired
+    - Revoked
+    - Invalid
+    
+    Contact **support@smallest.ai** with:
+    - Your license key
+    - License-proxy logs
+    - Error messages
+  </Accordion>
+</AccordionGroup>
+
+### Model Loading Failed
+
+**Symptoms:**
+- Lightning TTS stuck at startup
+- Error: `Failed to load model`
+- Container keeps restarting
+
+**Diagnosis:**
+
+Check Lightning TTS logs:
+```bash
+docker compose logs lightning-tts
+```
+
+<AccordionGroup>
+  <Accordion title="Solution 1: Check GPU Memory" icon="memory">
+    Verify GPU has enough VRAM:
+    ```bash
+    nvidia-smi
+    ```
+    
+    Lightning TTS requires minimum 16GB VRAM.
+  </Accordion>
+
+  <Accordion title="Solution 2: Check Disk Space" icon="hard-drive">
+    Models require space:
+    ```bash
+    df -h
+    ```
+    
+    Free up space if needed:
+    ```bash
+    docker system prune -a
+    ```
+  </Accordion>
+
+  <Accordion title="Solution 3: Increase Startup Time" icon="clock">
+    Models may need more time to load:
+    ```yaml
+    lightning-tts:
+      healthcheck:
+        start_period: 120s
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Port Already in Use
+
+**Symptoms:**
+- Error: `port is already allocated`
+- Error: `bind: address already in use`
+
+**Diagnosis:**
+
+Find what's using the port:
+```bash
+sudo lsof -i :7100
+sudo netstat -tulpn | grep 7100
+```
+
+<AccordionGroup>
+  <Accordion title="Solution 1: Stop Conflicting Service" icon="stop">
+    If another service is using the port:
+    ```bash
+    sudo systemctl stop [service-name]
+    ```
+    
+    Or kill the process:
+    ```bash
+    sudo kill -9 [PID]
+    ```
+  </Accordion>
+
+  <Accordion title="Solution 2: Change Port" icon="shuffle">
+    Modify docker-compose.yml to use different port:
+    ```yaml
+    api-server:
+      ports:
+        - "8080:7100"
+    ```
+    
+    Access API at http://localhost:8080 instead
+  </Accordion>
+
+  <Accordion title="Solution 3: Remove Old Containers" icon="trash">
+    Old containers may still be bound:
+    ```bash
+    docker compose down
+    docker container prune -f
+    docker compose up -d
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Out of Memory
+
+**Symptoms:**
+- Container killed unexpectedly
+- Error: `OOMKilled`
+- System becomes unresponsive
+
+**Diagnosis:**
+
+Check container status:
+```bash
+docker compose ps
+docker inspect [container-name] | grep OOMKilled
+```
+
+<AccordionGroup>
+  <Accordion title="Solution 1: Increase System Memory" icon="memory">
+    Lightning TTS requires minimum 16 GB RAM
+    
+    Check current memory:
+    ```bash
+    free -h
+    ```
+  </Accordion>
+
+  <Accordion title="Solution 2: Add Memory Limits" icon="gauge">
+    Prevent one service from consuming all memory:
+    ```yaml
+    services:
+      lightning-tts:
+        deploy:
+          resources:
+            limits:
+              memory: 14G
+            reservations:
+              memory: 12G
+    ```
+  </Accordion>
+
+  <Accordion title="Solution 3: Enable Swap" icon="arrows-rotate">
+    Add swap space (temporary solution):
+    ```bash
+    sudo fallocate -l 16G /swapfile
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile
+    sudo swapon /swapfile
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Slow Performance
+
+**Symptoms:**
+- High latency (>500ms)
+- Low throughput
+- GPU underutilized
+
+**Diagnosis:**
+
+Monitor GPU usage:
+```bash
+watch -n 1 nvidia-smi
+```
+
+Check container resources:
+```bash
+docker stats
+```
+
+<AccordionGroup>
+  <Accordion title="Solution 1: Optimize GPU Usage" icon="gauge-high">
+    Ensure GPU is not throttling:
+    ```bash
+    nvidia-smi -q -d PERFORMANCE
+    ```
+    
+    Enable persistence mode:
+    ```bash
+    sudo nvidia-smi -pm 1
+    ```
+  </Accordion>
+
+  <Accordion title="Solution 2: Increase CPU Allocation" icon="microchip">
+    ```yaml
+    lightning-tts:
+      deploy:
+        resources:
+          limits:
+            cpus: '8'
+    ```
+  </Accordion>
+
+  <Accordion title="Solution 3: Optimize Redis" icon="database">
+    Use Redis with persistence disabled for speed:
+    ```yaml
+    redis:
+      command: redis-server --save ""
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Performance Optimization
+
+### Best Practices
+
+<Steps>
+  <Step title="Enable GPU Persistence Mode">
+    Reduces GPU initialization time:
+    ```bash
+    sudo nvidia-smi -pm 1
+    ```
+  </Step>
+
+  <Step title="Optimize Container Resources">
+    Allocate appropriate CPU/memory:
+    ```yaml
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
+          memory: 14G
+    ```
+  </Step>
+
+  <Step title="Monitor and Tune">
+    Use monitoring tools:
+    ```bash
+    docker stats
+    nvidia-smi dmon
+    ```
+  </Step>
+</Steps>
+
+### Benchmark Your Deployment
+
+Test TTS performance:
+
+```bash
+time curl -X POST http://localhost:7100/v1/speak \
+  -H "Authorization: Token ${LICENSE_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "This is a test of the text-to-speech service.",
+    "voice": "default"
+  }'
+```
+
+Expected performance:
+- **Cold start**: First request after container start (5-10 seconds)
+- **Warm requests**: Subsequent requests (100-300ms)
+- **Real-time factor**: 0.1-0.3x
+
+## Debugging Tools
+
+### View All Logs
+
+```bash
+docker compose logs -f
+```
+
+### Follow Specific Service
+
+```bash
+docker compose logs -f lightning-tts
+```
+
+### Last N Lines
+
+```bash
+docker compose logs --tail=100 api-server
+```
+
+### Save Logs to File
+
+```bash
+docker compose logs > deployment-logs.txt
+```
+
+### Execute Commands in Container
+
+```bash
+docker compose exec lightning-tts bash
+```
+
+### Check Container Configuration
+
+```bash
+docker inspect lightning-tts
+```
+
+### Network Debugging
+
+Test connectivity between containers:
+
+```bash
+docker compose exec api-server ping lightning-tts
+docker compose exec api-server curl http://lightning-tts:8876/health
+```
+
+## Health Checks
+
+### API Server
+
+```bash
+curl http://localhost:7100/health
+```
+
+Expected: `{"status": "healthy"}`
+
+### Lightning TTS
+
+```bash
+curl http://localhost:8876/health
+```
+
+Expected: `{"status": "ready", "gpu": "NVIDIA A10"}`
+
+### License Proxy
+
+```bash
+docker compose exec license-proxy wget -q -O- http://localhost:3369/health
+```
+
+Expected: `{"status": "valid"}`
+
+### Redis
+
+```bash
+docker compose exec redis redis-cli ping
+```
+
+Expected: `PONG`
+
+## Getting Help
+
+### Before Contacting Support
+
+Collect the following information:
+
+<Steps>
+  <Step title="System Information">
+    ```bash
+    docker version
+    docker compose version
+    nvidia-smi
+    uname -a
+    ```
+  </Step>
+
+  <Step title="Container Status">
+    ```bash
+    docker compose ps > status.txt
+    docker stats --no-stream > resources.txt
+    ```
+  </Step>
+
+  <Step title="Logs">
+    ```bash
+    docker compose logs > all-logs.txt
+    ```
+  </Step>
+
+  <Step title="Configuration">
+    Sanitize and include:
+    - docker-compose.yml
+    - .env (remove license key)
+  </Step>
+</Steps>
+
+### Contact Support
+
+Email: **support@smallest.ai**
+
+Include:
+- Description of the issue
+- Steps to reproduce
+- System information
+- Logs and configuration
+- License key (via secure channel)
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="TTS Configuration" icon="gear" href="/docker/tts/configuration">
+    Advanced configuration options
+  </Card>
+
+  <Card title="API Reference" icon="code" href="/api-reference/authentication">
+    Integrate with your applications
+  </Card>
+</CardGroup>
+

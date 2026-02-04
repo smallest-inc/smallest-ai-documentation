@@ -1,0 +1,251 @@
+---
+title: "Calendar Integration"
+sidebarTitle: "Calendar"
+description: "Connect Google Calendar to enable appointment booking through your agent."
+---
+
+Calendar integration lets your agent check availability and book appointments in real-time. No more back-and-forth — callers can schedule right on the call.
+
+---
+
+## What You Can Do
+
+| Capability | Description |
+|------------|-------------|
+| **Check Availability** | See open slots in real-time |
+| **Book Appointments** | Create events directly from calls |
+| **Reschedule** | Move existing appointments |
+| **Cancel** | Remove appointments when requested |
+
+---
+
+## Supported Calendars
+
+| Calendar | Status |
+|----------|--------|
+| **Google Calendar** | ✓ Native integration |
+| **Microsoft Outlook** | Via API calls |
+| **Calendly** | Via API calls |
+| **Cal.com** | Via API calls |
+
+---
+
+## Connecting Google Calendar
+
+<Steps>
+  ### Navigate to Integrations
+  
+  Go to **Settings** → **Integrations** → **Google Calendar**.
+
+  ### Click "Connect Google"
+  
+  You'll be redirected to Google sign-in.
+
+  ### Select Account and Calendars
+  
+  Choose which Google account and which calendars to access.
+
+  ### Grant Permissions
+  
+  Atoms needs permission to:
+  - See your calendars
+  - View events
+  - Create events
+
+  ### Verify Connection
+  
+  You should see your calendars listed in the integration settings.
+</Steps>
+
+---
+
+## Configuration
+
+### Select Booking Calendar
+
+Choose which calendar to book appointments on:
+
+| Setting | Description |
+|---------|-------------|
+| **Primary Calendar** | Where to create new events |
+| **Check Calendars** | Which calendars to check for conflicts |
+| **Buffer Time** | Minutes between appointments |
+
+### Business Hours
+
+Define when appointments can be booked:
+
+| Day | Hours |
+|-----|-------|
+| Monday - Friday | 9:00 AM - 5:00 PM |
+| Saturday | 10:00 AM - 2:00 PM |
+| Sunday | Closed |
+
+### Appointment Types
+
+Configure different appointment durations:
+
+| Type | Duration | Description |
+|------|----------|-------------|
+| Consultation | 30 min | Initial meeting |
+| Follow-up | 15 min | Quick check-in |
+| Deep Dive | 60 min | Extended session |
+
+---
+
+## Using Calendar in Agents
+
+### Single Prompt Agent
+
+Enable calendar tools in your agent:
+
+```
+CALENDAR INTEGRATION:
+Your agent can check availability and book appointments.
+
+When the customer wants to schedule:
+1. Ask what type of appointment they need
+2. Ask for their preferred date
+3. Check availability and offer 2-3 options
+4. Confirm their selection
+5. Book the appointment
+6. Confirm details and send to their email
+
+Available appointment types:
+- Consultation (30 min)
+- Follow-up (15 min)
+```
+
+### Convo Flow Agent
+
+Use API nodes to interact with calendar:
+
+```
+[Collect Preferred Date]
+        ↓
+[API: Check Availability]
+        ↓
+   ┌────┴────┐
+Slots Found  No Slots
+   ↓            ↓
+[Offer Options] [Suggest Alternatives]
+   ↓
+[Confirm Selection]
+        ↓
+[API: Book Appointment]
+        ↓
+[Confirm Booking]
+```
+
+---
+
+## Example Conversation
+
+```
+Customer: "I'd like to schedule an appointment."
+
+Agent: "I'd be happy to help you schedule. What day works best for you?"
+
+Customer: "How about next Tuesday?"
+
+Agent: "Let me check Tuesday for you... I have openings at 
+        9:00 AM, 11:30 AM, and 2:00 PM. Which works best?"
+
+Customer: "2:00 PM works."
+
+Agent: "Great! I've booked you for Tuesday, January 23rd at 2:00 PM. 
+        You'll receive a calendar invite at the email on file. 
+        Is there anything else I can help with?"
+```
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Offer Limited Options" icon="list-ol">
+    Don't overwhelm with every available slot:
+    
+    **Better:** "I have 9 AM, 2 PM, and 4:30 PM available."
+    
+    **Worse:** "I have 9, 9:30, 10, 10:30, 11, 11:30..." (too many)
+  </Accordion>
+  
+  <Accordion title="Confirm All Details" icon="check">
+    Before booking, confirm:
+    - Date and time
+    - Customer name
+    - Contact info (email/phone)
+    - Appointment type
+    
+    "Just to confirm: That's Tuesday the 23rd at 2 PM for a consultation. Is that correct?"
+  </Accordion>
+  
+  <Accordion title="Handle Time Zones" icon="globe">
+    Always clarify time zone:
+    
+    "That's 2 PM Eastern Time. Does that work for you?"
+    
+    Or detect from caller's phone number when possible.
+  </Accordion>
+  
+  <Accordion title="Send Confirmations" icon="envelope">
+    After booking:
+    - Send calendar invite
+    - Include video link if virtual
+    - Add any preparation instructions
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="No Availability Showing" icon="calendar-xmark">
+    **Possible causes:**
+    - Business hours not configured
+    - Checking wrong calendar
+    - All slots booked
+    
+    **Solutions:**
+    1. Verify business hours settings
+    2. Check which calendars are being queried
+    3. Expand date range
+  </Accordion>
+  
+  <Accordion title="Event Not Created" icon="plus">
+    **Possible causes:**
+    - Calendar permissions
+    - Wrong calendar selected
+    - API error
+    
+    **Solutions:**
+    1. Reconnect Google Calendar
+    2. Check primary calendar setting
+    3. Verify API logs for errors
+  </Accordion>
+  
+  <Accordion title="Double Bookings" icon="clone">
+    **Possible causes:**
+    - Not checking all calendars
+    - Race condition (simultaneous bookings)
+    
+    **Solutions:**
+    1. Include all relevant calendars in conflict check
+    2. Atoms handles race conditions, but check settings
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CRM Integration" icon="users" href="/platform/features/integrations/overview">
+    Add customer context to bookings
+  </Card>
+  <Card title="API Calls" icon="code" href="/platform/features/api-calls/common-integrations">
+    Connect other calendar systems
+  </Card>
+</CardGroup>

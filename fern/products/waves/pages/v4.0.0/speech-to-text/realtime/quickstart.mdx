@@ -1,0 +1,144 @@
+---
+title: 'Quickstart'
+description: 'Get started with real-time transcription using the Pulse STT WebSocket API'
+---
+
+This guide shows you how to transcribe streaming audio using Smallest AI's Pulse STT model via the WebSocket API. The Pulse model provides state-of-the-art low latencies (64ms) for TTFT (Time to First Transcript), making it an ideal choice for speech-to-text conversion during live conversations. 
+
+# Real-Time Audio Transcription
+
+The Real-Time API allows you to stream audio data and receive transcription results as the audio is processed. This is ideal for live conversations, voice assistants, and scenarios where you need immediate transcription feedback. For these scenarios, where minimizing latency is critical, stream audio in chunks of a few kilobytes over a live connection.
+
+## When to Use Real-Time Transcription
+
+- **Live conversations**: Transcribe phone calls, video conferences, or live events.
+- **Voice assistants**: Build interactive voice applications that respond immediately.
+- **Streaming workflows**: Process audio as it is being captured or generated.
+- **Low-latency requirements**: When you need transcription results with minimal delay.
+
+## Endpoint
+
+```
+WSS wss://waves-api.smallest.ai/api/v1/pulse/get_text
+```
+
+## Authentication
+
+Head over to the [smallest console](https://console.smallest.ai/apikeys) to generate an API key if not done previously. Also look at [Authentication guide](/v4.0.0/content/getting-started/authentication) for more information about API keys and their usage.
+
+Include your API key in the Authorization header when establishing the WebSocket connection:
+
+```http
+Authorization: Bearer SMALLEST_API_KEY
+```
+
+## Example Connection
+
+<CodeGroup>
+```javascript JavaScript
+const API_KEY = "SMALLEST_API_KEY";
+
+const url = new URL("wss://waves-api.smallest.ai/api/v1/pulse/get_text");
+url.searchParams.append("language", "en");
+url.searchParams.append("encoding", "linear16");
+url.searchParams.append("sample_rate", "16000");
+url.searchParams.append("word_timestamps", "true");
+
+const ws = new WebSocket(url.toString(), {
+  headers: {
+    Authorization: `Bearer ${API_KEY}`,
+  },
+});
+
+ws.onopen = () => {
+  console.log("Connected to STT WebSocket");
+  // Start streaming audio chunks
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log("Transcript:", data.transcript);
+  console.log("Full transcript:", data.full_transcript);
+  console.log("Is final:", data.is_final);
+};
+```
+
+```python Python
+import asyncio
+import websockets
+import json
+from urllib.parse import urlencode
+
+BASE_WS_URL = "wss://waves-api.smallest.ai/api/v1/pulse/get_text"
+params = {
+    "language": "en",
+    "encoding": "linear16",
+    "sample_rate": "16000",
+    "word_timestamps": "true"
+}
+WS_URL = f"{BASE_WS_URL}?{urlencode(params)}"
+
+API_KEY = "SMALLEST_API_KEY"
+
+async def connect():
+    headers = {
+        "Authorization": f"Bearer {API_KEY}"
+    }
+    
+    async with websockets.connect(WS_URL, additional_headers=headers) as ws:
+        print("Connected to STT WebSocket")
+        
+        # Send audio chunks
+        # audio_chunk = b"..."
+        # await ws.send(audio_chunk)
+        
+        # Listen for transcriptions
+        async for message in ws:
+            data = json.loads(message)
+            print(f"Transcript: {data.get('transcript')}")
+            print(f"Is final: {data.get('is_final')}")
+
+asyncio.run(connect())
+```
+</CodeGroup>
+
+## Example Response
+
+The server responds with JSON messages containing transcription results:
+
+```json
+{
+  "session_id": "sess_12345abcde",
+  "transcript": "Hello, how are you?",
+  "is_final": true,
+  "is_last": false,
+  "language": "en"
+}
+```
+
+For detailed information about response fields, see the [response format documentation](/v4.0.0/content/speech-to-text/realtime/response-format).
+
+## Streaming Audio
+
+Send raw audio bytes as binary WebSocket messages. The recommended chunk size is 4096 bytes:
+
+```javascript
+const audioChunk = new Uint8Array(4096);
+ws.send(audioChunk);
+```
+
+When you're done streaming, send an end signal:
+
+```json
+{
+  "type": "end"
+}
+```
+
+## Next Steps
+
+- Learn about [supported audio formats](/v4.0.0/content/speech-to-text/realtime/audio-formats) for WebSocket streaming.
+- Review complete [code examples](/v4.0.0/content/speech-to-text/realtime/code-examples) for Python, Node.js, and Browser JavaScript.
+- Follow [best practices](/v4.0.0/content/speech-to-text/realtime/best-practices) for optimal streaming performance.
+- Troubleshoot common issues in the [troubleshooting guide](/v4.0.0/content/speech-to-text/realtime/troubleshooting).
+

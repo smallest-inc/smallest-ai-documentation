@@ -1,0 +1,137 @@
+---
+title: "API Keys & Authentication"
+description: "Generate and manage API keys for programmatic access"
+---
+
+# API Keys & Authentication
+
+Access Atoms programmatically using API keys. Generate, rotate, and manage keys securely.
+
+---
+
+## Getting Your API Key
+
+1. Log in to your [Atoms Dashboard](https://atoms.smallest.ai)
+2. Go to **Settings** → **API Keys**
+3. Click **Generate New Key**
+4. **Copy immediately** — you won't see it again!
+
+<Warning>
+  **Security:** Your API key provides full access to your account. Never share it publicly, commit it to version control, or expose it in client-side code.
+</Warning>
+
+---
+
+## Using Your API Key
+
+### Environment Variable (Recommended)
+
+```bash
+export SMALLEST_API_KEY="your-api-key-here"
+```
+
+### In Code
+
+<CodeGroup>
+```python Python
+from smallestai.atoms import AtomsClient
+
+# Automatically reads SMALLEST_API_KEY from environment
+client = AtomsClient()
+
+# Or pass explicitly (not recommended)
+client = AtomsClient(api_key="your-api-key")
+```
+
+```javascript Node.js
+import { AtomsClient } from '@smallest/atoms';
+
+// Automatically reads SMALLEST_API_KEY from environment
+const client = new AtomsClient();
+```
+
+```bash cURL
+curl -X GET "https://api.smallest.ai/v1/agents" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+---
+
+## Key Management
+
+### Multiple Keys
+
+Create separate keys for different purposes:
+
+| Key Name | Use Case |
+|----------|----------|
+| `prod-backend` | Production server |
+| `staging-backend` | Staging environment |
+| `ci-cd-pipeline` | Automated deployments |
+| `developer-john` | Individual developer |
+
+### Rotating Keys
+
+1. Generate a new key
+2. Update your applications to use the new key
+3. Test that everything works
+4. Delete the old key
+
+<Tip>Rotate keys periodically and immediately after any suspected exposure.</Tip>
+
+---
+
+## Key Permissions (Coming Soon)
+
+Fine-grained permissions for API keys:
+
+| Permission | Access |
+|------------|--------|
+| **Full Access** | All API operations |
+| **Read Only** | GET requests only |
+| **Agents Only** | Agent CRUD, no billing |
+| **Calls Only** | Make calls, view logs |
+
+---
+
+## Rate Limits
+
+API requests are rate-limited to ensure fair usage:
+
+| Endpoint | Limit |
+|----------|-------|
+| Most endpoints | 100 requests/minute |
+| Call initiation | 10 calls/minute |
+| Bulk operations | 20 requests/minute |
+
+Hitting limits returns `429 Too Many Requests`. Implement exponential backoff in your code.
+
+---
+
+## Troubleshooting
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `401 Unauthorized` | Invalid or missing key | Check key is correct |
+| `403 Forbidden` | Key lacks permission | Generate key with correct scope |
+| `429 Too Many Requests` | Rate limit hit | Add retry logic with backoff |
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use environment variables">
+    Never hardcode API keys. Use `SMALLEST_API_KEY` environment variable.
+  </Accordion>
+  <Accordion title="One key per environment">
+    Separate keys for dev, staging, production.
+  </Accordion>
+  <Accordion title="Rotate regularly">
+    Rotate keys quarterly or after any team changes.
+  </Accordion>
+  <Accordion title="Monitor usage">
+    Check API logs for unexpected activity.
+  </Accordion>
+</AccordionGroup>

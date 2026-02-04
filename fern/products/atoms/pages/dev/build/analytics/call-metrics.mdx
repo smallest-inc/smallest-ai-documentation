@@ -1,166 +1,227 @@
 ---
 title: "Call Metrics"
 sidebarTitle: "Call Metrics"
-description: "Track call duration, status, and transcripts."
+description: "Retrieve call details, transcripts, recordings, and performance data."
 ---
 
-Retrieve detailed metrics for individual calls.
+Access detailed information about every call through the SDK.
 
-## Getting Call Details
+## Getting Recent Calls
+
+Fetch a paginated list of calls:
 
 ```python
-import requests
-import os
+from smallestai.atoms.call import Call
 
-API_KEY = os.getenv("SMALLEST_API_KEY")
-call_id = "CALL-1768155029217-0bae45"
+call = Call()
 
-response = requests.get(
-    f"https://atoms.smallest.ai/api/v1/conversation/{call_id}",
-    headers={"Authorization": f"Bearer {API_KEY}"}
-)
-data = response.json()["data"]
+calls = call.get_calls(limit=5)
 
-print(f"Call ID: {data['callId']}")
-print(f"Duration: {data['duration']} seconds")
+for log in calls["data"]["logs"]:
+    print(f"{log['callId']}: {log['status']} ({log['duration']}s)")
+```
+
+The response includes pagination info:
+
+```json
+{
+  "status": true,
+  "data": {
+    "logs": [...],
+    "pagination": {
+      "total": 94,
+      "page": 1,
+      "hasMore": true,
+      "limit": 5
+    }
+  }
+}
+```
+
+---
+
+## Filtering Calls
+
+Narrow results using filter parameters:
+
+```python
+from smallestai.atoms.call import Call
+
+call = Call()
+
+# By status
+completed = call.get_calls(status="completed", limit=10)
+
+# By agent
+agent_calls = call.get_calls(agent_id="696ddd281ea16a73cb8aafbe", limit=10)
+
+# By campaign
+campaign_calls = call.get_calls(campaign_id="696ddd2a04ff172dbd8eddad", limit=10)
+
+# By call type
+outbound = call.get_calls(call_type="telephony_outbound", limit=10)
+
+# By phone number
+found = call.get_calls(search="+916366821717", limit=10)
+```
+
+### Filter Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `agent_id` | string | Filter by agent ID |
+| `campaign_id` | string | Filter by campaign ID |
+| `page` | int | Page number (default: 1) |
+| `limit` | int | Results per page (default: 10) |
+| `status` | string | completed, failed, in_progress, no_answer, busy |
+| `call_type` | string | telephony_inbound, telephony_outbound, chat |
+| `search` | string | Match callId, fromNumber, or toNumber |
+
+---
+
+## Getting Single Call Details
+
+Retrieve complete details for one call:
+
+```python
+from smallestai.atoms.call import Call
+
+call = Call()
+
+call_id = "CALL-1768807723178-4561d0"
+details = call.get_call(call_id)
+
+data = details["data"]
 print(f"Status: {data['status']}")
+print(f"Duration: {data['duration']} seconds")
+print(f"From: {data['from']} → To: {data['to']}")
 ```
 
-## Call Duration
+### Response Fields
+
+| Field | Description |
+|-------|-------------|
+| `callId` | Unique call identifier |
+| `status` | completed, failed, in_progress, no_answer |
+| `duration` | Length in seconds |
+| `type` | telephony_outbound, telephony_inbound, chat |
+| `from` / `to` | Phone numbers |
+| `transcript` | Array of conversation messages |
+| `recordingUrl` | Mono audio file URL |
+| `recordingDualUrl` | Stereo audio file URL |
+| `callCost` | Cost in credits |
+| `disconnectionReason` | user_hangup, agent_hangup, timeout |
+| `postCallAnalytics` | AI summary and extracted metrics |
+
+---
+
+## Accessing Transcripts
+
+The transcript is an array of messages with speaker roles:
 
 ```python
-duration_seconds = data["duration"]
-duration_minutes = duration_seconds / 60
+details = call.get_call(call_id)
+transcript = details["data"].get("transcript", [])
 
-print(f"Call lasted {duration_minutes:.1f} minutes")
+for msg in transcript:
+    print(f"{msg['role']}: {msg['content']}")
 ```
 
-## Call Status
+---
 
-Check call outcomes:
+## Accessing Recordings
+
+Recordings are available after the call completes:
 
 ```python
-status = data["status"]
+details = call.get_call(call_id)
+data = details["data"]
 
-if status == "completed":
-    print("Call completed successfully")
-elif status == "in_progress":
-    print("Call is ongoing")
-elif status == "failed":
-    print(f"Call failed: {data.get('callFailureReason', 'Unknown')}")
+if data.get("recordingUrl"):
+    print(f"Mono: {data['recordingUrl']}")
+
+if data.get("recordingDualUrl"):
+    print(f"Stereo: {data['recordingDualUrl']}")
 ```
 
-## Call Types
+---
+
+## Batch Search
+
+Fetch multiple calls at once with `search_calls()`:
 
 ```python
-call_type = data["type"]
+call_ids = ["CALL-1768807723178-4561d0", "CALL-1768807723177-4561cd"]
+result = call.search_calls(call_ids)
 
-# Possible values:
-# - 'telephony_inbound'  - Incoming call
-# - 'telephony_outbound' - Outgoing call  
-# - 'chat'               - Text conversation
+print(f"Found {result['data']['total']} of {len(call_ids)} calls")
 ```
 
-## Phone Numbers
+<Note>
+Maximum 100 call IDs per request.
+</Note>
+
+---
+
+## Performance Metrics
+
+Each call includes latency breakdowns:
 
 ```python
-caller = data["from"]  # Who initiated
-callee = data["to"]    # Who received
+details = call.get_call(call_id)
+data = details["data"]
 
-print(f"From: {caller}")
-print(f"To: {callee}")
+print(f"Transcriber: {data.get('average_transcriber_latency')}ms")
+print(f"Agent (LLM): {data.get('average_agent_latency')}ms")
+print(f"Synthesizer: {data.get('average_synthesizer_latency')}ms")
 ```
 
-## Transcripts
+| Metric | Description |
+|--------|-------------|
+| `average_transcriber_latency` | Speech-to-text processing time |
+| `average_agent_latency` | LLM response generation time |
+| `average_synthesizer_latency` | Text-to-speech processing time |
 
-Get the full conversation:
+---
 
-```python
-transcript = data["transcript"]
+## SDK Reference
 
-for message in transcript:
-    role = message.get("role", "unknown")
-    content = message.get("content", "")
-    print(f"{role}: {content}")
-```
+| Method | Description |
+|--------|-------------|
+| `get_calls(...)` | List calls with optional filters |
+| `get_call(call_id)` | Get single call with all details |
+| `search_calls(call_ids)` | Batch fetch by call IDs |
 
-## Recording URL
+---
 
-Access the call recording:
+## Tips
 
-```python
-recording_url = data["recordingUrl"]
-dual_url = data["recordingDualUrl"]  # Stereo version
-
-if recording_url:
-    print(f"Recording: {recording_url}")
-```
-
-## Call Cost
-
-```python
-cost = data["callCost"]
-print(f"Call cost: {cost} credits")
-```
-
-## Call Events
-
-View the call lifecycle:
-
-```python
-events = data["events"]
-
-for event in events:
-    event_type = event["eventType"]
-    event_time = event["eventTime"]
-    print(f"{event_time}: {event_type}")
-```
-
-Common event types:
-- `call_pending` - Call initiated
-- `call_queued` - Waiting for agent
-- `in_progress` - Call connected
-- `completed` - Call ended normally
-- `failed` - Call failed
-
-## Batch Analysis
-
-Analyze multiple calls:
-
-```python
-def analyze_calls(call_ids):
-    total_duration = 0
-    completed = 0
-    
-    for call_id in call_ids:
-        resp = requests.get(
-            f"https://atoms.smallest.ai/api/v1/conversation/{call_id}",
-            headers={"Authorization": f"Bearer {API_KEY}"}
-        )
-        data = resp.json()["data"]
-        
-        total_duration += data.get("duration", 0)
-        if data.get("status") == "completed":
-            completed += 1
-    
-    avg_duration = total_duration / len(call_ids) if call_ids else 0
-    completion_rate = completed / len(call_ids) * 100 if call_ids else 0
-    
-    print(f"Average duration: {avg_duration:.1f}s")
-    print(f"Completion rate: {completion_rate:.1f}%")
-```
-
-## Export Data
-
-```python
-import json
-
-# Export to JSON
-with open("call_log.json", "w") as f:
-    json.dump(data, f, indent=2)
-
-# Export transcript to text
-with open("transcript.txt", "w") as f:
-    for msg in data.get("transcript", []):
-        f.write(f"{msg.get('role', '')}: {msg.get('content', '')}\n")
-```
+<AccordionGroup>
+  <Accordion title="What's the difference between status and disconnectionReason?">
+    `status` is the outcome (completed, failed). `disconnectionReason` explains *why* it ended:
+    - `user_hangup` — Caller hung up
+    - `agent_hangup` — Agent ended the call
+    - `dial_no_answer` — No pickup
+    - `timeout` — Call timeout
+  </Accordion>
+  <Accordion title="When are recordings available?">
+    Recordings generate after the call ends. They may take a few seconds to appear. Check if `recordingUrl` is non-empty before accessing.
+  </Accordion>
+  <Accordion title="How do I calculate average call duration?">
+    Fetch calls with `get_calls()`, then calculate:
+    ```python
+    calls = call.get_calls(status="completed", limit=100)
+    durations = [log["duration"] for log in calls["data"]["logs"]]
+    avg = sum(durations) / len(durations)
+    ```
+  </Accordion>
+  <Accordion title="How do I find calls for a specific phone number?">
+    Use the `search` parameter:
+    ```python
+    calls = call.get_calls(search="+916366821717")
+    ```
+  </Accordion>
+  <Accordion title="How do I get calls from a specific date range?">
+    Currently, use pagination and filter client-side by `createdAt`. Date range filters are coming soon.
+  </Accordion>
+</AccordionGroup>

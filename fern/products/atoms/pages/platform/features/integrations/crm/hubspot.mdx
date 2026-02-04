@@ -1,0 +1,235 @@
+---
+title: "HubSpot Integration"
+sidebarTitle: "HubSpot"
+description: "Connect Atoms to HubSpot for contact lookup and engagement tracking."
+---
+
+Integrate your Atoms agents with HubSpot to look up contacts, log engagements, and create deals automatically.
+
+---
+
+## What You Can Do
+
+| Capability | Description |
+|------------|-------------|
+| **Contact Lookup** | Find contacts by phone number |
+| **Engagement Logging** | Log calls as HubSpot engagements |
+| **Contact Creation** | Create new contacts for unknown callers |
+| **Deal Updates** | Update deal stages based on call outcomes |
+
+---
+
+## Connecting HubSpot
+
+<Steps>
+  ### Navigate to Integrations
+  
+  Go to **Settings** → **Integrations** → **HubSpot**.
+
+  ### Click "Connect HubSpot"
+  
+  You'll be redirected to HubSpot login.
+
+  ### Authorize Access
+  
+  Log in and select your HubSpot account. Grant access to:
+  - Contacts
+  - Deals
+  - Engagements
+  - Timeline events
+
+  ### Verify Connection
+  
+  You should see "Connected" status with your HubSpot account info.
+</Steps>
+
+---
+
+## Configuration Options
+
+### Contact Lookup
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Search Property** | Which property to search | phone |
+| **Properties to Fetch** | Contact data to retrieve | firstname, lastname, email, company |
+| **Create if Not Found** | Auto-create new contacts | Optional |
+
+### Engagement Logging
+
+| Setting | Description | Options |
+|---------|-------------|---------|
+| **Log Calls** | Create call engagements | Yes/No |
+| **Engagement Type** | Type of engagement | CALL |
+| **Include Recording** | Attach recording link | If available |
+
+---
+
+## Using HubSpot Data in Agents
+
+### Pre-Call Lookup
+
+When a call connects, Atoms searches HubSpot:
+
+```
+POST /crm/v3/objects/contacts/search
+
+{
+  "filterGroups": [{
+    "filters": [{
+      "propertyName": "phone",
+      "operator": "EQ", 
+      "value": "{{caller_phone}}"
+    }]
+  }],
+  "properties": ["firstname", "lastname", "email", "company", "lifecyclestage"]
+}
+```
+
+**Variables populated:**
+- `{{first_name}}` — First name
+- `{{last_name}}` — Last name
+- `{{customer_email}}` — Email address
+- `{{company_name}}` — Associated company
+- `{{lifecycle_stage}}` — Lead, MQL, Customer, etc.
+
+### In Your Prompt
+
+```
+CONTACT CONTEXT (from HubSpot):
+- Name: {{first_name}} {{last_name}}
+- Company: {{company_name}}
+- Stage: {{lifecycle_stage}}
+
+Greet them by first name. If they're a "customer" stage, 
+thank them for being a customer. If "lead" or "mql", 
+focus on qualifying their needs.
+```
+
+---
+
+## Post-Call Engagement Logging
+
+After each call, Atoms creates a Call engagement:
+
+```json
+{
+  "engagement": {
+    "type": "CALL",
+    "timestamp": 1705766400000
+  },
+  "associations": {
+    "contactIds": [12345]
+  },
+  "metadata": {
+    "body": "Call Summary:\nCustomer inquired about pricing for Enterprise plan. Sent follow-up email with quote.\n\nOutcome: Interested - Follow up scheduled",
+    "durationMilliseconds": 225000,
+    "status": "COMPLETED",
+    "toNumber": "+14155551234",
+    "disposition": "Connected"
+  }
+}
+```
+
+---
+
+## Creating Contacts for New Callers
+
+Enable auto-creation for callers not in HubSpot:
+
+<Steps>
+  ### Enable "Create if Not Found"
+  
+  In HubSpot integration settings, turn on contact creation.
+
+  ### Configure Required Fields
+  
+  During the call, ensure you collect:
+  - Name (at minimum)
+  - Email (recommended)
+  - Any other required fields
+
+  ### Set Lifecycle Stage
+  
+  Choose what stage new contacts start at:
+  - Subscriber
+  - Lead
+  - Or your custom stage
+</Steps>
+
+### In Your Prompt
+
+```
+If the caller is new (not found in HubSpot):
+1. Collect their name: "May I have your name please?"
+2. Collect their email: "And what's the best email to reach you?"
+3. Ask how they found us (optional): "How did you hear about us?"
+
+Store this information for the CRM.
+```
+
+---
+
+## Deal Integration
+
+Update deals based on call outcomes:
+
+| Call Outcome | Deal Action |
+|--------------|-------------|
+| Interested | Move to "Qualified" |
+| Demo Scheduled | Move to "Demo Scheduled" |
+| Not Interested | Move to "Closed Lost" |
+| Follow-up Needed | Add note, keep stage |
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Contact Not Found" icon="search">
+    **Possible causes:**
+    - Phone number format differs
+    - Contact has phone in different property
+    - Contact doesn't exist
+    
+    **Solutions:**
+    1. Check phone format (country codes, formatting)
+    2. Search multiple phone properties
+    3. Enable "create if not found"
+  </Accordion>
+  
+  <Accordion title="Engagement Not Created" icon="list">
+    **Possible causes:**
+    - Contact wasn't matched
+    - API permissions issue
+    - Rate limit exceeded
+    
+    **Solutions:**
+    1. Verify contact lookup succeeded
+    2. Check HubSpot API permissions
+    3. Review rate limits in HubSpot
+  </Accordion>
+  
+  <Accordion title="Connection Expired" icon="clock">
+    **Possible causes:**
+    - OAuth token expired
+    - HubSpot permissions changed
+    
+    **Solutions:**
+    1. Reconnect the integration
+    2. Re-authorize access
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Salesforce Integration" icon="salesforce" href="/platform/features/integrations/crm/salesforce">
+    Set up Salesforce instead
+  </Card>
+  <Card title="Calendar Integration" icon="calendar" href="/platform/features/integrations/calendar">
+    Add appointment booking
+  </Card>
+</CardGroup>

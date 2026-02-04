@@ -1,0 +1,71 @@
+---
+title: "Quickstart"
+description: "This guide will help you get started quickly with transcribing your first audio using Python and the Smallest AI API."
+icon: "rocket"
+---
+
+## Step 1: Sign Up & Get Your API Key
+
+1. Visit the [platform](https://atoms.smallest.ai/dashboard/speech-to-text?utm_source=documentation&utm_medium=speech-to-text) and sign up for an account or log in if you already have an account.
+2. Navigate to `API Key` tab in your account dashboard.
+3. Create a new API Key and copy it.
+4. Export the API Key in your environment with the name `SMALLEST_API_KEY`, ensuring that your application can access it securely for authentication.
+
+## Step 2: Install Dependencies
+
+To install the required library:
+
+```bash
+pip install requests
+```
+
+## Step 3: Make Your First API Call
+
+Here is a basic example of how to use Python to transcribe an audio file:
+
+<CodeGroup>
+```python Python
+import os
+import requests
+
+API_KEY = os.environ.get("SMALLEST_API_KEY")
+
+response = requests.post(
+    "https://waves-api.smallest.ai/api/v1/pulse/get_text",
+    params={"model": "pulse", "language": "en"},
+    headers={
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "audio/wav",
+    },
+    data=open("audio.wav", "rb").read(),
+    timeout=120
+)
+
+result = response.json()
+print(result["transcription"])
+```
+
+```bash cURL
+curl --request POST \
+  --url "https://waves-api.smallest.ai/api/v1/pulse/get_text?model=pulse&language=en" \
+  --header "Authorization: Bearer $SMALLEST_API_KEY" \
+  --header "Content-Type: audio/wav" \
+  --data-binary "@audio.wav"
+```
+</CodeGroup>
+
+Replace `YOUR_API_KEY` with the API key you obtained in Step 1.
+
+## Step 4: Explore More Features
+
+- **[Real-Time Transcription](/v4.0.0/content/speech-to-text/realtime/quickstart):** Stream audio via WebSocket for live transcription.
+- **[Speaker Diarization](/v4.0.0/content/speech-to-text/features/diarization):** Identify and label different speakers in multi-speaker audio.
+- **[Word Timestamps](/v4.0.0/content/speech-to-text/features/word-timestamps):** Get precise timing information for each word.
+- **[Emotion Detection](/v4.0.0/content/speech-to-text/features/emotion-detection):** Analyze emotional tone in transcribed speech.
+
+For detailed documentation on all available features and endpoints, visit our [API Reference](/v4.0.0/content/api-references/pulse-stt).
+
+### Need Help?
+
+If you have any questions or need assistance, please contact our support team at [support@smallest.ai](mailto:support@smallest.ai).
+

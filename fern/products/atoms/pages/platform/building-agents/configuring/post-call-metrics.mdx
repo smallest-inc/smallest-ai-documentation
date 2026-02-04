@@ -1,0 +1,161 @@
+---
+title: "Post-Call Metrics"
+sidebarTitle: "Post-Call Metrics"
+description: "Extract structured data from every conversation automatically."
+---
+
+Post-call metrics let you pull specific insights from conversations after they end. Define what you want to know — satisfaction scores, call outcomes, issue categories — and Atoms analyzes each call to fill in the answers.
+
+**Location:** Left Sidebar → Post Call Metrics
+
+<Frame caption="Post-call metrics dashboard">
+  ![Post-call metrics list](/platform/building-agents/images/post-call-metrics-list.png)
+</Frame>
+
+---
+
+## How It Works
+
+1. **You define metrics** — What questions do you want answered about each call?
+2. **Call ends** — Conversation completes normally
+3. **AI analyzes** — Atoms reviews the transcript against your metrics
+4. **Data populated** — Your metrics get filled in automatically
+5. **Access anywhere** — View in logs, receive via webhook, export
+
+---
+
+## Creating a New Metric
+
+Click the **Add Metrics +** button to open the configuration panel. You'll see two options:
+
+<Tabs>
+  <Tab title="Disposition Metrics">
+    <Frame caption="Create a new metric from scratch">
+      ![Disposition metrics](/platform/building-agents/images/post-call-disposition.png)
+    </Frame>
+    
+    Build a custom metric from scratch. Fill in the Identifier, Data Type, and Prompt — see details below.
+    
+    Use **Add Another +** to create multiple metrics at once.
+    
+    <Note>
+    Don't forget to hit **Save** in the Disposition tab once you're done.
+    </Note>
+  </Tab>
+  
+  <Tab title="Templates">
+    <Frame caption="Select from pre-built metrics">
+      ![Metric templates](/platform/building-agents/images/post-call-templates.png)
+    </Frame>
+    
+    Choose from pre-built metrics for common use cases. Just select the ones you want — no manual configuration needed.
+    
+    <Note>
+    Don't forget to hit **Save** in the Disposition tab once you're done.
+    </Note>
+  </Tab>
+</Tabs>
+
+---
+
+## Configuring a Metric
+
+Each metric needs three things:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| **Identifier** | Yes | Unique name for this metric. Lowercase, numbers, underscores only. |
+| **Data Type** | Yes | What kind of value: String, Number, or Boolean |
+| **Prompt** | Yes | The question you want answered about the call |
+
+### Identifier
+
+This is the key used to reference the metric in exports, webhooks, and the API.
+
+```
+customer_satisfaction
+call_outcome
+follow_up_needed
+```
+
+<Note>
+**Naming rules:** Lowercase letters, numbers, and underscores only. No spaces or special characters.
+</Note>
+
+### Data Type
+
+| Type | Use for | Example values |
+|------|---------|----------------|
+| **String** | Free text, categories | "resolved", "escalated", "billing issue" |
+| **Boolean** | Yes/no questions | true, false |
+| **Integer** | Whole numbers, scores | 1, 5, 10 |
+| **Enum** | Fixed set of options | One of: "low", "medium", "high" |
+| **Datetime** | Dates and times | "2024-01-15T10:30:00Z" |
+
+### Prompt
+
+This is the question the AI answers by analyzing the transcript. Be specific.
+
+**Good prompts:**
+- "Did the agent acknowledge and respond to customer concerns effectively?"
+- "Rate customer satisfaction from 1 to 5 based on tone and words used."
+- "What was the primary reason for this call? Options: billing, technical, account, other"
+
+**Vague prompts to avoid:**
+- "Was it good?"
+- "Customer happy?"
+
+<Tip>
+**Start with 3-5 metrics.** Too many can slow analysis and clutter your data. Add more as you learn what insights matter most.
+</Tip>
+
+---
+
+## Example Metrics
+
+<Tabs>
+  <Tab title="Call Outcome">
+    | Field | Value |
+    |-------|-------|
+    | **Identifier** | `call_outcome` |
+    | **Data Type** | String |
+    | **Prompt** | "What was the outcome of this call? Options: resolved, escalated, transferred, abandoned, callback_scheduled" |
+  </Tab>
+
+  <Tab title="Satisfaction Score">
+    | Field | Value |
+    |-------|-------|
+    | **Identifier** | `satisfaction_score` |
+    | **Data Type** | Integer |
+    | **Prompt** | "Rate the customer's apparent satisfaction from 1 to 5, based on their tone and language throughout the call." |
+  </Tab>
+
+  <Tab title="Follow-Up Needed">
+    | Field | Value |
+    |-------|-------|
+    | **Identifier** | `follow_up_needed` |
+    | **Data Type** | Boolean |
+    | **Prompt** | "Does this call require any follow-up action from the team?" |
+  </Tab>
+
+  <Tab title="Issue Category">
+    | Field | Value |
+    |-------|-------|
+    | **Identifier** | `issue_category` |
+    | **Data Type** | Enum |
+    | **Prompt** | "What was the primary issue category? Options: billing, technical, account, product_info, complaint, other" |
+  </Tab>
+</Tabs>
+
+---
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Conversation Logs" icon="scroll" href="/platform/building-agents/testing-launch/conversation-logs">
+    View metrics for individual calls
+  </Card>
+  <Card title="Analytics Dashboard" icon="chart-line" href="/platform/analytics/overview">
+    See aggregated trends across calls
+  </Card>
+</CardGroup>

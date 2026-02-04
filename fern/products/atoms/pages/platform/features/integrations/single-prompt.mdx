@@ -1,0 +1,213 @@
+---
+title: "Integrations with Single Prompt"
+sidebarTitle: "Single Prompt"
+description: "How to use integrations effectively with Single Prompt agents."
+---
+
+Single Prompt agents use integrations through Pre-Call APIs, Tool Calls, and Post-Call APIs. Here's how to set them up for maximum effectiveness.
+
+---
+
+## Integration Flow
+
+```
+[Call Connects]
+       ↓
+[Pre-Call API] → CRM lookup, load context
+       ↓
+[Agent Conversation] → Tool calls for real-time actions
+       ↓
+[Post-Call API] → Log to CRM, trigger follow-ups
+```
+
+---
+
+## Pre-Call: Loading Customer Context
+
+Pre-Call APIs run before your agent speaks, loading context from your connected systems.
+
+### CRM Lookup
+
+```
+When call connects:
+1. Atoms checks caller phone in CRM
+2. Retrieves: name, email, account status, history
+3. Populates variables for your prompt
+4. Agent greets with full context
+```
+
+### Using Context in Your Prompt
+
+```
+CUSTOMER CONTEXT (automatically populated from CRM):
+- Name: {{customer_name}}
+- Account Status: {{account_status}}
+- Last Contact: {{last_contact_date}}
+- Open Issues: {{open_tickets}}
+
+INSTRUCTIONS:
+- Greet {{customer_name}} by name
+- If {{account_status}} is "vip", thank them for their loyalty
+- If {{open_tickets}} > 0, ask if they're calling about an existing issue
+```
+
+---
+
+## Mid-Call: Tool-Based Integrations
+
+Single Prompt agents can call integration tools during the conversation when the agent decides they're needed.
+
+### Available Tools
+
+Configure which integration tools your agent can use:
+
+| Tool | Trigger | Action |
+|------|---------|--------|
+| `check_availability` | Customer asks about scheduling | Queries calendar |
+| `book_appointment` | Customer confirms time | Creates calendar event |
+| `lookup_order` | Customer asks about order | Queries order system |
+| `create_ticket` | New support issue | Creates CRM ticket |
+
+### Prompt Instructions
+
+Tell the agent when to use tools:
+
+```
+AVAILABLE TOOLS:
+
+1. check_availability
+   - Use when: Customer asks about appointment times
+   - Requires: Preferred date (ask if not provided)
+   
+2. book_appointment
+   - Use when: Customer confirms a time slot
+   - Requires: Date, time, customer email
+   - Always confirm details before booking
+
+3. create_support_ticket
+   - Use when: Issue can't be resolved on the call
+   - Requires: Issue description, customer contact
+   - Tell customer their ticket number
+```
+
+### Example Flow
+
+```
+Customer: "I need to schedule an appointment for next week"
+
+Agent thinks: Need to check availability → use check_availability tool
+Agent: "I'd be happy to help. What day next week works best?"
+
+Customer: "Tuesday if possible"
+
+Agent calls: check_availability(date: "2024-01-23")
+Response: {slots: ["9:00 AM", "2:00 PM", "4:30 PM"]}
+
+Agent: "I have 9 AM, 2 PM, and 4:30 PM available on Tuesday. Which works for you?"
+
+Customer: "2 PM please"
+
+Agent calls: book_appointment(date: "2024-01-23", time: "14:00", email: "sarah@email.com")
+Response: {confirmed: true, event_id: "evt_123"}
+
+Agent: "Perfect! You're all set for Tuesday, January 23rd at 2 PM. 
+        I've sent a calendar invite to your email."
+```
+
+---
+
+## Post-Call: Automatic Logging
+
+After every call, Post-Call APIs sync data back to your systems.
+
+### What Gets Logged
+
+| Data | Destination | Purpose |
+|------|-------------|---------|
+| Call summary | CRM (Task/Note) | Record of conversation |
+| Duration | CRM | Tracking engagement |
+| Outcome | CRM | Pipeline/status updates |
+| Next steps | CRM | Follow-up triggers |
+
+### Customizing Post-Call Data
+
+Control what's sent to your CRM:
+
+```json
+{
+  "contact_phone": "{{caller_phone}}",
+  "contact_name": "{{customer_name}}",
+  "call_duration": {{call_duration}},
+  "call_summary": "{{call_summary}}",
+  "outcome": "{{disposition}}",
+  "next_action": "{{follow_up_action}}",
+  "booked_appointment": "{{appointment_date}}"
+}
+```
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Handle Missing Context" icon="question">
+    Not every caller will be in your CRM. Plan for it:
+    
+    ```
+    If customer data is not found ({{customer_name}} is empty):
+    - Greet generically: "Hi there! Thanks for calling."
+    - Ask for their name early
+    - Offer to create a contact record
+    - Continue with full service
+    ```
+  </Accordion>
+  
+  <Accordion title="Confirm Before Actions" icon="check">
+    Always confirm before taking actions:
+    
+    **Booking:**
+    "Just to confirm, I'll book you for Tuesday at 2 PM. Is that correct?"
+    
+    **Creating tickets:**
+    "I'll create a support ticket for this issue. Should I send updates to sarah@email.com?"
+  </Accordion>
+  
+  <Accordion title="Handle Integration Failures" icon="triangle-exclamation">
+    Integrations can fail. Have fallbacks:
+    
+    ```
+    If calendar check fails:
+    - Apologize: "I'm having trouble checking our calendar right now"
+    - Offer alternative: "Can I have someone call you back to schedule?"
+    - Or: "You can also book online at ourwebsite.com/schedule"
+    ```
+  </Accordion>
+  
+  <Accordion title="Keep Prompts Organized" icon="list">
+    Structure integration instructions clearly:
+    
+    ```
+    === CUSTOMER CONTEXT ===
+    [CRM data here]
+    
+    === AVAILABLE TOOLS ===
+    [Tool descriptions here]
+    
+    === CONVERSATION GUIDELINES ===
+    [How to use context and tools]
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Convo Flow Integrations" icon="diagram-project" href="/platform/features/integrations/convo-flow">
+    More control with node-based flows
+  </Card>
+  <Card title="API Call Setup" icon="code" href="/platform/features/api-calls/single-prompt">
+    Configure custom API calls
+  </Card>
+</CardGroup>

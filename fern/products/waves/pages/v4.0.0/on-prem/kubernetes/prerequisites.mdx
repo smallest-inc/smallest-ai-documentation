@@ -1,0 +1,371 @@
+---
+title: Prerequisites
+description: Requirements for deploying Smallest Self-Host on Kubernetes
+---
+
+<Warning>
+**Kubernetes deployment is currently only available for ASR (Speech-to-Text).** TTS (Text-to-Speech) Kubernetes support is coming soon. For TTS deployments, please use [Docker](/docker/tts/quick-start).
+</Warning>
+
+## Overview
+
+Before deploying Smallest Self-Host ASR on Kubernetes, ensure your cluster meets the requirements and you have the necessary tools and credentials.
+
+## Kubernetes Cluster Requirements
+
+### Minimum Cluster Specifications
+
+<CardGroup cols={2}>
+  <Card title="Kubernetes Version" icon="dharmachakra">
+    **v1.19 or higher**
+    
+    v1.24+ recommended
+  </Card>
+
+  <Card title="Node Count" icon="server">
+    **Minimum 2 nodes**
+    
+    - 1 CPU node (control plane/general)
+    - 1 GPU node (Lightning ASR)
+  </Card>
+
+  <Card title="Total Resources" icon="microchip">
+    **Minimum cluster capacity**
+    
+    - 8 CPU cores
+    - 32 GB RAM
+    - 1 NVIDIA GPU
+  </Card>
+
+  <Card title="Storage" icon="hard-drive">
+    **Persistent volume support**
+    
+    - Storage class available
+    - 100 GB minimum capacity
+  </Card>
+</CardGroup>
+
+ 
+<Tip>
+  We recommend using L4 or L40s for the best performance.
+</Tip>
+
+## Required Tools
+
+Install the following tools on your local machine:
+
+### Helm
+
+Helm 3.0 or higher is required.
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    brew install helm
+    ```
+  </Tab>
+
+  <Tab title="Linux">
+    ```bash
+    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+    ```
+  </Tab>
+
+  <Tab title="Windows">
+    ```powershell
+    choco install kubernetes-helm
+    ```
+  </Tab>
+</Tabs>
+
+Verify installation:
+```bash
+helm version
+```
+
+### kubectl
+
+Kubernetes CLI tool for cluster management.
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    brew install kubectl
+    ```
+  </Tab>
+
+  <Tab title="Linux">
+    ```bash
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    chmod +x kubectl
+    sudo mv kubectl /usr/local/bin/
+    ```
+  </Tab>
+
+  <Tab title="Windows">
+    ```powershell
+    choco install kubernetes-cli
+    ```
+  </Tab>
+</Tabs>
+
+Verify installation:
+```bash
+kubectl version --client
+```
+
+## Cluster Access
+
+### Configure kubectl
+
+Ensure kubectl is configured to access your cluster:
+
+```bash
+kubectl cluster-info
+kubectl get nodes
+```
+
+Expected output should show your cluster nodes.
+
+### Test Cluster Access
+
+Verify you have sufficient permissions:
+
+```bash
+kubectl auth can-i create deployments
+kubectl auth can-i create services
+kubectl auth can-i create secrets
+```
+
+All should return `yes`.
+
+## GPU Support
+
+### NVIDIA GPU Operator
+
+For Kubernetes clusters, install the NVIDIA GPU Operator to manage GPU resources.
+
+<Note>
+The Smallest Self-Host Helm chart includes the GPU Operator as an optional dependency. You can enable it during installation or install it separately.
+</Note>
+
+#### Verify GPU Nodes
+
+Check that GPU nodes are properly labeled:
+
+```bash
+kubectl get nodes -l node.kubernetes.io/instance-type
+```
+
+Verify GPU resources are available:
+
+```bash
+kubectl get nodes -o json | jq '.items[].status.capacity'
+```
+
+Look for `nvidia.com/gpu` in the capacity.
+
+## Credentials
+
+Obtain the following from Smallest.ai before installation:
+
+<AccordionGroup>
+  <Accordion title="License Key" icon="key">
+    Your unique license key for validation
+    
+    **Contact**: support@smallest.ai
+    
+    You'll add this to `values.yaml`:
+    ```yaml
+    global:
+      licenseKey: "your-license-key-here"
+    ```
+  </Accordion>
+
+  <Accordion title="Container Registry Credentials" icon="docker">
+    Credentials to pull Docker images from `quay.io`:
+    - Username
+    - Password
+    - Email
+    
+    **Contact**: support@smallest.ai
+    
+    You'll add these to `values.yaml`:
+    ```yaml
+    global:
+      imageCredentials:
+        username: "your-username"
+        password: "your-password"
+        email: "your-email"
+    ```
+  </Accordion>
+
+  <Accordion title="Model URLs" icon="download">
+    Download URL for ASR models
+    
+    **Contact**: support@smallest.ai
+    
+    You'll add this to `values.yaml`:
+    ```yaml
+    models:
+      asrModelUrl: "your-model-url"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Storage Requirements
+
+### Storage Class
+
+Verify a storage class is available:
+
+```bash
+kubectl get storageclass
+```
+
+You should see at least one storage class marked as `(default)` or available.
+
+### For AWS Deployments
+
+If deploying on AWS EKS, you'll need:
+
+- **EBS CSI Driver** for block storage
+- **EFS CSI Driver** for shared file storage (recommended for model storage)
+
+<Tip>
+See the [AWS Deployment](/kubernetes/aws/eks-setup) guide for detailed setup instructions.
+</Tip>
+
+## Network Requirements
+
+### Required Ports
+
+Ensure the following ports are accessible within the cluster:
+
+| Port | Service | Purpose |
+|------|---------|---------|
+| 7100 | API Server | Client API requests |
+| 2269 | Lightning ASR | Internal ASR processing |
+| 3369 | License Proxy | Internal license validation |
+| 6379 | Redis | Internal caching |
+
+### External Access
+
+The License Proxy requires outbound HTTPS access to:
+
+- `console-api.smallest.ai` (port 443)
+
+<Warning>
+Ensure your cluster's network policies and security groups allow outbound HTTPS traffic from pods.
+</Warning>
+
+## Optional Components
+
+### Prometheus & Grafana
+
+For monitoring and autoscaling based on custom metrics:
+
+- **Prometheus Operator** (included in chart)
+- **Grafana** (included in chart)
+- **Prometheus Adapter** (included in chart)
+
+These are required for:
+- Custom metrics-based autoscaling
+- Advanced monitoring dashboards
+- Performance visualization
+
+### Cluster Autoscaler
+
+For automatic node scaling on AWS EKS:
+
+- IAM role with autoscaling permissions
+- IRSA (IAM Roles for Service Accounts) configured
+
+<Tip>
+See the [Cluster Autoscaler](/kubernetes/autoscaling/cluster-autoscaler) guide for setup.
+</Tip>
+
+## Namespace
+
+Decide on a namespace for deployment:
+
+<Tabs>
+  <Tab title="Default Namespace">
+    Deploy to the default namespace:
+    ```bash
+    kubectl config set-context --current --namespace=default
+    ```
+  </Tab>
+
+  <Tab title="Custom Namespace">
+    Create and use a dedicated namespace:
+    ```bash
+    kubectl create namespace smallest
+    kubectl config set-context --current --namespace=smallest
+    ```
+  </Tab>
+</Tabs>
+
+## Verification Checklist
+
+Before proceeding, ensure:
+
+<Steps>
+  <Step title="Cluster Access">
+    ```bash
+    kubectl get nodes
+    ```
+    Shows all cluster nodes in Ready state
+  </Step>
+
+  <Step title="GPU Nodes Available">
+    ```bash
+    kubectl get nodes -o json | jq '.items[].status.capacity."nvidia.com/gpu"'
+    ```
+    Shows GPU count for GPU nodes
+  </Step>
+
+  <Step title="Helm Installed">
+    ```bash
+    helm version
+    ```
+    Shows Helm 3.x
+  </Step>
+
+  <Step title="Storage Available">
+    ```bash
+    kubectl get storageclass
+    ```
+    Shows at least one storage class
+  </Step>
+
+  <Step title="Credentials Ready">
+    - [ ] License key obtained
+    - [ ] Container registry credentials
+    - [ ] Model download URL
+  </Step>
+
+  <Step title="Sufficient Resources">
+    ```bash
+    kubectl top nodes
+    ```
+    Shows available resources for deployment
+  </Step>
+</Steps>
+
+## AWS-Specific Prerequisites
+
+If deploying on AWS EKS, see:
+
+<Card title="AWS EKS Setup" icon="aws" href="/kubernetes/aws/eks-setup">
+  Complete guide for setting up EKS cluster with GPU support
+</Card>
+
+## What's Next?
+
+Once all prerequisites are met, proceed to the quick start:
+
+<Card title="Quick Start" icon="rocket" href="/kubernetes/quick-start">
+  Deploy Smallest Self-Host with Helm
+</Card>
+

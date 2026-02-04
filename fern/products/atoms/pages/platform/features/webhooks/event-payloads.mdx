@@ -1,0 +1,174 @@
+---
+title: "Event Payloads"
+sidebarTitle: "Event Payloads"
+description: "Data schemas for each webhook event type."
+---
+
+Each webhook event sends a JSON payload with relevant data. This page documents the structure of each event type.
+
+---
+
+## Common Fields
+
+All webhooks include these base fields:
+
+```json
+{
+  "event": "call.start | call.end | analytics.completed",
+  "timestamp": "2024-07-15T14:30:00Z",
+  "agent_id": "agent_abc123",
+  "call_id": "call_xyz789"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `event` | string | Event type identifier |
+| `timestamp` | ISO 8601 | When the event occurred |
+| `agent_id` | string | Agent that handled the call |
+| `call_id` | string | Unique call identifier |
+
+---
+
+## Call Start Event
+
+**Event:** `call.start`
+
+Sent when a call connects, before conversation begins.
+
+```json
+{
+  "event": "call.start",
+  "timestamp": "2024-07-15T14:30:00Z",
+  "agent_id": "agent_abc123",
+  "call_id": "call_xyz789",
+  "call_direction": "inbound",
+  "caller_phone": "+15551234567",
+  "agent_phone": "+15559876543"
+}
+```
+
+→ **NEEDS PLATFORM INFO:** Complete start event payload schema
+
+### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `call_direction` | string | "inbound" or "outbound" |
+| `caller_phone` | string | Caller's phone number |
+| `agent_phone` | string | Phone number called/calling from |
+
+---
+
+## Call End Event
+
+**Event:** `call.end`
+
+Sent when a call concludes.
+
+```json
+{
+  "event": "call.end",
+  "timestamp": "2024-07-15T14:35:00Z",
+  "agent_id": "agent_abc123",
+  "call_id": "call_xyz789",
+  "duration_seconds": 300,
+  "disposition": "successful",
+  "transcript": [
+    {"role": "agent", "content": "Hello! How can I help?", "timestamp": "..."},
+    {"role": "user", "content": "I have a question...", "timestamp": "..."}
+  ],
+  "variables": {
+    "customer_name": "Jane Smith",
+    "issue_type": "billing"
+  }
+}
+```
+
+→ **NEEDS PLATFORM INFO:** Complete end event payload schema
+
+### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `duration_seconds` | number | Call length in seconds |
+| `disposition` | string | Outcome category |
+| `transcript` | array | Full conversation |
+| `variables` | object | Variables collected/set |
+
+---
+
+## Analytics Completed Event
+
+**Event:** `analytics.completed`
+
+Sent when post-call analysis finishes.
+
+```json
+{
+  "event": "analytics.completed",
+  "timestamp": "2024-07-15T14:36:00Z",
+  "agent_id": "agent_abc123",
+  "call_id": "call_xyz789",
+  "metrics": {
+    "satisfaction_score": 4,
+    "issue_resolved": true,
+    "follow_up_needed": false,
+    "product_discussed": "Widget Pro"
+  }
+}
+```
+
+→ **NEEDS PLATFORM INFO:** Complete analytics event payload schema
+
+### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `metrics` | object | Post-call metrics you configured |
+
+Metric fields depend on what you set up in Post-Call Metrics.
+
+---
+
+## Handling Payloads
+
+### Parse JSON
+
+All payloads are JSON:
+
+```javascript
+const payload = JSON.parse(req.body);
+const eventType = payload.event;
+```
+
+### Route by Event Type
+
+Handle different events appropriately:
+
+```javascript
+switch (payload.event) {
+  case 'call.start':
+    handleCallStart(payload);
+    break;
+  case 'call.end':
+    handleCallEnd(payload);
+    break;
+  case 'analytics.completed':
+    handleAnalytics(payload);
+    break;
+}
+```
+
+---
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="Use Cases" icon="lightbulb" href="/platform/features/webhooks/use-cases">
+    Common webhook patterns
+  </Card>
+  <Card title="Creating Endpoints" icon="plus" href="/platform/features/webhooks/creating-endpoints">
+    Set up your endpoints
+  </Card>
+</CardGroup>

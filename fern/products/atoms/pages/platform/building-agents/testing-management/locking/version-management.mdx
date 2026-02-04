@@ -1,0 +1,188 @@
+---
+title: "Version Management"
+sidebarTitle: "Versions"
+description: "Manage multiple versions of your agent safely."
+---
+
+Version management lets you maintain multiple configurations of your agent — enabling safe iteration without disrupting live traffic.
+
+---
+
+## Why Versioning Matters
+
+Without versioning, every change to your agent affects live calls immediately. That's risky:
+
+- A typo in your prompt could confuse callers
+- A broken API configuration could crash conversations
+- Testing in production means real customers experience bugs
+
+Versioning gives you a safety net. Work on changes separately, test thoroughly, then promote when ready.
+
+---
+
+## How Versioning Works
+
+Each agent can have multiple versions:
+
+```
+My Support Agent
+├── v1 (locked, live on +1-555-0100)
+├── v2 (locked, archived)
+└── v3 (unlocked, in development)
+```
+
+Only one version handles live traffic at a time. Others exist for development, testing, or historical reference.
+
+---
+
+## Creating a New Version
+
+To create a new version:
+
+1. Go to your agent's settings or version panel
+2. Click **Create New Version**
+3. Choose to copy from:
+   - Current version (start with existing config)
+   - Blank slate (start fresh)
+4. The new version is created **unlocked** for editing
+
+The new version gets a version number automatically (v2, v3, etc.).
+
+---
+
+## Version Lifecycle
+
+A typical version goes through these stages:
+
+```
+Created (unlocked)
+    ↓ editing and testing
+Locked
+    ↓ final testing
+Deployed
+    ↓ live traffic
+Superseded
+    ↓ replaced by newer version
+Archived
+```
+
+### Stage Details
+
+| Stage | What's Happening |
+|-------|------------------|
+| **Created** | New version, actively being edited |
+| **Locked** | Configuration frozen, ready for deployment |
+| **Deployed** | Handling live traffic |
+| **Superseded** | Was live, now replaced by newer version |
+| **Archived** | Kept for reference but no longer active |
+
+---
+
+## Switching Live Versions
+
+To switch which version handles live calls:
+
+1. Ensure the new version is locked
+2. Go to the phone number configuration
+3. Change the assigned agent version
+4. Confirm the switch
+
+<Info>
+The switch is nearly instant. In-progress calls continue on the old version; new calls go to the new version.
+</Info>
+
+---
+
+## Comparing Versions
+
+When deciding whether to deploy a new version, compare it to the current live version:
+
+**Configuration Diff**
+See exactly what changed between versions — prompt text, settings, workflow structure.
+
+**Test Results**
+Compare test call outcomes. Does the new version handle the same scenarios correctly?
+
+**Metrics Preview**
+If possible, A/B test the new version with a portion of traffic before full deployment.
+
+---
+
+## Rolling Back
+
+If a new version has problems, roll back quickly:
+
+1. Go to phone number configuration
+2. Switch back to the previous version
+3. The old version resumes handling calls
+
+Because locked versions are frozen, the old version is exactly as you left it.
+
+<Tip>
+Don't delete old versions immediately. Keep at least one previous version available for quick rollback.
+</Tip>
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always develop on unlocked versions">
+    Never unlock a live version to make changes. Create a new version instead. This protects live traffic from in-progress changes.
+  </Accordion>
+  <Accordion title="Lock before deploying">
+    Only deploy locked versions. This ensures the configuration is frozen and stable.
+  </Accordion>
+  <Accordion title="Test the actual version you'll deploy">
+    Don't test on v3 then deploy v4 because "they're basically the same." Test the exact version going live.
+  </Accordion>
+  <Accordion title="Use descriptive version notes">
+    When creating a new version, add notes about what changes it contains. Future you will thank present you.
+  </Accordion>
+  <Accordion title="Clean up old versions">
+    Archive versions you no longer need. Keep the current live version and one previous version for rollback.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Version Strategy for Teams
+
+For teams with multiple people working on agents:
+
+**Development Branch**
+Unlocked versions where individual contributors make changes. Each person might have their own development version.
+
+**Staging Version**
+A locked version deployed to a test phone number. Team reviews changes here before production.
+
+**Production Version**
+The locked version handling real customer calls. Changes only come through the staging process.
+
+```
+Development → Staging → Production
+  (unlocked)   (locked)   (locked)
+```
+
+---
+
+## Version Limits
+
+Each agent can have a limited number of versions (check your plan). To free up version slots:
+
+- Archive versions you no longer need
+- Delete versions that were never deployed
+- Consolidate abandoned development versions
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="When to Lock" icon="clock" href="/platform/building-agents/testing-management/locking/when-to-lock">
+    Know when your version is ready
+  </Card>
+  <Card title="Testing" icon="flask" href="/platform/building-agents/testing-management/testing">
+    Test versions before deployment
+  </Card>
+</CardGroup>

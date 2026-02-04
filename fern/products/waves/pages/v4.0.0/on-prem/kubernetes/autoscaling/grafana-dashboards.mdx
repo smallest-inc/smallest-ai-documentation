@@ -1,0 +1,539 @@
+---
+title: Grafana Dashboards
+description: Visualize metrics, autoscaling behavior, and system performance
+---
+
+## Overview
+
+Grafana provides powerful visualization of Lightning ASR metrics, autoscaling behavior, and system performance. This guide covers accessing Grafana, importing dashboards, and creating custom visualizations.
+
+## Access Grafana
+
+### Enable Grafana
+
+Ensure Grafana is enabled in your Helm values:
+
+```yaml values.yaml
+scaling:
+  auto:
+    enabled: true
+
+kube-prometheus-stack:
+  grafana:
+    enabled: true
+    adminPassword: "admin-password"
+```
+
+### Port Forward
+
+Access Grafana locally:
+
+```bash
+kubectl port-forward -n default svc/smallest-prometheus-stack-grafana 3000:80
+```
+
+Open http://localhost:3000 in your browser.
+
+### Default Credentials
+
+- **Username**: `admin`
+- **Password**: `prom-operator` (or custom password from `adminPassword`)
+
+<Warning>
+Change the default password immediately in production:
+
+```yaml
+grafana:
+  adminPassword: "your-secure-password"
+```
+</Warning>
+
+### Expose Externally
+
+For permanent access, expose via LoadBalancer or Ingress:
+
+<Tabs>
+  <Tab title="LoadBalancer">
+    ```yaml values.yaml
+    kube-prometheus-stack:
+      grafana:
+        service:
+          type: LoadBalancer
+    ```
+  </Tab>
+
+  <Tab title="Ingress">
+    ```yaml
+    apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: grafana
+      namespace: default
+    spec:
+      rules:
+        - host: grafana.example.com
+          http:
+            paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: smallest-prometheus-stack-grafana
+                    port:
+                      number: 80
+    ```
+  </Tab>
+</Tabs>
+
+## Import ASR Dashboard
+
+The Smallest Self-Host repository includes a pre-built ASR dashboard.
+
+### Import from File
+
+<Steps>
+  <Step title="Get Dashboard JSON">
+    The dashboard is available at `grafana/dashboards/asr-dashboard.json` in the repository.
+  </Step>
+
+  <Step title="Open Grafana">
+    Navigate to Grafana → Dashboards → Import
+  </Step>
+
+  <Step title="Upload JSON">
+    - Click "Upload JSON file"
+    - Select `asr-dashboard.json`
+    - Click "Load"
+  </Step>
+
+  <Step title="Configure Data Source">
+    - Select Prometheus data source: `Prometheus`
+    - Click "Import"
+  </Step>
+</Steps>
+
+### Import via ConfigMap
+
+Automatically load dashboard on Grafana startup:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: asr-dashboard
+  namespace: default
+  labels:
+    grafana_dashboard: "1"
+data:
+  asr-dashboard.json: |
+    {
+      "dashboard": ...,
+      "overwrite": true
+    }
+```
+
+Or enable via Helm:
+
+```yaml values.yaml
+kube-prometheus-stack:
+  grafana:
+    dashboardProviders:
+      dashboardproviders.yaml:
+        apiVersion: 1
+        providers:
+          - name: 'default'
+            folder: 'Smallest'
+            type: file
+            options:
+              path: /var/lib/grafana/dashboards/default
+    
+    dashboards:
+      default:
+        asr-dashboard:
+          file: dashboards/asr-dashboard.json
+```
+
+## ASR Dashboard Overview
+
+The pre-built dashboard includes the following panels:
+
+### Active Requests
+
+Shows current requests being processed:
+
+- **Metric**: `asr_active_requests`
+- **Visualization**: Stat panel with thresholds
+- **Colors**: 
+  - Green: 0-5 requests
+  - Yellow: 5-10 requests
+  - Orange: 10-20 requests
+  - Red: 20+ requests
+
+### Request Rate
+
+Requests per second over time:
+
+- **Metric**: `rate(asr_total_requests[5m])`
+- **Visualization**: Time series graph
+- **Use**: Track traffic patterns
+
+### Error Rate
+
+Failed requests percentage:
+
+- **Metric**: `rate(asr_failed_requests[5m]) / rate(asr_total_requests[5m]) * 100`
+- **Visualization**: Stat panel + time series
+- **Alert**: Warning if > 5%
+
+### Response Time
+
+Request duration percentiles:
+
+- **Metrics**:
+  - P50: `histogram_quantile(0.50, asr_request_duration_seconds_bucket)`
+  - P95: `histogram_quantile(0.95, asr_request_duration_seconds_bucket)`
+  - P99: `histogram_quantile(0.99, asr_request_duration_seconds_bucket)`
+- **Visualization**: Time series graph
+
+### Pod Count
+
+Number of Lightning ASR replicas:
+
+- **Metric**: `count(asr_active_requests)`
+- **Visualization**: Stat panel
+- **Use**: Monitor autoscaling
+
+### GPU Utilization
+
+GPU usage per pod:
+
+- **Metric**: `asr_gpu_utilization`
+- **Visualization**: Time series graph
+- **Use**: Ensure GPUs are utilized
+
+### GPU Memory
+
+GPU memory usage:
+
+- **Metric**: `asr_gpu_memory_used_bytes / 1024 / 1024 / 1024`
+- **Visualization**: Gauge + time series
+- **Use**: Monitor memory leaks
+
+## Create Custom Dashboards
+
+### Add New Dashboard
+
+<Steps>
+  <Step title="Create Dashboard">
+    Grafana → Dashboards → New Dashboard
+  </Step>
+
+  <Step title="Add Panel">
+    Click "Add panel"
+  </Step>
+
+  <Step title="Configure Query">
+    - Data source: Prometheus
+    - Metric: `asr_active_requests`
+    - Legend: `{{pod}}`
+  </Step>
+
+  <Step title="Customize Visualization">
+    - Choose visualization type (Time series, Stat, Gauge, etc.)
+    - Configure thresholds
+    - Set units and decimals
+  </Step>
+
+  <Step title="Save">
+    Click "Save dashboard"
+    
+    Enter name: "Custom ASR Dashboard"
+  </Step>
+</Steps>
+
+### Useful Queries
+
+#### Average Active Requests
+
+```promql
+avg(asr_active_requests)
+```
+
+#### Total Throughput (requests/hour)
+
+```promql
+sum(rate(asr_total_requests[1h])) * 3600
+```
+
+#### Pod Resource Usage
+
+```promql
+sum(container_memory_usage_bytes{pod=~"lightning-asr.*"}) by (pod) / 1024 / 1024 / 1024
+```
+
+#### Autoscaling Events
+
+```promql
+kube_deployment_status_replicas{deployment="lightning-asr"}
+```
+
+#### GPU Temperature
+
+```promql
+asr_gpu_temperature_celsius
+```
+
+## Dashboard Variables
+
+Add variables for dynamic filtering:
+
+### Namespace Variable
+
+<Steps>
+  <Step title="Dashboard Settings">
+    Click gear icon → Variables → Add variable
+  </Step>
+
+  <Step title="Configure Variable">
+    - **Name**: `namespace`
+    - **Type**: Query
+    - **Data source**: Prometheus
+    - **Query**: `label_values(asr_active_requests, namespace)`
+    - **Multi-value**: Enabled
+  </Step>
+
+  <Step title="Use in Queries">
+    Update panels to use variable:
+    ```promql
+    asr_active_requests{namespace="$namespace"}
+    ```
+  </Step>
+</Steps>
+
+### Pod Variable
+
+```
+label_values(asr_active_requests{namespace="$namespace"}, pod)
+```
+
+### Time Range Variable
+
+```
+$__interval
+```
+
+Use in queries for dynamic aggregation.
+
+## Alerting
+
+### Configure Alert Rules
+
+<Steps>
+  <Step title="Edit Panel">
+    Open panel → Alert tab
+  </Step>
+
+  <Step title="Create Alert">
+    - **Name**: High Active Requests
+    - **Evaluate every**: 1m
+    - **For**: 5m
+  </Step>
+
+  <Step title="Conditions">
+    ```
+    WHEN avg() OF query(A, 5m, now) IS ABOVE 20
+    ```
+  </Step>
+
+  <Step title="Notification">
+    - Choose notification channel
+    - Add message template
+  </Step>
+</Steps>
+
+### Alert Notification Channels
+
+Configure notifications:
+
+<Tabs>
+  <Tab title="Email">
+    Grafana → Alerting → Notification channels → Add channel
+    
+    - **Type**: Email
+    - **Addresses**: ops@example.com
+  </Tab>
+
+  <Tab title="Slack">
+    - **Type**: Slack
+    - **Webhook URL**: https://hooks.slack.com/...
+    - **Channel**: #alerts
+  </Tab>
+
+  <Tab title="PagerDuty">
+    - **Type**: PagerDuty
+    - **Integration Key**: Your key
+  </Tab>
+</Tabs>
+
+## Pre-Built Dashboard Examples
+
+### System Overview Dashboard
+
+```json
+{
+  "title": "Smallest Self-Host Overview",
+  "panels": [
+    {
+      "title": "Active Requests",
+      "targets": [{"expr": "sum(asr_active_requests)"}]
+    },
+    {
+      "title": "Request Rate",
+      "targets": [{"expr": "sum(rate(asr_total_requests[5m]))"}]
+    },
+    {
+      "title": "Pod Count",
+      "targets": [{"expr": "count(asr_active_requests)"}]
+    },
+    {
+      "title": "Error Rate %",
+      "targets": [{"expr": "sum(rate(asr_failed_requests[5m])) / sum(rate(asr_total_requests[5m])) * 100"}]
+    }
+  ]
+}
+```
+
+### Autoscaling Dashboard
+
+Track HPA behavior:
+
+```promql
+kube_deployment_status_replicas{deployment="lightning-asr"}
+kube_deployment_status_replicas_available{deployment="lightning-asr"}
+kube_horizontalpodautoscaler_status_desired_replicas{horizontalpodautoscaler="lightning-asr"}
+kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler="lightning-asr"}
+```
+
+### Cost Dashboard
+
+Monitor resource costs:
+
+```promql
+sum(kube_pod_container_resource_requests{pod=~"lightning-asr.*"}) by (resource)
+count(kube_node_info{node=~".*gpu.*"}) * 1.00
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Dashboard Folders" icon="folder">
+    Organize dashboards by category:
+    
+    - **Smallest Overview**: High-level metrics
+    - **Lightning ASR**: Detailed ASR metrics
+    - **Infrastructure**: Node and cluster metrics
+    - **Autoscaling**: HPA and scaling behavior
+  </Accordion>
+
+  <Accordion title="Set Appropriate Time Ranges" icon="clock">
+    Default time ranges for different views:
+    
+    - **Real-time monitoring**: Last 15 minutes
+    - **Troubleshooting**: Last 1 hour
+    - **Analysis**: Last 24 hours
+    - **Trends**: Last 7 days
+  </Accordion>
+
+  <Accordion title="Use Annotations" icon="bookmark">
+    Mark important events:
+    
+    - Deployments
+    - Scaling events
+    - Incidents
+    - Configuration changes
+  </Accordion>
+
+  <Accordion title="Template Dashboards" icon="clone">
+    Create template dashboards for:
+    
+    - Different environments (dev, staging, prod)
+    - Different namespaces
+    - Different models
+  </Accordion>
+
+  <Accordion title="Export and Version Control" icon="code-branch">
+    Save dashboard JSON to git:
+    
+    ```bash
+    kubectl get configmap asr-dashboard -o jsonpath='{.data.asr-dashboard\.json}' > asr-dashboard.json
+    git add asr-dashboard.json
+    git commit -m "Update ASR dashboard"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Grafana Not Showing Data
+
+**Check Prometheus data source**:
+
+Grafana → Configuration → Data Sources → Prometheus
+
+- **URL**: `http://smallest-prometheus-stack-prometheus:9090`
+- **Access**: Server (default)
+
+Test connection with "Save & Test" button.
+
+**Check Prometheus is running**:
+
+```bash
+kubectl get pods -l app.kubernetes.io/name=prometheus
+```
+
+### Queries Returning No Data
+
+**Verify metric exists in Prometheus**:
+
+```bash
+kubectl port-forward svc/smallest-prometheus-stack-prometheus 9090:9090
+```
+
+Open http://localhost:9090 and query the metric.
+
+**Check time range**: Ensure time range includes data.
+
+### Dashboard Not Loading
+
+**Check Grafana logs**:
+
+```bash
+kubectl logs -l app.kubernetes.io/name=grafana
+```
+
+**Increase memory if needed**:
+
+```yaml
+kube-prometheus-stack:
+  grafana:
+    resources:
+      limits:
+        memory: 512Mi
+```
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="HPA Configuration" icon="chart-line" href="/kubernetes/autoscaling/hpa-configuration">
+    Use metrics for autoscaling
+  </Card>
+
+  <Card title="Metrics Setup" icon="chart-bar" href="/kubernetes/autoscaling/metrics-setup">
+    Configure Prometheus metrics
+  </Card>
+
+  <Card title="License Proxy" icon="key" href="/kubernetes/license-proxy">
+    Configure license validation
+  </Card>
+</CardGroup>
+

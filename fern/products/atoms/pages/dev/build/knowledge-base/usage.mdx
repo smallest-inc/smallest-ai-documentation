@@ -1,191 +1,169 @@
 ---
 title: "Using Knowledge Bases"
 sidebarTitle: "Usage"
-description: "Create, populate, and connect Knowledge Bases to your agents."
+description: "Create, upload content, and connect knowledge bases to your agents."
 ---
 
-Knowledge Bases give your agents context from your documents. Upload PDFs, and the platform automatically retrieves relevant information during conversations.
-
-## Complete Workflow
-
-```python
-from smallestai.atoms import AtomsClient
-from smallestai.atoms.models import KnowledgebasePostRequest, CreateAgentRequest
-import time
-
-client = AtomsClient()
-
-# 1. Create Knowledge Base
-kb = client.create_knowledge_base(
-    knowledgebase_post_request=KnowledgebasePostRequest(
-        name="ProductDocs",
-        description="Product documentation"
-    )
-)
-kb_id = kb.data
-
-# 2. Upload Documents
-with open("manual.pdf", "rb") as f:
-    client.upload_media_to_knowledge_base(id=kb_id, media=("manual.pdf", f.read()))
-
-# 3. Wait for Processing
-for _ in range(10):
-    items = client.get_knowledge_base_items(id=kb_id).data
-    if all(item.processing_status == "completed" for item in items):
-        print("Ready!")
-        break
-    time.sleep(2)
-
-# 4. Create Agent with KB
-agent = client.create_agent(
-    create_agent_request=CreateAgentRequest(
-        name="SupportBot",
-        global_knowledge_base_id=kb_id,
-        global_prompt="Answer using the knowledge base.",
-        slm_model="gpt-4o"
-    )
-)
-```
+This guide walks through the complete knowledge base workflow—from creation to agent integration.
 
 ## Creating a Knowledge Base
 
-```python
-from smallestai.atoms.models import KnowledgebasePostRequest
-
-kb = client.create_knowledge_base(
-    knowledgebase_post_request=KnowledgebasePostRequest(
-        name="CompanyKB",
-        description="Internal documentation"
-    )
-)
-kb_id = kb.data
-```
-
-## Uploading Documents
-
-### PDF Files
+Every KB starts with a name and optional description. Use the `create` method:
 
 ```python
-with open("manual.pdf", "rb") as f:
-    client.upload_media_to_knowledge_base(
-        id=kb_id,
-        media=("manual.pdf", f.read())
-    )
-```
+from smallestai.atoms.kb import KB
+from smallestai.atoms import AtomsClient
 
-### Multiple Files
+# Initialize separate managers
+kb = KB()
+client = AtomsClient()
 
-```python
-import os
-
-for filename in os.listdir("./documents"):
-    if filename.endswith(".pdf"):
-        with open(f"./documents/{filename}", "rb") as f:
-            client.upload_media_to_knowledge_base(id=kb_id, media=(filename, f.read()))
-```
-
-## Checking Processing Status
-
-Documents are processed asynchronously. Poll until complete:
-
-```python
-import time
-
-def wait_for_processing(client, kb_id, timeout=60):
-    start = time.time()
-    
-    while time.time() - start < timeout:
-        items = client.get_knowledge_base_items(id=kb_id).data
-        
-        if all(item.processing_status == "completed" for item in items):
-            return True
-            
-        time.sleep(2)
-    
-    return False
-```
-
-| Status | Meaning |
-|--------|---------|
-| `pending` | Queued |
-| `processing` | Being indexed |
-| `completed` | Ready |
-| `failed` | Error |
-
-## Connecting to Agents
-
-### At Creation
-
-```python
-from smallestai.atoms.models import CreateAgentRequest
-
-agent = client.create_agent(
-    create_agent_request=CreateAgentRequest(
-        name="SupportBot",
-        global_knowledge_base_id=kb_id,
-        global_prompt="Answer using the knowledge base.",
-        slm_model="gpt-4o"
-    )
-)
-```
-
-### Update Existing Agent
-
-```python
-from smallestai.atoms.models import AgentIdPatchRequest
-
-# Connect KB
-client.update_agent(
-    id=agent_id,
-    agent_id_patch_request=AgentIdPatchRequest(global_knowledge_base_id=kb_id)
+# Create KB
+response = kb.create(
+    name="Product Documentation",
+    description="Technical specs and troubleshooting guides"
 )
 
-# Disconnect KB
-client.update_agent(
-    id=agent_id,
-    agent_id_patch_request=AgentIdPatchRequest(global_knowledge_base_id="")
-)
+kb_id = response["data"]
 ```
 
-## Managing Documents
+The response contains the KB ID you'll use for all subsequent operations:
 
-### List Items
+```json
+{
+  "status": true,
+  "data": "696ddd64b9f099f0679fdb41"
+}
+```
+
+---
+
+## Retrieving KB Details
+
+### Single Knowledge Base
+
+`get()` retrieves the full details of a specific KB:
 
 ```python
-items = client.get_knowledge_base_items(id=kb_id).data
-
-for item in items:
-    print(f"{item.id}: {item.file_name or item.title}")
+details = kb.get(kb_id)
 ```
 
-### Delete KB
+Returns the full KB object:
+
+```json
+{
+  "status": true,
+  "data": {
+    "_id": "696ddd64b9f099f0679fdb41",
+    "name": "Product Documentation",
+    "description": "Technical specs and troubleshooting guides",
+    "organization": "693abd625a5f74726c0450a4",
+    "createdBy": "693abd625a5f74726c0450a1"
+  }
+}
+```
+
+### All Knowledge Bases
+
+`list()` returns every KB in your organization:
+
+```python
+all_kbs = kb.list()
+
+for item in all_kbs["data"]:
+    print(f"{item['name']}: {item['_id']}")
+```
+
+---
+
+## Linking a KB to an Agent
+
+The connection happens at agent creation time. Pass `kb_id` to the `new_agent` helper:
+
+```python
+agent = client.new_agent(
+    name="Support Agent",
+    prompt="You are a helpful support agent. Use your knowledge base to answer product questions accurately.",
+    description="Agent with product KB",
+    kb_id=kb_id
+)
+
+agent_id = agent.data
+```
+
+The agent now has access to all content in that knowledge base during conversations.
+
+---
+
+## Verifying the Link
+
+`get_agent_by_id()` returns the agent with its `globalKnowledgeBaseId` field:
+
+```python
+agent_details = client.get_agent_by_id(id=agent_id)
+
+linked_kb = agent_details["data"]["globalKnowledgeBaseId"]
+print(f"Agent is linked to KB: {linked_kb}")
+```
+
+The response includes the linked KB ID:
+
+```json
+{
+  "status": true,
+  "data": {
+    "_id": "696ddd6593f50590da907bcf",
+    "name": "Support Agent",
+    "globalKnowledgeBaseId": "696ddd64b9f099f0679fdb41",
+    "globalPrompt": "You are a helpful support agent..."
+  }
+}
+```
+
+---
+
+## Deleting a Knowledge Base
 
 <Warning>
-  Disconnect the KB from agents before deleting.
+A knowledge base cannot be deleted while it's connected to an agent. Delete or archive the agent first.
 </Warning>
 
-```python
-from smallestai.atoms.models import AgentIdPatchRequest
+Use `delete_agent()` to archive the agent, then `delete()` to remove the KB:
 
-client.update_agent(
-    id=agent_id,
-    agent_id_patch_request=AgentIdPatchRequest(global_knowledge_base_id="")
-)
-client.delete_knowledge_base(id=kb_id)
+```python
+# First, remove the agent
+client.delete_agent(id=agent_id)
+
+# Then delete the KB
+kb.delete(kb_id)
 ```
 
-## Best Practices
+---
+
+## SDK Reference
+
+| Method | Description |
+|--------|-------------|
+| `kb.create(name, description)` | Create a new knowledge base |
+| `kb.list()` | List all KBs in your organization |
+| `kb.get(id)` | Retrieve a specific KB |
+| `kb.delete(id)` | Delete a KB (must be unlinked first) |
+
+---
+
+## Tips
 
 <AccordionGroup>
-  <Accordion title="Keep documents focused">
-    Upload content relevant to your agent's purpose. Quality over quantity.
+  <Accordion title="Can I link multiple KBs to one agent?">
+    Currently, each agent supports one knowledge base via `globalKnowledgeBaseId`. For multiple knowledge sources, combine them into a single KB before linking.
   </Accordion>
-  
-  <Accordion title="Wait for processing">
-    Always confirm `completed` status before using with an agent.
+  <Accordion title="What file types can I upload?">
+    PDF files are fully supported. Text upload is available but may require backend deployment. Check with your administrator.
   </Accordion>
-  
-  <Accordion title="Test retrieval">
-    Make test calls to verify the agent correctly uses KB content.
+  <Accordion title="How do I update KB content?">
+    Upload new documents to the same KB. The agent will automatically use the updated content in future conversations.
+  </Accordion>
+  <Accordion title="Why can't I delete my KB?">
+    The error "This knowledge base is connected to an agent" means you must delete or archive the linked agent first. KBs with active connections cannot be removed.
   </Accordion>
 </AccordionGroup>

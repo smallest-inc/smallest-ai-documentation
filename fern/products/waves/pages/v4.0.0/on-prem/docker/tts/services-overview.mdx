@@ -1,0 +1,446 @@
+---
+title: Services Overview
+description: Detailed breakdown of each service component in the TTS Docker deployment
+---
+
+## Architecture
+
+The TTS Docker deployment consists of four main services that work together:
+
+```mermaid
+graph LR
+    Client[Client] -->|HTTP/WebSocket| API[API Server :7100]
+    API -->|HTTP| TTS[Lightning TTS :8876]
+    API -->|HTTP| License[License Proxy :3369]
+    TTS -->|HTTP| License
+    TTS -->|Cache| Redis[Redis :6379]
+    License -->|HTTPS| External[Smallest License Server]
+    
+    style API fill:#07C983
+    style TTS fill:#0D9373
+    style License fill:#1E90FF
+    style Redis fill:#DC382D
+```
+
+## API Server
+
+The API Server is the main entry point for all client requests.
+
+### Purpose
+
+- Routes incoming API requests to Lightning TTS workers
+- Manages WebSocket connections for streaming
+- Handles request queuing and load balancing
+- Provides unified API interface
+
+### Container Details
+
+<ParamField path="Image" type="string">
+  `quay.io/smallestinc/self-hosted-api-server:latest`
+</ParamField>
+
+<ParamField path="Port" type="integer">
+  `7100` - Main API endpoint
+</ParamField>
+
+<ParamField path="Resources" type="object">
+  - CPU: 0.5-2 cores
+  - Memory: 512 MB - 2 GB
+  - No GPU required
+</ParamField>
+
+### Key Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/health` | GET | Health check |
+| `/v1/speak` | POST | Synchronous text-to-speech |
+| `/v1/speak/stream` | WebSocket | Streaming text-to-speech |
+
+### Environment Variables
+
+```yaml
+LICENSE_KEY: Your license key
+LIGHTNING_TTS_BASE_URL: Internal URL to Lightning TTS
+API_BASE_URL: Internal URL to License Proxy
+```
+
+### Logs
+
+Key log messages:
+
+```
+✓ Connected to Lightning TTS at http://lightning-tts:8876
+✓ License validation successful
+✓ API server listening on port 7100
+```
+
+### Dependencies
+
+- Requires Lightning TTS to be running
+- Requires License Proxy for validation
+- Optionally uses Redis for request coordination
+
+## Lightning TTS
+
+The core text-to-speech engine powered by GPU acceleration.
+
+### Purpose
+
+- Converts text to high-quality speech audio
+- Processes both batch and streaming requests
+- Manages GPU resources and model inference
+- Handles voice synthesis and audio generation
+
+### Container Details
+
+<ParamField path="Image" type="string">
+  `quay.io/smallestinc/lightning-tts:latest`
+</ParamField>
+
+<ParamField path="Port" type="integer">
+  `8876` - TTS service endpoint
+</ParamField>
+
+<ParamField path="Resources" type="object">
+  - CPU: 4-8 cores
+  - Memory: 12-16 GB
+  - **GPU: 1x NVIDIA GPU (16+ GB VRAM)**
+</ParamField>
+
+### GPU Requirements
+
+Lightning TTS requires NVIDIA GPU with CUDA support:
+
+| GPU Model | VRAM | Performance |
+|-----------|------|-------------|
+| A100 | 40-80 GB | Excellent |
+| A10 | 24 GB | Excellent |
+| L4 | 24 GB | Very Good |
+| T4 | 16 GB | Good |
+
+### Environment Variables
+
+```yaml
+LICENSE_KEY: Your license key
+REDIS_URL: Redis connection string
+PORT: Service port (default 8876)
+GPU_DEVICE_ID: GPU to use (for multi-GPU)
+```
+
+### Model Loading
+
+On first startup, Lightning TTS:
+
+1. Loads TTS models from container (embedded)
+2. Validates model integrity
+3. Loads model into GPU memory
+4. Performs warmup inference
+
+<Tip>
+Models are embedded in the container - no separate download needed.
+</Tip>
+
+### Logs
+
+Key log messages:
+
+```
+✓ GPU detected: NVIDIA A10 (24GB)
+✓ Model loaded successfully
+✓ Warmup completed in 3.2s
+✓ Server ready on port 8876
+```
+
+### Performance
+
+Typical performance metrics:
+
+| Metric | Value |
+|--------|-------|
+| Real-time Factor | 0.1-0.3x |
+| Cold Start | 30-60 seconds |
+| Warm Inference | 100-300ms latency |
+| Throughput | 50+ hours/hour (A10) |
+
+### Dependencies
+
+- Requires License Proxy for validation
+- Requires Redis for request coordination
+- Requires NVIDIA GPU
+
+## License Proxy
+
+Validates license keys and reports usage to Smallest servers.
+
+### Purpose
+
+- Validates license keys on startup
+- Reports usage metadata to Smallest
+- Provides grace period for offline operation
+- Acts as licensing gateway for all services
+
+### Container Details
+
+<ParamField path="Image" type="string">
+  `quay.io/smallestinc/license-proxy:latest`
+</ParamField>
+
+<ParamField path="Port" type="integer">
+  `3369` - License validation endpoint (internal)
+</ParamField>
+
+<ParamField path="Resources" type="object">
+  - CPU: 0.25-1 core
+  - Memory: 256-512 MB
+  - No GPU required
+</ParamField>
+
+### Environment Variables
+
+```yaml
+LICENSE_KEY: Your license key
+```
+
+### Network Requirements
+
+<Warning>
+License Proxy requires outbound HTTPS access to:
+- `console-api.smallest.ai` on port 443
+
+Ensure your firewall allows these connections.
+</Warning>
+
+### Validation Process
+
+1. On startup, validates license key with Smallest servers
+2. Receives license terms and quotas
+3. Caches validation (valid for grace period)
+4. Periodically reports usage metadata
+
+### Usage Reporting
+
+License Proxy reports only metadata:
+
+| Data Reported | Example |
+|---------------|---------|
+| Audio duration | 3600 seconds |
+| Request count | 150 requests |
+| Features used | streaming, voice selection |
+| Response codes | 200, 400, 500 |
+
+<Note>
+**No audio or transcript data is transmitted** to Smallest servers.
+</Note>
+
+### Offline Mode
+
+If connection to license server fails:
+
+- Uses cached validation (24-hour grace period)
+- Continues serving requests
+- Logs warning messages
+- Retries connection periodically
+
+### Logs
+
+Key log messages:
+
+```
+✓ License validated successfully
+✓ License valid until: 2024-12-31
+✓ Server listening on port 3369
+⚠ Connection to license server failed, using cached validation
+```
+
+## Redis
+
+Provides caching and state management for the system.
+
+### Purpose
+
+- Request queuing and coordination
+- Session state for streaming connections
+- Caching of frequent requests
+- Performance optimization
+
+### Container Details
+
+<ParamField path="Image" type="string">
+  `redis:latest` or `redis:7-alpine`
+</ParamField>
+
+<ParamField path="Port" type="integer">
+  `6379` - Redis protocol
+</ParamField>
+
+<ParamField path="Resources" type="object">
+  - CPU: 0.5-1 core
+  - Memory: 512 MB - 1 GB
+  - No GPU required
+</ParamField>
+
+### Configuration Options
+
+<Tabs>
+  <Tab title="Embedded Redis">
+    Default configuration with minimal setup:
+    ```yaml
+    redis:
+      image: redis:latest
+      ports:
+        - "6379:6379"
+    ```
+  </Tab>
+
+  <Tab title="With Persistence">
+    Enable data persistence:
+    ```yaml
+    redis:
+      image: redis:latest
+      command: redis-server --appendonly yes
+      volumes:
+        - redis-data:/data
+    ```
+  </Tab>
+
+  <Tab title="With Authentication">
+    Add password protection:
+    ```yaml
+    redis:
+      image: redis:latest
+      command: redis-server --requirepass ${REDIS_PASSWORD}
+    ```
+  </Tab>
+
+  <Tab title="External Redis">
+    Use external Redis instance:
+    ```yaml
+    environment:
+      REDIS_URL: redis://external-host:6379
+    ```
+    Remove Redis service from docker-compose.yml
+  </Tab>
+</Tabs>
+
+### Data Stored
+
+Redis stores:
+
+- Request queue state
+- WebSocket session data
+- Temporary audio chunks (streaming)
+- Worker status and health
+
+<Note>
+Data in Redis is temporary and can be safely cleared. No persistent state is stored.
+</Note>
+
+### Health Check
+
+Built-in health check:
+
+```yaml
+healthcheck:
+  test: ["CMD", "redis-cli", "ping"]
+  interval: 5s
+  timeout: 3s
+  retries: 5
+```
+
+## Service Dependencies
+
+Startup order and dependencies:
+
+```mermaid
+graph TD
+    Redis[Redis] --> TTS[Lightning TTS]
+    License[License Proxy] --> TTS
+    TTS --> API[API Server]
+    License --> API
+    
+    style Redis fill:#DC382D
+    style License fill:#1E90FF
+    style TTS fill:#0D9373
+    style API fill:#07C983
+```
+
+### Recommended Startup Sequence
+
+1. **Redis** - Starts immediately (5 seconds)
+2. **License Proxy** - Validates license (10-15 seconds)
+3. **Lightning TTS** - Loads models (30-60 seconds)
+4. **API Server** - Connects to services (5-10 seconds)
+
+## Resource Planning
+
+### Minimum Configuration
+
+For development/testing:
+
+```yaml
+Total Resources:
+  CPU: 6 cores
+  Memory: 16 GB
+  GPU: 1x T4 (16 GB VRAM)
+  Storage: 100 GB
+```
+
+### Production Configuration
+
+For production workloads:
+
+```yaml
+Total Resources:
+  CPU: 12 cores
+  Memory: 32 GB
+  GPU: 1x A10 (24 GB VRAM)
+  Storage: 200 GB
+```
+
+## Monitoring
+
+### Container Health
+
+Check container status:
+
+```bash
+docker compose ps
+```
+
+### Resource Usage
+
+Monitor resource consumption:
+
+```bash
+docker stats
+```
+
+### GPU Usage
+
+Monitor GPU utilization:
+
+```bash
+watch -n 1 nvidia-smi
+```
+
+### Logs
+
+View service logs:
+
+```bash
+docker compose logs -f [service-name]
+```
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="TTS Configuration" icon="gear" href="/docker/tts/configuration">
+    Customize service configuration and resource allocation
+  </Card>
+
+  <Card title="TTS Troubleshooting" icon="wrench" href="/docker/tts/docker-troubleshooting">
+    Debug issues and optimize performance
+  </Card>
+</CardGroup>
+

@@ -1,0 +1,585 @@
+---
+title: Configuration
+description: Advanced configuration options for STT Docker deployments
+---
+
+## Overview
+
+This guide covers advanced configuration options for customizing your Docker deployment. Learn how to optimize resources, configure external services, and tune performance.
+
+## Environment Variables
+
+All configuration is managed through environment variables in the `.env` file.
+
+### Core Configuration
+
+<ParamField path="LICENSE_KEY" type="string" required>
+  Your Smallest.ai license key for validation and usage reporting
+</ParamField>
+
+<ParamField path="MODEL_URL" type="string" required>
+  Download URL for the Lightning ASR model (provided by Smallest.ai)
+</ParamField>
+
+### API Server Configuration
+
+<ParamField path="API_SERVER_PORT" type="integer" default="7100">
+  Port for the API server to listen on
+  
+  ```bash
+  API_SERVER_PORT=8080
+  ```
+</ParamField>
+
+<ParamField path="API_BASE_URL" type="string" default="http://license-proxy:6699">
+  Internal URL for license proxy communication
+</ParamField>
+
+<ParamField path="LIGHTNING_ASR_BASE_URL" type="string" default="http://lightning-asr:2233">
+  Internal URL for Lightning ASR communication
+</ParamField>
+
+### Lightning ASR Configuration
+
+<ParamField path="ASR_PORT" type="integer" default="2233">
+  Port for Lightning ASR to listen on
+  
+  ```bash
+  ASR_PORT=2233
+  ```
+</ParamField>
+
+<ParamField path="REDIS_URL" type="string" default="redis://redis:6379">
+  Redis connection URL for caching and state management
+  
+  For external Redis:
+  ```bash
+  REDIS_URL=redis://external-redis.example.com:6379
+  ```
+  
+  With password:
+  ```bash
+  REDIS_URL=redis://:password@redis:6379
+  ```
+</ParamField>
+
+<ParamField path="GPU_DEVICE_ID" type="string" default="0">
+  GPU device ID to use (for multi-GPU systems)
+  
+  ```bash
+  GPU_DEVICE_ID=0
+  ```
+</ParamField>
+
+## Resource Configuration
+
+### GPU Allocation
+
+For systems with multiple GPUs, you can specify which GPU to use:
+
+```yaml docker-compose.yml
+lightning-asr:
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            device_ids: ['0']
+            capabilities: [gpu]
+```
+
+For multiple GPUs per container:
+
+```yaml docker-compose.yml
+lightning-asr:
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 2
+            capabilities: [gpu]
+```
+
+### Memory Limits
+
+Set memory limits for containers:
+
+```yaml docker-compose.yml
+api-server:
+  deploy:
+    resources:
+      limits:
+        memory: 2G
+      reservations:
+        memory: 512M
+
+lightning-asr:
+  deploy:
+    resources:
+      limits:
+        memory: 16G
+      reservations:
+        memory: 12G
+```
+
+### CPU Allocation
+
+Reserve CPU cores for each service:
+
+```yaml docker-compose.yml
+lightning-asr:
+  deploy:
+    resources:
+      limits:
+        cpus: '8'
+      reservations:
+        cpus: '4'
+```
+
+## Redis Configuration
+
+### Using External Redis
+
+To use an external Redis instance instead of the embedded one:
+
+<Steps>
+  <Step title="Update Environment">
+    Modify `.env` file:
+    ```bash
+    REDIS_URL=redis://your-redis-host:6379
+    REDIS_PASSWORD=your-password
+    ```
+  </Step>
+
+  <Step title="Update Docker Compose">
+    Comment out or remove the Redis service:
+    ```yaml docker-compose.yml
+    # redis:
+    #   image: redis:latest
+    #   ...
+    ```
+  </Step>
+
+  <Step title="Update Dependencies">
+    Remove Redis from depends_on:
+    ```yaml docker-compose.yml
+    api-server:
+      depends_on:
+        - lightning-asr
+        - license-proxy
+        # - redis  # removed
+    ```
+  </Step>
+</Steps>
+
+### Redis Persistence
+
+Enable data persistence for Redis:
+
+```yaml docker-compose.yml
+redis:
+  image: redis:latest
+  command: redis-server --appendonly yes
+  volumes:
+    - redis-data:/data
+  networks:
+    - smallest-network
+
+volumes:
+  redis-data:
+    driver: local
+```
+
+### Redis with Authentication
+
+Add password protection:
+
+```yaml docker-compose.yml
+redis:
+  image: redis:latest
+  command: redis-server --requirepass ${REDIS_PASSWORD}
+  environment:
+    - REDIS_PASSWORD=${REDIS_PASSWORD}
+```
+
+Update `.env`:
+```bash
+REDIS_PASSWORD=your-secure-password
+REDIS_URL=redis://:your-secure-password@redis:6379
+```
+
+## Scaling Configuration
+
+### Multiple ASR Workers
+
+Run multiple Lightning ASR containers for higher throughput:
+
+```yaml docker-compose.yml
+services:
+  lightning-asr-1:
+    image: quay.io/smallestinc/lightning-asr:latest
+    ports:
+      - "2233:2233"
+    environment:
+      - MODEL_URL=${MODEL_URL}
+      - LICENSE_KEY=${LICENSE_KEY}
+      - REDIS_URL=redis://redis:6379
+      - PORT=2233
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+    networks:
+      - smallest-network
+
+  lightning-asr-2:
+    image: quay.io/smallestinc/lightning-asr:latest
+    ports:
+      - "2234:2233"
+    environment:
+      - MODEL_URL=${MODEL_URL}
+      - LICENSE_KEY=${LICENSE_KEY}
+      - REDIS_URL=redis://redis:6379
+      - PORT=2233
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['1']
+              capabilities: [gpu]
+    networks:
+      - smallest-network
+
+  api-server:
+    environment:
+      - LIGHTNING_ASR_BASE_URL=http://lightning-asr-1:2233,http://lightning-asr-2:2233
+```
+
+<Note>
+This configuration requires multiple GPUs in your system and will distribute load across workers.
+</Note>
+
+## Network Configuration
+
+### Custom Network Settings
+
+Configure custom network with specific subnet:
+
+```yaml docker-compose.yml
+networks:
+  smallest-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+          gateway: 172.28.0.1
+```
+
+### Expose on Specific Interface
+
+Bind to specific host IP:
+
+```yaml docker-compose.yml
+api-server:
+  ports:
+    - "192.168.1.100:7100:7100"
+```
+
+### Use Host Network
+
+For maximum performance (loses network isolation):
+
+```yaml docker-compose.yml
+api-server:
+  network_mode: host
+```
+
+<Warning>
+Host network mode bypasses Docker networking and directly uses host network stack. Use only if necessary.
+</Warning>
+
+## Logging Configuration
+
+### Custom Log Drivers
+
+Use JSON file logging with rotation:
+
+```yaml docker-compose.yml
+services:
+  api-server:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+### Syslog Integration
+
+Send logs to syslog:
+
+```yaml docker-compose.yml
+services:
+  api-server:
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "tcp://192.168.1.100:514"
+        tag: "smallest-api-server"
+```
+
+### Centralized Logging
+
+Forward logs to external logging service:
+
+```yaml docker-compose.yml
+services:
+  api-server:
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.{{.Name}}"
+```
+
+## Volume Configuration
+
+### Persistent Model Storage
+
+Avoid re-downloading models on container restart:
+
+```yaml docker-compose.yml
+services:
+  lightning-asr:
+    volumes:
+      - model-cache:/app/models
+
+volumes:
+  model-cache:
+    driver: local
+```
+
+### Custom Model Location
+
+Use a specific host directory:
+
+```yaml docker-compose.yml
+services:
+  lightning-asr:
+    volumes:
+      - /mnt/models:/app/models
+    environment:
+      - MODEL_CACHE_DIR=/app/models
+```
+
+## Health Checks
+
+### Custom Health Check Intervals
+
+Adjust health check timing:
+
+```yaml docker-compose.yml
+redis:
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 10s
+    timeout: 5s
+    retries: 3
+    start_period: 30s
+```
+
+### API Server Health Check
+
+Add health check for API server:
+
+```yaml docker-compose.yml
+api-server:
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    start_period: 60s
+```
+
+## Security Configuration
+
+### Run as Non-Root User
+
+Add user specification:
+
+```yaml docker-compose.yml
+api-server:
+  user: "1000:1000"
+```
+
+### Read-Only Filesystem
+
+Increase security with read-only root filesystem:
+
+```yaml docker-compose.yml
+api-server:
+  read_only: true
+  tmpfs:
+    - /tmp
+    - /var/run
+```
+
+### Resource Limits
+
+Prevent resource exhaustion:
+
+```yaml docker-compose.yml
+api-server:
+  deploy:
+    resources:
+      limits:
+        cpus: '2'
+        memory: 2G
+        pids: 100
+```
+
+## Example: Production Configuration
+
+Here's a complete production-ready configuration:
+
+```yaml docker-compose.yml
+version: "3.8"
+
+services:
+  lightning-asr:
+    image: quay.io/smallestinc/lightning-asr:latest
+    ports:
+      - "127.0.0.1:2233:2233"
+    environment:
+      - MODEL_URL=${MODEL_URL}
+      - LICENSE_KEY=${LICENSE_KEY}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - PORT=2233
+    volumes:
+      - model-cache:/app/models
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+          cpus: '8'
+        reservations:
+          memory: 12G
+          cpus: '4'
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - smallest-network
+
+  api-server:
+    image: quay.io/smallestinc/self-hosted-api-server:latest
+    container_name: api-server
+    ports:
+      - "7100:7100"
+    environment:
+      - LICENSE_KEY=${LICENSE_KEY}
+      - LIGHTNING_ASR_BASE_URL=http://lightning-asr:2233
+      - API_BASE_URL=http://license-proxy:6699
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - smallest-network
+    depends_on:
+      - lightning-asr
+      - license-proxy
+      - redis
+
+  license-proxy:
+    image: quay.io/smallestinc/license-proxy:latest
+    container_name: license-proxy
+    environment:
+      - LICENSE_KEY=${LICENSE_KEY}
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1'
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - smallest-network
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - smallest-network
+
+networks:
+  smallest-network:
+    driver: bridge
+    name: smallest-network
+
+volumes:
+  model-cache:
+    driver: local
+  redis-data:
+    driver: local
+```
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="STT Services Overview" icon="layer-group" href="/docker/stt/services-overview">
+    Learn about each service component in detail
+  </Card>
+
+  <Card title="STT Troubleshooting" icon="wrench" href="/docker/stt/docker-troubleshooting">
+    Debug common issues and optimize performance
+  </Card>
+</CardGroup>
+

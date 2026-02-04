@@ -1,0 +1,301 @@
+---
+title: "Creating API Calls"
+sidebarTitle: "Creating"
+description: "Step-by-step guide to setting up API calls for your agent."
+---
+
+This guide walks you through creating and configuring API calls for your Atoms agent.
+
+---
+
+## Before You Start
+
+You'll need:
+- **API endpoint URL** — Where to send requests
+- **Authentication** — API key, OAuth token, or other credentials
+- **Request format** — What data to send
+- **Response format** — What data you'll receive
+
+<Info>
+If you're not sure about your API details, check your service's API documentation or ask your development team.
+</Info>
+
+---
+
+## Creating a Pre-Call API
+
+Pre-Call APIs run **before** the conversation starts — perfect for loading customer context.
+
+<Steps>
+  ### Open Agent Settings
+  
+  Navigate to your agent and find **API Calls** in the settings panel.
+
+  ### Click "Add Pre-Call API"
+  
+  This creates a new API call that runs when the call connects.
+
+  ### Configure the Request
+  
+  **Basic Settings:**
+  
+  | Field | Description | Example |
+  |-------|-------------|---------|
+  | **Name** | Descriptive label | "Fetch Customer Info" |
+  | **URL** | API endpoint | `https://api.example.com/customers` |
+  | **Method** | HTTP method | GET, POST, PUT, DELETE |
+
+  ### Add Query Parameters (GET requests)
+  
+  For GET requests, add parameters:
+  
+  | Parameter | Value |
+  |-----------|-------|
+  | `phone` | `{{caller_phone}}` |
+  
+  Results in: `https://api.example.com/customers?phone=+14155551234`
+
+  ### Add Headers
+  
+  Most APIs require authentication:
+  
+  | Header | Value |
+  |--------|-------|
+  | `Authorization` | `Bearer your-api-key` |
+  | `Content-Type` | `application/json` |
+
+  ### Add Request Body (POST/PUT)
+  
+  For POST requests, add a JSON body:
+  
+  ```json
+  {
+    "phone": "{{caller_phone}}",
+    "source": "voice_agent"
+  }
+  ```
+
+  ### Map Response Variables
+  
+  Tell Atoms how to extract data from the response:
+  
+  | JSON Path | Variable Name |
+  |-----------|---------------|
+  | `$.name` | `customer_name` |
+  | `$.account.balance` | `account_balance` |
+  | `$.status` | `account_status` |
+
+  ### Save and Test
+  
+  Click **Save**, then test with a call to verify it works.
+</Steps>
+
+---
+
+## Creating a Post-Call API
+
+Post-Call APIs run **after** the call ends — perfect for logging and follow-ups.
+
+<Steps>
+  ### Add Post-Call API
+  
+  In your agent settings, click **"Add Post-Call API"**.
+
+  ### Configure the Request
+  
+  Typically POST requests to log data:
+  
+  ```json
+  {
+    "call_id": "{{call_id}}",
+    "caller": "{{caller_phone}}",
+    "customer_name": "{{customer_name}}",
+    "duration": "{{call_duration}}",
+    "outcome": "{{disposition}}",
+    "summary": "{{call_summary}}"
+  }
+  ```
+
+  ### Set Error Handling
+  
+  Choose what happens if the API fails:
+  - **Ignore** — Continue normally
+  - **Retry** — Try again (1-3 times)
+  - **Alert** — Notify your team
+</Steps>
+
+---
+
+## Authentication Methods
+
+<Tabs>
+  <Tab title="API Key">
+    Most common for simple integrations.
+    
+    **In Header:**
+    ```
+    Authorization: Bearer sk_live_your_api_key
+    ```
+    
+    **Or as Query Parameter:**
+    ```
+    ?api_key=sk_live_your_api_key
+    ```
+  </Tab>
+  <Tab title="Basic Auth">
+    Username and password encoded.
+    
+    ```
+    Authorization: Basic base64(username:password)
+    ```
+    
+    Atoms can encode this for you — just enter username and password.
+  </Tab>
+  <Tab title="OAuth 2.0">
+    For services like Salesforce, Google, etc.
+    
+    1. Set up OAuth connection in Integrations
+    2. Reference the integration in your API call
+    3. Atoms handles token refresh automatically
+  </Tab>
+</Tabs>
+
+---
+
+## Response Mapping
+
+### Simple Mapping
+
+For flat JSON responses:
+
+```json
+{
+  "name": "Sarah Johnson",
+  "email": "sarah@example.com",
+  "balance": 150.00
+}
+```
+
+| JSON Path | Variable |
+|-----------|----------|
+| `$.name` | `customer_name` |
+| `$.email` | `customer_email` |
+| `$.balance` | `account_balance` |
+
+### Nested Mapping
+
+For nested responses:
+
+```json
+{
+  "customer": {
+    "name": "Sarah Johnson",
+    "account": {
+      "balance": 150.00,
+      "status": "active"
+    }
+  }
+}
+```
+
+| JSON Path | Variable |
+|-----------|----------|
+| `$.customer.name` | `customer_name` |
+| `$.customer.account.balance` | `account_balance` |
+| `$.customer.account.status` | `account_status` |
+
+### Array Mapping
+
+For array responses:
+
+```json
+{
+  "appointments": [
+    {"date": "2024-01-21", "time": "2:00 PM"},
+    {"date": "2024-01-22", "time": "10:00 AM"}
+  ]
+}
+```
+
+| JSON Path | Variable |
+|-----------|----------|
+| `$.appointments[0].date` | `next_appointment_date` |
+| `$.appointments[0].time` | `next_appointment_time` |
+
+---
+
+## Error Handling
+
+<AccordionGroup>
+  <Accordion title="API Timeout" icon="clock">
+    **Default timeout:** 10 seconds
+    
+    **If timeout occurs:**
+    - Pre-Call: Agent starts without the data
+    - In-Call: Agent acknowledges delay or skips
+    - Post-Call: Queued for retry
+    
+    **Recommendation:** Design prompts to handle missing data gracefully.
+  </Accordion>
+  
+  <Accordion title="Authentication Errors (401/403)" icon="lock">
+    **Causes:**
+    - Expired API key
+    - Invalid credentials
+    - IP not whitelisted
+    
+    **Solution:** Check and update credentials in agent settings.
+  </Accordion>
+  
+  <Accordion title="Not Found (404)" icon="circle-question">
+    **Causes:**
+    - Wrong endpoint URL
+    - Customer doesn't exist in system
+    
+    **Solution:** Verify URL; handle "not found" as valid response.
+  </Accordion>
+  
+  <Accordion title="Server Errors (500)" icon="server">
+    **Causes:**
+    - External API is down
+    - Bug in external system
+    
+    **Solution:** Implement retry logic; have fallback behavior.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Testing Your API Call
+
+Before going live:
+
+<Steps>
+  ### Use the Test Panel
+  
+  In API settings, click **Test** to send a sample request.
+
+  ### Check the Response
+  
+  Verify you receive expected data and variable mapping works.
+
+  ### Test with Real Call
+  
+  Make a test call and check:
+  - Variables populated correctly
+  - Agent uses data in conversation
+  - Call logs show API activity
+</Steps>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Single Prompt APIs" icon="terminal" href="/platform/features/api-calls/single-prompt">
+    Configure APIs for Single Prompt agents
+  </Card>
+  <Card title="Convo Flow APIs" icon="diagram-project" href="/platform/features/api-calls/convo-flow">
+    Use API Call nodes in workflows
+  </Card>
+</CardGroup>

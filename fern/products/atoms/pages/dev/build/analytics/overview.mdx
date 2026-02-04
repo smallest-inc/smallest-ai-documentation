@@ -1,56 +1,48 @@
 ---
 title: "Analytics"
 sidebarTitle: "Overview"
-description: "Track call metrics and agent performance."
+description: "Track every call, measure performance, and extract insights."
 ---
 
-Retrieve conversation logs to analyze call metrics, view transcripts, and monitor your agents.
+**Analytics** gives you complete visibility into what happens during and after every call your agents handle.
 
-## Quick Example
+## What Can You Track?
 
-```python
-import requests
-import os
+Every call generates rich data that you can access programmatically:
 
-API_KEY = os.getenv("SMALLEST_API_KEY")
+| Category | Data Available |
+|----------|----------------|
+| **Call Details** | Duration, status, phone numbers, timestamps |
+| **Transcript** | Full conversation text with speaker labels |
+| **Recordings** | Mono and stereo audio files |
+| **AI Summaries** | Auto-generated call summaries |
+| **Disposition Metrics** | Extracted data points you define |
+| **Performance** | Latency breakdowns per component |
+| **Cost** | Credits consumed per call |
 
-# Get conversation details
-response = requests.get(
-    f"https://atoms.smallest.ai/api/v1/conversation/{call_id}",
-    headers={"Authorization": f"Bearer {API_KEY}"}
-)
-data = response.json()["data"]
+## How It Works
 
-print(f"Duration: {data['duration']} seconds")
-print(f"Status: {data['status']}")
-print(f"Type: {data['type']}")
-print(f"Recording: {data['recordingUrl']}")
-```
+1. **During the call** — Events are logged in real-time (status changes, transcription, speech)
+2. **After the call** — AI processes the transcript to generate summaries and extract configured metrics
+3. **On demand** — SDK methods let you query, filter, and search call data
 
-## Available Metrics
+## SDK Methods
 
-| Metric | Field | Description |
-|--------|-------|-------------|
-| Call ID | `callId` | Unique call identifier |
-| Status | `status` | in_progress, completed, failed |
-| Duration | `duration` | Length in seconds |
-| Type | `type` | telephony_outbound, telephony_inbound, chat |
-| Transcript | `transcript` | Array of conversation messages |
-| Recording | `recordingUrl` | Link to mono audio |
-| Dual Recording | `recordingDualUrl` | Link to stereo audio |
-| Cost | `callCost` | Call cost in credits |
-| From | `from` | Caller phone number |
-| To | `to` | Recipient phone number |
-| Events | `events` | Call lifecycle events |
-| Agent | `agent` | Agent configuration used |
+| Method | Purpose |
+|--------|---------|
+| `get_calls()` | List calls with filters |
+| `get_call(id)` | Get single call details |
+| `search_calls(ids)` | Batch fetch by call IDs |
+| `get_post_call_config(agent_id)` | Get agent's analytics config |
+| `set_post_call_config(agent_id, ...)` | Configure post-call extraction |
 
 ## What's Next
 
 <CardGroup cols={2}>
   <Card title="Call Metrics" icon="phone" href="/dev/build/analytics/call-metrics">
-    Track call duration, status, and transcripts.
+    Retrieve calls, transcripts, recordings, and performance data.
   </Card>
-  <Card title="Performance" icon="gauge-high" href="/dev/build/analytics/agent-performance">
-    Monitor latency and identify bottlenecks.
+  <Card title="Post-Call Analytics" icon="chart-line" href="/dev/build/analytics/post-call-analytics">
+    Configure AI summaries and disposition metrics.
   </Card>
 </CardGroup>

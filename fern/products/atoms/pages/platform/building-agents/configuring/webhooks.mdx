@@ -1,0 +1,107 @@
+---
+title: "Webhooks"
+sidebarTitle: "Webhooks"
+description: "Send real-time event notifications to external systems."
+---
+
+Webhooks push data to your systems when events happen — call starts, call ends, analytics ready. Use them to trigger workflows, update CRMs, create tickets, or feed data pipelines.
+
+**Location:** Left Sidebar → Agent Settings → Webhook tab
+
+---
+
+## How It Works
+
+1. **Event occurs** (call starts, call ends, etc.)
+2. **Atoms sends HTTP POST** to your endpoint with event data
+3. **Your server processes** the data and takes action
+
+---
+
+## Configuration
+
+### Select Endpoint
+
+Choose from your configured webhook endpoints.
+
+<Note>
+**Create endpoints first.** Go to Features → Webhooks to set up endpoints before you can select them here.
+</Note>
+
+### Subscribe to Events
+
+| Event | When It Fires | What's Included |
+|-------|---------------|-----------------|
+| **Start** | Call begins | Caller info, agent info, timestamp |
+| **End** | Call ends | Full transcript, duration, outcome |
+| **Analytics Completed** | Post-call analysis done | Metrics, scores, extracted data |
+
+---
+
+## Event Payloads
+
+<Tabs>
+  <Tab title="Start">
+    ```json
+    {
+      "event": "call.start",
+      "call_id": "abc123",
+      "agent_id": "agent_xyz",
+      "caller_phone": "+15551234567",
+      "direction": "inbound",
+      "timestamp": "2024-01-15T10:30:00Z"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="End">
+    ```json
+    {
+      "event": "call.end",
+      "call_id": "abc123",
+      "agent_id": "agent_xyz",
+      "duration_seconds": 180,
+      "transcript": [...],
+      "outcome": "resolved",
+      "timestamp": "2024-01-15T10:33:00Z"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Analytics Completed">
+    ```json
+    {
+      "event": "analytics.completed",
+      "call_id": "abc123",
+      "metrics": {
+        "sentiment": "positive",
+        "resolution": true,
+        "customer_satisfaction": 4.5
+      },
+      "timestamp": "2024-01-15T10:35:00Z"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Use Cases
+
+| Use Case | Description |
+|----------|-------------|
+| **CRM Updates** | Push call data to Salesforce, HubSpot |
+| **Ticket Creation** | Auto-create support tickets after calls |
+| **Notifications** | Alert teams about important calls |
+| **Analytics Pipelines** | Feed data to your analytics systems |
+
+---
+
+## Setup Steps
+
+1. Create an endpoint in **Features → Webhooks**
+2. Return here and select your endpoint
+3. Check the events you want to receive
+4. Save
+
+→ See [Creating Webhook Endpoints](/platform/features/webhooks/creating-endpoints) for endpoint setup.

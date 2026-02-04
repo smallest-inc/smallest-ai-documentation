@@ -1,0 +1,617 @@
+---
+title: GPU Nodes Configuration
+description: Advanced GPU node setup and optimization for AWS EKS
+---
+
+## Overview
+
+This guide covers advanced configuration and optimization for GPU nodes in AWS EKS, including node taints, tolerations, labels, and performance tuning.
+
+## GPU Node Configuration
+
+### Node Labels
+
+Labels help Kubernetes schedule pods on the correct nodes.
+
+#### Automatic Labels
+
+EKS automatically adds these labels to GPU nodes:
+
+```yaml
+node.kubernetes.io/instance-type: g5.xlarge
+beta.kubernetes.io/instance-type: g5.xlarge
+topology.kubernetes.io/zone: us-east-1a
+topology.kubernetes.io/region: us-east-1
+```
+
+#### Custom Labels
+
+Add custom labels when creating node groups:
+
+```yaml cluster-config.yaml
+managedNodeGroups:
+  - name: gpu-nodes
+    instanceType: g5.xlarge
+    labels:
+      workload: gpu
+      nvidia.com/gpu: "true"
+      gpu-type: a10
+      cost-tier: spot
+```
+
+Or add labels to existing nodes:
+
+```bash
+kubectl label nodes <node-name> workload=gpu
+kubectl label nodes <node-name> gpu-type=a10
+```
+
+### Node Taints
+
+Taints prevent non-GPU workloads from running on expensive GPU nodes.
+
+#### Add Taints During Node Group Creation
+
+```yaml cluster-config.yaml
+managedNodeGroups:
+  - name: gpu-nodes
+    instanceType: g5.xlarge
+    taints:
+      - key: nvidia.com/gpu
+        value: "true"
+        effect: NoSchedule
+```
+
+#### Add Taints to Existing Nodes
+
+```bash
+kubectl taint nodes <node-name> nvidia.com/gpu=true:NoSchedule
+```
+
+### Tolerations in Pod Specs
+
+Pods must have matching tolerations to run on tainted nodes:
+
+```yaml values.yaml
+lightningAsr:
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+    - key: nvidia.com/gpu
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+```
+
+## Node Selectors
+
+### Using Instance Type
+
+Most common approach for AWS:
+
+```yaml values.yaml
+lightningAsr:
+  nodeSelector:
+    node.kubernetes.io/instance-type: g5.xlarge
+```
+
+### Using Custom Labels
+
+```yaml values.yaml
+lightningAsr:
+  nodeSelector:
+    workload: gpu
+    gpu-type: a10
+```
+
+### Multiple Selectors
+
+Combine multiple selectors for precise placement:
+
+```yaml values.yaml
+lightningAsr:
+  nodeSelector:
+    node.kubernetes.io/instance-type: g5.xlarge
+    topology.kubernetes.io/zone: us-east-1a
+    cost-tier: on-demand
+```
+
+## NVIDIA Device Plugin
+
+The NVIDIA device plugin makes GPUs available to Kubernetes pods.
+
+### Installation via GPU Operator
+
+The recommended approach is using the NVIDIA GPU Operator (included in the Smallest Helm chart):
+
+```yaml values.yaml
+gpu-operator:
+  enabled: true
+  driver:
+    enabled: true
+  toolkit:
+    enabled: true
+  devicePlugin:
+    enabled: true
+```
+
+### Manual Installation
+
+Alternatively, install the device plugin directly:
+
+```bash
+kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.14.0/nvidia-device-plugin.yml
+```
+
+### Verify Device Plugin
+
+```bash
+kubectl get pods -n kube-system | grep nvidia-device-plugin
+kubectl logs -n kube-system -l name=nvidia-device-plugin
+```
+
+### Check GPU Availability
+
+```bash
+kubectl get nodes -o json | \
+  jq -r '.items[] | select(.status.capacity."nvidia.com/gpu" != null) | 
+  "\(.metadata.name)\t\(.status.capacity."nvidia.com/gpu")"'
+```
+
+## GPU Resource Limits
+
+### Request GPU in Pod Spec
+
+The Lightning ASR deployment automatically requests GPU:
+
+```yaml
+resources:
+  limits:
+    nvidia.com/gpu: 1
+  requests:
+    nvidia.com/gpu: 1
+```
+
+### Multiple GPUs
+
+For pods that need multiple GPUs:
+
+```yaml
+resources:
+  limits:
+    nvidia.com/gpu: 2
+  requests:
+    nvidia.com/gpu: 2
+```
+
+<Note>
+Smallest Self-Host Lightning ASR is optimized for single GPU per pod. Use multiple pods for scaling rather than multiple GPUs per pod.
+</Note>
+
+## GPU Performance Optimization
+
+### Enable GPU Persistence Mode
+
+GPU persistence mode keeps the NVIDIA driver loaded, reducing initialization time:
+
+```yaml
+gpu-operator:
+  enabled: true
+  driver:
+    enabled: true
+    env:
+      - name: NVIDIA_DRIVER_CAPABILITIES
+        value: "compute,utility"
+      - name: NVIDIA_REQUIRE_CUDA
+        value: "cuda>=11.8"
+  toolkit:
+    enabled: true
+    env:
+      - name: NVIDIA_MPS_ENABLED
+        value: "1"
+```
+
+### Use DaemonSet for GPU Configuration
+
+Create a DaemonSet to configure GPU settings on all GPU nodes:
+
+```yaml gpu-config-daemonset.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: gpu-config
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      name: gpu-config
+  template:
+    metadata:
+      labels:
+        name: gpu-config
+    spec:
+      hostPID: true
+      nodeSelector:
+        nvidia.com/gpu: "true"
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+      - name: gpu-config
+        image: nvidia/cuda:11.8.0-base-ubuntu22.04
+        command:
+          - /bin/bash
+          - -c
+          - |
+            nvidia-smi -pm 1
+            nvidia-smi --auto-boost-default=DISABLED
+            nvidia-smi -ac 1215,1410
+            sleep infinity
+        securityContext:
+          privileged: true
+        volumeMounts:
+          - name: sys
+            mountPath: /sys
+      volumes:
+        - name: sys
+          hostPath:
+            path: /sys
+```
+
+Apply:
+
+```bash
+kubectl apply -f gpu-config-daemonset.yaml
+```
+
+### Monitor GPU Utilization
+
+Deploy NVIDIA DCGM exporter for Prometheus metrics:
+
+```bash
+helm repo add gpu-helm-charts https://nvidia.github.io/dcgm-exporter/helm-charts
+helm repo update
+
+helm install dcgm-exporter gpu-helm-charts/dcgm-exporter \
+  --namespace kube-system \
+  --set serviceMonitor.enabled=true
+```
+
+## Multi-GPU Strategies
+
+### Strategy 1: One Pod per GPU (Recommended)
+
+Scale horizontally with one pod per GPU:
+
+```yaml values.yaml
+scaling:
+  auto:
+    enabled: true
+    lightningAsr:
+      hpa:
+        enabled: true
+        minReplicas: 1
+        maxReplicas: 10
+
+lightningAsr:
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+```
+
+### Strategy 2: GPU Sharing (Time-Slicing)
+
+Allow multiple pods to share a single GPU (reduces isolation):
+
+```yaml
+gpu-operator:
+  enabled: true
+  devicePlugin:
+    config:
+      name: time-slicing-config
+      default: any
+      sharing:
+        timeSlicing:
+          replicas: 4
+```
+
+<Warning>
+GPU sharing reduces isolation and can impact performance. Use only if cost is more critical than performance.
+</Warning>
+
+### Strategy 3: Multi-Instance GPU (MIG)
+
+For A100 and A30 GPUs, use MIG to partition GPUs:
+
+```bash
+nvidia-smi mig -cgi 9,9,9,9,9,9,9 -C
+```
+
+Configure pods to use MIG instances:
+
+```yaml
+resources:
+  limits:
+    nvidia.com/mig-1g.5gb: 1
+```
+
+## Node Auto-Scaling
+
+### Configure Auto-Scaling Groups
+
+When creating node groups, enable auto-scaling:
+
+```yaml cluster-config.yaml
+managedNodeGroups:
+  - name: gpu-nodes
+    instanceType: g5.xlarge
+    minSize: 0
+    maxSize: 10
+    desiredCapacity: 1
+    tags:
+      k8s.io/cluster-autoscaler/enabled: "true"
+      k8s.io/cluster-autoscaler/smallest-cluster: "owned"
+```
+
+### Install Cluster Autoscaler
+
+See [Cluster Autoscaler](/kubernetes/autoscaling/cluster-autoscaler) for full setup.
+
+Quick enable:
+
+```yaml values.yaml
+cluster-autoscaler:
+  enabled: true
+  autoDiscovery:
+    clusterName: smallest-cluster
+  awsRegion: us-east-1
+  nodeSelector:
+    workload: cpu
+```
+
+<Note>
+Run Cluster Autoscaler on CPU nodes, not GPU nodes, to avoid wasting GPU resources.
+</Note>
+
+## Cost Optimization
+
+### Use Spot Instances
+
+Save up to 70% with Spot instances:
+
+```yaml cluster-config.yaml
+managedNodeGroups:
+  - name: gpu-nodes-spot
+    instanceType: g5.xlarge
+    minSize: 0
+    maxSize: 10
+    desiredCapacity: 1
+    spot: true
+    instancesDistribution:
+      maxPrice: 0.50
+      instanceTypes: ["g5.xlarge", "g5.2xlarge"]
+      onDemandBaseCapacity: 0
+      onDemandPercentageAboveBaseCapacity: 0
+      spotAllocationStrategy: capacity-optimized
+    labels:
+      capacity-type: spot
+    taints:
+      - key: nvidia.com/gpu
+        value: "true"
+        effect: NoSchedule
+```
+
+### Handle Spot Interruptions
+
+Add pod disruption budget:
+
+```yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: lightning-asr-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: lightning-asr
+```
+
+Configure graceful shutdown:
+
+```yaml values.yaml
+lightningAsr:
+  terminationGracePeriodSeconds: 120
+```
+
+### Mixed On-Demand and Spot
+
+Combine both for reliability:
+
+```yaml cluster-config.yaml
+managedNodeGroups:
+  - name: gpu-nodes-ondemand
+    instanceType: g5.xlarge
+    minSize: 1
+    maxSize: 3
+    labels:
+      capacity-type: on-demand
+      
+  - name: gpu-nodes-spot
+    instanceType: g5.xlarge
+    minSize: 0
+    maxSize: 10
+    spot: true
+    labels:
+      capacity-type: spot
+```
+
+Use pod affinity to prefer spot:
+
+```yaml values.yaml
+lightningAsr:
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - key: capacity-type
+                operator: In
+                values:
+                  - spot
+```
+
+## Monitoring GPU Nodes
+
+### View GPU Node Status
+
+```bash
+kubectl get nodes -l nvidia.com/gpu=true
+```
+
+### Check GPU Allocation
+
+```bash
+kubectl describe nodes -l nvidia.com/gpu=true | grep -A 5 "Allocated resources"
+```
+
+### GPU Utilization
+
+Using NVIDIA SMI:
+
+```bash
+kubectl run nvidia-smi --rm -it --restart=Never \
+  --image=nvidia/cuda:11.8.0-base-ubuntu22.04 \
+  --overrides='{"spec":{"nodeSelector":{"nvidia.com/gpu":"true"},"tolerations":[{"key":"nvidia.com/gpu","operator":"Exists"}]}}' \
+  -- nvidia-smi
+```
+
+## Troubleshooting
+
+### GPU Not Detected
+
+**Check NVIDIA device plugin**:
+
+```bash
+kubectl get pods -n kube-system | grep nvidia
+kubectl logs -n kube-system -l name=nvidia-device-plugin
+```
+
+**Verify driver on node**:
+
+```bash
+kubectl debug node/<node-name> -it --image=ubuntu
+apt-get update && apt-get install -y nvidia-utils
+nvidia-smi
+```
+
+### Pods Not Scheduling on GPU Nodes
+
+**Check tolerations**:
+
+```bash
+kubectl describe pod <pod-name> | grep -A 5 Tolerations
+```
+
+**Check node selector**:
+
+```bash
+kubectl get pod <pod-name> -o jsonpath='{.spec.nodeSelector}'
+```
+
+**Check node taints**:
+
+```bash
+kubectl describe node <node-name> | grep Taints
+```
+
+### GPU Out of Memory
+
+**Check pod resource limits**:
+
+```bash
+kubectl describe pod <pod-name> | grep -A 5 Limits
+```
+
+**Monitor GPU memory**:
+
+```bash
+kubectl exec <pod-name> -- nvidia-smi
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Isolate GPU Workloads" icon="shield">
+    Always use taints and tolerations to prevent non-GPU workloads from running on GPU nodes:
+    
+    ```yaml
+    taints:
+      - key: nvidia.com/gpu
+        value: "true"
+        effect: NoSchedule
+    ```
+  </Accordion>
+
+  <Accordion title="Set Resource Limits" icon="gauge">
+    Always specify GPU resource requests and limits:
+    
+    ```yaml
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+      requests:
+        nvidia.com/gpu: 1
+    ```
+  </Accordion>
+
+  <Accordion title="Use Node Auto-Scaling" icon="chart-line">
+    Configure auto-scaling to scale GPU nodes to zero during off-hours:
+    
+    ```yaml
+    minSize: 0
+    maxSize: 10
+    ```
+  </Accordion>
+
+  <Accordion title="Monitor GPU Utilization" icon="chart-bar">
+    Use DCGM exporter and Grafana to monitor GPU metrics:
+    
+    - GPU utilization
+    - Memory usage
+    - Temperature
+    - Power consumption
+  </Accordion>
+
+  <Accordion title="Test Spot Interruptions" icon="flask">
+    Regularly test your application's response to spot interruptions:
+    
+    ```bash
+    kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="EFS Configuration" icon="folder" href="/kubernetes/storage/efs-configuration">
+    Set up shared storage for model caching
+  </Card>
+
+  <Card title="HPA Configuration" icon="chart-line" href="/kubernetes/autoscaling/hpa-configuration">
+    Configure pod autoscaling based on metrics
+  </Card>
+
+  <Card title="Cluster Autoscaler" icon="arrows-up-down" href="/kubernetes/autoscaling/cluster-autoscaler">
+    Enable automatic node scaling
+  </Card>
+
+  <Card title="Monitoring" icon="chart-bar" href="/kubernetes/autoscaling/grafana-dashboards">
+    Set up Grafana dashboards
+  </Card>
+</CardGroup>
+
