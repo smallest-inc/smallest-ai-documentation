@@ -1,0 +1,360 @@
+---
+title: "Working with Nodes"
+sidebarTitle: "Nodes"
+description: "Master the building blocks of Convo Flow agents."
+---
+
+Nodes are the building blocks of every Convo Flow agent. Each node represents a step in your conversation — a greeting, a question, an API call, or a handoff to a human.
+
+Think of nodes like stations on a train line. Your conversation travels from one station to the next, with branches determining which route to take based on what the caller says.
+
+---
+
+## Node Types
+
+<Frame caption="Available node types in the Convo Flow builder">
+  <img src="/images/node-types.png" alt="Node types" />
+</Frame>
+
+| Node | Purpose | When to Use |
+|------|---------|-------------|
+| **Default** | Speak and listen | Greetings, questions, information delivery |
+| **API Call** | Connect to external services | Fetch data, book appointments, update CRMs |
+| **Transfer Call** | Hand off to a human | Escalations, complex issues, sales closes |
+| **End Call** | Conclude the conversation | Successful completion, dead ends |
+| **Pre-Call API** | Actions before the call | Load customer data, set variables |
+| **Post-Call API** | Actions after the call | Log outcomes, trigger follow-ups |
+
+---
+
+## Default Node
+
+The workhorse of Convo Flow. Use it for any conversational turn where your agent speaks and expects a response.
+
+<Frame caption="Default node on the canvas">
+  <img src="/images/default-node.png" alt="Default node" />
+</Frame>
+
+### How to Use
+
+1. Drag **Default Node** from the left panel onto your canvas
+2. Click the node to select it
+3. In the right panel, write your prompt:
+
+```
+Hi {{customer_name}}! Thanks for calling Acme Support. 
+How can I help you today?
+```
+
+The prompt is what your agent says. Variables like `{{customer_name}}` get replaced with actual data.
+
+### Setting Up Branches
+
+Branches determine what happens next based on the caller's response. Click **+ Add Branch** and configure:
+
+| Field | What It Does | Example |
+|-------|--------------|---------|
+| **Branch Name** | Internal label for the branch | "Billing Question" |
+| **Condition** | When to take this path | "User asks about billing" |
+| **Next Node** | Where to go next | → Billing Help node |
+
+Write conditions in natural language. The AI interprets them:
+- "User confirms"
+- "User says no or declines"
+- "User asks about pricing"
+- "User wants to speak to a person"
+- "Anything else" (fallback)
+
+<Accordion title="Best Practices for Branches">
+**Always add a fallback.** Create a branch with condition "Anything else" that handles unexpected responses. Route it back to the same node with a clarification prompt or to a help node.
+
+**Order matters.** Branches are evaluated top to bottom. Put specific conditions first, fallback last.
+
+**Keep conditions clear.** "User wants to reschedule" is better than "User mentions changing times or dates or rescheduling or..."
+</Accordion>
+
+---
+
+## API Call Node
+
+Connect your agent to external systems — fetch data, book appointments, update records mid-conversation.
+
+### How to Use
+
+1. Drag **API Call** node onto the canvas
+2. Configure the request in the right panel:
+
+| Field | What to Enter |
+|-------|---------------|
+| **URL** | Your API endpoint (e.g., `https://api.example.com/appointments`) |
+| **Method** | GET, POST, PUT, or DELETE |
+| **Headers** | Authentication tokens, content-type |
+| **Body** | Data to send (supports variables like `{{customer_phone}}`) |
+
+### Handling Responses
+
+Map API response fields to variables:
+
+```json
+// API returns:
+{
+  "available_slots": ["9:00 AM", "2:00 PM", "4:30 PM"],
+  "next_available": "9:00 AM"
+}
+
+// Map to variables:
+{{available_times}} → available_slots
+{{suggested_time}} → next_available
+```
+
+Your agent can now say: *"I have {{suggested_time}} available. Does that work?"*
+
+### Branching on Results
+
+Set up branches for different API outcomes:
+- **Success** — Continue to confirmation
+- **No availability** — Offer waitlist or callback
+- **API error** — Apologize and offer to transfer
+
+<Accordion title="Common API Integrations">
+**Calendar Booking**
+- Google Calendar API
+- Calendly webhooks
+- Microsoft Graph
+
+**CRM Updates**
+- Salesforce REST API
+- HubSpot API
+- Custom CRM endpoints
+
+**Data Lookup**
+- Customer databases
+- Order management systems
+- Inventory systems
+</Accordion>
+
+---
+
+## Transfer Call Node
+
+Hand the conversation to a human when needed — for escalations, complex issues, or high-value opportunities.
+
+### How to Use
+
+1. Drag **Transfer Call** node to your canvas
+2. Configure the transfer:
+
+| Field | What It Does |
+|-------|--------------|
+| **Transfer To** | Phone number or SIP address of the destination |
+| **Whisper Message** | What the human agent hears before connecting (caller doesn't hear this) |
+| **Hold Message** | What the caller hears while waiting |
+
+### Whisper Messages
+
+Give your human agents context before they pick up:
+
+```
+Incoming transfer from AI agent. 
+Customer: {{customer_name}}
+Issue: {{issue_type}}
+Account: {{account_number}}
+```
+
+The human knows what's happening before saying hello.
+
+<Accordion title="Best Practices for Transfers">
+**Set expectations.** Before transferring, tell the caller what's happening and roughly how long they'll wait.
+
+**Pass context.** Use whisper messages so humans don't make callers repeat everything.
+
+**Have a backup.** Configure what happens if the transfer fails — voicemail, callback offer, or alternate number.
+</Accordion>
+
+---
+
+## End Call Node
+
+Gracefully conclude the conversation.
+
+<Frame caption="End Call node">
+  <img src="/images/end-call-node.png" alt="End Call node" />
+</Frame>
+
+### How to Use
+
+1. Drag **End Call** node to mark conversation endpoints
+2. Write a closing message:
+
+```
+Great, you're all set! Your appointment is confirmed for 
+{{appointment_date}} at {{appointment_time}}. 
+Have a wonderful day!
+```
+
+### Dispositions
+
+Tag the outcome for analytics:
+
+| Disposition | When to Use |
+|-------------|-------------|
+| **Successful** | Goal achieved (booking made, issue resolved) |
+| **Unsuccessful** | Goal not achieved (not interested, wrong number) |
+| **Transferred** | Handed to human |
+| **Callback Requested** | Customer asked for follow-up |
+
+Dispositions help you track how conversations end and measure agent performance.
+
+---
+
+## Pre-Call API Node
+
+Execute actions *before* your agent says hello. Perfect for loading personalized data.
+
+<Frame caption="Pre-Call API node">
+  <img src="/images/pre-call-api-node.png" alt="Pre-Call API node" />
+</Frame>
+
+### How to Use
+
+This special node runs immediately when the call connects, before any conversation happens.
+
+### Common Use Cases
+
+| Use Case | What to Fetch |
+|----------|---------------|
+| **Personalization** | Customer name, account status, preferences |
+| **Context loading** | Open tickets, recent orders, appointment history |
+| **Routing logic** | VIP status, language preference, time zone |
+
+### Example
+
+```
+GET https://api.example.com/customers/{{caller_phone}}
+
+Response → Variables:
+{{customer_name}}
+{{account_type}}
+{{last_order_date}}
+```
+
+Now your greeting can be: *"Hi {{customer_name}}! I see you placed an order on {{last_order_date}}. How can I help?"*
+
+---
+
+## Post-Call API Node
+
+Trigger actions *after* the call ends. Great for logging and follow-ups.
+
+<Frame caption="Post-Call API node">
+  <img src="/images/post-call-api-node.png" alt="Post-Call API node" />
+</Frame>
+
+### How to Use
+
+This node runs automatically after every call, regardless of how it ended.
+
+### Common Use Cases
+
+| Use Case | What to Send |
+|----------|--------------|
+| **CRM logging** | Call summary, outcome, duration |
+| **Ticket creation** | Create tickets for unresolved issues |
+| **Follow-up triggers** | Send email confirmations, SMS receipts |
+| **Analytics** | Custom metrics, conversion tracking |
+
+### Example
+
+```
+POST https://crm.example.com/activities
+
+Body:
+{
+  "contact_phone": "{{caller_phone}}",
+  "call_duration": "{{call_duration}}",
+  "outcome": "{{disposition}}",
+  "summary": "{{call_summary}}",
+  "agent_id": "voice-bot-001"
+}
+```
+
+---
+
+## Connecting Nodes
+
+Branches are the arrows between nodes — they define your conversation's flow.
+
+### Creating Connections
+
+1. Click on a node to select it
+2. Scroll to **Branches** in the right panel
+3. Click **+ Add Branch**
+4. Set the condition and target node
+5. Drag from the branch's output handle to the target node
+
+### Branch Types
+
+| Type | How It Works |
+|------|--------------|
+| **Intent-based** | AI interprets caller's meaning — "User wants to reschedule" |
+| **Keyword-based** | Matches specific words — "User says 'yes'" |
+| **Variable-based** | Checks variable values — `{{account_type}} == 'premium'` |
+| **Default** | Catch-all fallback — "Anything else" |
+
+<Accordion title="Avoiding Dead Ends">
+Every branch should lead somewhere. Use the **Validation** feature (top right) to find:
+- Nodes with no outgoing branches
+- Branches pointing to deleted nodes
+- Disconnected node clusters
+
+Fix all validation errors before deploying.
+</Accordion>
+
+<Accordion title="Looping Wisely">
+It's fine to loop back (e.g., fallback → same node for clarification), but:
+- Set a maximum retry count
+- After 2-3 failures, offer transfer or end gracefully
+- Don't let callers get stuck in infinite loops
+</Accordion>
+
+---
+
+## Variables in Nodes
+
+Variables make your conversations dynamic. Use them anywhere in prompts.
+
+### Syntax
+
+```
+{{variable_name}}
+```
+
+### System Variables
+
+| Variable | Contains |
+|----------|----------|
+| `{{caller_phone}}` | Caller's phone number |
+| `{{call_duration}}` | Time elapsed |
+| `{{current_date}}` | Today's date |
+| `{{current_time}}` | Current time |
+
+### Custom Variables
+
+Create your own from:
+- **Pre-Call API** responses
+- **Contact list** imports (for outbound campaigns)
+- **API Call** responses during conversation
+- **Collected** from caller responses
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Voice Selection" icon="microphone" href="/platform/building-agents/configuration/agent-settings/voice-selection">
+    Choose how your agent sounds
+  </Card>
+  <Card title="Test Your Agent" icon="flask" href="/platform/building-agents/testing-management/testing">
+    Validate before going live
+  </Card>
+</CardGroup>

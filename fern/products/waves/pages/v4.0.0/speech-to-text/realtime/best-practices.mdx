@@ -1,0 +1,224 @@
+---
+title: 'Best Practices'
+description: 'Optimize your real-time WebSocket transcription for low latency and high accuracy'
+---
+
+# Real-time streaming best practices
+
+Follow these recommendations to keep Pulse STT latencies low while preserving transcript fidelity in real-time scenarios.
+
+## Chunk Size and Streaming Rate
+
+### Recommended Chunk Size
+
+- **Optimal**: 4096 bytes per chunk
+- **Range**: 1024 to 8192 bytes
+- **Consistency**: Maintain consistent chunk sizes when possible
+
+Sending audio in 4096-byte chunks provides the best balance between latency and processing efficiency.
+
+### Streaming Rate
+
+- **Interval**: Send chunks every 50-100ms
+- **Avoid**: Sending chunks too rapidly (< 20ms) or too slowly (> 200ms)
+- **Consistency**: Maintain regular intervals for predictable latency
+
+```javascript
+// Good: Consistent 50ms intervals
+setTimeout(sendChunk, 50);
+
+// Avoid: Variable or very short intervals
+setTimeout(sendChunk, Math.random() * 10); // Too fast and inconsistent
+```
+
+## Handling Partial vs Final Transcripts
+
+The API sends two types of transcripts:
+
+### Partial Transcripts (`is_final: false`)
+
+- **Purpose**: Show interim results for immediate user feedback
+- **Behavior**: May change as more audio is processed
+- **Use case**: Display "live" transcription as the user speaks
+
+```javascript
+if (!message.is_final) {
+  // Show partial transcript with visual indicator (e.g., grayed out)
+  displayPartialTranscript(message.transcript);
+}
+```
+
+### Final Transcripts (`is_final: true`)
+
+- **Purpose**: Confirmed transcription for a segment
+- **Behavior**: Stable and won't change
+- **Use case**: Store in database, display as confirmed text
+
+```javascript
+if (message.is_final) {
+  // Store final transcript
+  saveTranscript(message.full_transcript);
+  // Update UI with confirmed text
+  displayFinalTranscript(message.full_transcript);
+}
+```
+
+## Audio Preprocessing
+
+### Before Streaming
+
+1. **Convert to correct format**: Ensure audio matches the `encoding` parameter (linear16, linear32, alaw, mulaw, opus, ogg_opus)
+2. **Set sample rate**: Match the `sample_rate` parameter in your WebSocket URL
+3. **Mono channel**: Downmix stereo/multi-channel to mono
+4. **Normalize levels**: Prevent clipping and ensure consistent volume
+
+### Example Preprocessing
+
+```python
+import numpy as np
+import soundfile as sf
+
+def preprocess_audio(input_path, target_sample_rate=16000):
+    """Preprocess audio for WebSocket streaming"""
+    audio, sample_rate = sf.read(input_path)
+    
+    # Convert to mono
+    if len(audio.shape) > 1:
+        audio = np.mean(audio, axis=1)
+    
+    # Resample if needed
+    if sample_rate != target_sample_rate:
+        from scipy import signal
+        audio = signal.resample(audio, int(len(audio) * target_sample_rate / sample_rate))
+    
+    # Normalize to prevent clipping
+    max_val = np.abs(audio).max()
+    if max_val > 0:
+        audio = audio / max_val * 0.95
+    
+    # Convert to 16-bit PCM
+    audio_int16 = (audio * 32767).astype(np.int16)
+    
+    return audio_int16, target_sample_rate
+```
+
+## Error Handling and Reconnection
+
+### Connection Errors
+
+Implement robust error handling for network issues:
+
+```javascript
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
+
+function connect() {
+  const ws = new WebSocket(url.toString());
+  
+  ws.onerror = (error) => {
+    console.error("WebSocket error:", error);
+  };
+  
+  ws.onclose = (event) => {
+    if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts) {
+      reconnectAttempts++;
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+      console.log(`Reconnecting in ${delay}ms...`);
+      setTimeout(connect, delay);
+    }
+  };
+  
+  ws.onopen = () => {
+    reconnectAttempts = 0; // Reset on successful connection
+  };
+  
+  return ws;
+}
+```
+
+### Handling Connection Drops
+
+- **Detect drops**: Monitor connection state and implement heartbeat/ping
+- **Buffer audio**: Store audio chunks during disconnection
+- **Resume streaming**: Continue from where you left off after reconnection
+
+## Session Management
+
+### Session Lifecycle
+
+1. **Establish connection**: Create WebSocket with proper authentication
+2. **Stream audio**: Send chunks at regular intervals
+3. **Handle responses**: Process partial and final transcripts
+4. **End session**: Send `{"type": "end"}` when done
+5. **Close connection**: Gracefully close the WebSocket
+
+### Graceful Shutdown
+
+To properly close a session, send the end token and wait for the server to respond with `is_last=true` before closing the WebSocket connection:
+
+```javascript
+function endTranscription(ws) {
+  // Send end signal
+  ws.send(JSON.stringify({ type: "end" }));
+  
+  // Wait for is_last=true response before closing
+  ws.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    if (message.is_last === true) {
+      ws.close(1000, "Transcription complete");
+    }
+  };
+}
+```
+
+<Warning>
+Do not close the WebSocket immediately after sending the end token. Always wait for the `is_last=true` response to ensure all audio has been processed and final transcripts are received.
+</Warning>
+
+## Latency Optimization
+
+### Minimize Processing Delays
+
+- **Preprocess offline**: Convert audio format before streaming
+- **Use optimal encoding**: `linear16` at 16 kHz for best latency/quality balance
+- **Consistent chunking**: Avoid variable chunk sizes that cause processing delays
+
+### Network Optimization
+
+- **Stable connection**: Use reliable network connections
+- **Monitor bandwidth**: Ensure sufficient bandwidth for audio streaming
+- **Reduce overhead**: Minimize unnecessary data in WebSocket messages
+
+## Quality Checklist
+
+1. **Use 16 kHz mono linear16** whenever possible for optimal latency
+2. **Stream in 4096-byte chunks** at 50-100ms intervals
+3. **Handle partial transcripts** for immediate user feedback
+4. **Store final transcripts** for accuracy and persistence
+5. **Implement reconnection logic** for production reliability
+6. **Monitor session state** to detect and handle errors gracefully
+7. **Test with real audio** to validate latency and accuracy
+
+## Performance Tips
+
+### For Low Latency
+
+- Use `linear16` encoding at 16 kHz
+- Stream chunks every 50ms
+- Process responses asynchronously
+- Avoid blocking operations in message handlers
+
+### For High Accuracy
+
+- Use higher sample rates (44.1 kHz or 48 kHz) when latency allows
+- Enable `word_timestamps` for precise timing
+- Wait for `is_final=true` before committing transcripts
+- Use `full_transcript` for complete session text
+
+### For Production
+
+- Implement connection pooling for multiple sessions
+- Add rate limiting to prevent overwhelming the API
+- Log session IDs for debugging and support
+- Monitor transcription quality and latency metrics
+

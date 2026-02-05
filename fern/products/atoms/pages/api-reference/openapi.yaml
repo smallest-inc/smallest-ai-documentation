@@ -207,8 +207,8 @@ paths:
           name: offset
           schema:
             type: integer
-            default: 5
-            description: Number of items to return
+            default: 10
+            description: Number of items to return per page
         - in: query
           name: search
           schema:
@@ -340,8 +340,8 @@ paths:
                   properties:
                     enabled:
                       type: string
-                      enum: [en, hi, ta, kn]
-                      description: The language of the agent. You can choose from the list of supported languages.
+                      enum: [en, hi, ta]
+                      description: "The language of the agent. Supported: 'en' (English), 'hi' (Hindi), 'ta' (Tamil)."
                       default: en
                     switching:
                       type: object
@@ -635,9 +635,293 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
+  /conversation:
+    get:
+      summary: Get all conversation logs
+      description: Retrieve paginated conversation logs with support for various filters. Returns call logs for agents belonging to the authenticated user's organization.
+      tags:
+        - Logs
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+          example: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 5
+            minimum: 1
+          description: Number of items per page
+          example: 10
+        - in: query
+          name: agentIds
+          schema:
+            type: string
+          description: Comma-separated list of agent IDs to filter by
+          example: "60d0fe4f5311236168a109ca,60d0fe4f5311236168a109cb"
+        - in: query
+          name: campaignIds
+          schema:
+            type: string
+          description: Comma-separated list of campaign IDs to filter by
+          example: "60d0fe4f5311236168a109ca,60d0fe4f5311236168a109cb"
+        - in: query
+          name: callTypes
+          schema:
+            type: string
+            enum:
+              - telephony_inbound
+              - telephony_outbound
+              - chat
+          description: Comma-separated list of call types to filter by
+          example: "telephony_outbound,telephony_inbound"
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Search query to filter by callId, fromNumber, or toNumber
+          example: "+1234567890"
+        - in: query
+          name: statusFilter
+          schema:
+            type: string
+          description: |
+            Comma-separated list of call statuses to filter by.
+            Available statuses: pending, in_progress, completed, failed, no_answer, cancelled, busy
+          example: "completed,failed"
+        - in: query
+          name: disconnectReasonFilter
+          schema:
+            type: string
+          description: |
+            Comma-separated list of disconnect reasons to filter by.
+            Available reasons: user_hangup, agent_hangup, connection_error, timeout, system_error, transfer_complete
+          example: "user_hangup,agent_hangup"
+        - in: query
+          name: callAttemptFilter
+          schema:
+            type: string
+          description: |
+            Comma-separated list of call attempt types to filter by.
+            Available filters: initial (first attempt calls), retry (retry attempt calls), all (all calls)
+          example: "initial"
+        - in: query
+          name: durationFilter
+          schema:
+            type: string
+          description: |
+            Comma-separated list of duration ranges to filter by.
+            Available ranges: 0-30 (0-30 seconds), 30-60 (30-60 seconds), 1-5 (1-5 minutes), 5+ (more than 5 minutes)
+          example: "0-30,30-60"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      logs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                              description: The database ID of the call log
+                              example: "60d0fe4f5311236168a109ca"
+                            callId:
+                              type: string
+                              description: The unique call identifier
+                              example: "CALL-1737000000000-abc123"
+                            status:
+                              type: string
+                              description: The status of the call
+                              enum: [pending, in_progress, completed, failed, no_answer, cancelled, busy]
+                              example: "completed"
+                            duration:
+                              type: number
+                              description: The duration of the call in seconds
+                              example: 120
+                            from:
+                              type: string
+                              description: The phone number the call was made from
+                              example: "+15551234567"
+                            to:
+                              type: string
+                              description: The phone number the call was made to
+                              example: "+15559876543"
+                            type:
+                              type: string
+                              description: The type of call
+                              enum: [telephony_inbound, telephony_outbound, chat]
+                              example: "telephony_outbound"
+                            agentId:
+                              type: string
+                              description: The ID of the agent that handled the call
+                              example: "60d0fe4f5311236168a109ca"
+                            agentName:
+                              type: string
+                              description: The name of the agent
+                              example: "Sales Agent"
+                            recordingUrl:
+                              type: string
+                              description: URL to the call recording (if available)
+                              example: "https://storage.example.com/recordings/call-123.mp3"
+                            recordingDualUrl:
+                              type: string
+                              description: URL to the dual-channel call recording (if available)
+                              example: "https://storage.example.com/recordings/call-123-dual.mp3"
+                            disconnectionReason:
+                              type: string
+                              description: The reason the call was disconnected
+                              example: "user_hangup"
+                            retryCount:
+                              type: integer
+                              description: Number of retry attempts for this call
+                              example: 0
+                            createdAt:
+                              type: string
+                              format: date-time
+                              description: When the call was created
+                              example: "2025-01-15T10:30:00.000Z"
+                            dispositionMetrics:
+                              type: object
+                              description: Custom disposition metrics for the call
+                              additionalProperties:
+                                type: string
+                              example:
+                                interested: "yes"
+                                follow_up_needed: "no"
+                            agentDispositionConfig:
+                              type: array
+                              description: Configuration for disposition metrics
+                              items:
+                                type: object
+                                properties:
+                                  identifier:
+                                    type: string
+                                  type:
+                                    type: string
+                      pagination:
+                        type: object
+                        properties:
+                          total:
+                            type: integer
+                            description: Total number of matching call logs
+                            example: 150
+                          page:
+                            type: integer
+                            description: Current page number
+                            example: 1
+                          limit:
+                            type: integer
+                            description: Number of items per page (page size)
+                            example: 10
+                          hasMore:
+                            type: boolean
+                            description: Whether there are more pages available
+                            example: true
+                          totalPages:
+                            type: integer
+                            description: Total number of pages
+                            example: 15
+                      dispositionMetricsConfig:
+                        type: array
+                        description: Global disposition metrics configuration
+                        items:
+                          type: object
+                          properties:
+                            identifier:
+                              type: string
+                            type:
+                              type: string
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /conversation/search:
+    post:
+      summary: Search conversation logs by call IDs
+      description: |
+        Fetch specific conversation logs by their callIds. This endpoint allows you to retrieve up to 100 specific calls at once.
+        Only returns calls that belong to agents in your organization (security check enforced).
+        Unlike the GET /conversation endpoint, this endpoint can also return retry calls (non-root calls).
+      tags:
+        - Logs
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - callIds
+              properties:
+                callIds:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 1
+                  maxItems: 100
+                  description: Array of callIds to fetch
+                  example: ["CALL-1737000000000-abc123", "CALL-1737000000001-def456"]
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      logs:
+                        type: array
+                        items:
+                          type: object
+                          description: Call log details (same structure as GET /conversation)
+                      total:
+                        type: integer
+                        description: Number of logs returned
+                        example: 2
+                      requestedCount:
+                        type: integer
+                        description: Number of callIds requested
+                        example: 3
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
   /conversation/{id}:
     get:
-      summary: Get conversation logs
+      summary: Get conversation log by ID
+      description: Retrieve detailed information about a specific conversation including transcript, events, and latency metrics.
       tags:
         - Logs
       security:
@@ -646,9 +930,10 @@ paths:
         - in: path
           name: id
           required: true
-          description: The callId of the conversation. You can get the callId from the conversation logs.
+          description: The callId of the conversation. You can get the callId from the conversation logs endpoint.
           schema:
             type: string
+          example: "CALL-1737000000000-abc123"
       responses:
         "200":
           description: Successful response
@@ -2203,7 +2488,7 @@ paths:
             minimum: 1
             default: 1
             example: 1
-        - name: offset
+        - name: limit
           in: query
           required: false
           description: Number of items per page (default is 5)
@@ -2709,9 +2994,10 @@ components:
         description:
           type: string
         backgroundSound:
-          type: boolean
-          default: false
-          description: Whether to add ambient background sound during calls. Currently provides office ambience by default. Additional sound options available upon request.
+          type: string
+          enum: ["", "office", "cafe", "call_center", "static"]
+          default: ""
+          description: "Ambient background sound during calls. Options: '' (none), 'office', 'cafe', 'call_center', 'static'."
         # visibleToEveryone:
         #   type: boolean
         #   default: false
@@ -2721,8 +3007,8 @@ components:
           properties:
             enabled:
               type: string
-              enum: [en, hi, ta, kn]
-              description: The language of the agent. You can choose from the list of supported languages.
+              enum: [en, hi, ta]
+              description: "The language of the agent. Supported: 'en' (English), 'hi' (Hindi), 'ta' (Tamil)."
               default: en
             switching:
               type: object
@@ -2846,8 +3132,9 @@ components:
           type: string
           description: The description of the agent
         backgroundSound:
-          type: boolean
-          description: Whether ambient background sound is enabled during calls
+          type: string
+          enum: ["", "office", "cafe", "call_center", "static"]
+          description: "Ambient background sound during calls. Options: '' (none), 'office', 'cafe', 'call_center', 'static'."
         organization:
           type: string
           description: The organization ID of the agent
@@ -2871,7 +3158,7 @@ components:
             enabled:
               type: string
               description: The language of the agent
-              enum: [en, hi, ta, kn]
+              enum: [en, hi, ta]
             switching:
               type: object
               description: Language switching configuration for the agent
@@ -3450,8 +3737,10 @@ tags:
     description: Operations related to agents
   - name: Workflows
     description: Operations related to workflow configuration and management
-  - name: Call Logs
-    description: Operations related to agent call logs
+  - name: Logs
+    description: Operations related to conversation logs, call history, and recordings. Supports filtering by agents, campaigns, call IDs, status, duration, and more.
+  - name: Calls
+    description: Operations related to initiating and managing calls
   - name: Phone Numbers
     description: Operations related to phone numbers
   - name: Webhooks

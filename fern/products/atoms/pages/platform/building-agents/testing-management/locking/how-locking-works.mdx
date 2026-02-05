@@ -1,0 +1,175 @@
+---
+title: "How Locking Works"
+sidebarTitle: "How It Works"
+description: "Technical details of the agent locking mechanism."
+---
+
+Understanding how locking works helps you use it effectively and avoid common pitfalls.
+
+---
+
+## The Lock Toggle
+
+Find the lock toggle in the top bar of your agent editor.
+
+<Frame caption="Lock toggle in the agent editor">
+  <img src="/images/configure.png" alt="Lock toggle" />
+</Frame>
+
+**Unlocked (default):** Full editing enabled. You can change anything.
+
+**Locked:** Editing disabled. Configuration is frozen.
+
+Click the toggle to switch states. Locking requires confirmation.
+
+---
+
+## What Gets Locked
+
+When you lock an agent, the following are frozen:
+
+### For All Agents
+
+| Component | Locked? |
+|-----------|---------|
+| Agent name | ✓ |
+| Voice selection | ✓ |
+| LLM model | ✓ |
+| LLM parameters (temperature, etc.) | ✓ |
+| Language settings | ✓ |
+
+### For Single Prompt Agents
+
+| Component | Locked? |
+|-----------|---------|
+| Role & Objective prompt | ✓ |
+| Conversation Flow prompt | ✓ |
+| Dos and Don'ts prompt | ✓ |
+| End Call Conditions prompt | ✓ |
+
+### For Convo Flow Agents
+
+| Component | Locked? |
+|-----------|---------|
+| All nodes and their prompts | ✓ |
+| All branch conditions | ✓ |
+| Branch connections | ✓ |
+| API configurations | ✓ |
+| Variable definitions | ✓ |
+
+### Not Locked
+
+| Component | Why Not Locked? |
+|-----------|-----------------|
+| Phone number assignment | You need to connect/disconnect numbers |
+| Conversation logs | These accumulate regardless |
+| Knowledge Base content | Content can be updated independently |
+| External API endpoints | These are managed externally |
+
+---
+
+## Attempting to Edit While Locked
+
+If you try to edit a locked agent:
+
+1. The edit UI is disabled (fields are read-only)
+2. If you somehow trigger an edit API, it returns an error
+3. A message indicates the agent is locked
+
+To make changes, you must either:
+- Unlock the agent (if you have permission)
+- Create a new version based on this one
+
+---
+
+## Locking and Phone Numbers
+
+Locked agents can be connected to live phone numbers. In fact, this is the recommended workflow:
+
+```
+Lock agent → Connect to phone number → Go live
+```
+
+The lock protects the configuration while it's handling real calls.
+
+You can disconnect a phone number from a locked agent without unlocking it.
+
+---
+
+## Unlocking
+
+To unlock an agent:
+
+1. Click the lock toggle
+2. Confirm you want to unlock
+3. Editing is now enabled
+
+<Warning>
+Unlocking a live agent is risky. Any changes you make immediately affect live calls. Consider creating a new version instead.
+</Warning>
+
+### When Unlocking is Appropriate
+
+- The agent is not connected to any live phone numbers
+- You've disconnected it from live traffic
+- You're making an emergency fix and accept the risk
+
+### Better Alternative: Version
+
+Instead of unlocking, create a new version:
+1. Keep the current version locked (and live)
+2. Create a new unlocked version to edit
+3. Test the new version
+4. Lock the new version
+5. Switch traffic to the new version
+6. Archive or delete the old version
+
+This prevents any disruption to live calls.
+
+---
+
+## Lock State in Team Environments
+
+In team settings:
+
+- **Who can lock:** Anyone with edit permissions
+- **Who can unlock:** Anyone with edit permissions (consider restricting this)
+- **Visibility:** Lock state is visible to all team members
+- **Audit:** Lock/unlock actions are logged with timestamp and user
+
+<Tip>
+For production agents, consider restricting unlock permissions to senior team members to prevent accidental changes.
+</Tip>
+
+---
+
+## Lock State via API
+
+If you're managing agents programmatically:
+
+```bash
+# Check lock state
+GET /agents/{agent_id}
+# Returns: { ..., "is_locked": true, ... }
+
+# Lock an agent
+POST /agents/{agent_id}/lock
+
+# Unlock an agent
+POST /agents/{agent_id}/unlock
+```
+
+API requests to modify a locked agent return `403 Forbidden`.
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Version Management" icon="code-branch" href="/platform/building-agents/testing-management/locking/version-management">
+    Managing multiple versions safely
+  </Card>
+  <Card title="When to Lock" icon="clock" href="/platform/building-agents/testing-management/locking/when-to-lock">
+    Deciding when to lock
+  </Card>
+</CardGroup>

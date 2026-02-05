@@ -1,0 +1,344 @@
+---
+title: 'Troubleshooting'
+description: 'Common issues and solutions for real-time WebSocket transcription'
+---
+
+## Connection Issues
+
+### Cannot Establish WebSocket Connection
+
+**Symptoms**: Connection fails immediately or times out
+
+**Possible Causes**:
+- Invalid API key
+- Network/firewall blocking WebSocket connections
+- Incorrect WebSocket URL
+
+**Solutions**:
+
+1. **Verify API Key**:
+   ```javascript
+   // Ensure Authorization header is correct
+   headers: {
+     Authorization: `Bearer ${API_KEY}` // Not "Token" or "Key"
+   }
+   ```
+
+2. **Check WebSocket URL**:
+   ```javascript
+   // Correct URL format
+   const url = new URL("wss://waves-api.smallest.ai/api/v1/pulse/get_text");
+   // Not "ws://" or "https://"
+   ```
+
+3. **Test Network Connectivity**:
+   ```bash
+   # Test WebSocket endpoint
+   curl -i -N -H "Connection: Upgrade" \
+        -H "Upgrade: websocket" \
+        -H "Sec-WebSocket-Version: 13" \
+        -H "Sec-WebSocket-Key: test" \
+        https://waves-api.smallest.ai/api/v1/pulse/get_text
+   ```
+
+### Connection Drops Unexpectedly
+
+**Symptoms**: Connection closes without sending end signal
+
+**Possible Causes**:
+- Network instability
+- Server timeout
+- Invalid audio data
+
+**Solutions**:
+
+1. **Implement Reconnection Logic**:
+   ```javascript
+   let ws;
+   let reconnectAttempts = 0;
+   
+   function connect() {
+     ws = new WebSocket(url.toString(), { headers });
+     
+     ws.onclose = (event) => {
+       if (event.code !== 1000 && reconnectAttempts < 5) {
+         setTimeout(connect, 1000 * Math.pow(2, reconnectAttempts++));
+       }
+     };
+   }
+   ```
+
+2. **Monitor Connection State**:
+   ```javascript
+   setInterval(() => {
+     if (ws.readyState !== WebSocket.OPEN) {
+       console.warn("Connection not open, state:", ws.readyState);
+     }
+   }, 5000);
+   ```
+
+## Audio Encoding Problems
+
+### No Transcription Received
+
+**Symptoms**: Connection established but no transcript messages
+
+**Possible Causes**:
+- Incorrect audio encoding
+- Mismatched sample rate
+- Invalid audio format
+
+**Solutions**:
+
+1. **Verify Encoding Parameters**:
+   ```javascript
+   // Ensure encoding matches your audio format
+   url.searchParams.append("encoding", "linear16"); // or linear32, alaw, mulaw, opus, ogg_opus
+   url.searchParams.append("sample_rate", "16000"); // Must match audio
+   ```
+
+2. **Check Audio Format**:
+   ```python
+   import soundfile as sf
+   
+   audio, sample_rate = sf.read("audio.wav")
+   print(f"Sample rate: {sample_rate}")
+   print(f"Channels: {audio.shape}")
+   print(f"Format: {audio.dtype}")
+   # Should be: 16000 Hz, mono, int16
+   ```
+
+3. **Validate Chunk Format**:
+   ```javascript
+   // Ensure chunks are binary (not base64 or text)
+   ws.send(audioChunk); // Uint8Array or ArrayBuffer
+   // Not: ws.send(JSON.stringify(audioChunk))
+   ```
+
+### Poor Transcription Quality
+
+**Symptoms**: Incorrect or garbled transcriptions
+
+**Possible Causes**:
+- Wrong sample rate
+- Incorrect encoding
+- Audio quality issues
+
+**Solutions**:
+
+1. **Match Sample Rate**:
+   ```javascript
+   // Audio must match sample_rate parameter
+   const audioContext = new AudioContext({ sampleRate: 16000 });
+   url.searchParams.append("sample_rate", "16000");
+   ```
+
+2. **Use Recommended Encoding**:
+   ```javascript
+   // Use linear16 for best quality
+   url.searchParams.append("encoding", "linear16");
+   ```
+
+3. **Preprocess Audio**:
+   ```python
+   # Normalize and clean audio before streaming
+   audio = audio / np.abs(audio).max() * 0.95  # Normalize
+   audio = audio.astype(np.int16)  # Convert to int16
+   ```
+
+## Response Handling Issues
+
+### Partial Transcripts Not Updating
+
+**Symptoms**: Only final transcripts received, no partial updates
+
+**Possible Causes**:
+- Not checking `is_final` field
+- Filtering out partial messages
+
+**Solutions**:
+
+1. **Handle Both Types**:
+   ```javascript
+   ws.onmessage = (event) => {
+     const message = JSON.parse(event.data);
+     
+     if (!message.is_final) {
+       // Show partial transcript
+       displayPartial(message.transcript);
+     } else {
+       // Show final transcript
+       displayFinal(message.full_transcript);
+     }
+   };
+   ```
+
+## Performance Issues
+
+### High Latency
+
+**Symptoms**: Long delay between speaking and transcription
+
+**Possible Causes**:
+- Chunk size too large
+- Streaming rate too slow
+- Network latency
+
+**Solutions**:
+
+1. **Optimize Chunk Size**:
+   ```javascript
+   // Use recommended 4096 bytes
+   const chunkSize = 4096;
+   ```
+
+2. **Increase Streaming Rate**:
+   ```javascript
+   // Send chunks every 50ms
+   setTimeout(sendChunk, 50); // Not 200ms or longer
+   ```
+
+3. **Check Network**:
+   ```bash
+   # Test latency to API
+   ping waves-api.smallest.ai
+   ```
+
+### Memory Issues
+
+**Symptoms**: Application crashes or slows down during streaming
+
+**Possible Causes**:
+- Buffering too much audio
+- Not cleaning up resources
+
+**Solutions**:
+
+1. **Stream Directly**:
+   ```javascript
+   // Stream chunks immediately, don't buffer entire file
+   const stream = fs.createReadStream("audio.wav", { highWaterMark: 4096 });
+   stream.on("data", (chunk) => ws.send(chunk));
+   ```
+
+2. **Clean Up Resources**:
+   ```javascript
+   ws.onclose = () => {
+     // Clean up audio resources
+     if (audioContext) audioContext.close();
+     if (stream) stream.destroy();
+   };
+   ```
+
+## Browser-Specific Issues
+
+### CORS Errors
+
+**Symptoms**: WebSocket connection blocked in browser
+
+**Solutions**:
+
+1. **Use WSS (Secure WebSocket)**:
+   ```javascript
+   // Always use wss:// in browsers
+   const url = new URL("wss://waves-api.smallest.ai/api/v1/pulse/get_text");
+   ```
+
+2. **Handle Authentication**:
+   ```javascript
+   // Note: Browsers may not support custom headers in WebSocket
+   // Consider using query parameter for API key (if supported)
+   // Or use a proxy server for authentication
+   ```
+
+### Microphone Access Denied
+
+**Symptoms**: Cannot access microphone in browser
+
+**Solutions**:
+
+1. **Request Permissions**:
+   ```javascript
+   navigator.mediaDevices.getUserMedia({ audio: true })
+     .then(stream => {
+       // Use stream
+     })
+     .catch(error => {
+       console.error("Microphone access denied:", error);
+       // Show user instructions
+     });
+   ```
+
+2. **Handle HTTPS Requirement**:
+   - Microphone access requires HTTPS (or localhost)
+   - Ensure your page is served over HTTPS
+
+## Debugging Tips
+
+### Enable Verbose Logging
+
+```javascript
+ws.onopen = () => console.log("✓ Connected");
+ws.onmessage = (event) => {
+  console.log("📨 Received:", JSON.parse(event.data));
+};
+ws.onerror = (error) => console.error("✗ Error:", error);
+ws.onclose = (event) => console.log("✗ Closed:", event.code, event.reason);
+```
+
+### Validate Audio Before Sending
+
+```javascript
+function validateAudioChunk(chunk) {
+  if (!(chunk instanceof ArrayBuffer || chunk instanceof Uint8Array)) {
+    throw new Error("Audio chunk must be ArrayBuffer or Uint8Array");
+  }
+  if (chunk.byteLength === 0) {
+    throw new Error("Audio chunk cannot be empty");
+  }
+  if (chunk.byteLength > 8192) {
+    console.warn("Chunk size exceeds recommended 4096 bytes");
+  }
+  return true;
+}
+```
+
+### Monitor Session State
+
+```javascript
+let sessionStats = {
+  chunksSent: 0,
+  messagesReceived: 0,
+  partialCount: 0,
+  finalCount: 0
+};
+
+ws.onmessage = (event) => {
+  sessionStats.messagesReceived++;
+  const message = JSON.parse(event.data);
+  if (message.is_final) {
+    sessionStats.finalCount++;
+  } else {
+    sessionStats.partialCount++;
+  }
+  console.log("Session stats:", sessionStats);
+};
+```
+
+## Getting Help
+
+If you continue to experience issues:
+
+1. **Check API Status**: Verify the API is operational
+2. **Review Documentation**: Ensure you're following the correct API version
+3. **Test with Sample Code**: Use the provided examples as a baseline
+4. **Note down**: Reach out with:
+   - Session ID (if available)
+   - Error messages
+   - Code snippets (sanitized of API keys)
+   - Network conditions (if applicable)
+
+5. **Reach out to us:**
+    - Email: [support@smallest.ai](mailto:support@smallest.ai)
+    - Discord: [Join our community](https://discord.gg/5evETqguJs)
+

@@ -1,0 +1,66 @@
+---
+title: "Concurrency and Limits"
+description: "Understanding API concurrency limits and rate limiting"
+icon: "bolt"
+---
+
+## Overview
+
+Waves API implements concurrency limits to ensure fair usage and optimal performance across all users. Understanding these limits is crucial for building robust applications that integrate with our services.
+
+## What is Concurrency?
+
+**Concurrency** refers to the number of simultaneous requests that can be processed at any given moment. In the context of Waves API:
+
+- **1 TTS request concurrency**: Only 1 Text-to-Speech request can be actively processed at a time per account
+- This applies to all TTS endpoints including Lightning v2, Lightning v3.1, and streaming variants
+
+## How Concurrency Works
+
+### HTTP API Requests
+
+- Each HTTP API call (POST request) counts as **1 concurrency unit** while being processed
+- Once the request completes and returns a response, the concurrency slot is freed
+- If you attempt to make a second HTTP request while one is already being processed, you'll receive a `429 Too Many Requests` error
+
+### WebSocket Connections
+
+- You can establish up to **5 WebSocket connections** simultaneously (5 × concurrency limit)
+- However, only **1 concurrent request** can be processed across all WebSocket connections
+- Additional requests sent through any WebSocket while one is being processed will be rejected with an error
+
+## Monitoring Your Usage
+
+### Dashboard Monitoring
+
+Check your usage patterns in the Waves dashboard to:
+
+- Monitor request patterns
+- Identify peak usage times
+- Plan capacity requirements
+
+Link to dashboard: https://waves.smallest.ai/developers/usage?utm_source=documentation&utm_medium=api-references
+
+## Parallel Conversational Bots
+
+For conversational applications, you can potentially support approximately **4x your concurrency limit** in parallel conversations. This is based on the typical speaking patterns where users don't speak continuously.
+
+### How It Works
+
+- **Concurrency limit**: 1 active TTS request
+- **Potential parallel conversations**: ~4 conversations simultaneously
+- **Reasoning**: In natural conversation, users speak intermittently with pauses between responses
+  <Warning>
+    This is a **rough estimate** and may fail when multiple conversations
+    simultaneously request TTS generation. Your application must handle 429
+    errors gracefully when the actual concurrency limit is reached.
+  </Warning>
+
+## Upgrading Limits
+
+If your application requires higher concurrency limits, please contact our support team to discuss enterprise plans with increased limits.
+
+<Note>
+  Concurrency limits are account basis. If you are using multiple models, all
+  models share the same concurrency limit.
+</Note>

@@ -1,0 +1,272 @@
+---
+title: "Pulse (Realtime)"
+description: The Pulse STT WebSocket API provides real-time speech-to-text transcription capabilities with streaming audio input. This API uses WebSocket to deliver transcription results as audio is processed, enabling low-latency transcription without waiting for the entire audio file to upload. Perfect for live transcription, voice assistants, and real-time communication systems that require immediate speech recognition. Supports multiple languages, word-level timestamps, sentence-level timestamps (utterances), PII and PCI redaction, cumulative transcripts, and more advanced features.
+asyncapi: "/asyncapi-spec/pulse-stt-ws.json /api/v1/pulse/get_text"
+---
+
+## Query Parameters
+
+The WebSocket connection accepts the following query parameters:
+
+### Audio Configuration
+
+| Parameter     | Type   | Default    | Description                                                                           |
+| ------------- | ------ | ---------- | ------------------------------------------------------------------------------------- |
+| `encoding`    | string | `linear16` | Audio encoding format. Options: `linear16`, `linear32`, `alaw`, `mulaw`, `opus`, `ogg_opus` |
+| `sample_rate` | string | `16000`    | Audio sample rate in Hz. Options: `8000`, `16000`, `22050`, `24000`, `44100`, `48000` |
+
+### Language & Detection
+
+| Parameter  | Type   | Default | Description                                                                                                                                                                                                                                                                                       |
+| ---------- | ------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `language` | string | `en`    | Language code for transcription. Use `multi` for automatic language detection. Supported: `it`, `es`, `en`, `pt`, `hi`, `de`, `fr`, `uk`, `ru`, `kn`, `ml`, `pl`, `mr`, `gu`, `cs`, `sk`, `te`, `or`, `nl`, `bn`, `lv`, `et`, `ro`, `pa`, `fi`, `sv`, `bg`, `ta`, `hu`, `da`, `lt`, `mt`, `multi` |
+
+### Feature Flags
+
+| Parameter             | Type   | Default | Description                                                              |
+| --------------------- | ------ | ------- | ------------------------------------------------------------------------ |
+| `word_timestamps`     | string | `true`  | Include word-level timestamps in transcription. Options: `true`, `false` |
+| `full_transcript`     | string | `false` | Include cumulative transcript received till now in responses where `is_final` is `true`. Options: `true`, `false` |
+| `sentence_timestamps` | string | `false` | Include sentence-level timestamps (utterances) in transcription. Options: `true`, `false` |
+| `redact_pii`          | string | `false` | Redact personally identifiable information (name, surname, address). Options: `true`, `false` |
+| `redact_pci`          | string | `false` | Redact payment card information (credit card, CVV, zip, account number). Options: `true`, `false` |
+| `numerals`            | string | `auto`  | "Convert spoken numerals into digit form (e.g., 'twenty five' to '25') and `auto` enables automatic detection based on context. Options: `true`, `false`, `auto` |
+| `keywords`            | list   |  None   | List of keywords to boost during transcription. Each keyword is formatted as 'word:weight' where weight is a positive number indicating boost intensity (e.g., ['word:5.0', 'name:4.0']). Higher weights increase the likelihood of the keyword being recognized. Recommended weight range is 1 to 10; extremely high values may degrade transcription accuracy. |
+| `diarize`             | string | `false` | Enable speaker diarization to identify and label different speakers in the audio. When enabled, each word in the transcription includes `speaker` (integer ID) and `speaker_confidence` (float 0-1) fields. Options: `true`, `false` |
+
+### Webhook Configuration
+
+## Connection Flow
+
+### Example Connection URL
+
+```javascript
+const url = new URL("wss://waves-api.smallest.ai/api/v1/pulse/get_text");
+url.searchParams.append("language", "en");
+url.searchParams.append("encoding", "linear16");
+url.searchParams.append("sample_rate", "16000");
+url.searchParams.append("word_timestamps", "true");
+url.searchParams.append("full_transcript", "true");
+url.searchParams.append("sentence_timestamps", "true");
+url.searchParams.append("redact_pii", "true");
+url.searchParams.append("redact_pci", "true");
+url.searchParams.append("numerals", "true");
+url.searchParams.append("keywords", JSON.stringify(["product:5.0"]));
+url.searchParams.append("diarize", "true");
+
+const ws = new WebSocket(url.toString(), {
+  headers: {
+    Authorization: `Bearer ${API_KEY}`,
+  },
+});
+```
+
+## Input Messages
+
+### Audio Data (Binary)
+
+Send raw audio bytes as binary WebSocket messages:
+
+```javascript
+const audioChunk = new Uint8Array(4096);
+ws.send(audioChunk);
+```
+
+### End Signal (JSON)
+
+Signal the end of audio stream:
+
+```json
+{
+  "type": "end"
+}
+```
+
+## Response Format
+
+The server responds with JSON messages containing transcription results:
+
+```json
+{
+  "session_id": "sess_12345abcde",
+  "transcript": "Hello, how are you?",
+  "is_final": true,
+  "is_last": false,
+  "language": "en"
+}
+```
+
+### Response Fields
+
+| Field             | Type    | Description                                                          |
+| ----------------- | ------- | -------------------------------------------------------------------- |
+| `session_id`      | string  | Unique identifier for the transcription session                      |
+| `transcript`      | string  | Partial or complete transcription text for the current segment       |
+| `is_final`        | boolean | Indicates if this is the final transcription for the current segment |
+| `is_last`         | boolean | Indicates if this is the last transcription in the session           |
+| `language`        | string  | Detected primary language code, returns only when `is_final=True` |
+| `languages`       | array   | List of languages detected in the audio included in Responses where `is_final` is `true` |
+
+### Optional Response Fields (Based on Query Parameters)
+
+| Field             | Type   | When Included            | Description                                                            |
+| ----------------- | ------ | ------------------------ | ---------------------------------------------------------------------- |
+| `full_transcript` | string | `full_transcript=true` AND `is_final=true` | Complete transcription text accumulated till now. Only present in responses when `full_transcript=true` query parameter is set AND `is_final=true` |
+| `words`            | array  | `word_timestamps=true`   | Word-level timestamps with `word`, `start`, `end`, and `confidence` fields. When `diarize=true`, also includes `speaker` and `speaker_confidence` fields |
+| `utterances`       | array  | `sentence_timestamps=true` | Sentence-level timestamps with `text`, `start`, and `end` fields |
+| `redacted_entities`| array  | `redact_pii=true` or `redact_pci=true` | List of redacted entity placeholders (e.g., `[FIRSTNAME_1]`, `[CREDITCARDCVV_1]`) |
+
+### Example Response with All Features
+
+```json
+{
+  "session_id": "sess_12345abcde",
+  "transcript": "[CREDITCARDCVV_1] and expiry [TIME_2].",
+  "is_final": true,
+  "is_last": true,
+  "full_transcript": "Hi, my name is [FIRSTNAME_1] [FIRSTNAME_2] You can reach me at [PHONENUMBER_1] and I paid using my Visa card [ZIPCODE_1] [ACCOUNTNUMBER_1] with [CREDITCARDCVV_1] and expiry [TIME_1].",
+  "language": "en",
+  "languages": ["en"],
+  "words": [
+    {
+      "word": "[creditcardcvv_1]",
+      "start": 15.44,
+      "end": 17.36,
+      "confidence": 0.97,
+      "speaker": 0,
+      "speaker_confidence": 0.67
+    },
+    {
+      "word": "and",
+      "start": 18.0,
+      "end": 18.32,
+      "confidence": 0.94,
+      "speaker": 0,
+      "speaker_confidence": 0.76
+    },
+    {
+      "word": "expiry",
+      "start": 18.32,
+      "end": 19.2,
+      "confidence": 1.0,
+      "speaker": 0,
+      "speaker_confidence": 0.91
+    },
+    {
+      "word": "[time_2]",
+      "start": 19.2,
+      "end": 19.92,
+      "confidence": 0.91,
+      "speaker": 0,
+      "speaker_confidence": 0.82
+    },
+  ],
+  "utterances": [
+    {
+      "text": "Hi, my name is Hans Miller.",
+      "start": 0.0,
+      "end": 2.64,
+      "speaker": 0
+    },
+    {
+      "text": "You can reach me at [PHONENUMBER_1], and I paid using my Visa card 4242 42424242 with CVV123 and expiry [TIME_1].",
+      "start": 2.64,
+      "end": 21.04,
+      "speaker": 0
+    }
+  ],
+  "redacted_entities": [
+    "[CREDITCARDCVV_1]",
+    "[TIME_2]"
+  ]
+}
+```
+
+## Code Examples
+
+<CodeGroup>
+```python python
+import asyncio
+import json
+import argparse
+import numpy as np
+import websockets
+import librosa
+from urllib.parse import urlencode
+
+BASE_WS_URL = "wss://waves-api.smallest.ai/api/v1/pulse/get_text"
+
+async def stream_audio(audio_file, api_key, language="en", encoding="linear16", sample_rate=16000, word_timestamps="true", full_transcript="false", sentence_timestamps="false", redact_pii="false", redact_pci="false", numerals="auto", keywords="auto", diarize="false"):
+    params = {
+        "language": language,
+        "encoding": encoding,
+        "sample_rate": sample_rate,
+        "word_timestamps": word_timestamps,
+        "full_transcript": full_transcript,
+        "sentence_timestamps": sentence_timestamps,
+        "redact_pii": redact_pii,
+        "redact_pci": redact_pci,
+        "numerals": numerals,
+        "keywords": keywords,
+        "diarize": diarize
+    }
+    ws_url = f"{BASE_WS_URL}?{urlencode(params)}"
+    
+    async with websockets.connect(ws_url, additional_headers={"Authorization": f"Bearer {api_key}"}) as ws:
+        print(f"Connected: {ws_url}")
+        
+        async def send():
+            audio, _ = librosa.load(audio_file, sr=sample_rate, mono=True)
+            chunk_size = int(0.160 * sample_rate)
+            
+            for i in range(0, len(audio), chunk_size):
+                chunk = audio[i:i + chunk_size]
+                await ws.send((chunk * 32768.0).astype(np.int16).tobytes())
+                await asyncio.sleep(len(chunk) / sample_rate)
+            
+            await ws.send(json.dumps({"type": "end"}))
+        
+        sender = asyncio.create_task(send())
+        
+        async for message in ws:
+            data = json.loads(message)
+            print("Received:", json.dumps(data, indent=2))
+            if data.get("is_last"):
+                break
+        
+        await sender
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("audio_file", nargs="?", default="path/to/audio.wav")
+    parser.add_argument("--api-key", "-k", default="your_api_key_here")
+    parser.add_argument("--language", "-l", default="en")
+    parser.add_argument("--encoding", "-e", default="linear16")
+    parser.add_argument("--sample-rate", "-sr", type=int, default=16000)
+    parser.add_argument("--word-timestamps", "-wt", default="true")
+    parser.add_argument("--full-transcript", "-ft", default="false")
+    parser.add_argument("--sentence-timestamps", "-st", default="false")
+    parser.add_argument("--redact-pii", default="false")
+    parser.add_argument("--redact-pci", default="false")
+    parser.add_argument("--numerals", default="auto")
+    parser.add_argument("--keywords", default=None)
+    parser.add_argument("--diarize", default="false")
+    
+    args = parser.parse_args()
+    asyncio.run(stream_audio(
+        args.audio_file,
+        args.api_key,
+        args.language,
+        args.encoding,
+        args.sample_rate,
+        args.word_timestamps,
+        args.full_transcript,
+        args.sentence_timestamps,
+        args.redact_pii,
+        args.redact_pci,
+        args.numerals,
+        args.keywords,
+        args.diarize
+    ))
+```
+</CodeGroup>

@@ -1,0 +1,87 @@
+---
+title: 'Numeric Formatting'
+description: 'Control how numbers are formatted in transcriptions'
+---
+
+<Badge color="purple">Real-Time</Badge>
+
+Numeric Formatting allows you to control how numbers, dates, and numerical values are represented in transcription output. You can choose between spelled-out numbers or numeric digits based on your application's requirements.
+
+
+## Enabling Numeric Formatting
+
+<Note>
+Numeric Formatting is currently only available for the Real-Time WebSocket API.
+</Note>
+Add a `numerals` parameter in the query string set to `true`, `false`, or `auto` to control numeric formatting. The default is `auto`, which enables automatic detection based on context.
+
+### Real-Time WebSocket API
+
+```javascript
+const url = new URL("wss://waves-api.smallest.ai/api/v1/pulse/get_text");
+url.searchParams.append("language", "en");
+url.searchParams.append("encoding", "linear16");
+url.searchParams.append("sample_rate", "16000");
+url.searchParams.append("numerals", "true"); // or "false" or "auto"
+
+const ws = new WebSocket(url.toString(), {
+  headers: {
+    Authorization: `Bearer ${API_KEY}`,
+  },
+});
+```
+
+## Formatting Options
+
+### `numerals=true` (Numeric Format)
+
+When enabled, numbers are transcribed as digits:
+
+- **"25"** instead of "twenty-five"
+- **"$1,234.56"** instead of "one thousand two hundred thirty-four dollars and fifty-six cents"
+- **"3:45 PM"** instead of "three forty-five P M"
+- **"2024"** instead of "twenty twenty-four"
+- **"1.5"** instead of "one point five"
+
+### `numerals=false` (Spelled-Out Format)
+
+When disabled, numbers are transcribed as words:
+
+- **"twenty-five"** instead of "25"
+- **"one thousand two hundred thirty-four"** instead of "1234"
+- **"three forty-five"** instead of "3:45"
+- **"twenty twenty-four"** instead of "2024"
+
+### `numerals=auto` (Automatic Detection)
+
+When set to `auto` (default), the system automatically detects the appropriate format based on context. This is recommended for most use cases.
+
+## Sample Response
+
+### With `numerals=true`
+
+```json
+{
+  // other fields
+  "transcript": "The price is $25.99 and we have 42 items in stock. Call us at 555-1234.",
+  "is_final": true,
+  "is_last": false,
+  "language": "en"
+}
+```
+
+### With `numerals=false`
+
+```json
+{
+  // other fields
+  "transcript": "The price is twenty-five dollars and ninety-nine cents and we have forty-two items in stock. Call us at five five five one two three four.",
+  "is_final": true,
+  "is_last": false,
+  "language": "en"
+}
+```
+
+<Note>
+If not specified, `numerals=auto` (automatic detection) is used by default.
+</Note>

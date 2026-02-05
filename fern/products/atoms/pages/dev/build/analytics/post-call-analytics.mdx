@@ -1,0 +1,252 @@
+---
+title: "Post-Call Analytics"
+sidebarTitle: "Post-Call Analytics"
+description: "Configure AI summaries and disposition metrics for automated call insights."
+---
+
+After each call, the platform automatically generates analytics. You can configure what data to extract.
+
+## What Gets Generated
+
+Every completed call includes `postCallAnalytics`:
+
+| Field | Description |
+|-------|-------------|
+| `summary` | AI-generated call summary |
+| `dispositionMetrics` | Extracted data points you configure |
+
+---
+
+## Accessing Post-Call Data
+
+```python
+from smallestai.atoms.call import Call
+
+call = Call()
+
+# Get call details
+details = call.get_call("CALL-1768842587790-69eb58")
+data = details["data"]
+
+# Access analytics
+analytics = data.get("postCallAnalytics", {})
+
+print(f"Summary: {analytics.get('summary')}")
+
+for metric in analytics.get("dispositionMetrics", []):
+    print(f"  {metric['identifier']}: {metric['value']}")
+    print(f"    Confidence: {metric['confidence']}")
+    print(f"    Reasoning: {metric['reasoning']}")
+```
+
+### Example Output
+
+```
+Summary: The call involved an agent reaching out to discuss AI products. 
+The user expressed interest and provided their name.
+
+  user_interested: yes
+    Confidence: 1
+    Reasoning: The user explicitly stated 'I am interested'.
+  user_name: John
+    Confidence: 1
+    Reasoning: The user provided their name directly.
+```
+
+---
+
+## Configuring Disposition Metrics
+
+Use `set_post_call_config()` to define what data to extract:
+
+```python
+from smallestai.atoms.call import Call
+
+call = Call()
+
+call.set_post_call_config(
+    agent_id="696e655577e1d88ff54b4fbf",
+    summary_prompt="Summarize this sales call briefly.",
+    disposition_metrics=[
+        {
+            "identifier": "user_interested",
+            "dispositionMetricPrompt": "Was the user interested? yes, no, or unclear",
+            "dispositionValues": {"type": "ENUM"},
+            "choices": ["yes", "no", "unclear"]
+        },
+        {
+            "identifier": "user_name",
+            "dispositionMetricPrompt": "What is the user's name? Return 'unknown' if not mentioned.",
+            "dispositionValues": {"type": "STRING"}
+        }
+    ]
+)
+```
+
+---
+
+## Disposition Metric Types
+
+| Type | Description | Requires `choices` |
+|------|-------------|-------------------|
+| `STRING` | Free text (names, notes) | No |
+| `BOOLEAN` | Yes/No values | No |
+| `INTEGER` | Numeric values (ratings) | No |
+| `ENUM` | Selection from predefined list | Yes |
+| `DATETIME` | Date/time values | No |
+
+---
+
+## Metric Configuration Schema
+
+Each disposition metric requires:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `identifier` | Yes | Unique ID (e.g., `customer_status`) |
+| `dispositionMetricPrompt` | Yes | Question to extract this data |
+| `dispositionValues.type` | Yes | STRING, BOOLEAN, INTEGER, ENUM, DATETIME |
+| `choices` | For ENUM | List of allowed values |
+
+---
+
+## Getting Current Configuration
+
+```python
+config = call.get_post_call_config("696e655577e1d88ff54b4fbf")
+
+print("Configured metrics:")
+for metric in config["data"].get("dispositionMetrics", []):
+    print(f"  {metric['identifier']}: {metric['dispositionMetricType']}")
+```
+
+---
+
+## Complete Example: Sales Call Analytics
+
+```python
+import time
+from smallestai.atoms import AtomsClient
+from smallestai.atoms.call import Call
+from smallestai.atoms.audience import Audience
+from smallestai.atoms.campaign import Campaign
+
+client = AtomsClient()
+call = Call()
+audience = Audience()
+campaign = Campaign()
+
+# 1. Create agent
+agent = client.new_agent(
+    name=f"Sales Agent {int(time.time())}",
+    prompt="You are a sales agent. Ask if interested and get their name.",
+    description="Testing disposition metrics"
+)
+agent_id = agent.data
+
+# 2. Configure disposition metrics
+call.set_post_call_config(
+    agent_id=agent_id,
+    summary_prompt="Summarize this sales call briefly.",
+    disposition_metrics=[
+        {
+            "identifier": "user_interested",
+            "dispositionMetricPrompt": "Was the user interested? yes, no, or unclear",
+            "dispositionValues": {"type": "ENUM"},
+            "choices": ["yes", "no", "unclear"]
+        },
+        {
+            "identifier": "user_name",
+            "dispositionMetricPrompt": "What is the user's name? Return 'unknown' if not mentioned.",
+            "dispositionValues": {"type": "STRING"}
+        }
+    ]
+)
+
+# 3. Create audience and campaign
+phones = client.get_phone_numbers()
+phone_id = phones["data"][0]["_id"]
+
+aud = audience.create(
+    name=f"Test Audience {int(time.time())}",
+    phone_numbers=["+916366821717"],
+    names=[("Test", "User")]
+)
+audience_id = aud["data"]["_id"]
+
+camp = campaign.create(
+    name=f"Analytics Test {int(time.time())}",
+    agent_id=agent_id,
+    audience_id=audience_id,
+    phone_ids=[phone_id]
+)
+campaign_id = camp["data"]["_id"]
+
+# 4. Start campaign
+campaign.start(campaign_id)
+print("Call in progress...")
+
+# 5. Wait for completion
+time.sleep(60)
+
+# 6. Get call with analytics
+calls = call.get_calls(agent_id=agent_id, limit=1)
+call_id = calls["data"]["logs"][0]["callId"]
+
+details = call.get_call(call_id)
+data = details["data"]
+
+# 7. Display results
+print(f"\nCall Status: {data['status']}")
+print(f"Duration: {data['duration']}s")
+
+print("\nTranscript:")
+for line in data.get("transcript", []):
+    print(f"  [{line['role'].upper()}]: {line['content']}")
+
+analytics = data.get("postCallAnalytics", {})
+if analytics:
+    print(f"\nSummary: {analytics.get('summary')}")
+    print("\nDisposition Metrics:")
+    for m in analytics.get("dispositionMetrics", []):
+        print(f"  {m['identifier']}: {m['value']}")
+        print(f"    Confidence: {m['confidence']}")
+        print(f"    Reasoning: {m['reasoning']}")
+
+# 8. Cleanup
+campaign.delete(campaign_id)
+audience.delete(audience_id)
+client.delete_agent(id=agent_id)
+```
+
+---
+
+## SDK Reference
+
+| Method | Description |
+|--------|-------------|
+| `call.get_post_call_config(agent_id)` | Get agent's analytics config |
+| `call.set_post_call_config(agent_id, ...)` | Configure summary and disposition metrics |
+| `call.get_call(call_id)` | Get call details with analytics |
+| `call.get_calls(agent_id=..., limit=...)` | List calls with optional filters |
+
+---
+
+## Tips
+
+<AccordionGroup>
+  <Accordion title="When are metrics populated?">
+    Disposition metrics are extracted after the call ends, typically within 10-30 seconds. The AI analyzes the transcript based on your configured prompts.
+  </Accordion>
+  <Accordion title="What makes a good disposition prompt?">
+    Be specific and direct. Instead of "What happened?", use:
+    - "Did the customer agree to schedule a follow-up? Answer yes or no."
+    - "What is the customer's email? Return 'not provided' if not mentioned."
+  </Accordion>
+  <Accordion title="Can I change metrics after calls are made?">
+    Yes. New calls use the updated config. Existing calls keep their original analytics.
+  </Accordion>
+  <Accordion title="What if the AI can't extract a value?">
+    The metric will have an empty or null value. Specify fallback behavior in your prompts, like "Return 'unknown' if not mentioned."
+  </Accordion>
+</AccordionGroup>

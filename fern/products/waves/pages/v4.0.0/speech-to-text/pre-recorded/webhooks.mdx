@@ -1,0 +1,75 @@
+---
+title: 'Webhooks'
+description: 'Receive asynchronous Pulse STT results without polling'
+---
+
+# Webhooks for pre-recorded uploads
+
+Use webhooks to process Pulse STT jobs asynchronously—ideal for long recordings or high-volume backfills. When a transcription finishes, Waves sends a POST request to your callback with the final payload.
+
+## Steps
+
+<Steps>
+  <Step title="Create a webhook endpoint">
+    Route an HTTPS URL (e.g., `https://api.example.com/webhooks/stt`) that accepts POST requests. Implement signature checks or HMAC validation inside this handler to guard against spoofed traffic.
+  </Step>
+  <Step title="Attach metadata">
+    Include `webhook_url` and optional `webhook_extra` query parameters when calling `POST /api/v1/pulse/get_text`. `webhook_extra` accepts comma-separated `key:value` pairs that return verbatim in the webhook payload for correlation.
+  </Step>
+  <Step title="Submit audio">
+    Make your transcription request as usual (raw bytes or audio URL). Pulse STT queues the job, streams to the model, and emits the webhook once `status=success` (or `failed`).
+  </Step>
+  <Step title="Handle the callback">
+    Parse the JSON payload, verify any signatures you added, and store the transcript, timestamps, and metadata in your system of record. Respond with `2xx` to acknowledge receipt; send `5xx` to trigger a retry.
+  </Step>
+</Steps>
+
+## Sample request
+
+```bash
+curl --request POST \
+  --url "https://waves-api.smallest.ai/api/v1/pulse/get_text?model=pulse&language=en&word_timestamps=true&webhook_url=https://api.example.com/webhooks/stt&webhook_extra=case_id:42,region:us-east" \
+  --header "Authorization: Bearer $SMALLEST_API_KEY" \
+  --header "Content-Type: audio/wav" \
+  --data-binary "@/path/to/audio.wav"
+```
+
+## Sample webhook payload
+
+```json
+{
+  "status": "success",
+  "transcription": "Hello world.",
+  "words": [
+    { "start": 0.0, "end": 0.5, "speaker": "speaker_0", "word": "Hello" },
+    { "start": 0.6, "end": 0.9, "speaker": "speaker_0", "word": "world." }
+  ],
+  "utterances": [
+    { "text": "Hello world.", "start": 0.0, "end": 0.9, "speaker": "speaker_0" }
+  ],
+  "language": "en",
+  "age": "adult",
+  "gender": "male",
+  "emotions": {
+    "happiness": 0.8,
+    "sadness": 0.15,
+    "disgust": 0.02,
+    "fear": 0.03,
+    "anger": 0.05
+  }
+}
+```
+
+## Implementation tips
+
+- **Security**: terminate TLS, validate signatures/HMACs, and reject unsigned requests.
+- **Retries**: respond with `5xx` to trigger Waves' retry logic; use idempotent handlers. Waves does `10 retries` before giving up on delivery. 
+- **Rate limits**: add lightweight rate limiting or queueing to absorb bursts.
+- **Local development**: tunnel your local server with `ngrok http 3000` to test callbacks.
+
+## Testing checklist
+
+1. Trigger a transcription with `webhook_url` pointing to your dev endpoint.
+2. Inspect the webhook payload, store the `request_id`, and ensure metadata flows through.
+3. Simulate failures by returning `500` to confirm retries work as expected.
+

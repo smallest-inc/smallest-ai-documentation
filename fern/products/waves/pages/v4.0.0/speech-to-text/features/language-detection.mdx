@@ -1,0 +1,79 @@
+---
+title: 'Language detection'
+description: 'Automatically detect and transcribe 30+ languages with Pulse STT'
+---
+
+<Badge color="green">Pre-Recorded</Badge> <Badge color="purple">Real-Time</Badge>
+
+## Enabling language detection
+
+Set the `language` query parameter to `multi` when calling the API. It will auto-detect the spoken language across 30+ ISO 639-1 language codes.
+
+<Note>
+View the full list of [supported languages](../overview#supported-languages).
+</Note>
+
+### Pre-Recorded API
+
+```bash
+curl --request POST \
+  --url "https://waves-api.smallest.ai/api/v1/pulse/get_text?model=pulse&language=multi&word_timestamps=true" \
+  --header "Authorization: Bearer $SMALLEST_API_KEY" \
+  --header "Content-Type: audio/wav" \
+  --data-binary "@/path/to/audio.wav"
+```
+
+### Real-Time WebSocket API
+
+```javascript
+const url = new URL("wss://waves-api.smallest.ai/api/v1/pulse/get_text");
+url.searchParams.append("language", "multi");
+url.searchParams.append("encoding", "linear16");
+url.searchParams.append("sample_rate", "16000");
+
+const ws = new WebSocket(url.toString(), {
+  headers: {
+    Authorization: `Bearer ${API_KEY}`,
+  },
+});
+```
+
+## Output format & field of interest
+
+When language detection is enabled, the `transcription` (or `transcript` for realtime), `words`, and `utterances` arrays are emitted in the detected language. The response includes a `language` field with the detected primary language code, and a `languages` array (in realtime responses where `is_final=true`) listing all detected languages. Persist the detected locale in your app by storing the `language` parameter you supplied (for auditing) and by inspecting downstream metadata such as subtitles or captions that inherit the localized transcript.
+
+## Sample response
+
+### Pre-Recorded API Response
+
+```json
+{
+  "status": "success",
+  "transcription": "Hola mundo.",
+  "words": [
+    { "start": 0.0, "end": 0.4, "word": "Hola" },
+    { "start": 0.5, "end": 0.9, "word": "mundo." }
+  ],
+  "utterances": [
+    { "text": "Hola mundo.", "start": 0.0, "end": 0.9 }
+  ]
+}
+```
+
+### Real-Time WebSocket API Response
+
+```json
+{
+  "session_id": "sess_12345abcde",
+  "transcript": "Hola mundo.",
+  "is_final": true,
+  "is_last": false,
+  "language": "es",
+  "languages": ["es"]
+}
+```
+
+<Note>
+The `language` field is only returned when `is_final=true` in real-time API responses. The `languages` array lists all languages detected in the audio and is also only included when `is_final=true`.
+</Note>
+
