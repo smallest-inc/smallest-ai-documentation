@@ -2,7 +2,8 @@ asyncapi: 3.0.0
 info:
   title: Waves Text-to-Speech API
   version: 1.0.0
-  description: WebSocket-based streaming text-to-speech API for generating realistic
+  description:
+    WebSocket-based streaming text-to-speech API for generating realistic
     voices
   contact:
     name: Waves API Support
@@ -17,19 +18,19 @@ servers:
     protocol: wss
     description: Production WebSocket API endpoint
     security:
-    - $ref: '#/components/securitySchemes/bearerAuth'
+      - $ref: "#/components/securitySchemes/bearerAuth"
 channels:
   /api/v1/lightning-v2/get_speech/stream:
     address: /api/v1/lightning-v2/get_speech/stream
     messages:
-      ttsRequest.message:
-        name: TTSRequest
+      lightningV2TtsRequest.message:
+        name: LightningV2TtsRequest
         contentType: application/json
         payload:
           type: object
           required:
-          - voice_id
-          - text
+            - voice_id
+            - text
           properties:
             voice_id:
               type: string
@@ -39,7 +40,8 @@ channels:
               description: The text to convert to speech
             max_buffer_flush_ms:
               type: integer
-              description: The maximum time (in ms) to wait for more input before
+              description:
+                The maximum time (in ms) to wait for more input before
                 generating output. It flushes when either this time is reached or
                 enough input is received for optimal output—whichever comes first.
                 This is useful for input streams. Deafults to 0
@@ -48,27 +50,31 @@ channels:
               minimum: 0
             continue:
               type: boolean
-              description: This setting controls whether the system should buffer
+              description:
+                This setting controls whether the system should buffer
                 and wait for more input after receiving the current one. If not set,
                 it assumes no more input is coming.
               default: false
             flush:
               type: boolean
-              description: This setting controls whether the system should flush the
+              description:
+                This setting controls whether the system should flush the
                 current buffer.
               default: false
             complete_backoff_ms:
               type: number
-              description: The time in ms to wait after the last chunk is sent before
+              description:
+                The time in ms to wait after the last chunk is sent before
                 sending the complete response. Default is 4000ms. Maximum is 10000ms.
               default: 4000
               minimum: 0
               maximum: 10000
             language:
               type: string
-              description: 'The language code, available options: `en`, `hi`, `mr`,
+              description:
+                "The language code, available options: `en`, `hi`, `mr`,
                 `kn`, `ta`, `bn`, `gu`, `de`, `fr`, `es`, `it`, `pl`, `nl`, `ru`,
-                `ar`, `he`'
+                `ar`, `he`"
               default: en
             sample_rate:
               type: integer
@@ -99,19 +105,19 @@ channels:
               maximum: 1
               default: 0
           examples:
-          - voice_id: ryan
-            text: Hello, this is a sample text to convert to speech.
-            max_buffer_flush_ms: 0
-            continue: false
-            flush: false
-            language: en
-            sample_rate: 24000
-            speed: 1
-            consistency: 0.5
-            enhancement: 1
-            similarity: 0
-      ttsResponse.message:
-        name: TTSResponse
+            - voice_id: ryan
+              text: Hello, this is a sample text to convert to speech.
+              max_buffer_flush_ms: 0
+              continue: false
+              flush: false
+              language: en
+              sample_rate: 24000
+              speed: 1
+              consistency: 0.5
+              enhancement: 1
+              similarity: 0
+      lightningV2TtsResponse.message:
+        name: LightningV2TtsResponse
         contentType: application/json
         payload:
           type: object
@@ -122,9 +128,10 @@ channels:
             status:
               type: string
               enum:
-              - chunk
-              - complete
-              description: Status of the TTS request, `chunk` indicates incoming audio
+                - chunk
+                - complete
+              description:
+                Status of the TTS request, `chunk` indicates incoming audio
                 chunk, `complete` indicates completion.
             data:
               type: object
@@ -136,17 +143,17 @@ operations:
   ttsRequest:
     action: receive
     channel:
-      $ref: '#/channels/~1api~1v1~1lightning-v2~1get_speech~1stream'
+      $ref: "#/channels/~1api~1v1~1lightning-v2~1get_speech~1stream"
     summary: Send text-to-speech request
     messages:
-    - $ref: '#/channels/~1api~1v1~1lightning-v2~1get_speech~1stream/messages/ttsRequest.message'
+      - $ref: "#/channels/~1api~1v1~1lightning-v2~1get_speech~1stream/messages/lightningV2TtsRequest.message"
   ttsResponse:
     action: send
     channel:
-      $ref: '#/channels/~1api~1v1~1lightning-v2~1get_speech~1stream'
+      $ref: "#/channels/~1api~1v1~1lightning-v2~1get_speech~1stream"
     summary: Receive audio stream chunks
     messages:
-    - $ref: '#/channels/~1api~1v1~1lightning-v2~1get_speech~1stream/messages/ttsResponse.message'
+      - $ref: "#/channels/~1api~1v1~1lightning-v2~1get_speech~1stream/messages/lightningV2TtsResponse.message"
 components:
   securitySchemes:
     bearerAuth:
@@ -173,7 +180,7 @@ components:
         status:
           type: string
           enum:
-          - complete
+            - complete
           description: Indicates that the streaming is complete
     ErrorResponse:
       type: object
@@ -181,7 +188,7 @@ components:
         status:
           type: string
           enum:
-          - error
+            - error
         error:
           type: object
           properties:
