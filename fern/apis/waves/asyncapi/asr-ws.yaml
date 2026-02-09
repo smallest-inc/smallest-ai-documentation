@@ -2,7 +2,8 @@ asyncapi: 3.0.0
 info:
   title: Waves ASR (Speech-to-Text) API
   version: 1.0.0
-  description: WebSocket-based streaming automatic speech recognition API for real-time
+  description:
+    WebSocket-based streaming automatic speech recognition API for real-time
     speech transcription
   contact:
     name: Waves API Support
@@ -17,22 +18,22 @@ servers:
     protocol: wss
     description: Production WebSocket ASR endpoint
     security:
-    - $ref: '#/components/securitySchemes/bearerAuth'
+      - $ref: "#/components/securitySchemes/bearerAuth"
 channels:
   /api/v1/asr:
     address: /api/v1/asr
     messages:
-      audioRequest.message:
-        name: AudioRequest
+      asrAudioRequest.message:
+        name: AsrAudioRequest
         contentType: application/octet-stream
         payload:
           type: string
           format: binary
           description: Raw audio data in the specified encoding format
           examples:
-          - Binary audio data chunk
-      transcriptionResponse.message:
-        name: TranscriptionResponse
+            - Binary audio data chunk
+      asrTranscriptionResponse.message:
+        name: AsrTranscriptionResponse
         contentType: application/json
         payload:
           type: object
@@ -44,25 +45,25 @@ channels:
               type: boolean
               description: Indicates if this marks the end of a speech turn
           examples:
-          - text: Hello, how are you doing today?
-            isEndOfTurn: false
-          - text: Thank you for using our service.
-            isEndOfTurn: true
+            - text: Hello, how are you doing today?
+              isEndOfTurn: false
+            - text: Thank you for using our service.
+              isEndOfTurn: true
 operations:
   audioRequest:
     action: receive
     channel:
-      $ref: '#/channels/~1api~1v1~1asr'
+      $ref: "#/channels/~1api~1v1~1asr"
     summary: Send audio data for transcription
     messages:
-    - $ref: '#/channels/~1api~1v1~1asr/messages/audioRequest.message'
+      - $ref: "#/channels/~1api~1v1~1asr/messages/asrAudioRequest.message"
   transcriptionResponse:
     action: send
     channel:
-      $ref: '#/channels/~1api~1v1~1asr'
+      $ref: "#/channels/~1api~1v1~1asr"
     summary: Receive transcription results
     messages:
-    - $ref: '#/channels/~1api~1v1~1asr/messages/transcriptionResponse.message'
+      - $ref: "#/channels/~1api~1v1~1asr/messages/asrTranscriptionResponse.message"
 components:
   securitySchemes:
     bearerAuth:
@@ -86,7 +87,7 @@ components:
         status:
           type: string
           enum:
-          - error
+            - error
         error:
           type: object
           properties:
