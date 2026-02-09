@@ -1,6 +1,7 @@
 # Override file for pulse-stt-openapi.yaml
 # Ensures proper grouping under Speech to Text section
 # Specifies waves server for all endpoints
+# Fixes error response examples to match AsyncAPI ErrorResponse structure
 
 paths:
   /api/v1/pulse/get_text:
@@ -10,3 +11,16 @@ paths:
       tags:
         - Speech to Text
       summary: Pulse (Pre-Recorded)
+      responses:
+        "413":
+          content:
+            application/json:
+              example:
+                error:
+                  message: "File size exceeds maximum limit of 25MB"
+        "429":
+          content:
+            application/json:
+              example:
+                error:
+                  message: "Rate limit exceeded. Please try again later."
