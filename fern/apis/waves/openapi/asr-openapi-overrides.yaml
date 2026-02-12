@@ -1,12 +1,17 @@
 # Override file for asr-openapi.yaml
 # Renames the 'transcription' property to 'text' in SpeechToTextResponse
 # Specifies waves server for all endpoints
-# Fixes error response examples to match AsyncAPI ErrorResponse structure
+# Groups under Speech to Text sub-client with method name 'lightning'
+# Assigns unique operationId to avoid naming conflict with pulse endpoint
+# Fixes 413/429 examples to match the merged ErrorResponse schema
 
 paths:
   /api/v1/lightning/get_text:
     post:
       x-fern-server-name: waves
+      x-fern-sdk-group-name: Speech to Text
+      x-fern-sdk-method-name: lightning
+      operationId: lightningSpeechToText
       responses:
         "200":
           content:
@@ -20,10 +25,14 @@ paths:
             application/json:
               example:
                 error:
+                  code: "413"
                   message: "File size exceeds maximum limit of 25MB"
+                status: error
         "429":
           content:
             application/json:
               example:
                 error:
+                  code: "429"
                   message: "Rate limit exceeded. Please try again later."
+                status: error

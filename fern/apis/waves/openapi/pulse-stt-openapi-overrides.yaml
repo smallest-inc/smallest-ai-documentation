@@ -1,13 +1,18 @@
 # Override file for pulse-stt-openapi.yaml
 # Ensures proper grouping under Speech to Text section
 # Specifies waves server for all endpoints
-# Fixes error response examples to match AsyncAPI ErrorResponse structure
+# Assigns unique operationId to avoid naming conflict with lightning endpoint
+# Fixes 413/429 examples to match the merged ErrorResponse schema
+# (the REST ErrorResponse gets merged with the AsyncAPI ErrorResponse,
+#  so error must be an object with code/message, not a plain string)
 
 paths:
   /api/v1/pulse/get_text:
     post:
       x-fern-server-name: waves
       x-fern-sdk-group-name: Speech to Text
+      x-fern-sdk-method-name: pulse
+      operationId: pulseSpeechToText
       tags:
         - Speech to Text
       summary: Pulse (Pre-Recorded)
@@ -17,10 +22,14 @@ paths:
             application/json:
               example:
                 error:
+                  code: "413"
                   message: "File size exceeds maximum limit of 25MB"
+                status: error
         "429":
           content:
             application/json:
               example:
                 error:
+                  code: "429"
                   message: "Rate limit exceeded. Please try again later."
+                status: error
