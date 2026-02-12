@@ -1,127 +1,33 @@
-# Override file for pulse-stt-ws.json
-# Restructures the spec to avoid $ref to #/channels/ locations which Fern doesn't support
-# Specifies waves server for all endpoints
+# Override file for pulse-stt-ws.yaml
+# Adds unique type names to prevent collisions with other AsyncAPI files
+# Maps server reference to match generators.yml environment URLs
+
+servers:
+  waves-ws:
+    host: waves-api.smallest.ai
+    pathname: /api/v1/pulse/get_text
+    protocol: wss
 
 channels:
   /api/v1/pulse/get_text:
-    x-fern-server-name: waves
-    x-fern-sdk-group-name: Speech to Text
-    title: Pulse (Realtime)
+    x-fern-sdk-group-name: Pulse STT Streaming
+    servers:
+      - $ref: "#/servers/waves-ws"
+    messages:
+      audioData.message:
+        x-fern-type-name: PulseAudioData
+        name: PulseAudioData
+      endSignal.message:
+        x-fern-type-name: PulseEndSignal
+        name: PulseEndSignal
+      transcriptionResponse.message:
+        x-fern-type-name: PulseTranscriptionResponse
+        name: PulseTranscriptionResponse
 
-# Override operations to remove channel refs and use component message refs
 operations:
   sendAudioData:
-    channel: null
-    messages:
-      - $ref: "#/components/messages/AudioData"
+    action: send
   sendEndSignal:
-    channel: null
-    messages:
-      - $ref: "#/components/messages/EndSignal"
+    action: send
   receiveTranscription:
-    channel: null
-    messages:
-      - $ref: "#/components/messages/TranscriptionResponse"
-
-# Add messages to components
-components:
-  messages:
-    AudioData:
-      name: AudioData
-      contentType: application/octet-stream
-      payload:
-        type: string
-        format: binary
-        description: Raw audio data chunk, transmitted in binary format using the selected encoding
-    EndSignal:
-      name: EndSignal
-      contentType: application/json
-      payload:
-        type: object
-        required:
-          - type
-        properties:
-          type:
-            type: string
-            enum: [end]
-            description: Signal to indicate end of audio stream
-    TranscriptionResponse:
-      name: TranscriptionResponse
-      contentType: application/json
-      payload:
-        type: object
-        required:
-          - session_id
-        properties:
-          session_id:
-            type: string
-            description: Unique identifier for the transcription session
-          transcript:
-            type: string
-            description: Partial or complete transcription text for the current segment
-          full_transcript:
-            type: string
-            description: Complete transcription text accumulated so far
-          is_final:
-            type: boolean
-            default: false
-            description: Indicates if this is the final transcription for the current segment
-          is_last:
-            type: boolean
-            default: false
-            description: Indicates if this is the last transcription in the session
-          words:
-            type: array
-            description: Word-level timestamps (when word_timestamps=true)
-            items:
-              type: object
-              properties:
-                word:
-                  type: string
-                  description: The transcribed word
-                start:
-                  type: number
-                  description: Start time in seconds
-                end:
-                  type: number
-                  description: End time in seconds
-                confidence:
-                  type: number
-                  description: Confidence score (0.0 to 1.0)
-                speaker:
-                  type: integer
-                  description: Speaker label (when diarization is enabled)
-                speaker_confidence:
-                  type: number
-                  description: Speaker confidence score (0.0 to 1.0)
-          utterances:
-            type: array
-            description: Sentence-level timestamps (when sentence_timestamps=true)
-            items:
-              type: object
-              properties:
-                text:
-                  type: string
-                  description: The transcribed sentence
-                start:
-                  type: number
-                  description: Start time in seconds
-                end:
-                  type: number
-                  description: End time in seconds
-                speaker:
-                  type: integer
-                  description: Speaker label (when diarization is enabled)
-          language:
-            type: string
-            description: Detected primary language code
-          languages:
-            type: array
-            description: List of languages detected in the audio
-            items:
-              type: string
-          redacted_entities:
-            type: array
-            description: List of redacted entity placeholders
-            items:
-              type: string
+    action: receive

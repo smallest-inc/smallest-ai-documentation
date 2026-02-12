@@ -1,43 +1,28 @@
-# Override file for asr-ws.json
-# Restructures the spec to avoid $ref to #/channels/ locations which Fern doesn't support
-# Specifies waves server for all endpoints
+# Override file for asr-ws.yaml
+# Adds unique type names to prevent collisions with other AsyncAPI files
+# Maps server reference to match generators.yml environment URLs
+
+servers:
+  waves-ws:
+    host: waves-api.smallest.ai
+    pathname: /api/v1/asr
+    protocol: wss
 
 channels:
   /api/v1/asr:
-    x-fern-server-name: waves
-    x-fern-sdk-group-name: Speech to Text
-    title: ASR WebSocket
+    x-fern-sdk-group-name: ASR Streaming
+    servers:
+      - $ref: "#/servers/waves-ws"
+    messages:
+      audioRequest.message:
+        x-fern-type-name: AsrAudioRequest
+        name: AsrAudioRequest
+      transcriptionResponse.message:
+        x-fern-type-name: AsrTranscriptionResponse
+        name: AsrTranscriptionResponse
 
-# Override operations to remove channel refs and use component message refs
 operations:
   audioRequest:
-    channel: null
-    messages:
-      - $ref: "#/components/messages/AudioRequest"
+    action: send
   transcriptionResponse:
-    channel: null
-    messages:
-      - $ref: "#/components/messages/TranscriptionResponse"
-
-# Add messages to components
-components:
-  messages:
-    AudioRequest:
-      name: AudioRequest
-      contentType: application/octet-stream
-      payload:
-        type: string
-        format: binary
-        description: Raw audio data in the specified encoding format
-    TranscriptionResponse:
-      name: TranscriptionResponse
-      contentType: application/json
-      payload:
-        type: object
-        properties:
-          text:
-            type: string
-            description: The transcribed text content
-          isEndOfTurn:
-            type: boolean
-            description: Indicates if this marks the end of a speech turn
+    action: receive
