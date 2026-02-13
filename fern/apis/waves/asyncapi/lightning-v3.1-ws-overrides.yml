@@ -1,100 +1,28 @@
-# Override file for lightning-v3.1-ws.json
-# Restructures the spec to avoid $ref to #/channels/ locations which Fern doesn't support
-# Specifies waves server for all endpoints
+# Override file for lightning-v3.1-ws.yaml
+# Adds unique type names to prevent collisions with other AsyncAPI files
+# Maps server reference to match generators.yml environment URLs
 
 servers:
+  waves-ws:
+    host: waves-api.smallest.ai
+    pathname: /api/v1/lightning-v3.1/get_speech/stream
+    protocol: wss
   production:
     x-fern-server-name: waves
 
 channels:
   /api/v1/lightning-v3.1/get_speech/stream:
-    x-fern-server-name: waves
-    x-fern-audiences:
-      - v4
-    x-fern-sdk-group-name: Text to Speech
-    title: Lightning v3.1 WebSocket
+    x-fern-sdk-group-name: Lightning V3.1 TTS
+    servers:
+      - $ref: "#/servers/waves-ws"
+    messages:
+      ttsRequest.message:
+        name: LightningV31TtsRequest
+      ttsResponse.message:
+        name: LightningV31TtsResponse
 
-# Override operations to remove channel refs and use component message refs
 operations:
   ttsRequest:
-    channel: null
-    messages:
-      - $ref: "#/components/messages/TTSRequest"
+    action: send
   ttsResponse:
-    channel: null
-    messages:
-      - $ref: "#/components/messages/TTSResponse"
-
-# Add messages to components
-components:
-  messages:
-    TTSRequest:
-      name: TTSRequest
-      contentType: application/json
-      payload:
-        type: object
-        required:
-          - voice_id
-          - text
-        properties:
-          voice_id:
-            type: string
-            description: The ID of the voice to use
-          text:
-            type: string
-            description: The text to convert to speech
-          max_buffer_flush_ms:
-            type: integer
-            description: Maximum time (in ms) to wait for more input before generating output
-            default: 0
-            maximum: 1000
-            minimum: 0
-          continue:
-            type: boolean
-            description: Whether to buffer and wait for more input
-            default: false
-          flush:
-            type: boolean
-            description: Whether to flush the current buffer
-            default: false
-          complete_backoff_ms:
-            type: number
-            description: Time in ms to wait after the last chunk before sending complete response
-            default: 4000
-            minimum: 0
-            maximum: 10000
-          language:
-            type: string
-            description: "Language code: en, hi"
-            default: en
-            enum: [en, hi]
-          sample_rate:
-            type: integer
-            description: Audio sample rate in Hz
-            default: 44100
-            enum: [8000, 16000, 24000, 44100]
-          speed:
-            type: number
-            description: Speaking speed multiplier
-            minimum: 0.5
-            maximum: 2.0
-            default: 1
-    TTSResponse:
-      name: TTSResponse
-      contentType: application/json
-      payload:
-        type: object
-        properties:
-          request_id:
-            type: string
-            description: Unique identifier for the TTS request
-          status:
-            type: string
-            enum: [chunk, complete]
-            description: "Status: chunk for audio data, complete for end of stream"
-          data:
-            type: object
-            properties:
-              audio:
-                type: string
-                description: Base64-encoded audio chunk
+    action: receive

@@ -1,16 +1,23 @@
-# Override file for stream-tts-ws.json
-# Restructures the spec to avoid $ref to #/channels/ locations which Fern doesn't support
-# Specifies waves server for all endpoints
+# Override file for stream-tts-ws.yaml
+# Adds unique type names to prevent collisions with other AsyncAPI files
+# Maps server reference to match generators.yml environment URLs
+
+servers:
+  waves-ws:
+    host: waves-api.smallest.ai
+    pathname: /api/v1/streaming-tts/stream
+    protocol: wss
 
 channels:
   /api/v1/streaming-tts/stream:
-    x-fern-server-name: waves
-    x-fern-audiences:
-      - v2
-      - v3
-      - v4
-    x-fern-sdk-group-name: Text to Speech
-    title: Lightning
+    x-fern-sdk-group-name: Streaming TTS
+    servers:
+      - $ref: "#/servers/waves-ws"
+    messages:
+      streamingTTSRequest.message:
+        name: StreamTtsRequest
+      streamingTTSResponse.message:
+        name: StreamTtsResponse
     description: |
       The Lightning SSE API allows you to stream text-to-speech audio in real-time. This is particularly useful for applications requiring low-latency audio generation.
 
@@ -132,116 +139,8 @@ channels:
       - The SSE connection will remain open until all chunks are sent or an error occurs
       - For optimal performance, keep individual requests under 1000 characters
 
-# Override operations to remove channel refs and use component message refs
 operations:
   streamingTTSRequest:
-    channel: null
-    messages:
-      - $ref: "#/components/messages/StreamingTTSRequest"
+    action: send
   streamingTTSResponse:
-    channel: null
-    messages:
-      - $ref: "#/components/messages/StreamingTTSResponse"
-
-# Add messages to components
-components:
-  messages:
-    StreamingTTSRequest:
-      name: StreamingTTSRequest
-      contentType: application/json
-      payload:
-        type: object
-        required:
-          - voice_id
-          - text
-        properties:
-          voice_id:
-            type: string
-            description: "Voice identifier (e.g., 'aditi', 'male-1', 'female-2')"
-          text:
-            type: string
-            description: The text to convert to speech. Can be sent incrementally for streaming input.
-          is_streaming:
-            type: boolean
-            description: Indicates if this is part of a streaming text input sequence
-            default: false
-          is_final:
-            type: boolean
-            description: Indicates if this is the final chunk in a streaming sequence
-            default: true
-          language:
-            type: string
-            description: Language code for synthesis
-            default: en
-            enum: [en, hi, mr, kn, ta, bn, gu, de, fr, es, it, pl, nl, ru, ar, he]
-          sample_rate:
-            type: integer
-            description: Audio sample rate in Hz
-            default: 24000
-            enum: [16000, 22050, 24000, 44100, 48000]
-          speed:
-            type: number
-            description: Speech speed multiplier
-            minimum: 0.1
-            maximum: 5.0
-            default: 1.0
-          consistency:
-            type: number
-            description: Voice consistency parameter
-            minimum: 0.0
-            maximum: 1.0
-            default: 0.5
-          enhancement:
-            type: integer
-            description: Audio enhancement level
-            minimum: 0
-            maximum: 2
-            default: 1
-          similarity:
-            type: number
-            description: Voice similarity parameter
-            minimum: 0.0
-            maximum: 1.0
-            default: 0.0
-          max_buffer_flush_ms:
-            type: integer
-            description: Maximum buffer time in milliseconds before forcing audio output
-            minimum: 0
-            maximum: 5000
-            default: 0
-    StreamingTTSResponse:
-      name: StreamingTTSResponse
-      contentType: application/json
-      payload:
-        type: object
-        properties:
-          request_id:
-            type: string
-            description: Unique identifier for the streaming TTS request
-          status:
-            type: string
-            enum: [chunk, complete, error]
-            description: "Status: 'chunk' for audio data, 'complete' for end of stream, 'error' for failures"
-          data:
-            type: object
-            properties:
-              audio:
-                type: string
-                description: Base64-encoded PCM audio chunk
-              format:
-                type: string
-                description: Audio format specification
-                default: pcm_16bit_mono
-              sample_rate:
-                type: integer
-                description: Sample rate of the audio chunk
-                default: 24000
-          error:
-            type: object
-            properties:
-              message:
-                type: string
-                description: Error message description
-              code:
-                type: string
-                description: Error code identifier
+    action: receive
