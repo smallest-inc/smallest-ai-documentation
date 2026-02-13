@@ -1,113 +1,28 @@
-# Override file for lightning-v2-ws.json (v4 docs)
-# Restructures the spec to avoid $ref to #/channels/ locations which Fern doesn't support
-# Specifies waves server for all endpoints
+# Override file for lightning-v2-ws.yaml (v4 docs)
+# Adds server mapping, audience tags, and unique message names
+
+servers:
+  production:
+    x-fern-server-name: waves
 
 channels:
   /api/v1/lightning-v2/get_speech/stream:
     x-fern-server-name: waves
     x-fern-audiences:
       - v4docs
-    x-fern-sdk-group-name: Text to Speech
+    x-fern-sdk-group-name: Text to Speech V2
     title: Lightning v2 WebSocket
     description: The Lightning v2 WebSocket API provides real-time text-to-speech streaming capabilities with high-quality voice synthesis. This API uses WebSocket to deliver audio chunks as they're generated, enabling low-latency audio playback without waiting for the entire audio file to process. Perfect for interactive applications, voice assistants, and real-time communication systems that require immediate audio feedback. For an end-to-end example of how to use the Lightning v2 WebSocket API, check out [Text to Speech (WS) Example](https://github.com/smallest-inc/waves-examples/tree/main/lightning_v2/ws_streaming)
+    servers:
+      - $ref: "#/servers/production"
+    messages:
+      lightningV2TtsRequest.message:
+        name: V4LightningV2TtsRequest
+      lightningV2TtsResponse.message:
+        name: V4LightningV2TtsResponse
 
-# Override operations to remove channel refs and use component message refs
 operations:
-  ttsRequest:
-    channel: null
-    messages:
-      - $ref: "#/components/messages/TTSRequest"
-  ttsResponse:
-    channel: null
-    messages:
-      - $ref: "#/components/messages/TTSResponse"
-
-# Add messages to components
-components:
-  messages:
-    TTSRequest:
-      name: TTSRequest
-      contentType: application/json
-      payload:
-        type: object
-        required:
-          - voice_id
-          - text
-        properties:
-          voice_id:
-            type: string
-            description: The ID of the voice to use
-          text:
-            type: string
-            description: The text to convert to speech
-          max_buffer_flush_ms:
-            type: integer
-            description: Maximum time (in ms) to wait for more input before generating output
-            default: 0
-            maximum: 1000
-            minimum: 0
-          continue:
-            type: boolean
-            description: Whether to buffer and wait for more input
-            default: false
-          flush:
-            type: boolean
-            description: Whether to flush the current buffer
-            default: false
-          complete_backoff_ms:
-            type: number
-            description: Time in ms to wait after the last chunk before sending complete response
-            default: 4000
-            minimum: 0
-            maximum: 10000
-          language:
-            type: string
-            description: "Language code: en, hi, mr, kn, ta, bn, gu, de, fr, es, it, pl, nl, ru, ar, he"
-            default: en
-          sample_rate:
-            type: integer
-            description: Audio sample rate in Hz
-            default: 24000
-          speed:
-            type: number
-            description: Speaking speed multiplier
-            minimum: 0.1
-            maximum: 5
-            default: 1
-          consistency:
-            type: number
-            description: Voice consistency parameter
-            minimum: 0
-            maximum: 1
-            default: 0.5
-          enhancement:
-            type: integer
-            description: Audio enhancement level
-            minimum: 0
-            maximum: 2
-            default: 1
-          similarity:
-            type: number
-            description: Voice similarity parameter
-            minimum: 0
-            maximum: 1
-            default: 0
-    TTSResponse:
-      name: TTSResponse
-      contentType: application/json
-      payload:
-        type: object
-        properties:
-          request_id:
-            type: string
-            description: Unique identifier for the TTS request
-          status:
-            type: string
-            enum: [chunk, complete]
-            description: "Status: chunk for audio data, complete for end of stream"
-          data:
-            type: object
-            properties:
-              audio:
-                type: string
-                description: Base64-encoded audio chunk
+  LightningV2TtsRequest:
+    action: send
+  LightningV2TtsResponse:
+    action: receive
