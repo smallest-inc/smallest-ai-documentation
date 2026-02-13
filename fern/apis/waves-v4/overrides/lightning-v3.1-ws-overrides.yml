@@ -1,0 +1,152 @@
+# Override file for lightning-v3.1-ws.json (v4 docs)
+# Restructures the spec to avoid $ref to #/channels/ locations which Fern doesn't support
+# Specifies waves server for all endpoints
+
+servers:
+  production:
+    x-fern-server-name: waves
+
+channels:
+  /api/v1/lightning-v3.1/get_speech/stream:
+    x-fern-server-name: waves
+    x-fern-audiences:
+      - v4docs
+    x-fern-sdk-group-name: Text to Speech
+    title: Lightning v3.1 WebSocket
+    description: |
+      # Lightning v3.1 WebSocket
+
+      The Lightning v3.1 WebSocket API provides real-time text-to-speech streaming capabilities with natural, expressive voice synthesis. This API uses WebSocket to deliver audio chunks as they're generated, enabling low-latency audio playback without waiting for the entire audio file to process.
+
+      ## Overview
+
+      The Lightning v3.1 WebSocket API delivers state-of-the-art text-to-speech synthesis through a persistent WebSocket connection, providing ultra-low latency audio streaming for applications that demand real-time voice generation. Unlike traditional HTTP-based TTS APIs, this WebSocket implementation streams audio chunks as they're processed, significantly reducing perceived latency and enabling seamless user experiences.
+
+      Lightning v3.1 is a 44 kHz model that produces natural, expressive, and realistic speech, with support for voice cloning.
+
+      ## Key Benefits
+
+      * **Ultra-Low Latency**: Audio chunks delivered as soon as they're generated
+      * **Real-Time Streaming**: Continuous audio delivery without waiting for complete text processing
+      * **Natural Speech**: Expressive synthesis that sounds realistic
+      * **Voice Cloning Support**: Compatible with cloned voices
+      * **Persistent Connection**: Maintains connection for multiple requests, reducing connection overhead
+      * **Interactive Applications**: Perfect for chatbots, voice assistants, and live communication systems
+
+      ## Use Cases
+
+      * **Voice Assistants**: Real-time response generation for conversational AI
+      * **Interactive Chatbots**: Immediate audio feedback for user interactions
+      * **Live Streaming**: Real-time narration and commentary
+      * **Accessibility Tools**: Screen readers and text-to-speech applications
+      * **Gaming**: Dynamic voice generation for characters and narration
+      * **Customer Service**: Automated voice responses with natural speech patterns
+
+      ## Concurrency and Rate Limits
+
+      This WebSocket API is subject to concurrency limits to ensure optimal performance for all users. Here's how it works:
+
+      * **1 Concurrency Unit** = 1 active TTS request that can be processed at any given time
+      * **5 WebSocket Connections** can be established per concurrency unit
+      * **Total Connections** = Your concurrency limit × 5
+
+      **Examples:**
+
+      * **1 concurrency** = Up to 5 WebSocket connections, but only 1 active request
+      * **3 concurrency** = Up to 15 WebSocket connections, but only 3 active requests simultaneously
+      * **5 concurrency** = Up to 25 WebSocket connections, but only 5 active requests simultaneously
+
+      While you can maintain multiple WebSocket connections, only your concurrency limit number of requests can be actively processed at once. Additional requests sent through any connection while at the concurrency limit will be rejected with an error.
+
+      For detailed information about concurrency limits, rate limiting, and best practices for handling these constraints, see our [Concurrency and Limits](concurrency-and-limits) documentation.
+
+      <Note>
+        When multiple requests are sent simultaneously beyond your concurrency limit,
+        additional requests will be rejected with an error. Implement proper error
+        handling and request queuing to manage concurrency effectively.
+      </Note>
+
+# Override operations to remove channel refs and use component message refs
+operations:
+  ttsRequest:
+    channel: null
+    messages:
+      - $ref: "#/components/messages/TTSRequest"
+  ttsResponse:
+    channel: null
+    messages:
+      - $ref: "#/components/messages/TTSResponse"
+
+# Add messages to components
+components:
+  messages:
+    TTSRequest:
+      name: TTSRequest
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - voice_id
+          - text
+        properties:
+          voice_id:
+            type: string
+            description: The ID of the voice to use
+          text:
+            type: string
+            description: The text to convert to speech
+          max_buffer_flush_ms:
+            type: integer
+            description: Maximum time (in ms) to wait for more input before generating output
+            default: 0
+            maximum: 1000
+            minimum: 0
+          continue:
+            type: boolean
+            description: Whether to buffer and wait for more input
+            default: false
+          flush:
+            type: boolean
+            description: Whether to flush the current buffer
+            default: false
+          complete_backoff_ms:
+            type: number
+            description: Time in ms to wait after the last chunk before sending complete response
+            default: 4000
+            minimum: 0
+            maximum: 10000
+          language:
+            type: string
+            description: "Language code: en, hi"
+            default: en
+            enum: [en, hi]
+          sample_rate:
+            type: integer
+            description: Audio sample rate in Hz
+            default: 44100
+            enum: [8000, 16000, 24000, 44100]
+          speed:
+            type: number
+            description: Speaking speed multiplier
+            minimum: 0.5
+            maximum: 2.0
+            default: 1
+    TTSResponse:
+      name: TTSResponse
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          request_id:
+            type: string
+            description: Unique identifier for the TTS request
+          status:
+            type: string
+            enum: [chunk, complete]
+            description: "Status: chunk for audio data, complete for end of stream"
+          data:
+            type: object
+            properties:
+              audio:
+                type: string
+                description: Base64-encoded audio chunk

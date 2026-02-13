@@ -1,0 +1,71 @@
+paths:
+  /api/v1/lightning-v3.1/get_speech:
+    post:
+      x-fern-server-name: waves
+      x-fern-audiences:
+        - v4docs
+      tags:
+        - Text to Speech
+      summary: Lightning v3.1
+      description: |
+        Get speech for given text using the Lightning v3.1 model
+
+        ## Overview
+
+        Lightning v3.1 is a 44 kHz text-to-speech model that delivers natural, expressive, and realistic speech synthesis.
+
+        ## Key Features
+
+        * **Voice Cloning Support**: Compatible with cloned voices
+        * **Ultra-Low Latency**: Optimized for real-time applications
+        * **Multi-Language**: Supports English (en) and Hindi (hi)
+        * **Multiple Output Formats**: PCM, MP3, WAV, and mulaw
+        * **Flexible Sample Rates**: 8000 Hz to 44100 Hz
+        * **Speed Control**: Adjustable from 0.5x to 2x speed
+  /api/v1/lightning-v3.1/stream:
+    post:
+      x-fern-server-name: waves
+      x-fern-audiences:
+        - v4docs
+      tags:
+        - Text to Speech
+      summary: Lightning v3.1 SSE
+      description: |
+        Stream speech for given text using the Lightning v3.1 SSE API
+
+        ## Overview
+
+        The Lightning v3.1 SSE API provides real-time text-to-speech streaming capabilities with natural, expressive voice synthesis. This API uses Server-Sent Events (SSE) to deliver audio chunks as they're generated, enabling low-latency audio playback without waiting for the entire audio file to process.
+
+        Lightning v3.1 is a 44 kHz model that produces natural, expressive, and realistic speech, with support for voice cloning.
+
+        ## When to Use
+
+        * **Interactive Applications**: Perfect for chatbots, virtual assistants, and other applications requiring immediate voice responses
+        * **Long-Form Content**: Efficiently stream audio for articles, stories, or other long-form content without buffering delays
+        * **Voice User Interfaces**: Create natural-sounding voice interfaces with minimal perceived latency
+        * **Accessibility Solutions**: Provide real-time audio versions of written content for users with visual impairments
+
+        ## How It Works
+
+        1. **Make a POST Request**: Send your text and voice settings to the API endpoint
+        2. **Receive Audio Chunks**: The API processes your text and streams audio back as base64-encoded chunks with 1024 byte size
+        3. **Process the Stream**: Handle the SSE events to decode and play audio chunks sequentially
+        4. **End of Stream**: The API sends a completion event when all audio has been delivered
+
+components:
+  schemas:
+    LightningV31Request:
+      properties:
+        output_format:
+          enum:
+            - mp3
+            - pcm
+            - wav
+            - ulaw
+            - alaw
+        sample_rate:
+          enum:
+            - 8000
+            - 16000
+            - 24000

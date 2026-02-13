@@ -1,23 +1,24 @@
-# Override file for pulse-stt-openapi.yaml
-# Ensures proper grouping under Speech to Text section
-# Specifies waves server for all endpoints
-# Assigns unique operationId to avoid naming conflict with lightning endpoint
-# Fixes 413/429 examples to match the merged ErrorResponse schema
-# (the REST ErrorResponse gets merged with the AsyncAPI ErrorResponse,
-#  so error must be an object with code/message, not a plain string)
-
 paths:
   /api/v1/pulse/get_text:
     post:
       x-fern-server-name: waves
       x-fern-audiences:
-        - v4
+        - v4docs
       x-fern-sdk-group-name: Speech to Text
       x-fern-sdk-method-name: pulse
       operationId: pulseSpeechToText
       tags:
         - Speech to Text
       summary: Pulse (Pre-Recorded)
+      description: |
+        Convert speech to text using file upload with the Pulse STT POST API
+
+        The STT POST API allows you to convert speech to text using two different input methods:
+
+        1. **Raw Audio Bytes** (`application/octet-stream`) - Send raw audio data with all parameters as query parameters
+        2. **Audio URL** (`application/json`) - Provide only a URL to an audio file in the JSON body, with all other parameters as query parameters
+
+        Both methods use our Pulse STT model with automatic language detection across 30+ languages.
       responses:
         "413":
           content:
