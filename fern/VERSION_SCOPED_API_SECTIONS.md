@@ -21,34 +21,53 @@ paths:
         - Pronunciation Dictionaries
 ```
 
-2. **Set the `audiences` filter** on each version's `api:` section to control which tagged endpoints appear:
+2. **Set the `audiences` filter** on each version's `api:` section to its version identifier:
 
 ```yaml
-# v4.0.0.yml - includes v4-tagged endpoints
+# v4.0.0.yml
 - api: API Reference
   api-name: waves
   audiences:
-    - base
     - v4
 
-# v2.2.0.yml - excludes v4-tagged endpoints
+# v3.0.1.yml
 - api: API Reference
   api-name: waves
   audiences:
-    - base
+    - v3
+
+# v2.2.0.yml
+- api: API Reference
+  api-name: waves
+  audiences:
+    - v2
 ```
 
 ### Filtering behavior
 
-- Endpoints **without** `x-fern-audiences` are always included regardless of the `audiences` filter (they are audience-agnostic).
-- Endpoints **with** `x-fern-audiences: [v4]` only appear when the version config's `audiences` list includes `v4`.
+- Endpoints are **explicitly tagged** with the version audiences they belong to (e.g. `[v2, v3, v4]` for common endpoints, `[v4]` for v4-only).
+- Each version config sets `audiences` to its own version identifier: v2.2.0 uses `[v2]`, v3.0.1 uses `[v3]`, v4.0.0 uses `[v4]`.
+- An endpoint only appears in a version if the version's audience is listed in the endpoint's `x-fern-audiences`.
 - If **no** `audiences` filter is set on the API section, nothing is filtered and all endpoints appear.
-
-The `base` audience is a placeholder that activates filtering. Since no endpoints are tagged `base`, its only purpose is to ensure the filter is active so that v4-tagged endpoints are excluded.
 
 ## What's currently tagged
 
-The following endpoints are tagged `x-fern-audiences: [v4]` (v4-only):
+### Common endpoints — `x-fern-audiences: [v2, v3, v4]`
+
+**REST (OpenAPI overrides):**
+- Lightning TTS (POST `/api/v1/lightning/get_speech`) - `waves-api-overrides.yaml`
+- Lightning Large TTS (POST `/api/v1/lightning-large/get_speech`, POST `/api/v1/lightning-large/stream`) - `waves-api-overrides.yaml`
+- Lightning v2 TTS (POST `/api/v1/lightning-v2/get_speech`, POST `/api/v1/lightning-v2/stream`) - `waves-api-overrides.yaml`
+- Get Voices (GET `/api/v1/{model}/get_voices`) - `get-voices-openapi-overrides.yaml`
+- Add Voice (POST `/api/v1/lightning-large/add_voice`) - `add-voice-openapi-overrides.yaml`
+- Get Cloned Voices (GET `/api/v1/lightning-large/get_cloned_voices`) - `get-cloned-voices-openapi-overrides.yaml`
+- Delete Voice Clone (DELETE `/api/v1/lightning-large`) - `delete-cloned-voice-openapi-overrides.yaml`
+
+**WebSocket (AsyncAPI overrides):**
+- Streaming TTS WebSocket (`/api/v1/streaming-tts/stream`) - `stream-tts-ws-overrides.yml`
+- Lightning v2 WebSocket (`/api/v1/lightning-v2/get_speech/stream`) - `lightning-v2-ws-overrides.yml`
+
+### v4-only endpoints — `x-fern-audiences: [v4]`
 
 **REST (OpenAPI overrides):**
 - Pronunciation Dictionaries (GET, POST, PUT, DELETE `/api/v1/pronunciation-dicts`) - `waves-api-overrides.yaml`
@@ -64,11 +83,10 @@ The following endpoints are tagged `x-fern-audiences: [v4]` (v4-only):
 
 ## General pattern for adding version-scoped sections
 
-To hide a new API section from older versions:
+To add a new endpoint to specific versions:
 
-1. Add `x-fern-audiences: [v4]` to the endpoint(s) in their override file
-2. Ensure the version configs that should show it include `v4` in their `audiences` list
-3. Ensure the version configs that should hide it do NOT include `v4` in their `audiences` list
+1. Add `x-fern-audiences` with the list of version tags (e.g. `[v4]` or `[v2, v3, v4]`) in the override file
+2. The endpoint will only appear in versions whose `audiences` config includes a matching tag
 
 ## Important: `layout` does NOT filter
 
