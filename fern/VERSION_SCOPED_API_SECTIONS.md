@@ -2,66 +2,79 @@
 
 This document explains how to show or hide auto-generated API reference sections (like Pronunciation Dictionaries) on a per-version basis, even though all versions share the same underlying API specs.
 
-## The mechanism: `layout` as a strict filter
+## The mechanism: `x-fern-audiences` + `audiences` filter
 
-All versions reference the same `waves` API definition via `api-name: waves` in their version config files. However, each version config has its own `layout` property under the `api:` block. When `flattened: true` is set, this layout acts as a **strict filter**: only the subpackages explicitly listed in the layout will appear in the sidebar. Any subpackages that exist in the API spec but are omitted from the layout are hidden for that version.
+All versions reference the same `waves` API definition via `api-name: waves` in their version config files. To control which endpoints appear per-version, we use Fern's **audiences** feature (Pro/Enterprise).
 
-## How it works for Pronunciation Dictionaries
+### How it works
 
-The Pronunciation Dictionaries endpoints exist in the shared API spec (`waves-api.yaml` + overrides) and are tagged with the "Pronunciation Dictionaries" tag. This tag creates a subpackage in the auto-generated API reference.
-
-**v4.0.0** includes it in its layout:
+1. **Tag version-specific endpoints** with `x-fern-audiences` in the OpenAPI/AsyncAPI override files:
 
 ```yaml
-# fern/products/waves/versions/v4.0.0.yml
-- api: API Reference
-  api-name: waves
-  flattened: true
-  layout:
-    - Text to Speech:
-        title: Text to Speech
-    - Speech to Text:
-        title: Speech to Text
-    - Voices:
-        title: Voices
-    - Voice Cloning:
-        title: Voice Cloning
-    - Pronunciation Dictionaries:
-        title: Pronunciation Dictionaries
+# In waves-api-overrides.yaml
+paths:
+  /api/v1/pronunciation-dicts:
+    get:
+      x-fern-audiences:
+        - v4
+      tags:
+        - Pronunciation Dictionaries
 ```
 
-**v2.2.0** and **v3.0.1** omit it from their layouts:
+2. **Set the `audiences` filter** on each version's `api:` section to control which tagged endpoints appear:
 
 ```yaml
-# fern/products/waves/versions/v2.2.0.yml
+# v4.0.0.yml - includes v4-tagged endpoints
 - api: API Reference
   api-name: waves
-  flattened: true
-  layout:
-    - Lightning v2:
-        title: Lightning v2
-    - Lightning Large:
-        title: Lightning Large
-    - Lightning:
-        title: Lightning
-    - Voices:
-        title: Voices
-    - Voice Cloning:
-        title: Voice Cloning
+  audiences:
+    - base
+    - v4
+
+# v2.2.0.yml - excludes v4-tagged endpoints
+- api: API Reference
+  api-name: waves
+  audiences:
+    - base
 ```
 
-Because the layout is a strict filter, Pronunciation Dictionaries endpoints are hidden in v2.2.0 and v3.0.1 even though the endpoints exist in the shared API spec.
+### Filtering behavior
 
-## General pattern for version-scoping
+- Endpoints **without** `x-fern-audiences` are always included regardless of the `audiences` filter (they are audience-agnostic).
+- Endpoints **with** `x-fern-audiences: [v4]` only appear when the version config's `audiences` list includes `v4`.
+- If **no** `audiences` filter is set on the API section, nothing is filtered and all endpoints appear.
 
-To show a section in one version but not another:
+The `base` audience is a placeholder that activates filtering. Since no endpoints are tagged `base`, its only purpose is to ensure the filter is active so that v4-tagged endpoints are excluded.
 
-1. Ensure the endpoints are tagged with a distinct tag in the OpenAPI spec/overrides
-2. Add that tag to the `layout` list in the version configs where it should appear
-3. Omit it from the `layout` list in version configs where it should be hidden
+## What's currently tagged
 
-No changes to the API spec, audiences, or separate API definitions are needed. The version-specific `layout` property is the sole control.
+The following endpoints are tagged `x-fern-audiences: [v4]` (v4-only):
 
-## Key constraint
+**REST (OpenAPI overrides):**
+- Pronunciation Dictionaries (GET, POST, PUT, DELETE `/api/v1/pronunciation-dicts`) - `waves-api-overrides.yaml`
+- Lightning v3.1 TTS (POST `/api/v1/lightning-v3.1/get_speech`, POST `/api/v1/lightning-v3.1/stream`) - `lightning-v3.1-openapi-overrides.yaml`
+- ASR Speech-to-Text (POST `/api/v1/lightning/get_text`) - `asr-openapi-overrides.yaml`
+- Pulse STT (POST `/api/v1/pulse/get_text`) - `pulse-stt-openapi-overrides.yaml`
 
-All versions share the same API spec files in `fern/apis/waves/`. You cannot add or remove endpoints per-version at the spec level. The `layout` in each version config is the only per-version control over which auto-generated sections appear.
+**WebSocket (AsyncAPI overrides):**
+- ASR WebSocket (`/api/v1/asr`) - `asr-ws-overrides.yml`
+- Lightning ASR WebSocket (`/api/v1/lightning/get_text`) - `lightning-asr-ws-overrides.yml`
+- Lightning v3.1 WebSocket (`/api/v1/lightning-v3.1/get_speech/stream`) - `lightning-v3.1-ws-overrides.yml`
+- Pulse STT WebSocket (`/api/v1/pulse/get_text`) - `pulse-stt-ws-overrides.yml`
+
+## General pattern for adding version-scoped sections
+
+To hide a new API section from older versions:
+
+1. Add `x-fern-audiences: [v4]` to the endpoint(s) in their override file
+2. Ensure the version configs that should show it include `v4` in their `audiences` list
+3. Ensure the version configs that should hide it do NOT include `v4` in their `audiences` list
+
+## Important: `layout` does NOT filter
+
+The `layout` property under the `api:` block controls **ordering**, not visibility. Any subpackages not listed in the layout are appended at the end. To actually hide endpoints, you must use `x-fern-audiences` + `audiences`.
+
+## Reference
+
+- [Fern audiences docs](https://buildwithfern.com/learn/api-definitions/openapi/extensions/audiences)
+- [Fern x-fern-ignore docs](https://buildwithfern.com/learn/api-definitions/openapi/extensions/ignoring-elements) (alternative: permanently hide endpoints from all versions)
