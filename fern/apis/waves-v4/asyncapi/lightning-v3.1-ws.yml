@@ -1,19 +1,23 @@
 asyncapi: 3.0.0
-
 info:
   title: Lightning V3.1 Text-to-Speech WebSocket API
   version: 3.1.0
   description: WebSocket-based streaming text-to-speech API for Lightning V3.1 model
-
-defaultContentType: application/json
-
+  contact:
+    name: Waves API Support
+    url: https://waves-api.smallest.ai/support
+    email: support@smallest.ai
+  license:
+    name: Proprietary
 servers:
   production:
     host: waves-api.smallest.ai
+    pathname: /api/v1/lightning-v3.1/get_speech/stream
     protocol: wss
     description: Production WebSocket API endpoint
     x-fern-server-name: waves
-
+    security:
+      - $ref: "#/components/securitySchemes/bearerAuth"
 channels:
   lightningV31Stream:
     address: /api/v1/lightning-v3.1/get_speech/stream
@@ -21,6 +25,7 @@ channels:
     x-fern-audiences:
       - v4docs
     x-fern-sdk-group-name: Text to Speech V3.1
+    title: Lightning v3.1 WebSocket
     description: |
       # Lightning v3.1 WebSocket
 
@@ -56,7 +61,7 @@ channels:
 
       * **1 Concurrency Unit** = 1 active TTS request that can be processed at any given time
       * **5 WebSocket Connections** can be established per concurrency unit
-      * **Total Connections** = Your concurrency limit x 5
+      * **Total Connections** = Your concurrency limit × 5
 
       **Examples:**
 
@@ -80,113 +85,119 @@ channels:
     servers:
       - $ref: "#/servers/production"
     messages:
-      ttsRequest:
-        $ref: "#/components/messages/V4LightningV31TtsRequest"
-      ttsResponse:
-        $ref: "#/components/messages/V4LightningV31TtsResponse"
-
+      lightningV31TtsRequest:
+        name: V4LightningV31TtsRequest
+        contentType: application/json
+        payload:
+          type: object
+          required:
+            - voice_id
+            - text
+          properties:
+            voice_id:
+              type: string
+              description: The ID of the voice to use
+            text:
+              type: string
+              description: The text to convert to speech
+            max_buffer_flush_ms:
+              type: integer
+              description: "The maximum time (in ms) to wait for more input before generating output. It flushes when either this time is reached or enough input is received for optimal output\u2014whichever comes first. This is useful for input streams. Defaults to 0"
+              default: 0
+              maximum: 1000
+              minimum: 0
+            continue:
+              type: boolean
+              description: This setting controls whether the system should buffer and wait for more input after receiving the current one. If not set, it assumes no more input is coming.
+              default: false
+            flush:
+              type: boolean
+              description: This setting controls whether the system should flush the current buffer.
+              default: false
+            complete_backoff_ms:
+              type: number
+              description: The time in ms to wait after the last chunk is sent before sending the complete response. Default is 4000ms. Maximum is 10000ms.
+              default: 4000
+              minimum: 0
+              maximum: 10000
+            language:
+              type: string
+              description: "The language code, available options: `en`, `hi`"
+              default: en
+              enum:
+                - en
+                - hi
+            sample_rate:
+              type: integer
+              description: "Audio sample rate in Hz. Supported values: 8000, 16000, 24000, 44100"
+              default: 44100
+            speed:
+              type: number
+              description: Speaking speed multiplier
+              minimum: 0.5
+              maximum: 2.0
+              default: 1
+        examples:
+          - name: basicTts
+            payload:
+              voice_id: ryan
+              text: Hello, this is a sample text to convert to speech.
+              sample_rate: 24000
+              language: en
+              speed: 1
+      lightningV31TtsResponse:
+        name: V4LightningV31TtsResponse
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            request_id:
+              type: string
+              description: Unique identifier for the TTS request
+            status:
+              type: string
+              enum:
+                - chunk
+                - complete
+              description: "Status of the TTS request, `chunk` indicates incoming audio chunk, `complete` indicates completion."
+            data:
+              type: object
+              properties:
+                audio:
+                  type: string
+                  description: Base64-encoded audio chunk
+        examples:
+          - name: audioChunk
+            payload:
+              request_id: req_abc123
+              status: chunk
+              data:
+                audio: SGVsbG8gV29ybGQ=
+          - name: completionStatus
+            payload:
+              request_id: req_abc123
+              status: complete
 operations:
-  lightningV31TtsRequest:
+  "Lightning v3.1 Tts Request":
     action: send
     channel:
       $ref: "#/channels/lightningV31Stream"
-    description: Send text-to-speech request
+    summary: Send text-to-speech request
+    description: Send a JSON message with voice_id, text, and optional parameters to generate speech audio.
     messages:
-      - $ref: "#/channels/lightningV31Stream/messages/ttsRequest"
-
-  lightningV31TtsResponse:
+      - $ref: "#/channels/lightningV31Stream/messages/lightningV31TtsRequest"
+  "Lightning v3.1 Tts Response":
     action: receive
     channel:
       $ref: "#/channels/lightningV31Stream"
-    description: Receive audio stream chunks
+    summary: Receive audio stream chunks
+    description: Receive audio data chunks and completion status from the server.
     messages:
-      - $ref: "#/channels/lightningV31Stream/messages/ttsResponse"
-
+      - $ref: "#/channels/lightningV31Stream/messages/lightningV31TtsResponse"
 components:
-  messages:
-    V4LightningV31TtsRequest:
-      name: V4LightningV31TtsRequest
-      contentType: application/json
-      payload:
-        $ref: "#/components/schemas/LightningV31TtsRequestPayload"
-
-    V4LightningV31TtsResponse:
-      name: V4LightningV31TtsResponse
-      contentType: application/json
-      payload:
-        $ref: "#/components/schemas/LightningV31TtsResponsePayload"
-
-  schemas:
-    LightningV31TtsRequestPayload:
-      type: object
-      required:
-        - voice_id
-        - text
-      properties:
-        voice_id:
-          type: string
-          description: The ID of the voice to use
-        text:
-          type: string
-          description: The text to convert to speech
-        max_buffer_flush_ms:
-          type: integer
-          description: The maximum time (in ms) to wait for more input before generating output. It flushes when either this time is reached or enough input is received for optimal output - whichever comes first. This is useful for input streams. Defaults to 0
-          default: 0
-          maximum: 1000
-          minimum: 0
-        continue:
-          type: boolean
-          description: This setting controls whether the system should buffer and wait for more input after receiving the current one. If not set, it assumes no more input is coming.
-          default: false
-        flush:
-          type: boolean
-          description: This setting controls whether the system should flush the current buffer.
-          default: false
-        complete_backoff_ms:
-          type: number
-          description: The time in ms to wait after the last chunk is sent before sending the complete response. Default is 4000ms. Maximum is 10000ms.
-          default: 4000
-          minimum: 0
-          maximum: 10000
-        language:
-          type: string
-          description: "The language code, available options: `en`, `hi`"
-          default: en
-          enum:
-            - en
-            - hi
-        sample_rate:
-          type: integer
-          description: Audio sample rate in Hz
-          default: 44100
-          enum:
-            - 8000
-            - 16000
-            - 24000
-            - 44100
-        speed:
-          type: number
-          description: Speaking speed multiplier
-          minimum: 0.5
-          maximum: 2.0
-          default: 1
-
-    LightningV31TtsResponsePayload:
-      type: object
-      properties:
-        request_id:
-          type: string
-          description: Unique identifier for the TTS request
-        status:
-          type: string
-          enum:
-            - chunk
-            - complete
-          description: Status of the TTS request, `chunk` indicates incoming audio chunk, `complete` indicates completion.
-        data:
-          type: object
-          properties:
-            audio:
-              type: string
-              description: Base64-encoded audio chunk
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Bearer token authentication
