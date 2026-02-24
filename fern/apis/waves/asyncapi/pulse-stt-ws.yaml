@@ -72,9 +72,16 @@ servers:
               default: linear16
               description: Audio encoding format
             sample_rate:
-              type: integer
-              description: "Audio sample rate in Hz. Supported values: 8000, 16000, 22050, 24000, 44100, 48000"
-              default: 16000
+              type: string
+              enum:
+                - "8000"
+                - "16000"
+                - "22050"
+                - "24000"
+                - "44100"
+                - "48000"
+              default: "16000"
+              description: Audio sample rate in Hz
             word_timestamps:
               type: string
               enum:
@@ -136,14 +143,10 @@ servers:
               default: "false"
               description: Enable speaker diarization to identify different speakers in the audio.
 channels:
-  pulseStream:
+  /api/v1/pulse/get_text:
     address: /api/v1/pulse/get_text
-    parameters:
-      Authorization:
-        description: "Bearer token for authentication. Format: Bearer YOUR_API_KEY"
-        location: $message.header#/Authorization
     messages:
-      audioData:
+      pulseAudioData.message:
         name: PulseAudioData
         contentType: application/octet-stream
         payload:
@@ -152,7 +155,7 @@ channels:
           description: Raw audio data chunk, transmitted in binary format using the selected encoding
           examples:
             - Binary audio data chunk (4096 bytes recommended)
-      endSignal:
+      pulseEndSignal.message:
         name: PulseEndSignal
         contentType: application/json
         payload:
@@ -167,7 +170,7 @@ channels:
               description: Signal to indicate end of audio stream
           examples:
             - type: end
-      transcriptionResponse:
+      pulseTranscriptionResponse.message:
         name: PulseTranscriptionResponse
         contentType: application/json
         payload:
@@ -331,30 +334,30 @@ channels:
                 - "[CREDITCARDCVV_1]"
                 - "[TIME_2]"
 operations:
-  "Send Audio Data":
-    action: send
+  sendAudioData:
+    action: receive
     channel:
-      $ref: "#/channels/pulseStream"
+      $ref: "#/channels/~1api~1v1~1pulse~1get_text"
     summary: Send audio data for transcription
     description: Stream audio data in chunks for real-time transcription
     messages:
-      - $ref: "#/channels/pulseStream/messages/audioData"
-  "Send End Signal":
-    action: send
+      - $ref: "#/channels/~1api~1v1~1pulse~1get_text/messages/pulseAudioData.message"
+  sendEndSignal:
+    action: receive
     channel:
-      $ref: "#/channels/pulseStream"
+      $ref: "#/channels/~1api~1v1~1pulse~1get_text"
     summary: Send end of stream signal
     description: Signal that audio streaming is complete
     messages:
-      - $ref: "#/channels/pulseStream/messages/endSignal"
-  "Receive Transcription":
-    action: receive
+      - $ref: "#/channels/~1api~1v1~1pulse~1get_text/messages/pulseEndSignal.message"
+  receiveTranscription:
+    action: send
     channel:
-      $ref: "#/channels/pulseStream"
+      $ref: "#/channels/~1api~1v1~1pulse~1get_text"
     summary: Receive transcription results
     description: Get real-time transcription results as audio is processed
     messages:
-      - $ref: "#/channels/pulseStream/messages/transcriptionResponse"
+      - $ref: "#/channels/~1api~1v1~1pulse~1get_text/messages/pulseTranscriptionResponse.message"
 components:
   securitySchemes:
     bearerAuth:

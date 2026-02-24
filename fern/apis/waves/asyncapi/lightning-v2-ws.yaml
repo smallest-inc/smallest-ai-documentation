@@ -20,16 +20,10 @@ servers:
     security:
       - $ref: "#/components/securitySchemes/bearerAuth"
 channels:
-  lightningV2Stream:
+  /api/v1/lightning-v2/get_speech/stream:
     address: /api/v1/lightning-v2/get_speech/stream
-    parameters:
-      Authorization:
-        description: "Bearer token for authentication. Format: Bearer YOUR_API_KEY"
-        location: $message.header#/Authorization
-    servers:
-      - $ref: "#/servers/production"
     messages:
-      lightningV2TtsRequest:
+      lightningV2TtsRequest.message:
         name: LightningV2TtsRequest
         contentType: application/json
         payload:
@@ -84,7 +78,7 @@ channels:
               default: en
             sample_rate:
               type: integer
-              description: "Audio sample rate in Hz. Supported values: 8000, 16000, 24000, 44100"
+              description: Audio sample rate in Hz
               default: 24000
             speed:
               type: number
@@ -110,18 +104,19 @@ channels:
               minimum: 0
               maximum: 1
               default: 0
-        examples:
-          - name: basicTts
-            payload:
-              voice_id: ryan
+          examples:
+            - voice_id: ryan
               text: Hello, this is a sample text to convert to speech.
-              sample_rate: 24000
+              max_buffer_flush_ms: 0
+              continue: false
+              flush: false
               language: en
+              sample_rate: 24000
               speed: 1
               consistency: 0.5
               enhancement: 1
               similarity: 0
-      lightningV2TtsResponse:
+      lightningV2TtsResponse.message:
         name: LightningV2TtsResponse
         contentType: application/json
         payload:
@@ -144,34 +139,21 @@ channels:
                 audio:
                   type: string
                   description: Base64-encoded audio chunk
-        examples:
-          - name: audioChunk
-            payload:
-              request_id: req_abc123
-              status: chunk
-              data:
-                audio: SGVsbG8gV29ybGQ=
-          - name: completionStatus
-            payload:
-              request_id: req_abc123
-              status: complete
 operations:
-  "Lightning v2 Tts Request":
-    action: send
-    channel:
-      $ref: "#/channels/lightningV2Stream"
-    summary: Send text-to-speech request
-    description: Send a JSON message with voice_id, text, and optional parameters to generate speech audio.
-    messages:
-      - $ref: "#/channels/lightningV2Stream/messages/lightningV2TtsRequest"
-  "Lightning v2 Tts Response":
+  ttsRequest:
     action: receive
     channel:
-      $ref: "#/channels/lightningV2Stream"
-    summary: Receive audio stream chunks
-    description: Receive audio data chunks and completion status from the server.
+      $ref: "#/channels/~1api~1v1~1lightning-v2~1get_speech~1stream"
+    summary: Send text-to-speech request
     messages:
-      - $ref: "#/channels/lightningV2Stream/messages/lightningV2TtsResponse"
+      - $ref: "#/channels/~1api~1v1~1lightning-v2~1get_speech~1stream/messages/lightningV2TtsRequest.message"
+  ttsResponse:
+    action: send
+    channel:
+      $ref: "#/channels/~1api~1v1~1lightning-v2~1get_speech~1stream"
+    summary: Receive audio stream chunks
+    messages:
+      - $ref: "#/channels/~1api~1v1~1lightning-v2~1get_speech~1stream/messages/lightningV2TtsResponse.message"
 components:
   securitySchemes:
     bearerAuth:
