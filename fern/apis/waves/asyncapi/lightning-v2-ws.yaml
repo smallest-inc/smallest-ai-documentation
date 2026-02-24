@@ -26,98 +26,6 @@ channels:
       Authorization:
         description: "Bearer token for authentication. Format: Bearer YOUR_API_KEY"
         location: $message.header#/Authorization
-      voice_id:
-        description: The ID of the voice to use
-        location: $message.payload#/voice_id
-        schema:
-          type: string
-      text:
-        description: The text to convert to speech
-        location: $message.payload#/text
-        schema:
-          type: string
-      max_buffer_flush_ms:
-        description: The maximum time (in ms) to wait for more input before generating output. Defaults to 0
-        location: $message.payload#/max_buffer_flush_ms
-        required: false
-        schema:
-          type: integer
-          default: 0
-          minimum: 0
-          maximum: 1000
-      continue:
-        description: This setting controls whether the system should buffer and wait for more input after receiving the current one. If not set, it assumes no more input is coming.
-        location: $message.payload#/continue
-        required: false
-        schema:
-          type: boolean
-          default: false
-      flush:
-        description: This setting controls whether the system should flush the current buffer.
-        location: $message.payload#/flush
-        required: false
-        schema:
-          type: boolean
-          default: false
-      complete_backoff_ms:
-        description: The time in ms to wait after the last chunk is sent before sending the complete response. Default is 4000ms. Maximum is 10000ms.
-        location: $message.payload#/complete_backoff_ms
-        required: false
-        schema:
-          type: number
-          default: 4000
-          minimum: 0
-          maximum: 10000
-      language:
-        description: "The language code, available options: en, hi, mr, kn, ta, bn, gu, de, fr, es, it, pl, nl, ru, ar, he"
-        location: $message.payload#/language
-        required: false
-        schema:
-          type: string
-          default: en
-      sample_rate:
-        description: Audio sample rate in Hz
-        location: $message.payload#/sample_rate
-        required: false
-        schema:
-          type: integer
-          default: 24000
-      speed:
-        description: Speaking speed multiplier
-        location: $message.payload#/speed
-        required: false
-        schema:
-          type: number
-          default: 1
-          minimum: 0.1
-          maximum: 5
-      consistency:
-        description: Voice consistency parameter
-        location: $message.payload#/consistency
-        required: false
-        schema:
-          type: number
-          default: 0.5
-          minimum: 0
-          maximum: 1
-      enhancement:
-        description: Audio enhancement level
-        location: $message.payload#/enhancement
-        required: false
-        schema:
-          type: integer
-          default: 1
-          minimum: 0
-          maximum: 2
-      similarity:
-        description: Voice similarity parameter
-        location: $message.payload#/similarity
-        required: false
-        schema:
-          type: number
-          default: 0
-          minimum: 0
-          maximum: 1
     servers:
       - $ref: "#/servers/production"
     messages:
@@ -248,7 +156,7 @@ channels:
               request_id: req_abc123
               status: complete
 operations:
-  lightningV2TtsRequest:
+  "Lightning v2 Tts Request":
     action: send
     channel:
       $ref: "#/channels/lightningV2Stream"
@@ -256,7 +164,7 @@ operations:
     description: Send a JSON message with voice_id, text, and optional parameters to generate speech audio.
     messages:
       - $ref: "#/channels/lightningV2Stream/messages/lightningV2TtsRequest"
-  lightningV2TtsResponse:
+  "Lightning v2 Tts Response":
     action: receive
     channel:
       $ref: "#/channels/lightningV2Stream"

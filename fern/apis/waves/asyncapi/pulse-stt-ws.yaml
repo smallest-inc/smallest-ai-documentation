@@ -149,146 +149,6 @@ channels:
       Authorization:
         description: "Bearer token for authentication. Format: Bearer YOUR_API_KEY"
         location: $message.header#/Authorization
-      language:
-        description: Language code for transcription. Use 'multi' for automatic language detection
-        location: $message.payload#/language
-        required: false
-        schema:
-          type: string
-          default: en
-          enum:
-            - it
-            - es
-            - en
-            - pt
-            - hi
-            - de
-            - fr
-            - uk
-            - ru
-            - kn
-            - ml
-            - pl
-            - mr
-            - gu
-            - cs
-            - sk
-            - te
-            - or
-            - nl
-            - bn
-            - lv
-            - et
-            - ro
-            - pa
-            - fi
-            - sv
-            - bg
-            - ta
-            - hu
-            - da
-            - lt
-            - mt
-            - multi
-      encoding:
-        description: Audio encoding format
-        location: $message.payload#/encoding
-        required: false
-        schema:
-          type: string
-          default: linear16
-          enum:
-            - linear16
-            - linear32
-            - alaw
-            - mulaw
-            - opus
-            - ogg_opus
-      sample_rate:
-        description: Audio sample rate in Hz
-        location: $message.payload#/sample_rate
-        required: false
-        schema:
-          type: string
-          default: "16000"
-          enum:
-            - "8000"
-            - "16000"
-            - "22050"
-            - "24000"
-            - "44100"
-            - "48000"
-      word_timestamps:
-        description: Include word-level timestamps in transcription
-        location: $message.payload#/word_timestamps
-        required: false
-        schema:
-          type: string
-          default: "true"
-          enum:
-            - "true"
-            - "false"
-      full_transcript:
-        description: Include cumulative transcript received till now in responses where is_final is true
-        location: $message.payload#/full_transcript
-        required: false
-        schema:
-          type: string
-          default: "false"
-          enum:
-            - "true"
-            - "false"
-      sentence_timestamps:
-        description: Include sentence-level timestamps (utterances) in transcription
-        location: $message.payload#/sentence_timestamps
-        required: false
-        schema:
-          type: string
-          default: "false"
-          enum:
-            - "true"
-            - "false"
-      redact_pii:
-        description: Redact personally identifiable information (name, surname, address, etc)
-        location: $message.payload#/redact_pii
-        required: false
-        schema:
-          type: string
-          default: "false"
-          enum:
-            - "true"
-            - "false"
-      redact_pci:
-        description: Redact payment card information (credit card, CVV, zip, account number, etc)
-        location: $message.payload#/redact_pci
-        required: false
-        schema:
-          type: string
-          default: "false"
-          enum:
-            - "true"
-            - "false"
-      numerals:
-        description: "Convert spoken numerals into digit form (e.g., 'twenty five' to '25') and auto enables automatic detection based on context."
-        location: $message.payload#/numerals
-        required: false
-        schema:
-          type: string
-          default: auto
-          enum:
-            - "true"
-            - "false"
-            - auto
-      diarize:
-        description: Enable speaker diarization to identify different speakers in the audio.
-        location: $message.payload#/diarize
-        required: false
-        schema:
-          type: string
-          default: "false"
-          enum:
-            - "true"
-            - "false"
     messages:
       audioData:
         name: PulseAudioData
@@ -478,7 +338,7 @@ channels:
                 - "[CREDITCARDCVV_1]"
                 - "[TIME_2]"
 operations:
-  sendAudioData:
+  "Send Audio Data":
     action: send
     channel:
       $ref: "#/channels/pulseStream"
@@ -486,7 +346,7 @@ operations:
     description: Stream audio data in chunks for real-time transcription
     messages:
       - $ref: "#/channels/pulseStream/messages/audioData"
-  sendEndSignal:
+  "Send End Signal":
     action: send
     channel:
       $ref: "#/channels/pulseStream"
@@ -494,7 +354,7 @@ operations:
     description: Signal that audio streaming is complete
     messages:
       - $ref: "#/channels/pulseStream/messages/endSignal"
-  receiveTranscription:
+  "Receive Transcription":
     action: receive
     channel:
       $ref: "#/channels/pulseStream"
