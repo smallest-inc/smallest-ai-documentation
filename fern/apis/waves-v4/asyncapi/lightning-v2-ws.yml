@@ -1,0 +1,144 @@
+asyncapi: 2.6.0
+
+info:
+  title: Waves Text-to-Speech API
+  version: 1.0.0
+  description: WebSocket-based streaming text-to-speech API for generating realistic voices
+
+servers:
+  production:
+    url: wss://waves-api.smallest.ai
+    protocol: wss
+    description: Production WebSocket API endpoint
+    x-fern-server-name: waves
+
+channels:
+  /api/v1/lightning-v2/get_speech/stream:
+    x-fern-server-name: waves
+    x-fern-audiences:
+      - v4docs
+    x-fern-sdk-group-name: Text to Speech V2
+    description: The Lightning v2 WebSocket API provides real-time text-to-speech streaming capabilities with high-quality voice synthesis. This API uses WebSocket to deliver audio chunks as they're generated, enabling low-latency audio playback without waiting for the entire audio file to process. Perfect for interactive applications, voice assistants, and real-time communication systems that require immediate audio feedback. For an end-to-end example of how to use the Lightning v2 WebSocket API, check out [Text to Speech (WS) Example](https://github.com/smallest-inc/waves-examples/tree/main/lightning_v2/ws_streaming)
+    publish:
+      description: Send text-to-speech request
+      operationId: LightningV2TtsRequest
+      message:
+        $ref: "#/components/messages/V4LightningV2TtsRequest"
+    subscribe:
+      description: Receive audio stream chunks
+      operationId: LightningV2TtsResponse
+      message:
+        $ref: "#/components/messages/V4LightningV2TtsResponse"
+
+    x-fern-examples:
+      - messages:
+          - type: publish
+            messageId: V4LightningV2TtsRequest
+            value:
+              voice_id: ryan
+              text: Hello, this is a sample text to convert to speech.
+              max_buffer_flush_ms: 0
+              continue: false
+              flush: false
+              language: en
+              sample_rate: 24000
+              speed: 1
+              consistency: 0.5
+              enhancement: 1
+              similarity: 0
+          - type: subscribe
+            messageId: V4LightningV2TtsResponse
+            value:
+              request_id: req_abc123
+              status: chunk
+              data:
+                audio: Y3VyaW91cyBtaW5kcyB0aGluayBhbGlrZSA6KQ==
+
+components:
+  messages:
+    V4LightningV2TtsRequest:
+      messageId: V4LightningV2TtsRequest
+      payload:
+        type: object
+        required:
+          - voice_id
+          - text
+        properties:
+          voice_id:
+            type: string
+            description: The ID of the voice to use
+          text:
+            type: string
+            description: The text to convert to speech
+          max_buffer_flush_ms:
+            type: integer
+            description: The maximum time (in ms) to wait for more input before generating output. It flushes when either this time is reached or enough input is received for optimal output - whichever comes first. This is useful for input streams. Defaults to 0
+            default: 0
+            maximum: 1000
+            minimum: 0
+          continue:
+            type: boolean
+            description: This setting controls whether the system should buffer and wait for more input after receiving the current one. If not set, it assumes no more input is coming.
+            default: false
+          flush:
+            type: boolean
+            description: This setting controls whether the system should flush the current buffer.
+            default: false
+          complete_backoff_ms:
+            type: number
+            description: The time in ms to wait after the last chunk is sent before sending the complete response. Default is 4000ms. Maximum is 10000ms.
+            default: 4000
+            minimum: 0
+            maximum: 10000
+          language:
+            type: string
+            description: "The language code, available options: `en`, `hi`, `mr`, `kn`, `ta`, `bn`, `gu`, `de`, `fr`, `es`, `it`, `pl`, `nl`, `ru`, `ar`, `he`"
+            default: en
+          sample_rate:
+            type: integer
+            description: Audio sample rate in Hz
+            default: 24000
+          speed:
+            type: number
+            description: Speaking speed multiplier
+            minimum: 0.1
+            maximum: 5
+            default: 1
+          consistency:
+            type: number
+            description: Voice consistency parameter
+            minimum: 0
+            maximum: 1
+            default: 0.5
+          enhancement:
+            type: integer
+            description: Audio enhancement level
+            minimum: 0
+            maximum: 2
+            default: 1
+          similarity:
+            type: number
+            description: Voice similarity parameter
+            minimum: 0
+            maximum: 1
+            default: 0
+    V4LightningV2TtsResponse:
+      messageId: V4LightningV2TtsResponse
+      payload:
+        type: object
+        properties:
+          request_id:
+            type: string
+            description: Unique identifier for the TTS request
+          status:
+            type: string
+            enum:
+              - chunk
+              - complete
+            description: Status of the TTS request, `chunk` indicates incoming audio chunk, `complete` indicates completion.
+          data:
+            type: object
+            properties:
+              audio:
+                type: string
+                description: Base64-encoded audio chunk

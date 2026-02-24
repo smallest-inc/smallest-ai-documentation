@@ -1,0 +1,253 @@
+asyncapi: 2.6.0
+
+info:
+  title: Waves Pulse STT (Speech-to-Text) API
+  version: 1.0.0
+  description: WebSocket-based streaming automatic speech recognition API for real-time speech transcription using the Pulse STT model
+
+servers:
+  production:
+    url: wss://waves-api.smallest.ai
+    protocol: wss
+    description: Production WebSocket Pulse STT endpoint
+    x-fern-server-name: waves
+
+channels:
+  /api/v1/pulse/get_text:
+    x-fern-server-name: waves
+    x-fern-audiences:
+      - v4docs
+    x-fern-sdk-group-name: Speech to Text
+    description: |
+      ## Overview
+      The Pulse STT WebSocket API provides real-time speech-to-text transcription capabilities with streaming audio input. This API uses WebSocket to deliver transcription results as audio is processed, enabling low-latency transcription without waiting for the entire audio file to upload. Perfect for live transcription, voice assistants, and real-time communication systems that require immediate speech recognition. Supports multiple languages, word-level timestamps, sentence-level timestamps (utterances), PII and PCI redaction, cumulative transcripts, and more advanced features.
+    bindings:
+      ws:
+        query:
+          type: object
+          properties:
+            language:
+              type: string
+              enum:
+                - it
+                - es
+                - en
+                - pt
+                - hi
+                - de
+                - fr
+                - uk
+                - ru
+                - kn
+                - ml
+                - pl
+                - mr
+                - gu
+                - cs
+                - sk
+                - te
+                - or
+                - nl
+                - bn
+                - lv
+                - et
+                - ro
+                - pa
+                - fi
+                - sv
+                - bg
+                - ta
+                - hu
+                - da
+                - lt
+                - mt
+                - multi
+              default: en
+              description: Language code for transcription. Use 'multi' for automatic language detection
+            encoding:
+              type: string
+              enum:
+                - linear16
+                - linear32
+                - alaw
+                - mulaw
+                - opus
+                - ogg_opus
+              default: linear16
+              description: Audio encoding format
+            sample_rate:
+              type: string
+              enum:
+                - "8000"
+                - "16000"
+                - "22050"
+                - "24000"
+                - "44100"
+                - "48000"
+              default: "16000"
+              description: Audio sample rate in Hz
+            word_timestamps:
+              type: string
+              enum:
+                - "true"
+                - "false"
+              default: "true"
+              description: Include word-level timestamps in transcription
+            full_transcript:
+              type: string
+              enum:
+                - "true"
+                - "false"
+              default: "false"
+              description: Include cumulative transcript received till now in responses where is_final is true
+            sentence_timestamps:
+              type: string
+              enum:
+                - "true"
+                - "false"
+              default: "false"
+              description: Include sentence-level timestamps (utterances) in transcription
+            redact_pii:
+              type: string
+              enum:
+                - "true"
+                - "false"
+              default: "false"
+              description: Redact personally identifiable information (name, surname, address, etc)
+            redact_pci:
+              type: string
+              enum:
+                - "true"
+                - "false"
+              default: "false"
+              description: Redact payment card information (credit card, CVV, zip, account number, etc)
+            numerals:
+              type: string
+              enum:
+                - "true"
+                - "false"
+                - auto
+              default: auto
+              description: Convert spoken numerals into digit form (e.g., 'twenty five' to '25') and `auto` enables automatic detection based on context.
+            diarize:
+              type: string
+              enum:
+                - "true"
+                - "false"
+              default: "false"
+              description: Enable speaker diarization to identify different speakers in the audio.
+    publish:
+      description: Send audio data for transcription
+      operationId: sendAudioData
+      message:
+        oneOf:
+          - $ref: "#/components/messages/AudioData"
+          - $ref: "#/components/messages/EndSignal"
+    subscribe:
+      description: Receive transcription results
+      operationId: receiveTranscription
+      message:
+        $ref: "#/components/messages/TranscriptionResponse"
+
+components:
+  messages:
+    AudioData:
+      messageId: AudioData
+      contentType: application/octet-stream
+      payload:
+        type: string
+        format: binary
+        description: Raw audio data chunk, transmitted in binary format using the selected encoding
+    EndSignal:
+      messageId: EndSignal
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+        properties:
+          type:
+            type: string
+            enum:
+              - end
+            description: Signal to indicate end of audio stream
+    TranscriptionResponse:
+      messageId: TranscriptionResponse
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - session_id
+        properties:
+          session_id:
+            type: string
+            description: Unique identifier for the transcription session
+          transcript:
+            type: string
+            description: Partial or complete transcription text for the current segment
+          full_transcript:
+            type: string
+            description: Complete transcription text accumulated so far
+          is_final:
+            type: boolean
+            default: false
+            description: Indicates if this is the final transcription for the current segment
+          is_last:
+            type: boolean
+            default: false
+            description: Indicates if this is the last transcription in the session
+          words:
+            type: array
+            description: Word-level timestamps (when word_timestamps=true)
+            items:
+              type: object
+              properties:
+                word:
+                  type: string
+                  description: The transcribed word
+                start:
+                  type: number
+                  description: Start time in seconds
+                end:
+                  type: number
+                  description: End time in seconds
+                confidence:
+                  type: number
+                  description: Confidence score (0.0 to 1.0)
+                speaker:
+                  type: integer
+                  description: Speaker label (when diarization is enabled)
+                speaker_confidence:
+                  type: number
+                  description: Speaker confidence score (0.0 to 1.0)
+          utterances:
+            type: array
+            description: Sentence-level timestamps (when sentence_timestamps=true)
+            items:
+              type: object
+              properties:
+                text:
+                  type: string
+                  description: The transcribed sentence
+                start:
+                  type: number
+                  description: Start time in seconds
+                end:
+                  type: number
+                  description: End time in seconds
+                speaker:
+                  type: integer
+                  description: Speaker label (when diarization is enabled)
+          language:
+            type: string
+            description: Detected primary language code
+          languages:
+            type: array
+            description: List of languages detected in the audio
+            items:
+              type: string
+          redacted_entities:
+            type: array
+            description: List of redacted entity placeholders
+            items:
+              type: string
