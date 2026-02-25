@@ -72,16 +72,9 @@ servers:
               default: linear16
               description: Audio encoding format
             sample_rate:
-              type: string
-              enum:
-                - "8000"
-                - "16000"
-                - "22050"
-                - "24000"
-                - "44100"
-                - "48000"
-              default: "16000"
-              description: Audio sample rate in Hz
+              type: integer
+              description: "Audio sample rate in Hz. Supported values: 8000, 16000, 22050, 24000, 44100, 48000"
+              default: 16000
             word_timestamps:
               type: string
               enum:
@@ -143,8 +136,12 @@ servers:
               default: "false"
               description: Enable speaker diarization to identify different speakers in the audio.
 channels:
-  /api/v1/pulse/get_text:
+  pulseStream:
     address: /api/v1/pulse/get_text
+    parameters:
+      Authorization:
+        description: "Bearer token for authentication. Format: Bearer YOUR_API_KEY"
+        location: $message.header#/Authorization
     messages:
       pulseAudioData.message:
         name: PulseAudioData
@@ -335,29 +332,29 @@ channels:
                 - "[TIME_2]"
 operations:
   sendAudioData:
-    action: receive
+    action: send
     channel:
-      $ref: "#/channels/~1api~1v1~1pulse~1get_text"
+      $ref: "#/channels/pulseStream"
     summary: Send audio data for transcription
     description: Stream audio data in chunks for real-time transcription
     messages:
-      - $ref: "#/channels/~1api~1v1~1pulse~1get_text/messages/pulseAudioData.message"
+      - $ref: "#/channels/pulseStream/messages/pulseAudioData.message"
   sendEndSignal:
-    action: receive
+    action: send
     channel:
-      $ref: "#/channels/~1api~1v1~1pulse~1get_text"
+      $ref: "#/channels/pulseStream"
     summary: Send end of stream signal
     description: Signal that audio streaming is complete
     messages:
-      - $ref: "#/channels/~1api~1v1~1pulse~1get_text/messages/pulseEndSignal.message"
+      - $ref: "#/channels/pulseStream/messages/pulseEndSignal.message"
   receiveTranscription:
-    action: send
+    action: receive
     channel:
-      $ref: "#/channels/~1api~1v1~1pulse~1get_text"
+      $ref: "#/channels/pulseStream"
     summary: Receive transcription results
     description: Get real-time transcription results as audio is processed
     messages:
-      - $ref: "#/channels/~1api~1v1~1pulse~1get_text/messages/pulseTranscriptionResponse.message"
+      - $ref: "#/channels/pulseStream/messages/pulseTranscriptionResponse.message"
 components:
   securitySchemes:
     bearerAuth:
