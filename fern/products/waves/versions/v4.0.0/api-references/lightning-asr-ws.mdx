@@ -1,7 +1,7 @@
 ---
 title: "Lightning (Realtime)"
 description: The Lightning STT WebSocket API provides real-time speech-to-text transcription capabilities with streaming audio input. This API uses WebSocket to deliver transcription results as audio is processed, enabling low-latency transcription without waiting for the entire audio file to upload. Perfect for live transcription, voice assistants, and real-time communication systems that require immediate speech recognition. Supports multiple languages, word-level timestamps, sentence-level timestamps (utterances), PII and PCI redaction, cumulative transcripts, and more advanced features.
-asyncapi: "/asyncapi-spec/lightning-asr-ws.json /api/v1/lightning/get_text"
+asyncapi: "/asyncapi-spec/lightning-asr-ws.json /waves/v1/lightning/get_text"
 ---
 
 ## Query Parameters
@@ -31,7 +31,6 @@ The WebSocket connection accepts the following query parameters:
 | `redact_pii`          | string | `false` | Redact personally identifiable information (name, surname, address). Options: `true`, `false` |
 | `redact_pci`          | string | `false` | Redact payment card information (credit card, CVV, zip, account number). Options: `true`, `false` |
 | `numerals`            | string | `auto`  | "Convert spoken numerals into digit form (e.g., 'twenty five' to '25') and `auto` enables automatic detection based on context. Options: `true`, `false`, `auto` |
-| `keywords`            | list   |  None   | List of keywords to boost during transcription. Each keyword is formatted as 'word:weight' where weight is a positive number indicating boost intensity (e.g., ['word:5.0', 'name:4.0']). Higher weights increase the likelihood of the keyword being recognized. Recommended weight range is 1 to 10; extremely high values may degrade transcription accuracy. |
 | `diarize`             | string | `false` | Enable speaker diarization to identify and label different speakers in the audio. When enabled, each word in the transcription includes `speaker` (integer ID) and `speaker_confidence` (float 0-1) fields. Options: `true`, `false` |
 
 ### Webhook Configuration
@@ -41,7 +40,7 @@ The WebSocket connection accepts the following query parameters:
 ### Example Connection URL
 
 ```javascript
-const url = new URL("wss://waves-api.smallest.ai/api/v1/lightning/get_text");
+const url = new URL("wss://api.smallest.ai/waves/v1/lightning/get_text");
 url.searchParams.append("language", "en");
 url.searchParams.append("encoding", "linear16");
 url.searchParams.append("sample_rate", "16000");
@@ -51,7 +50,6 @@ url.searchParams.append("sentence_timestamps", "true");
 url.searchParams.append("redact_pii", "true");
 url.searchParams.append("redact_pci", "true");
 url.searchParams.append("numerals", "true");
-url.searchParams.append("keywords", JSON.stringify(["product:5.0"]));
 url.searchParams.append("diarize", "true");
 
 const ws = new WebSocket(url.toString(), {
@@ -74,11 +72,11 @@ ws.send(audioChunk);
 
 ### End Signal (JSON)
 
-Signal the end of audio stream:
+Signal the end of audio stream. This is used to flush the transcription and receive the final response with `is_last=true`:
 
 ```json
 {
-  "type": "end"
+  "type": "finalize"
 }
 ```
 
@@ -194,9 +192,9 @@ import websockets
 import librosa
 from urllib.parse import urlencode
 
-BASE_WS_URL = "wss://waves-api.smallest.ai/api/v1/lightning/get_text"
+BASE_WS_URL = "wss://api.smallest.ai/waves/v1/lightning/get_text"
 
-async def stream_audio(audio_file, api_key, language="en", encoding="linear16", sample_rate=16000, word_timestamps="true", full_transcript="false", sentence_timestamps="false", redact_pii="false", redact_pci="false", numerals="auto", keywords="auto", diarize="false"):
+async def stream_audio(audio_file, api_key, language="en", encoding="linear16", sample_rate=16000, word_timestamps="true", full_transcript="false", sentence_timestamps="false", redact_pii="false", redact_pci="false", numerals="auto", diarize="false"):
     params = {
         "language": language,
         "encoding": encoding,
@@ -207,7 +205,6 @@ async def stream_audio(audio_file, api_key, language="en", encoding="linear16", 
         "redact_pii": redact_pii,
         "redact_pci": redact_pci,
         "numerals": numerals,
-        "keywords": keywords,
         "diarize": diarize
     }
     ws_url = f"{BASE_WS_URL}?{urlencode(params)}"
@@ -224,7 +221,7 @@ async def stream_audio(audio_file, api_key, language="en", encoding="linear16", 
                 await ws.send((chunk * 32768.0).astype(np.int16).tobytes())
                 await asyncio.sleep(len(chunk) / sample_rate)
             
-            await ws.send(json.dumps({"type": "end"}))
+            await ws.send(json.dumps({"type": "finalize"}))
         
         sender = asyncio.create_task(send())
         
@@ -249,7 +246,6 @@ if __name__ == "__main__":
     parser.add_argument("--redact-pii", default="false")
     parser.add_argument("--redact-pci", default="false")
     parser.add_argument("--numerals", default="auto")
-    parser.add_argument("--keywords", default=None)
     parser.add_argument("--diarize", default="false")
     
     args = parser.parse_args()
@@ -265,7 +261,6 @@ if __name__ == "__main__":
         args.redact_pii,
         args.redact_pci,
         args.numerals,
-        args.keywords,
         args.diarize
     ))
 ```

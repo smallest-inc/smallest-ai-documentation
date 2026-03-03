@@ -1,0 +1,84 @@
+---
+title: Hardware Requirements
+description: Cluster and hardware specifications for Kubernetes STT deployment
+---
+
+## Cluster Requirements
+
+<CardGroup cols={2}>
+  <Card title="Kubernetes Version" icon="dharmachakra">
+    **v1.19 or higher**
+    
+    v1.24+ recommended
+  </Card>
+
+  <Card title="Node Count" icon="server">
+    **Minimum 2 nodes**
+    
+    - 1 CPU node (control plane/general)
+    - 1 GPU node (Lightning ASR)
+  </Card>
+
+  <Card title="Total Resources" icon="microchip">
+    **Minimum cluster capacity**
+    
+    - 8 CPU cores
+    - 32 GB RAM
+    - 1 NVIDIA GPU
+  </Card>
+
+  <Card title="Storage" icon="hard-drive">
+    **Persistent volume support**
+    
+    - Storage class available
+    - 100 GB minimum capacity
+  </Card>
+</CardGroup>
+
+<Tip>
+We recommend using L4 or L40s GPUs for the best performance.
+</Tip>
+
+## Network Requirements
+
+Ensure the following ports are accessible within the cluster:
+
+| Port | Service | Purpose |
+|------|---------|---------|
+| 7100 | API Server | Client API requests |
+| 2269 | Lightning ASR | Internal ASR processing |
+| 3369 | License Proxy | Internal license validation |
+| 6379 | Redis | Internal caching |
+
+### External Access
+
+The License Proxy requires outbound HTTPS access to:
+- `api.smallest.ai` (port 443)
+
+<Warning>
+Ensure your cluster's network policies and security groups allow outbound HTTPS traffic from pods.
+</Warning>
+
+## Storage Requirements
+
+### Storage Class
+
+Verify a storage class is available:
+
+```bash
+kubectl get storageclass
+```
+
+You should see at least one storage class marked as `(default)` or available.
+
+### For AWS Deployments
+
+If deploying on AWS EKS, you'll need:
+
+- **EBS CSI Driver** for block storage
+- **EFS CSI Driver** for shared file storage (recommended for model storage)
+
+<Tip>
+See the [AWS EKS Setup](/v4.0.0/content/on-prem/kubernetes/aws/eks-setup) guide for detailed setup instructions.
+</Tip>
+

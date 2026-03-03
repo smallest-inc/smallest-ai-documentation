@@ -1,0 +1,180 @@
+---
+title: Software Requirements
+description: Software and dependencies for deploying Text-to-Speech with Docker
+---
+
+## Operating System
+
+<Tabs>
+  <Tab title="Ubuntu/Debian">
+    ```bash
+    Ubuntu 20.04 LTS or later
+    Ubuntu 22.04 LTS (recommended)
+    Debian 11 or later
+    ```
+  </Tab>
+
+  <Tab title="CentOS/RHEL">
+    ```bash
+    CentOS 8 or later
+    RHEL 8 or later
+    Rocky Linux 8 or later
+    ```
+  </Tab>
+
+  <Tab title="Other Linux">
+    Most modern Linux distributions with kernel 4.15+
+  </Tab>
+</Tabs>
+
+## Required Software
+
+<Steps>
+  <Step title="Docker">
+    Docker Engine 20.10 or later
+    
+    ```bash
+    docker --version
+    ```
+    
+    Expected output: `Docker version 20.10.0 or higher`
+  </Step>
+
+  <Step title="Docker Compose">
+    Docker Compose 2.0 or later
+    
+    ```bash
+    docker compose version
+    ```
+    
+    Expected output: `Docker Compose version v2.0.0 or higher`
+  </Step>
+
+  <Step title="NVIDIA Driver">
+    NVIDIA Driver 525+ for newer GPUs (A10, A100, L4)
+    
+    NVIDIA Driver 470+ for older GPUs (T4, V100)
+    
+    ```bash
+    nvidia-smi
+    ```
+    
+    Should display GPU information without errors
+  </Step>
+
+  <Step title="NVIDIA Container Toolkit">
+    Required for GPU access in containers
+    
+    ```bash
+    nvidia-container-cli --version
+    ```
+  </Step>
+</Steps>
+
+## Install Docker
+
+<Tabs>
+  <Tab title="Ubuntu">
+    ```bash
+    sudo apt-get update
+    sudo apt-get install -y ca-certificates curl gnupg
+    
+    sudo install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+      sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    sudo chmod a+r /etc/apt/keyrings/docker.gpg
+    
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+      https://download.docker.com/linux/ubuntu \
+      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    
+    sudo apt-get update
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io \
+      docker-buildx-plugin docker-compose-plugin
+    
+    sudo usermod -aG docker $USER
+    newgrp docker
+    ```
+  </Tab>
+
+  <Tab title="CentOS/RHEL">
+    ```bash
+    sudo yum install -y yum-utils
+    sudo yum-config-manager --add-repo \
+      https://download.docker.com/linux/centos/docker-ce.repo
+    
+    sudo yum install -y docker-ce docker-ce-cli containerd.io \
+      docker-buildx-plugin docker-compose-plugin
+    
+    sudo systemctl start docker
+    sudo systemctl enable docker
+    
+    sudo usermod -aG docker $USER
+    newgrp docker
+    ```
+  </Tab>
+</Tabs>
+
+## Install NVIDIA Driver
+
+<Tabs>
+  <Tab title="Ubuntu">
+    ```bash
+    sudo apt-get update
+    sudo apt-get install -y ubuntu-drivers-common
+    
+    sudo ubuntu-drivers autoinstall
+    
+    sudo reboot
+    ```
+    
+    After reboot, verify:
+    ```bash
+    nvidia-smi
+    ```
+  </Tab>
+
+  <Tab title="CentOS/RHEL">
+    ```bash
+    sudo yum install -y kernel-devel kernel-headers gcc make
+    
+    distribution=$(. /etc/os-release;echo $ID$VERSION_ID | sed -e 's/\.//g')
+    
+    sudo yum-config-manager --add-repo \
+      http://developer.download.nvidia.com/compute/cuda/repos/$distribution/x86_64/cuda-$distribution.repo
+    
+    sudo yum clean all
+    sudo yum -y install nvidia-driver-latest-dkms
+    
+    sudo reboot
+    ```
+  </Tab>
+</Tabs>
+
+## Install NVIDIA Container Toolkit
+
+```bash
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -s -L https://nvidia.github.io/libnvidia-container/gpgkey | \
+  sudo apt-key add -
+curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+
+sudo systemctl restart docker
+```
+
+## Verify GPU Access
+
+Test that Docker can access the GPU:
+
+```bash
+docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
+```
+
+You should see your GPU information displayed.
+

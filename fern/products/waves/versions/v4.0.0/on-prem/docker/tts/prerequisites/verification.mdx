@@ -1,0 +1,94 @@
+---
+title: Verification Checklist
+description: Verify all prerequisites before deploying TTS with Docker
+---
+
+## Pre-Deployment Checklist
+
+Before proceeding to installation, verify each item:
+
+<Steps>
+  <Step title="Docker Running">
+    ```bash
+    docker ps
+    ```
+    Should execute without errors
+  </Step>
+
+  <Step title="Docker Compose Available">
+    ```bash
+    docker compose version
+    ```
+    Should show version 2.0 or higher
+  </Step>
+
+  <Step title="GPU Accessible">
+    ```bash
+    docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
+    ```
+    Should display GPU information
+  </Step>
+
+  <Step title="Registry Login">
+    ```bash
+    docker login quay.io
+    ```
+    Should show "Login Succeeded"
+  </Step>
+
+  <Step title="Credentials Ready">
+    - [ ] License key obtained
+    - [ ] Container registry username and password
+    - [ ] Model download URLs (if required)
+  </Step>
+
+  <Step title="Ports Available">
+    ```bash
+    sudo netstat -tuln | grep -E '(7100|8876|3369|6379)'
+    ```
+    Should return no results (ports free)
+  </Step>
+
+  <Step title="Disk Space">
+    ```bash
+    df -h /
+    ```
+    Should show at least 100 GB available
+  </Step>
+</Steps>
+
+## Quick Verification Script
+
+Run this script to check all prerequisites at once:
+
+```bash
+#!/bin/bash
+echo "=== Docker TTS Prerequisites Check ==="
+
+echo -n "Docker: "
+docker --version &>/dev/null && echo "OK" || echo "MISSING"
+
+echo -n "Docker Compose: "
+docker compose version &>/dev/null && echo "OK" || echo "MISSING"
+
+echo -n "NVIDIA Driver: "
+nvidia-smi &>/dev/null && echo "OK" || echo "MISSING"
+
+echo -n "NVIDIA Container Toolkit: "
+docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi &>/dev/null && echo "OK" || echo "MISSING"
+
+echo -n "Port 7100 (API Server): "
+netstat -tuln 2>/dev/null | grep -q ':7100 ' && echo "IN USE" || echo "FREE"
+
+echo -n "Port 8876 (Lightning TTS): "
+netstat -tuln 2>/dev/null | grep -q ':8876 ' && echo "IN USE" || echo "FREE"
+
+echo -n "Port 3369 (License Proxy): "
+netstat -tuln 2>/dev/null | grep -q ':3369 ' && echo "IN USE" || echo "FREE"
+
+echo -n "Port 6379 (Redis): "
+netstat -tuln 2>/dev/null | grep -q ':6379 ' && echo "IN USE" || echo "FREE"
+
+echo "=== Check Complete ==="
+```
+

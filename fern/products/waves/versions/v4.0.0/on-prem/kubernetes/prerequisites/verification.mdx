@@ -1,0 +1,98 @@
+---
+title: Verification Checklist
+description: Verify all prerequisites before deploying STT on Kubernetes
+---
+
+## Pre-Deployment Checklist
+
+Before proceeding, ensure each item passes:
+
+<Steps>
+  <Step title="Cluster Access">
+    ```bash
+    kubectl get nodes
+    ```
+    Shows all cluster nodes in Ready state
+  </Step>
+
+  <Step title="GPU Nodes Available">
+    ```bash
+    kubectl get nodes -o json | jq '.items[].status.capacity."nvidia.com/gpu"'
+    ```
+    Shows GPU count for GPU nodes
+  </Step>
+
+  <Step title="Helm Installed">
+    ```bash
+    helm version
+    ```
+    Shows Helm 3.x
+  </Step>
+
+  <Step title="Storage Available">
+    ```bash
+    kubectl get storageclass
+    ```
+    Shows at least one storage class
+  </Step>
+
+  <Step title="Credentials Ready">
+    - [ ] License key obtained
+    - [ ] Container registry credentials
+    - [ ] Model download URL
+  </Step>
+
+  <Step title="Sufficient Resources">
+    ```bash
+    kubectl top nodes
+    ```
+    Shows available resources for deployment
+  </Step>
+
+  <Step title="Permissions Check">
+    ```bash
+    kubectl auth can-i create deployments
+    kubectl auth can-i create services
+    kubectl auth can-i create secrets
+    ```
+    All return `yes`
+  </Step>
+</Steps>
+
+## Quick Verification Script
+
+Run this script to check all prerequisites at once:
+
+```bash
+#!/bin/bash
+echo "=== Kubernetes STT Prerequisites Check ==="
+
+echo -n "kubectl: "
+kubectl version --client &>/dev/null && echo "OK" || echo "MISSING"
+
+echo -n "Helm: "
+helm version &>/dev/null && echo "OK" || echo "MISSING"
+
+echo -n "Cluster Access: "
+kubectl cluster-info &>/dev/null && echo "OK" || echo "FAILED"
+
+echo -n "Nodes Ready: "
+kubectl get nodes | grep -q "Ready" && echo "OK" || echo "FAILED"
+
+echo -n "Storage Class: "
+kubectl get storageclass &>/dev/null && echo "OK" || echo "MISSING"
+
+echo -n "GPU Resources: "
+kubectl get nodes -o json | jq -e '.items[].status.capacity."nvidia.com/gpu"' &>/dev/null && echo "OK" || echo "NOT DETECTED"
+
+echo "=== Check Complete ==="
+```
+
+## AWS-Specific Prerequisites
+
+If deploying on AWS EKS, see:
+
+<Card title="AWS EKS Setup" icon="aws" href="/v4.0.0/content/on-prem/kubernetes/aws/eks-setup">
+  Complete guide for setting up EKS cluster with GPU support
+</Card>
+

@@ -4,11 +4,11 @@ description: Deploy Smallest Self-Host on Kubernetes with Helm
 ---
 
 <Warning>
-Kubernetes deployment is currently available for **ASR (Speech-to-Text)** only. For TTS deployments, use [Docker](/waves/self-host/docker-setup/tts-deployment/quick-start).
+Kubernetes deployment is currently available for **ASR (Speech-to-Text)** only. For TTS deployments, use [Docker](/v4.0.0/content/on-prem/docker/tts/quick-start).
 </Warning>
 
 <Note>
-Ensure you've completed all [prerequisites](/waves/self-host/kubernetes-setup/prerequisites) before starting.
+Ensure you've completed all [prerequisites](/v4.0.0/content/on-prem/kubernetes/prerequisites/hardware-requirements) before starting.
 </Note>
 
 ## Add Helm Repository
@@ -75,12 +75,37 @@ Monitor the deployment:
 kubectl get pods -w
 ```
 
-| Component | Startup Time | Ready Indicator |
-|-----------|--------------|-----------------|
-| Redis | ~30s | `1/1 Running` |
-| License Proxy | ~1m | `1/1 Running` |
-| Lightning ASR | 2-10m | `1/1 Running` (model download on first run) |
-| API Server | ~30s | `1/1 Running` |
+<table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', borderRadius: '8px', overflow: 'hidden' }}>
+  <thead>
+    <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)' }}>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopLeftRadius: '8px' }}>Component</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Startup Time</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopRightRadius: '8px' }}>Ready Indicator</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Redis</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>~30s</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><code>1/1 Running</code></td>
+    </tr>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>License Proxy</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>~1m</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><code>1/1 Running</code></td>
+    </tr>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Lightning ASR</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>2-10m</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><code>1/1 Running</code> (model download on first run)</td>
+    </tr>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomLeftRadius: '8px' }}>API Server</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>~30s</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomRightRadius: '8px' }}><code>1/1 Running</code></td>
+    </tr>
+  </tbody>
+</table>
 
 <Tip>
 Model downloads are cached when using shared storage (EFS). Subsequent starts complete in under a minute.
@@ -94,12 +119,37 @@ kubectl get pods,svc
 
 All pods should show `Running` status with the following services available:
 
-| Service | Port | Description |
-|---------|------|-------------|
-| api-server | 7100 | REST API endpoint |
-| lightning-asr-internal | 2269 | ASR inference service |
-| license-proxy | 3369 | License validation |
-| redis-master | 6379 | Request queue |
+<table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', borderRadius: '8px', overflow: 'hidden' }}>
+  <thead>
+    <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)' }}>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopLeftRadius: '8px' }}>Service</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Port</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopRightRadius: '8px' }}>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>api-server</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>7100</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>REST API endpoint</td>
+    </tr>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>lightning-asr-internal</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>2269</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>ASR inference service</td>
+    </tr>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>license-proxy</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>3369</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>License validation</td>
+    </tr>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomLeftRadius: '8px' }}>redis-master</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>6379</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomRightRadius: '8px' }}>Request queue</td>
+    </tr>
+  </tbody>
+</table>
 
 ## Test the API
 
@@ -125,10 +175,30 @@ scaling:
 
 This deploys HorizontalPodAutoscalers that scale based on active requests:
 
-| Component | Metric | Default Target | Behavior |
-|-----------|--------|----------------|----------|
-| Lightning ASR | `asr_active_requests` | 4 per pod | Scales GPU workers based on inference queue depth |
-| API Server | `lightning_asr_replica_count` | 2:1 ratio | Maintains API capacity proportional to ASR workers |
+<table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', borderRadius: '8px', overflow: 'hidden' }}>
+  <thead>
+    <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)' }}>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopLeftRadius: '8px' }}>Component</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Metric</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Default Target</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopRightRadius: '8px' }}>Behavior</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Lightning ASR</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><code>asr_active_requests</code></td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>4 per pod</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Scales GPU workers based on inference queue depth</td>
+    </tr>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomLeftRadius: '8px' }}>API Server</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><code>lightning_asr_replica_count</code></td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>2:1 ratio</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomRightRadius: '8px' }}>Maintains API capacity proportional to ASR workers</td>
+    </tr>
+  </tbody>
+</table>
 
 ### How It Works
 
@@ -193,31 +263,56 @@ helm get values smallest-self-host -n smallest
 
 ## Troubleshooting
 
-| Issue | Cause | Resolution |
-|-------|-------|------------|
-| Pods `Pending` | Insufficient resources or missing GPU nodes | Check `kubectl describe pod <name>` for scheduling errors |
-| `ImagePullBackOff` | Invalid registry credentials | Verify `imageCredentials` in values.yaml |
-| `CrashLoopBackOff` | Invalid license or insufficient memory | Check logs with `kubectl logs <pod> --previous` |
-| Slow model download | Large model size (~20GB) | Use shared storage (EFS) for caching |
+<table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', borderRadius: '8px', overflow: 'hidden' }}>
+  <thead>
+    <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)' }}>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopLeftRadius: '8px' }}>Issue</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Cause</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopRightRadius: '8px' }}>Resolution</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Pods <code>Pending</code></td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Insufficient resources or missing GPU nodes</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Check <code>kubectl describe pod &lt;name&gt;</code> for scheduling errors</td>
+    </tr>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><code>ImagePullBackOff</code></td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Invalid registry credentials</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Verify <code>imageCredentials</code> in values.yaml</td>
+    </tr>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><code>CrashLoopBackOff</code></td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Invalid license or insufficient memory</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Check logs with <code>kubectl logs &lt;pod&gt; --previous</code></td>
+    </tr>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomLeftRadius: '8px' }}>Slow model download</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Large model size (~20GB)</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomRightRadius: '8px' }}>Use shared storage (EFS) for caching</td>
+    </tr>
+  </tbody>
+</table>
 
-For detailed troubleshooting, see [Troubleshooting Guide](/waves/self-host/kubernetes-setup/troubleshooting).
+For detailed troubleshooting, see [Troubleshooting Guide](/v4.0.0/content/on-prem/kubernetes/k8s-troubleshooting).
 
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card title="AWS Setup" icon="aws" href="/waves/self-host/kubernetes-setup/quick-start">
+  <Card title="AWS Setup" icon="aws" href="/v4.0.0/content/on-prem/kubernetes/aws/eks-setup">
     EKS-specific configuration
   </Card>
 
-  <Card title="Model Storage" icon="hard-drive" href="/waves/self-host/kubernetes-setup/storage-pvc/model-storage">
+  <Card title="Model Storage" icon="hard-drive" href="/v4.0.0/content/on-prem/kubernetes/storage/model-storage">
     Shared storage for faster cold starts
   </Card>
 
-  <Card title="Advanced Autoscaling" icon="chart-line" href="/waves/self-host/kubernetes-setup/autoscaling/hpa-configuration">
+  <Card title="Advanced Autoscaling" icon="chart-line" href="/v4.0.0/content/on-prem/kubernetes/autoscaling/hpa-configuration">
     Fine-tune scaling behavior and thresholds
   </Card>
 
-  <Card title="Monitoring" icon="chart-bar" href="/waves/self-host/kubernetes-setup/autoscaling/grafana-dashboards">
+  <Card title="Monitoring" icon="chart-bar" href="/v4.0.0/content/on-prem/kubernetes/autoscaling/grafana-dashboards">
     Grafana dashboards and alerting
   </Card>
 </CardGroup>

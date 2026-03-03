@@ -1,0 +1,176 @@
+---
+title: Prerequisites
+description: What you need before deploying Smallest Self-Host
+---
+
+## Overview
+
+Before deploying Smallest Self-Host, you'll need credentials from Smallest.ai and infrastructure with GPU support.
+
+## Credentials from Smallest.ai
+
+Contact **support@smallest.ai** to obtain the following:
+
+<AccordionGroup>
+  <Accordion title="License Key" icon="key">
+    Your unique license key for validation. This is required for all deployments.
+    
+    You'll add this to your configuration:
+    ```yaml
+    global:
+      licenseKey: "your-license-key-here"
+    ```
+    
+    Or as an environment variable:
+    ```bash
+    LICENSE_KEY=your-license-key-here
+    ```
+  </Accordion>
+
+  <Accordion title="Container Registry Credentials" icon="docker">
+    Credentials to pull Docker images from `quay.io`:
+    - **Username**
+    - **Password**
+    - **Email**
+    
+    Login to the registry:
+    ```bash
+    docker login quay.io
+    ```
+    
+    For Kubernetes, you'll add these to your `values.yaml`:
+    ```yaml
+    global:
+      imageCredentials:
+        create: true
+        registry: quay.io
+        username: "your-username"
+        password: "your-password"
+        email: "your-email@example.com"
+    ```
+  </Accordion>
+
+  <Accordion title="Model Download URLs" icon="download">
+    Download URLs for the AI models (STT and/or TTS).
+    
+    For Docker deployments, add to your `.env`:
+    ```bash
+    MODEL_URL=your-model-url-here
+    ```
+    
+    For Kubernetes, add to `values.yaml`:
+    ```yaml
+    models:
+      asrModelUrl: "your-asr-model-url"
+      ttsModelUrl: "your-tts-model-url"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Infrastructure Requirements
+
+<CardGroup cols={2}>
+  <Card title="GPU Requirements" icon="microchip">
+    - **NVIDIA GPU** with 16+ GB VRAM
+    - Recommended: A10, L4, L40s, T4, or A100
+    - NVIDIA Driver 525+ (for A10, A100, L4)
+    - NVIDIA Driver 470+ (for T4, V100)
+  </Card>
+
+  <Card title="Container Runtime" icon="docker">
+    - Docker 20.10+ or Podman 4.0+
+    - NVIDIA Container Toolkit
+    - For Kubernetes: GPU Operator or Device Plugin
+  </Card>
+</CardGroup>
+
+### Minimum Resources
+
+<table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', borderRadius: '8px', overflow: 'hidden' }}>
+  <thead>
+    <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)' }}>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopLeftRadius: '8px' }}>Component</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>CPU</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Memory</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>GPU</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopRightRadius: '8px' }}>Storage</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><strong>Lightning ASR</strong></td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>4-8 cores</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>12-16 GB</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>1x NVIDIA (16+ GB VRAM)</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>50+ GB</td>
+    </tr>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><strong>Lightning TTS</strong></td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>4-8 cores</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>12-16 GB</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>1x NVIDIA (16+ GB VRAM)</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>20+ GB</td>
+    </tr>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>API Server</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>0.5-2 cores</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>512 MB - 2 GB</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>None</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>1 GB</td>
+    </tr>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>License Proxy</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>0.25-1 core</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>256-512 MB</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>None</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>100 MB</td>
+    </tr>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomLeftRadius: '8px' }}>Redis</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>0.5-1 core</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>512 MB - 2 GB</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>None</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomRightRadius: '8px' }}>1 GB</td>
+    </tr>
+  </tbody>
+</table>
+
+## Network Requirements
+
+The License Proxy requires outbound HTTPS access to validate licenses:
+
+<table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', borderRadius: '8px', overflow: 'hidden' }}>
+  <thead>
+    <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)' }}>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopLeftRadius: '8px' }}>Endpoint</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Port</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopRightRadius: '8px' }}>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomLeftRadius: '8px' }}><code>api.smallest.ai</code></td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>443</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomRightRadius: '8px' }}>License validation and usage reporting</td>
+    </tr>
+  </tbody>
+</table>
+
+<Warning>
+Ensure your firewall and network policies allow outbound HTTPS traffic to `api.smallest.ai`.
+</Warning>
+
+## Next Steps
+
+Choose your deployment method and follow the specific prerequisites:
+
+<CardGroup cols={2}>
+  <Card title="Docker Prerequisites" icon="docker" href="/v4.0.0/content/on-prem/docker/stt/prerequisites/hardware-requirements">
+    Setup requirements for Docker deployments including NVIDIA Container Toolkit installation.
+  </Card>
+
+  <Card title="Kubernetes Prerequisites" icon="dharmachakra" href="/v4.0.0/content/on-prem/kubernetes/prerequisites/hardware-requirements">
+    Cluster requirements, GPU node setup, and Helm configuration for Kubernetes deployments.
+  </Card>
+</CardGroup>
+

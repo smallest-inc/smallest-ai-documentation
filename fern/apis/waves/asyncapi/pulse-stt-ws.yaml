@@ -5,14 +5,13 @@ info:
   description: WebSocket-based streaming automatic speech recognition API for real-time speech transcription using the Pulse STT model
   contact:
     name: Waves API Support
-    url: https://waves-api.smallest.ai/support
     email: support@smallest.ai
   license:
     name: Proprietary
 servers:
   production:
-    host: waves-api.smallest.ai
-    pathname: /api/v1/pulse/get_text
+    host: api.smallest.ai
+    pathname: /waves/v1/pulse/get_text
     protocol: wss
     description: Production WebSocket Pulse STT endpoint
     security:
@@ -110,16 +109,6 @@ servers:
                 - "false"
               default: "false"
               description: Redact payment card information (credit card, CVV, zip, account number, etc)
-            keywords:
-              type: array
-              items:
-                type: string
-                pattern: '^[^:]+:[0-9]+(\.[0-9]+)?$'
-              description: "List of keywords to boost during transcription. Each keyword is formatted as 'word:weight' where weight is a positive number indicating boost intensity (e.g., ['word:5.0', 'name:4.0']). Higher weights increase the likelihood of the keyword being recognized. Recommended weight range is 1 to 10; extremely high values may degrade transcription accuracy."
-              examples:
-                - - product:5.0
-                  - company:4.0
-                  - technical:3.5
             numerals:
               type: string
               enum:
@@ -137,7 +126,7 @@ servers:
               description: Enable speaker diarization to identify different speakers in the audio.
 channels:
   pulseStream:
-    address: /api/v1/pulse/get_text
+    address: /waves/v1/pulse/get_text
     parameters:
       Authorization:
         description: "Bearer token for authentication. Format: Bearer YOUR_API_KEY"
@@ -163,10 +152,10 @@ channels:
             type:
               type: string
               enum:
-                - end
+                - finalize
               description: Signal to indicate end of audio stream
           examples:
-            - type: end
+            - type: finalize
       pulseTranscriptionResponse.message:
         name: PulseTranscriptionResponse
         contentType: application/json

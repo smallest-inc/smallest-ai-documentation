@@ -7,14 +7,13 @@ info:
     speech transcription using the Lightning STT model
   contact:
     name: Waves API Support
-    url: https://waves-api.smallest.ai/support
     email: support@smallest.ai
   license:
     name: Proprietary
 servers:
   production:
-    host: waves-api.smallest.ai
-    pathname: /api/v1/lightning/get_text
+    host: api.smallest.ai
+    pathname: /waves/v1/lightning/get_text
     protocol: wss
     description: Production WebSocket Lightning STT endpoint
     security:
@@ -127,22 +126,6 @@ servers:
               description:
                 Redact payment card information (credit card, CVV, zip,
                 account number, etc)
-            keywords:
-              type: array
-              items:
-                type: string
-                pattern: ^[^:]+:[0-9]+(\.[0-9]+)?$
-              description:
-                List of keywords to boost during transcription. Each keyword
-                is formatted as 'word:weight' where weight is a positive number indicating
-                boost intensity (e.g., ['word:5.0', 'name:4.0']). Higher weights increase
-                the likelihood of the keyword being recognized. Recommended weight
-                range is 1 to 10; extremely high values may degrade transcription
-                accuracy.
-              examples:
-                - - product:5.0
-                  - company:4.0
-                  - technical:3.5
             numerals:
               type: string
               enum:
@@ -163,8 +146,8 @@ servers:
                 Enable speaker diarization to identify different speakers
                 in the audio.
 channels:
-  /api/v1/lightning/get_text:
-    address: /api/v1/lightning/get_text
+  /waves/v1/lightning/get_text:
+    address: /waves/v1/lightning/get_text
     messages:
       lightningAudioData.message:
         name: LightningAudioData
@@ -188,10 +171,10 @@ channels:
             type:
               type: string
               enum:
-                - end
+                - finalize
               description: Signal to indicate end of audio stream
           examples:
-            - type: end
+            - type: finalize
       lightningTranscriptionResponse.message:
         name: LightningTranscriptionResponse
         contentType: application/json
@@ -373,27 +356,27 @@ operations:
   sendAudioData:
     action: receive
     channel:
-      $ref: "#/channels/~1api~1v1~1lightning~1get_text"
+      $ref: "#/channels/~1waves~1v1~1lightning~1get_text"
     summary: Send audio data for transcription
     description: Stream audio data in chunks for real-time transcription
     messages:
-      - $ref: "#/channels/~1api~1v1~1lightning~1get_text/messages/lightningAudioData.message"
+      - $ref: "#/channels/~1waves~1v1~1lightning~1get_text/messages/lightningAudioData.message"
   sendEndSignal:
     action: receive
     channel:
-      $ref: "#/channels/~1api~1v1~1lightning~1get_text"
+      $ref: "#/channels/~1waves~1v1~1lightning~1get_text"
     summary: Send end of stream signal
     description: Signal that audio streaming is complete
     messages:
-      - $ref: "#/channels/~1api~1v1~1lightning~1get_text/messages/lightningEndSignal.message"
+      - $ref: "#/channels/~1waves~1v1~1lightning~1get_text/messages/lightningEndSignal.message"
   receiveTranscription:
     action: send
     channel:
-      $ref: "#/channels/~1api~1v1~1lightning~1get_text"
+      $ref: "#/channels/~1waves~1v1~1lightning~1get_text"
     summary: Receive transcription results
     description: Get real-time transcription results as audio is processed
     messages:
-      - $ref: "#/channels/~1api~1v1~1lightning~1get_text/messages/lightningTranscriptionResponse.message"
+      - $ref: "#/channels/~1waves~1v1~1lightning~1get_text/messages/lightningTranscriptionResponse.message"
 components:
   securitySchemes:
     bearerAuth:
