@@ -1076,6 +1076,67 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
+  /events:
+    get:
+      summary: Stream live transcript events (SSE)
+      description: |
+        Real-time Server-Sent Events (SSE) stream for an active call. Use this to receive user speech (STT) and agent speech (TTS) events as they happen.
+
+        **Protocol:** Server-Sent Events (SSE)  
+        **Authentication:** Cookie-based (logged-in dashboard user) or Bearer token. User must belong to the org that owns the agent.  
+        **Content-Type:** `text/event-stream`
+
+        **Transcript event types** (each event is data line with JSON payload).
+        - `user_interim_transcription` — partial STT while user is speaking (fields: `interim_transcription_text`)
+        - `user_transcription` — final STT for a turn (fields: `user_transcription_text`)
+        - `tts_completed` — agent finished a TTS segment (fields: `tts_text`, optional `tts_latency`)
+
+        **Lifecycle:** `sse_init` when connection opens; `sse_close` when the call ends (server then closes the connection). Only **active** calls can be subscribed; completed calls return 400.
+      tags:
+        - Live Transcripts
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: callId
+          required: true
+          description: The call ID to subscribe to for live events.
+          schema:
+            type: string
+            example: "CALL-1758124225863-80752e"
+      responses:
+        "200":
+          description: SSE stream. Each message is a line (data plus JSON) with event_type and payload-specific fields.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events stream of transcript and lifecycle events.
+        "400":
+          description: Missing or invalid callId, or call is already completed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+        "404":
+          description: Not authorized, org mismatch, or call/agent not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+
   /campaign:
     get:
       summary: Retrieve all campaigns
@@ -3747,6 +3808,8 @@ tags:
     description: Operations related to webhooks and webhook subscriptions
   - name: Audience
     description: Operations related to audience management and CSV uploads
+  - name: Live Transcripts
+    description: Real-time Server-Sent Events (SSE) for live call transcripts and TTS/STT events.
 
 servers:
   - url: https://atoms-api.smallest.ai/api/v1
