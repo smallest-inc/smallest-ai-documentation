@@ -1,0 +1,227 @@
+---
+title: "SSE for Live Transcripts"
+sidebarTitle: "SSE for Live Transcripts"
+description: "Real-time streaming of user speech (STT) and agent speech (TTS) events for an active call via Server-Sent Events."
+---
+
+Real-time streaming of user speech (STT) and agent speech (TTS) events for an active call via Server-Sent Events.
+
+## Endpoint
+
+**GET** `/api/v1/events?callId={callId}`
+
+| Detail | Value |
+|--------|--------|
+| **Protocol** | Server-Sent Events (SSE) |
+| **Authentication** | Cookie-based (logged-in dashboard user) |
+| **Authorization** | User must belong to the org that owns the agent |
+| **Content-Type** | `text/event-stream` |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `callId` | string | Yes | The call ID to subscribe events for |
+
+### Errors
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Missing or invalid callId |
+| 400 | Call is already completed |
+| 404 | Not authorized / org mismatch |
+| 404 | Call log or agent not found |
+
+## Event Types (Transcript-related)
+
+All events are sent as `data: <JSON>\n\n`. The three transcript-relevant event types are:
+
+### 1. user_interim_transcription
+
+Fired as the user is speaking. Contains partial, in-progress transcription text. These events are emitted frequently and may change as more audio is processed.
+
+```json
+{
+  "event_type": "user_interim_transcription",
+  "event_id": "evt_abc123",
+  "timestamp": "2026-03-02T10:00:01.123Z",
+  "call_id": "CALL-1758124225863-80752e",
+  "interim_transcription_text": "I wanted to ask about my"
+}
+```
+
+### 2. user_transcription
+
+Fired when the user finishes a speech segment. Contains the final transcription for that turn.
+
+```json
+{
+  "event_type": "user_transcription",
+  "event_id": "evt_abc456",
+  "timestamp": "2026-03-02T10:00:02.456Z",
+  "call_id": "CALL-1758124225863-80752e",
+  "user_transcription_text": "I wanted to ask about my recent order"
+}
+```
+
+### 3. tts_completed
+
+Fired when the agent finishes speaking a TTS segment. Contains the text that was spoken and optionally the TTS latency.
+
+```json
+{
+  "event_type": "tts_completed",
+  "event_id": "evt_abc789",
+  "timestamp": "2026-03-02T10:00:03.789Z",
+  "call_id": "CALL-1758124225863-80752e",
+  "tts_latency": 245,
+  "tts_text": "Sure, I can help you with your recent order. Could you provide your order number?"
+}
+```
+
+## Lifecycle Events
+
+### sse_init
+
+Sent immediately when the SSE connection is established.
+
+```json
+{
+  "event_type": "sse_init",
+  "event_time": "2026-03-02T10:00:00.000Z"
+}
+```
+
+### sse_close
+
+Sent when the call ends, right before the server closes the connection.
+
+```json
+{
+  "event_type": "sse_close",
+  "event_time": "2026-03-02T10:05:00.000Z"
+}
+```
+
+## Usage Examples
+
+### cURL
+
+```bash
+curl -N 'https://api.smallest.ai/atoms/v1/events?callId=CALL-1758124225863-80752e' \
+  -H 'Cookie: your_session_cookie' \
+  -H 'Accept: text/event-stream'
+```
+
+### JavaScript (Browser)
+
+```javascript
+const callId = "CALL-1758124225863-80752e";
+const evtSource = new EventSource(
+  `/api/v1/events?callId=${callId}`,
+  { withCredentials: true }
+);
+
+evtSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  switch (data.event_type) {
+    case "user_interim_transcription":
+      // Update live transcription preview (partial, will change)
+      console.log("[STT interim]", data.interim_transcription_text);
+      break;
+
+    case "user_transcription":
+      // Final user speech for this turn
+      console.log("[STT final]", data.user_transcription_text);
+      break;
+
+    case "tts_completed":
+      // Agent finished speaking this segment
+      console.log("[TTS]", data.tts_text);
+      break;
+
+    case "sse_close":
+      // Call ended, clean up
+      evtSource.close();
+      break;
+  }
+};
+
+evtSource.onerror = (err) => {
+  console.error("SSE connection error:", err);
+  evtSource.close();
+};
+```
+
+### Node.js
+
+```javascript
+import EventSource from "eventsource";
+
+const BASE_URL = "https://api.smallest.ai/atoms/v1";
+const callId = "CALL-1758124225863-80752e";
+
+const es = new EventSource(
+  `${BASE_URL}/events?callId=${callId}`,
+  { headers: { Cookie: "your_session_cookie" } }
+);
+
+es.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  if (data.event_type === "user_transcription") {
+    console.log(`User said: ${data.user_transcription_text}`);
+  }
+
+  if (data.event_type === "tts_completed") {
+    console.log(`Agent said: ${data.tts_text}`);
+  }
+
+  if (data.event_type === "sse_close") {
+    es.close();
+  }
+};
+```
+
+### Python
+
+```python
+import json
+import requests
+
+url = "https://api.smallest.ai/atoms/v1/events"
+params = {"callId": "CALL-1758124225863-80752e"}
+headers = {
+    "Cookie": "your_session_cookie",
+    "Accept": "text/event-stream",
+}
+
+with requests.get(url, params=params, headers=headers, stream=True) as resp:
+    for line in resp.iter_lines(decode_unicode=True):
+        if not line or not line.startswith("data: "):
+            continue
+
+        data = json.loads(line[len("data: "):])
+
+        if data["event_type"] == "user_interim_transcription":
+            print(f"[STT interim] {data['interim_transcription_text']}")
+
+        elif data["event_type"] == "user_transcription":
+            print(f"[STT final] {data['user_transcription_text']}")
+
+        elif data["event_type"] == "tts_completed":
+            print(f"[TTS] {data['tts_text']}")
+
+        elif data["event_type"] == "sse_close":
+            print("Call ended.")
+            break
+```
+
+## Notes
+
+- The connection is **real-time** — events stream directly from the call runtime as they are produced.
+- **Interim transcriptions** are partial and will be superseded by the final `user_transcription` event. Use them for live preview UI only.
+- The SSE connection **auto-closes** when the call ends (`sse_close` event). The server will also terminate the connection.
+- **Only active calls** can be subscribed to. Completed calls return a 400 error.
+- Other event types (e.g. `call_start`, `call_end`, `turn_latency`, metrics) are also sent on this stream but are not covered in this doc.
