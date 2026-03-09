@@ -1078,64 +1078,125 @@ paths:
 
   /events:
     get:
-      summary: Stream live transcript events (SSE)
+      summary: Subscribe to live call events (SSE)
       description: |
-        Real-time Server-Sent Events (SSE) stream for an active call. Use this to receive user speech (STT) and agent speech (TTS) events as they happen.
+        Real-time streaming of user speech (STT) and agent speech (TTS) events for an active call via Server-Sent Events.
 
-        **Protocol:** Server-Sent Events (SSE)  
-        **Authentication:** Cookie-based (logged-in dashboard user) or Bearer token. User must belong to the org that owns the agent.  
-        **Content-Type:** `text/event-stream`
+        The connection is real-time — events stream directly from the call runtime as they are produced. The SSE connection auto-closes when the call ends (`sse_close` event). Only active calls can be subscribed to; completed calls return a 400 error.
 
-        **Transcript event types** (each event is data line with JSON payload).
-        - `user_interim_transcription` — partial STT while user is speaking (fields: `interim_transcription_text`)
-        - `user_transcription` — final STT for a turn (fields: `user_transcription_text`)
-        - `tts_completed` — agent finished a TTS segment (fields: `tts_text`, optional `tts_latency`)
+        **Transcript event types:**
 
-        **Lifecycle:** `sse_init` when connection opens; `sse_close` when the call ends (server then closes the connection). Only **active** calls can be subscribed; completed calls return 400.
+        - `user_interim_transcription` — Partial, in-progress transcription as the user speaks. Use for live preview only; will be superseded by `user_transcription`.
+        - `user_transcription` — Final transcription for a completed user speech turn.
+        - `tts_completed` — Fired when the agent finishes speaking a TTS segment. Includes the spoken text and optionally TTS latency.
+
+        **Lifecycle events:**
+
+        - `sse_init` — Sent immediately when the SSE connection is established.
+        - `sse_close` — Sent when the call ends, right before the server closes the connection.
+
+        Other event types (e.g. `call_start`, `call_end`, `turn_latency`, metrics) are also sent on this stream.
       tags:
         - Live Transcripts
       security:
         - BearerAuth: []
       parameters:
-        - in: query
-          name: callId
+        - name: callId
+          in: query
           required: true
-          description: The call ID to subscribe to for live events.
+          description: The call ID to subscribe events for
           schema:
             type: string
             example: "CALL-1758124225863-80752e"
       responses:
         "200":
-          description: SSE stream. Each message is a line (data plus JSON) with event_type and payload-specific fields.
+          description: SSE event stream established successfully
           content:
             text/event-stream:
               schema:
-                type: string
-                description: Server-Sent Events stream of transcript and lifecycle events.
+                type: object
+                description: |
+                  Events are sent as `data: <JSON>\n\n`. Each event has an `event_type` field.
+                properties:
+                  event_type:
+                    type: string
+                    description: The type of event
+                    enum:
+                      - sse_init
+                      - user_interim_transcription
+                      - user_transcription
+                      - tts_completed
+                      - sse_close
+                  event_id:
+                    type: string
+                    description: Unique identifier for the event
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: ISO 8601 timestamp of the event
+                  call_id:
+                    type: string
+                    description: The call ID this event belongs to
+                  interim_transcription_text:
+                    type: string
+                    description: Partial transcription text (only for `user_interim_transcription`)
+                  user_transcription_text:
+                    type: string
+                    description: Final transcription text (only for `user_transcription`)
+                  tts_text:
+                    type: string
+                    description: Text spoken by the agent (only for `tts_completed`)
+                  tts_latency:
+                    type: integer
+                    description: TTS latency in milliseconds (only for `tts_completed`)
+              examples:
+                sse_init:
+                  summary: SSE connection initialized
+                  value:
+                    event_type: sse_init
+                    event_time: "2026-03-02T10:00:00.000Z"
+                user_interim_transcription:
+                  summary: Partial user speech
+                  value:
+                    event_type: user_interim_transcription
+                    event_id: evt_abc123
+                    timestamp: "2026-03-02T10:00:01.123Z"
+                    call_id: "CALL-1758124225863-80752e"
+                    interim_transcription_text: "I wanted to ask about my"
+                user_transcription:
+                  summary: Final user speech
+                  value:
+                    event_type: user_transcription
+                    event_id: evt_abc456
+                    timestamp: "2026-03-02T10:00:02.456Z"
+                    call_id: "CALL-1758124225863-80752e"
+                    user_transcription_text: "I wanted to ask about my recent order"
+                tts_completed:
+                  summary: Agent finished speaking
+                  value:
+                    event_type: tts_completed
+                    event_id: evt_abc789
+                    timestamp: "2026-03-02T10:00:03.789Z"
+                    call_id: "CALL-1758124225863-80752e"
+                    tts_latency: 245
+                    tts_text: "Sure, I can help you with your recent order. Could you provide your order number?"
+                sse_close:
+                  summary: Call ended
+                  value:
+                    event_type: sse_close
+                    event_time: "2026-03-02T10:05:00.000Z"
         "400":
-          description: Missing or invalid callId, or call is already completed.
+          description: Missing or invalid callId, or call is already completed
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
+                $ref: "#/components/schemas/BadRequestErrorResponse"
         "404":
-          description: Not authorized, org mismatch, or call/agent not found.
+          description: Not authorized (org mismatch) or call/agent not found
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
+                $ref: "#/components/schemas/ApiResponse"
 
   /campaign:
     get:
@@ -3809,8 +3870,8 @@ tags:
   - name: Audience
     description: Operations related to audience management and CSV uploads
   - name: Live Transcripts
-    description: Real-time Server-Sent Events (SSE) for live call transcripts and TTS/STT events.
+    description: Real-time streaming of call transcript events via Server-Sent Events (SSE). Subscribe to an active call to receive user speech, agent speech, and lifecycle events in real time.
 
 servers:
-  - url: https://atoms-api.smallest.ai/api/v1
+  - url: https://api.smallest.ai/atoms/v1
     description: Production server
