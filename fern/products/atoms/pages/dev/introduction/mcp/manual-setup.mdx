@@ -1,0 +1,125 @@
+---
+title: Manual Setup
+subtitle: Step-by-step config for Cursor and Claude Desktop.
+---
+
+<Callout intent="info">
+  Need an API key first? Go to **[console.smallest.ai](https://console.smallest.ai)** → **API Keys** → **Create API Key**.
+</Callout>
+
+## Install
+
+<Tabs>
+  <Tab title="curl">
+    Zero dependencies — no Node.js, no npm.
+
+    <Tabs>
+      <Tab title="Mac / Linux">
+        ```bash
+        curl -fsSL https://raw.githubusercontent.com/smallest-inc/mcp-server/main/install.sh | bash
+        ```
+      </Tab>
+      <Tab title="Windows (PowerShell)">
+        ```powershell
+        irm https://raw.githubusercontent.com/smallest-inc/mcp-server/main/install.ps1 | iex
+        ```
+      </Tab>
+    </Tabs>
+
+    It prompts for your API key and writes the config for both Cursor and Claude Desktop automatically.
+
+    Skip to [Restart your editor](#restart-your-editor) below.
+  </Tab>
+  <Tab title="npm">
+    <Callout intent="warn">
+      Requires **Node.js 18+** installed on your machine.
+    </Callout>
+
+    Open the MCP config file for your editor:
+
+    <Tabs>
+      <Tab title="Cursor">
+        | OS | Path |
+        |---|---|
+        | **Mac / Linux** | `~/.cursor/mcp.json` |
+        | **Windows** | `%USERPROFILE%\.cursor\mcp.json` |
+
+        If the file doesn't exist, create it.
+      </Tab>
+      <Tab title="Claude Desktop">
+        Open **Claude Desktop** → **Settings** (gear icon) → **Developer** → **Edit Config**
+
+        Or open the file manually:
+
+        | OS | Path |
+        |---|---|
+        | **Mac** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+        | **Windows** | `%APPDATA%\Claude\claude_desktop_config.json` |
+      </Tab>
+    </Tabs>
+
+    Paste this config. If you already have other MCP servers, just add the `"atoms"` entry inside `"mcpServers"`.
+
+    ```json
+    {
+      "mcpServers": {
+        "atoms": {
+          "command": "npx",
+          "args": ["-y", "@developer-smallestai/atoms-mcp-server"],
+          "env": {
+            "ATOMS_API_KEY": "sk_your_api_key_here"
+          }
+        }
+      }
+    }
+    ```
+
+    **Replace** `sk_your_api_key_here` with your actual API key.
+
+    <Callout intent="warn">
+      Don't share your API key or commit it to git.
+    </Callout>
+  </Tab>
+</Tabs>
+
+---
+
+## Restart your editor
+
+<Tabs>
+  <Tab title="Cursor">
+    `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows) → **Developer: Reload Window**
+  </Tab>
+  <Tab title="Claude Desktop">
+    Fully quit and reopen the app.
+  </Tab>
+</Tabs>
+
+---
+
+## Verify
+
+<Tabs>
+  <Tab title="Cursor">
+    Go to **Cursor Settings** → **MCP**. You should see `atoms` listed with a **green dot**.
+
+    Open a new chat (**make sure you're in Agent mode**, not Ask mode) and type:
+
+    ```
+    List all my agents
+    ```
+  </Tab>
+  <Tab title="Claude Desktop">
+    Start a new conversation and type:
+
+    ```
+    List all my agents
+    ```
+  </Tab>
+</Tabs>
+
+You should see your Atoms agents listed back. If you do — you're done!
+
+## Next steps
+
+Head to the **[Prompt Cookbook](/atoms/mcp/prompt-cookbook)** — it has copy-paste prompts for everything you can do.

@@ -1,0 +1,113 @@
+---
+title: Troubleshooting
+subtitle: Common issues and how to fix them.
+---
+
+## Server not showing up
+
+<AccordionGroup>
+  <Accordion title="Did you reload Cursor?">
+    After editing `~/.cursor/mcp.json`, you need to reload:
+
+    `Cmd+Shift+P` → **Developer: Reload Window**
+
+    For Claude Desktop, fully **quit and reopen** the app.
+  </Accordion>
+
+  <Accordion title="Is your JSON valid?">
+    A missing comma or bracket will silently break the config. Paste your `mcp.json` into [jsonlint.com](https://jsonlint.com) to validate.
+
+    Common mistakes:
+    - Trailing comma after the last entry
+    - Missing closing brace `}`
+    - Using single quotes instead of double quotes
+  </Accordion>
+
+  <Accordion title="Using the installer? Check the binary exists">
+    If you used the one-line installer, verify the binary is in place:
+
+    ```bash
+    ls ~/.atoms/atoms-mcp
+    ```
+
+    If not, re-run the installer:
+
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/smallest-inc/mcp-server/main/install.sh | bash
+    ```
+  </Accordion>
+
+  <Accordion title="Using npm? Check Node.js is installed">
+    The npm method requires **Node.js 18+**. Check with:
+
+    ```bash
+    node --version
+    ```
+
+    If not installed, download from [nodejs.org](https://nodejs.org), or use the one-line installer instead (no Node.js needed).
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## API key errors
+
+<AccordionGroup>
+  <Accordion title="Invalid or revoked API key">
+    Your `ATOMS_API_KEY` is either incorrect or has been revoked.
+
+    <Steps>
+      ### Go to the Atoms Console
+
+      Open **[console.smallest.ai](https://console.smallest.ai)** → **API Keys**
+
+      ### Create a new key
+
+      Click **Create API Key** and copy it.
+
+      ### Update your config
+
+      Replace the old key in `~/.cursor/mcp.json` or `claude_desktop_config.json`.
+
+      ### Reload
+
+      Reload Cursor (`Cmd+Shift+P` → Reload Window) or restart Claude Desktop.
+    </Steps>
+  </Accordion>
+
+  <Accordion title="No organizations found">
+    Your API key is valid but isn't linked to an organization. This usually means the account was just created. Ask your team admin to add you to the org.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Tools not being called
+
+<Callout intent="warn">
+  In Cursor, make sure you're in **Agent mode** (not Ask mode). Ask mode is read-only and won't trigger tools.
+</Callout>
+
+If the AI still doesn't pick up the tools, be more explicit:
+
+```
+Use the atoms MCP to list my agents
+```
+
+---
+
+## Calls not going through
+
+When using `make_call`, check these:
+
+| Requirement | Example |
+|---|---|
+| Phone number in **E.164 format** | `+14155551234` (with `+` and country code) |
+| Agent exists and is **not archived** | Check with `List all my agents` |
+| Org has a **phone number assigned** | Check with `List all phone numbers` |
+
+---
+
+## Still stuck?
+
+Reach out to the Atoms team on your internal Slack channel or email **support@smallest.ai**.
