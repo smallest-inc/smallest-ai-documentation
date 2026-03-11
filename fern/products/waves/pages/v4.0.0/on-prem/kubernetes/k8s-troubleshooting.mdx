@@ -47,7 +47,7 @@ lightning-asr-xxx   0/1     Pending   0          5m
 **Causes and Solutions**:
 
 <AccordionGroup>
-  <Accordion title="Insufficient GPU Resources" icon="server">
+  <Accordion title="Insufficient GPU Resources">
     **Check**:
     ```bash
     kubectl describe pod lightning-asr-xxx -n smallest
@@ -62,7 +62,7 @@ lightning-asr-xxx   0/1     Pending   0          5m
     - Reduce requested GPUs or add more nodes
   </Accordion>
 
-  <Accordion title="Node Selector Mismatch" icon="filter">
+  <Accordion title="Node Selector Mismatch">
     **Check**:
     ```bash
     kubectl get nodes --show-labels
@@ -75,7 +75,7 @@ lightning-asr-xxx   0/1     Pending   0          5m
     - Add labels to nodes: `kubectl label nodes <node-name> workload=gpu`
   </Accordion>
 
-  <Accordion title="Tolerations Missing" icon="shield-halved">
+  <Accordion title="Tolerations Missing">
     **Check**:
     ```bash
     kubectl describe pod lightning-asr-xxx -n smallest | grep -A5 "Tolerations"
@@ -93,7 +93,7 @@ lightning-asr-xxx   0/1     Pending   0          5m
     ```
   </Accordion>
 
-  <Accordion title="PVC Not Bound" icon="hard-drive">
+  <Accordion title="PVC Not Bound">
     **Check**:
     ```bash
     kubectl get pvc -n smallest
@@ -127,7 +127,7 @@ Look for errors in Events section.
 **Solutions**:
 
 <AccordionGroup>
-  <Accordion title="Invalid Credentials" icon="key">
+  <Accordion title="Invalid Credentials">
     **Error**: `unauthorized: authentication required`
     
     **Solutions**:
@@ -141,7 +141,7 @@ Look for errors in Events section.
       ```
   </Accordion>
 
-  <Accordion title="Image Not Found" icon="image">
+  <Accordion title="Image Not Found">
     **Error**: `manifest unknown` or `not found`
     
     **Solutions**:
@@ -150,7 +150,7 @@ Look for errors in Events section.
     - Contact support@smallest.ai for access
   </Accordion>
 
-  <Accordion title="Rate Limited" icon="gauge-high">
+  <Accordion title="Rate Limited">
     **Error**: `rate limit exceeded`
     
     **Solutions**:
@@ -178,7 +178,7 @@ kubectl describe pod lightning-asr-xxx -n smallest
 **Common Causes**:
 
 <AccordionGroup>
-  <Accordion title="License Validation Failed" icon="certificate">
+  <Accordion title="License Validation Failed">
     **Error**: `License validation failed` or `Invalid license key`
     
     **Solutions**:
@@ -188,7 +188,7 @@ kubectl describe pod lightning-asr-xxx -n smallest
     - Test License Proxy: `kubectl exec -it <api-server-pod> -- curl http://license-proxy:3369/health`
   </Accordion>
 
-  <Accordion title="Model Download Failed" icon="download">
+  <Accordion title="Model Download Failed">
     **Error**: `Failed to download model` or `Connection timeout`
     
     **Solutions**:
@@ -198,7 +198,7 @@ kubectl describe pod lightning-asr-xxx -n smallest
     - Test URL: `kubectl run test --rm -it --image=curlimages/curl -- curl -I $MODEL_URL`
   </Accordion>
 
-  <Accordion title="Out of Memory" icon="memory">
+  <Accordion title="Out of Memory">
     **Error**: Pod killed, exit code 137
     
     **Solutions**:
@@ -216,7 +216,7 @@ kubectl describe pod lightning-asr-xxx -n smallest
     - Check node capacity: `kubectl describe node <node-name>`
   </Accordion>
 
-  <Accordion title="GPU Not Accessible" icon="display">
+  <Accordion title="GPU Not Accessible">
     **Error**: `No CUDA-capable device` or `GPU not found`
     
     **Solutions**:
@@ -245,7 +245,7 @@ kubectl get endpoints -n smallest
 **Solutions**:
 
 <AccordionGroup>
-  <Accordion title="No Endpoints" icon="circle-xmark">
+  <Accordion title="No Endpoints">
     **Issue**: Service has no endpoints
     
     **Check**:
@@ -259,7 +259,7 @@ kubectl get endpoints -n smallest
     - Check pods are ready: `kubectl get pods -l app=api-server -o wide`
   </Accordion>
 
-  <Accordion title="Wrong Port" icon="network-wired">
+  <Accordion title="Wrong Port">
     **Solutions**:
     - Verify service port:
       ```bash
@@ -268,7 +268,7 @@ kubectl get endpoints -n smallest
     - Use correct port in connections (7100 for API Server)
   </Accordion>
 
-  <Accordion title="Network Policy Blocking" icon="shield">
+  <Accordion title="Network Policy Blocking">
     **Check**:
     ```bash
     kubectl get networkpolicy -n smallest
@@ -300,7 +300,7 @@ kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1" | jq .
 **Solutions**:
 
 <AccordionGroup>
-  <Accordion title="Metrics Not Available" icon="chart-simple">
+  <Accordion title="Metrics Not Available">
     **Check**:
     ```bash
     kubectl get servicemonitor -n smallest
@@ -323,7 +323,7 @@ kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1" | jq .
       Query: `asr_active_requests`
   </Accordion>
 
-  <Accordion title="Already at Max Replicas" icon="gauge-max">
+  <Accordion title="Already at Max Replicas">
     **Check**:
     ```bash
     kubectl get hpa lightning-asr -n smallest
@@ -340,7 +340,7 @@ kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1" | jq .
       ```
   </Accordion>
 
-  <Accordion title="Insufficient Cluster Resources" icon="server">
+  <Accordion title="Insufficient Cluster Resources">
     **Solutions**:
     - Add more nodes
     - Enable Cluster Autoscaler
@@ -358,7 +358,7 @@ kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1" | jq .
 **Solutions**:
 
 <AccordionGroup>
-  <Accordion title="No Storage Class" icon="hard-drive">
+  <Accordion title="No Storage Class">
     **Check**:
     ```bash
     kubectl get storageclass
@@ -370,7 +370,7 @@ kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1" | jq .
     - Create storage class
   </Accordion>
 
-  <Accordion title="EFS Mount Failed" icon="folder">
+  <Accordion title="EFS Mount Failed">
     **Check**:
     ```bash
     kubectl describe pod <pod-name> | grep -A10 "Events"
@@ -382,7 +382,7 @@ kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1" | jq .
     - Verify EFS CSI driver: `kubectl get pods -n kube-system -l app=efs-csi-controller`
   </Accordion>
 
-  <Accordion title="Permission Denied" icon="lock">
+  <Accordion title="Permission Denied">
     **Solutions**:
     - Check volume permissions
     - Add fsGroup to pod securityContext:
@@ -497,11 +497,11 @@ Include:
 ## What's Next?
 
 <CardGroup cols={2}>
-  <Card title="General Troubleshooting" icon="wrench" href="/v4.0.0/content/on-prem/troubleshooting/common-issues">
+  <Card title="General Troubleshooting" href="/waves/self-host/troubleshooting/common-issues">
     Platform-agnostic troubleshooting guide
   </Card>
 
-  <Card title="API Reference" icon="code" href="/v4.0.0/content/on-prem/api-reference/authentication">
+  <Card title="API Reference" href="/waves/self-host/api-reference/authentication">
     API integration documentation
   </Card>
 </CardGroup>
