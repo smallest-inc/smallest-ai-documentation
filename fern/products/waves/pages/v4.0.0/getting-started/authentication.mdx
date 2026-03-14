@@ -1,49 +1,104 @@
 ---
 title: "Authentication"
-description: "Learn how to authenticate your API requests and manage access keys securely."
+description: "Create an API key and authenticate requests to the Smallest AI APIs."
 icon: "lock"
 ---
 
-## API keys
-Smallest AI uses API keys for authentication. You must include your key with every API request to authenticate your identity and track usage against your quota.
+Every API request requires an API key in the `Authorization` header.
 
-Each API key can be scoped to the following:
+## Create Your API Key
 
-- **Rate Limits**: Controls the number of requests allowed within a specified time period.
-- **Credit Quota**: Defines the maximum usage credits available for your account.
+<Steps>
+  <Step title="Go to Settings → API Keys">
+    In the [Smallest AI Console](https://app.smallest.ai/dashboard/settings/apikeys?utm_source=documentation&utm_medium=authentication), click **API Keys** in the Settings sidebar.
 
-Your API key is confidential and should be kept secure. Never share it with others or expose it in client-side code (browsers, mobile apps, github repositories, etc.).
+    <img src="../../images/api-keys-page-create-button.png" alt="API Keys settings page with Create API Key button highlighted" width="700" style={{ borderRadius: '8px' }} />
+  </Step>
+  <Step title="Create a new key">
+    Click **Create API Key**, give it a descriptive name (e.g., `my-tts-app`), and click **Create API Key**.
 
-## Making Requests
+    <img src="../../images/create-api-key-modal.png" alt="Create New API Key dialog with name field and create button" width="500" style={{ borderRadius: '8px' }} />
 
->For local development, export your key as an environment variable. 
->For e.g., `export SMALLEST_API_KEY=...` instead of hardcoding it.
+    Copy the key immediately — it won't be shown again.
+  </Step>
+  <Step title="Set it in your environment">
+    ```bash
+    export SMALLEST_API_KEY="your-api-key-here"
+    ```
 
+    Add this to your `.bashrc` or `.zshrc` to persist across sessions.
+  </Step>
+</Steps>
 
-All API requests require your key in the `Authorization` header using the Bearer key format:
+## Using Your API Key
+
+Include your key in the `Authorization` header with every request:
 
 ```
 Authorization: Bearer YOUR_API_KEY
 ```
 
-## Example API Request
-Test the API with this curl command by replacing `YOUR_API_KEY` with your actual key:
-
-```bash
-curl 'https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices' \
-  -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer YOUR_API_KEY'
-```
-
-## Example with the Smallest Python Package
 <CodeGroup>
-```python python
-from smallestai.waves import WavesClient
 
-# Initialize the client with your API key
-client = WavesClient(api_key="YOUR_API_KEY")
-
-# Retrieve available voices
-print(f"Available Voices: {client.get_voices(model='lightning-v3.1')}")
+```bash cURL
+curl -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Authentication test", "voice_id": "magnus", "output_format": "wav"}' \
+  --output test.wav
 ```
+
+```python Python
+import os
+import requests
+
+response = requests.post(
+    "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech",
+    headers={
+        "Authorization": f"Bearer {os.environ['SMALLEST_API_KEY']}",
+        "Content-Type": "application/json",
+    },
+    json={"text": "Authentication test", "voice_id": "magnus", "output_format": "wav"},
+)
+```
+
+```javascript JavaScript
+const response = await fetch(
+  "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech",
+  {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.SMALLEST_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      text: "Authentication test",
+      voice_id: "magnus",
+      output_format: "wav",
+    }),
+  }
+);
+```
+
 </CodeGroup>
+
+## Security
+
+<Warning>
+Your API key is a secret. Never expose it in client-side code, public repositories, or browser applications.
+</Warning>
+
+- Store keys in environment variables, not in source code
+- Use `.env` files locally (add `.env` to `.gitignore`)
+- Rotate keys periodically via the console
+- Each key tracks usage against your account quota
+
+## Error Responses
+
+| Status | Meaning |
+|--------|---------|
+| `401 Unauthorized` | Missing or invalid API key |
+| `403 Forbidden` | Key doesn't have access to this resource |
+| `429 Too Many Requests` | Rate limit exceeded — wait and retry |
+
+For rate limits and concurrency details, see [Concurrency and Limits](/waves/documentation/api-references/concurrency-and-limits).

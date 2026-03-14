@@ -1,34 +1,66 @@
 ---
 title: "Quickstart"
-description: "This guide will help you get started quickly with transcribing your first audio using Python and the Smallest AI API."
+description: "Transcribe your first audio file in under 60 seconds with Pulse STT."
 icon: "rocket"
 ---
 
-## Step 1: Sign Up & Get Your API Key
+## Step 1: Get Your API Key
 
-1. Visit the [platform](https://app.smallest.ai/dashboard/settings/apikeys?utm_source=documentation&utm_medium=speech-to-text) and sign up for an account or log in if you already have an account.
-2. Navigate to `API Key` tab in your account dashboard (Manage Plan).
-3. Create a new API Key and copy it.
-4. Export the API Key in your environment with the name `SMALLEST_API_KEY`, ensuring that your application can access it securely for authentication.
+In the [Smallest AI Console](https://app.smallest.ai/dashboard/settings/apikeys?utm_source=documentation&utm_medium=speech-to-text), go to **Settings → API Keys** and click **Create API Key**.
 
-## Step 2: Install Dependencies
+<img src="../../images/api-keys-page-create-button.png" alt="API Keys settings page with Create API Key button highlighted" width="700" style={{ borderRadius: '8px' }} />
 
-To install the required library:
+<img src="../../images/create-api-key-modal.png" alt="Create New API Key dialog with name field" width="500" style={{ borderRadius: '8px' }} />
+
+Copy the key and export it:
 
 ```bash
-pip install requests
+export SMALLEST_API_KEY="your-api-key-here"
 ```
 
-## Step 3: Make Your First API Call
+<Tip>New to Smallest AI? [Sign up here](https://app.smallest.ai?utm_source=documentation&utm_medium=speech-to-text) first.</Tip>
 
-Here is a basic example of how to use Python to transcribe an audio file:
+## Step 2: Transcribe Audio
+
+Here's the sample audio we'll transcribe:
+
+<video controls style={{ width: '100%', maxWidth: '500px', height: '54px' }}>
+  <source src="../../audio/stt-sample-audio.wav" type="audio/wav" />
+</video>
+
+Paste this cURL — no install required:
+
+```bash
+curl -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"}'
+```
+
+You'll get back:
+
+```json
+{
+  "transcription": "This is a sample audio file for testing speech to text transcription with the Pulse API."
+}
+```
+
+## Step 3: Build It Into Your App
 
 <CodeGroup>
+
+```bash cURL (file upload)
+curl -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: audio/wav" \
+  --data-binary "@audio.wav"
+```
+
 ```python Python
 import os
 import requests
 
-API_KEY = os.environ.get("SMALLEST_API_KEY")
+API_KEY = os.environ["SMALLEST_API_KEY"]
 
 response = requests.post(
     "https://api.smallest.ai/waves/v1/pulse/get_text",
@@ -38,34 +70,60 @@ response = requests.post(
         "Content-Type": "audio/wav",
     },
     data=open("audio.wav", "rb").read(),
-    timeout=120
+    timeout=120,
 )
 
 result = response.json()
 print(result["transcription"])
 ```
 
-```bash cURL
-curl --request POST \
-  --url "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
-  --header "Authorization: Bearer $SMALLEST_API_KEY" \
-  --header "Content-Type: audio/wav" \
-  --data-binary "@audio.wav"
+```javascript JavaScript
+const fs = require("fs");
+
+const audioData = fs.readFileSync("audio.wav");
+
+const params = new URLSearchParams({ language: "en" });
+const response = await fetch(
+  `https://api.smallest.ai/waves/v1/pulse/get_text?${params}`,
+  {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.SMALLEST_API_KEY}`,
+      "Content-Type": "audio/wav",
+    },
+    body: audioData,
+  }
+);
+
+const result = await response.json();
+console.log(result.transcription);
 ```
+
 </CodeGroup>
 
-Replace `YOUR_API_KEY` with the API key you obtained in Step 1.
+## Step 4: Explore Features
 
-## Step 4: Explore More Features
+<CardGroup cols={2}>
+  <Card title="Real-Time Transcription" icon="broadcast-tower" href="/waves/documentation/speech-to-text/realtime/quickstart">
+    Stream audio via WebSocket for live transcription.
+  </Card>
+  <Card title="Speaker Diarization" icon="users" href="/waves/documentation/speech-to-text/features/diarization">
+    Identify and label different speakers.
+  </Card>
+  <Card title="Word Timestamps" icon="clock" href="/waves/documentation/speech-to-text/features/word-timestamps">
+    Precise timing for each transcribed word.
+  </Card>
+  <Card title="Emotion Detection" icon="face-smile" href="/waves/documentation/speech-to-text/features/emotion-detection">
+    Analyze emotional tone in speech.
+  </Card>
+</CardGroup>
 
-- **[Real-Time Transcription](/waves/documentation/speech-to-text/realtime/quickstart):** Stream audio via WebSocket for live transcription.
-- **[Speaker Diarization](/waves/documentation/speech-to-text/features/diarization):** Identify and label different speakers in multi-speaker audio.
-- **[Word Timestamps](/waves/documentation/speech-to-text/features/word-timestamps):** Get precise timing information for each word.
-- **[Emotion Detection](/waves/documentation/speech-to-text/features/emotion-detection):** Analyze emotional tone in transcribed speech.
+Full endpoint spec: [Pulse API Reference](/waves/documentation/api-references/pulse-stt)
 
-For detailed documentation on all available features and endpoints, visit our [API Reference](/waves/documentation/api-references/pulse-stt).
+## Need Help?
 
-### Need Help?
+<Card title="Join Discord" icon="discord" href="https://discord.gg/5evETqguJs">
+  Ask questions and get help from the community.
+</Card>
 
-If you have any questions or need assistance, please contact our support team at [support@smallest.ai](mailto:support@smallest.ai).
-
+Or email [support@smallest.ai](mailto:support@smallest.ai).

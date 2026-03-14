@@ -1,57 +1,166 @@
 ---
 title: "Quickstart"
-description: "Welcome to the Smallest AI platform! This guide will help you get started quickly with generating your first text-to-speech using Python and Smallest AI API.  "
+description: "Generate your first speech audio in under 60 seconds with Lightning TTS."
 icon: "rocket"
 ---
-   
-## Step 1: Sign Up & get the API Key  
 
-1. Visit the [platform](https://app.smallest.ai/dashboard/settings/apikeys?utm_source=documentation&utm_medium=text-to-speech) and sign up for an account or log in if you already have an account.  
-2. Navigate to `API Key` tab in your account dashboard (Manage Plan section).
-3. Create a new API Key and copy it.
-4. Export the API Key in your environment with the name `SMALLEST_API_KEY`, ensuring that your application can access it securely for authentication.  
+## Step 1: Get Your API Key
 
-## Step 2: Install the SDK
+In the [Smallest AI Console](https://app.smallest.ai/dashboard/settings/apikeys?utm_source=documentation&utm_medium=text-to-speech), go to **Settings → API Keys** and click **Create API Key**.
 
-To install the latest version available   
+<img src="../../images/api-keys-page-create-button.png" alt="API Keys settings page with Create API Key button highlighted" width="700" style={{ borderRadius: '8px' }} />
+
+<img src="../../images/create-api-key-modal.png" alt="Create New API Key dialog with name field" width="500" style={{ borderRadius: '8px' }} />
+
+Copy the key and export it:
+
 ```bash
-pip install smallestai
-```  
-When using an SDK in your application, make sure to pin to at least the major version (e.g., ==1.*). This helps ensure your application remains stable and avoids potential issues from breaking changes in future updates.  
+export SMALLEST_API_KEY="your-api-key-here"
+```
 
-## Step 3: Make Your First API Call
-Here is a basic example of how to use the Python SDK to convert text to speech:    
+<Tip>New to Smallest AI? [Sign up here](https://app.smallest.ai?utm_source=documentation&utm_medium=text-to-speech) first — it takes 30 seconds.</Tip>
+
+## Step 2: Hear Audio in 30 Seconds
+
+Paste this in your terminal — no install required:
+
+```bash
+curl -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello from Smallest AI! This is Lightning v3.1.", "voice_id": "magnus", "sample_rate": 24000, "output_format": "wav"}' \
+  --output hello.wav
+```
+
+Play `hello.wav` — it should sound like this:
+
+<video controls style={{ width: '100%', maxWidth: '500px', height: '54px' }}>
+  <source src="../../audio/tts-sample-hello.wav" type="audio/wav" />
+</video>
+
+That's broadcast-quality TTS with ~200ms latency.
+
+## Step 3: Build It Into Your App
 
 <CodeGroup>
-```python python
+
+```bash cURL
+curl -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Modern problems require modern solutions.",
+    "voice_id": "magnus",
+    "sample_rate": 24000,
+    "speed": 1.0,
+    "language": "en",
+    "output_format": "wav"
+  }' --output output.wav
+```
+
+```python Python
+import os
+import requests
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+
+response = requests.post(
+    "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech",
+    headers={
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+    },
+    json={
+        "text": "Modern problems require modern solutions.",
+        "voice_id": "magnus",
+        "sample_rate": 24000,
+        "speed": 1.0,
+        "language": "en",
+        "output_format": "wav",
+    },
+)
+
+with open("output.wav", "wb") as f:
+    f.write(response.content)
+print(f"Saved output.wav ({len(response.content):,} bytes)")
+```
+
+```javascript JavaScript
+const fs = require("fs");
+
+const API_KEY = process.env.SMALLEST_API_KEY;
+
+const response = await fetch(
+  "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech",
+  {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      text: "Modern problems require modern solutions.",
+      voice_id: "magnus",
+      sample_rate: 24000,
+      speed: 1.0,
+      language: "en",
+      output_format: "wav",
+    }),
+  }
+);
+
+const buffer = Buffer.from(await response.arrayBuffer());
+fs.writeFileSync("output.wav", buffer);
+console.log(`Saved output.wav (${buffer.length} bytes)`);
+```
+
+```python Python SDK
 from smallestai.waves import WavesClient
 
-def main():
-    client = WavesClient(api_key="YOUR_API_KEY")
-    audio = client.synthesize(
-        "Modern problems require modern solutions.",
-        sample_rate=24000,
-        speed=1.0
-    )
-    with open("output.wav", "wb") as f:
-        f.write(audio)
-
-if __name__ == "__main__":
-    main()
+client = WavesClient(api_key="YOUR_API_KEY")
+audio = client.synthesize(
+    "Modern problems require modern solutions.",
+    sample_rate=24000,
+    speed=1.0,
+)
+with open("output.wav", "wb") as f:
+    f.write(audio)
 ```
-</CodeGroup>  
 
-Replace `YOUR_API_KEY` with the API key you obtained in Step 2.  
+</CodeGroup>
 
-## Step 4: Explore More Features
+## Step 4: Explore More
 
-- **Voice Cloning:** Create custom voice profiles by uploading voice samples.
-- **Advanced Configurations:** Customize speech synthesis with different voices, speeds, and sample rates.  
+<CardGroup cols={2}>
+  <Card title="Voices & Languages" icon="users" href="/waves/documentation/text-to-speech/get-voice-models-langs">
+    Browse 80+ voices across English, Hindi, Spanish, and Tamil.
+  </Card>
+  <Card title="Streaming TTS" icon="broadcast-tower" href="/waves/documentation/text-to-speech/stream-tts">
+    Real-time audio streaming via WebSocket for voice assistants.
+  </Card>
+  <Card title="Voice Cloning" icon="microphone" href="/waves/documentation/voice-cloning/types-of-clone">
+    Clone any voice from just 5-15 seconds of audio.
+  </Card>
+  <Card title="Pronunciation Dicts" icon="spell-check" href="/waves/documentation/text-to-speech/pronunciation-dictionaries">
+    Custom pronunciations for brand names and technical terms.
+  </Card>
+</CardGroup>
 
-For detailed documentation on all available features and endpoints, visit our API Reference.  
+## Key Parameters
 
-### Need Help?
-If you have any questions or need assistance, please contact our support team at [support@smallest.ai](mailto:support@smallest.ai).
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `text` | string | *required* | Text to synthesize (max ~250 chars recommended) |
+| `voice_id` | string | *required* | Voice to use (e.g., `magnus`, `olivia`) |
+| `sample_rate` | int | `44100` | `8000`, `16000`, `24000`, or `44100` Hz |
+| `speed` | float | `1.0` | Speech rate: `0.5` to `2.0` |
+| `language` | string | `auto` | `en`, `hi`, `es`, `ta`, or `auto` |
+| `output_format` | string | `pcm` | `pcm`, `wav`, `mp3`, or `mulaw` |
 
+## Need Help?
 
+<Card title="Join the Community" icon="discord" href="https://discord.gg/5evETqguJs">
+  Ask questions, share what you're building, and connect with other developers on Discord.
+</Card>
 
+If you need direct assistance, reach out at [support@smallest.ai](mailto:support@smallest.ai).
