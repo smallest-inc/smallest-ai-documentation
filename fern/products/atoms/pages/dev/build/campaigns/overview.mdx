@@ -1,0 +1,84 @@
+---
+title: "Campaigns"
+sidebarTitle: "Overview"
+description: "Run outbound call campaigns at scale with the Atoms SDK."
+---
+
+Campaigns let your agents call through a list of contacts automatically. Upload an audience, assign an agent and phone number, then start the campaign — Atoms handles dialing, retries, and tracking.
+
+---
+
+## What You Can Do
+
+| Action | Method | Description |
+|--------|--------|-------------|
+| **Create** | `campaign.create()` | Set up a new campaign with agent, audience, and phone number |
+| **Start** | `campaign.start()` | Begin dialing contacts in the audience |
+| **Pause** | `campaign.pause()` | Temporarily stop dialing (resume later) |
+| **Monitor** | `campaign.get()` | Check progress, call counts, and status |
+| **Delete** | `campaign.delete()` | Remove a campaign and its data |
+
+---
+
+## How It Works
+
+```
+Audience (contacts) + Agent + Phone Number
+        ↓
+   Create Campaign
+        ↓
+   Start Campaign
+        ↓
+   Atoms dials each contact → Agent handles the call
+        ↓
+   Monitor progress → Pause/Resume as needed
+```
+
+---
+
+## Prerequisites
+
+Before running a campaign, you need three things:
+
+1. **An agent** — the AI that handles each call
+2. **An audience** — the list of phone numbers to dial
+3. **A phone number** — the outbound number your agent calls from
+
+```python
+from smallestai.atoms import AtomsClient
+from smallestai.atoms.campaign import Campaign
+
+client = AtomsClient()
+campaign = Campaign()
+
+# Get available phone numbers
+phones = client.get_phone_numbers()
+phone_id = phones[0]["_id"]
+```
+
+---
+
+## Campaign Lifecycle
+
+Campaigns move through these statuses:
+
+| Status | Meaning |
+|--------|---------|
+| **Draft** | Created but not started |
+| **Active** | Currently dialing contacts |
+| **Paused** | Temporarily stopped |
+| **Completed** | All contacts have been called |
+| **Failed** | Encountered an error |
+
+---
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="Manage Audiences" icon="users" href="/atoms/developer-guide/build/campaigns/managing-audiences">
+    Create and update contact lists for your campaigns.
+  </Card>
+  <Card title="Run a Campaign" icon="megaphone" href="/atoms/developer-guide/build/campaigns/creating-campaigns">
+    Full walkthrough: create, start, monitor, and clean up.
+  </Card>
+</CardGroup>
