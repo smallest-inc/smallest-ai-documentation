@@ -1902,6 +1902,92 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
+  /product/import-phone-number:
+    post:
+      summary: Import a SIP phone number
+      description: |
+        Bring your own SIP trunk by importing an existing phone number with its SIP termination URL.
+        Atoms creates both inbound and outbound SIP trunks so your number works for making and receiving calls through the platform.
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phoneNumber
+                - sipTerminationUrl
+              properties:
+                phoneNumber:
+                  type: string
+                  description: Your existing phone number in E.164 format
+                  example: "+14155551234"
+                sipTerminationUrl:
+                  type: string
+                  description: The SIP URI where calls should be routed to your infrastructure
+                  example: "sip:trunk.your-provider.com"
+                name:
+                  type: string
+                  description: A friendly display name for this number
+                  example: "Main Support Line"
+                sipUsername:
+                  type: string
+                  description: Username for SIP authentication (if your trunk requires it)
+                  example: "my-sip-user"
+                sipPassword:
+                  type: string
+                  description: Password for SIP authentication (if your trunk requires it)
+                  example: "my-sip-password"
+            example:
+              phoneNumber: "+14155551234"
+              sipTerminationUrl: "sip:trunk.your-provider.com"
+              name: "Main Support Line"
+              sipUsername: ""
+              sipPassword: ""
+      responses:
+        "200":
+          description: Phone number imported successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      phoneNumber:
+                        type: string
+                        description: The imported phone number
+                        example: "+14155551234"
+                      isActive:
+                        type: boolean
+                        description: Whether the number is active and ready to use
+                        example: true
+        "400":
+          description: Bad request — missing required fields or phone number already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "Phone number is required"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
   /webhook:
     get:
       summary: Get webhooks
