@@ -1,12 +1,16 @@
 ---
-title: "Keyword Boosting"
-description: "Boost specific words or phrases so the speech-to-text model recognizes them correctly."
+title: 'Keyword Boosting'
+description: 'Boost specific words or phrases so the speech-to-text model recognizes them correctly'
 icon: "arrow-up-right-dots"
 ---
 
-Boost specific words or phrases so the speech-to-text model is more likely to recognize them correctly — useful for proper nouns, brand names, technical terms, or domain-specific vocabulary.
+<Badge color="purple">Real-Time</Badge>
+
+Keyword boosting lets you bias the Pulse speech-to-text model toward specific words or phrases — useful for proper nouns, brand names, technical terms, or domain-specific vocabulary that the model might otherwise misrecognize.
 
 ## Format
+
+Keywords are passed as a **comma-separated string** in the `keywords` query parameter. Each keyword follows the format:
 
 ```
 KEYWORD:INTENSIFIER
@@ -26,33 +30,45 @@ KEYWORD:INTENSIFIER
 | `4-6` | Strong boost — for rare terms the model struggles with |
 | `7-10` | Very strong boost — use sparingly, can over-bias results |
 
-Higher = stronger bias toward that word in the output. Start low and increase if the word still isn't recognized correctly.
+Higher values create a stronger bias toward that word in the output. Start low and increase if the word still isn't recognized correctly.
 
-## API Request
+## Enabling Keyword Boosting
 
-<Note>Keyword boosting is available on the **real-time WebSocket** endpoint only. It is not supported on the pre-recorded HTTP endpoint.</Note>
+### Real-Time WebSocket API
 
-Keywords are passed as a **comma-separated string** in the `keywords` query parameter on the WebSocket URL.
+Add the `keywords` query parameter to your WebSocket connection URL with a comma-separated list of keywords and optional intensifiers.
 
-### Single keyword
+#### Single keyword
 
+```javascript
+const url = new URL("wss://api.smallest.ai/waves/v1/pulse/get_text");
+url.searchParams.append("language", "en");
+url.searchParams.append("encoding", "linear16");
+url.searchParams.append("sample_rate", "16000");
+url.searchParams.append("keywords", "NVIDIA:5");
+
+const ws = new WebSocket(url.toString(), {
+  headers: {
+    Authorization: `Bearer ${API_KEY}`,
+  },
+});
 ```
-wss://api.smallest.ai/waves/v1/pulse/get_text?language=en&encoding=linear16&sample_rate=16000&keywords=NVIDIA:5
-```
 
-### Multiple keywords
+#### Multiple keywords
 
 ```
 wss://api.smallest.ai/waves/v1/pulse/get_text?language=en&encoding=linear16&sample_rate=16000&keywords=Hansi:6,Muller:6,CVV:9
 ```
 
-### Mix of boosted and default-intensity keywords
+#### Mix of boosted and default-intensity keywords
 
 ```
 wss://api.smallest.ai/waves/v1/pulse/get_text?language=en&encoding=linear16&sample_rate=16000&keywords=CEO:3,NVIDIA:5,Jensen
 ```
 
 `Jensen` with no intensifier defaults to `1.0`.
+
+## Examples
 
 ### Boost names in a meeting transcript
 
@@ -66,20 +82,12 @@ wss://api.smallest.ai/waves/v1/pulse/get_text?language=en&encoding=linear16&samp
 wss://api.smallest.ai/waves/v1/pulse/get_text?language=en&encoding=linear16&sample_rate=16000&keywords=Anthropic:5,Claude:4,Sonnet:3
 ```
 
-## Supported Languages
-
-Keyword boosting works with all languages supported by Pulse, including English, Hindi, Marathi, Gujarati, and more.
-
 ## Limits
 
 - Max **100 keywords** per session
 - Intensifier must be a **non-negative number**
 - Each keyword must be a **string**
 
-## Need Help?
-
-<Card title="Join the Community" icon="fa-brands fa-discord" href="https://discord.gg/5evETqguJs">
-  Ask questions, share what you're building, and connect with other developers on Discord.
-</Card>
-
-If you need direct assistance, reach out at [support@smallest.ai](mailto:support@smallest.ai).
+<Note>
+Start with lower intensifier values (1–3) and increase gradually. Very high values (7–10) can over-bias the model and should be used sparingly.
+</Note>
