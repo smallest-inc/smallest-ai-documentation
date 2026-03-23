@@ -1,11 +1,83 @@
 ---
-title: "Word Boosting"
-description: "Improve recognition accuracy for specific words, phrases, and domain terms."
+title: "Keyword Boosting"
+description: "Boost specific words or phrases so the speech-to-text model recognizes them correctly."
 icon: "arrow-up-right-dots"
 ---
 
-<Badge color="yellow">Coming Soon</Badge>
+Boost specific words or phrases so the speech-to-text model is more likely to recognize them correctly — useful for proper nouns, brand names, technical terms, or domain-specific vocabulary.
 
-Word boosting allows you to improve transcription accuracy for specific words, phrases, brand names, and domain-specific terminology by increasing their likelihood during recognition.
+## Format
 
-This feature is currently under development. Join our [Discord community](https://discord.gg/5evETqguJs) to be notified when it launches.
+```
+KEYWORD:INTENSIFIER
+```
+
+| Part | Required | Description |
+|---|---|---|
+| `KEYWORD` | Yes | The word or phrase to boost |
+| `INTENSIFIER` | No | A number controlling boost strength. Defaults to `1.0` if omitted |
+
+## Intensifier Scale
+
+| Value | Effect |
+|---|---|
+| `1` | Mild boost (default if omitted) |
+| `2-3` | Moderate boost — good for uncommon proper nouns |
+| `4-6` | Strong boost — for rare terms the model struggles with |
+| `7-10` | Very strong boost — use sparingly, can over-bias results |
+
+Higher = stronger bias toward that word in the output. Start low and increase if the word still isn't recognized correctly.
+
+## API Request
+
+Keywords are passed as a **comma-separated string** in the `keywords` query parameter.
+
+### Single keyword
+
+```
+wss://api.smallest.ai/waves/v1/pulse/get_text?language=en&encoding=linear16&sample_rate=16000&keywords=NVIDIA:5
+```
+
+### Multiple keywords
+
+```
+wss://api.smallest.ai/waves/v1/pulse/get_text?language=en&encoding=linear16&sample_rate=16000&keywords=Hansi:6,Muller:6,CVV:9
+```
+
+### Mix of boosted and default-intensity keywords
+
+```
+wss://api.smallest.ai/waves/v1/pulse/get_text?language=en&encoding=linear16&sample_rate=16000&keywords=CEO:3,NVIDIA:5,Jensen
+```
+
+`Jensen` with no intensifier defaults to `1.0`.
+
+### Boost names in a meeting transcript
+
+```
+wss://api.smallest.ai/waves/v1/pulse/get_text?language=en&encoding=linear16&sample_rate=16000&keywords=Jensen:4,NVIDIA:5,Blackwell:6,CUDA:3
+```
+
+### Boost brand names and product terms
+
+```
+wss://api.smallest.ai/waves/v1/pulse/get_text?language=en&encoding=linear16&sample_rate=16000&keywords=Anthropic:5,Claude:4,Sonnet:3
+```
+
+## Supported Languages
+
+Keyword boosting works with all languages supported by Pulse, including English, Hindi, Marathi, Gujarati, and more.
+
+## Limits
+
+- Max **100 keywords** per session
+- Intensifier must be a **non-negative number**
+- Each keyword must be a **string**
+
+## Need Help?
+
+<Card title="Join the Community" icon="fa-brands fa-discord" href="https://discord.gg/5evETqguJs">
+  Ask questions, share what you're building, and connect with other developers on Discord.
+</Card>
+
+If you need direct assistance, reach out at [support@smallest.ai](mailto:support@smallest.ai).
