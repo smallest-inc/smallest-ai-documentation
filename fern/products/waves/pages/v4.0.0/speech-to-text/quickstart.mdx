@@ -29,20 +29,31 @@ Here's the sample audio we'll transcribe:
   Your browser does not support the audio element.
 </audio>
 
-Paste this cURL — no install required:
+First, generate a test audio file (or use any WAV file you have):
+
+```bash
+curl -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello from Smallest AI.", "voice_id": "magnus", "sample_rate": 24000, "output_format": "wav"}' \
+  --output audio.wav
+```
+
+Now transcribe it:
 
 ```bash
 curl -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
   -H "Authorization: Bearer $SMALLEST_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"}'
+  -H "Content-Type: audio/wav" \
+  --data-binary @audio.wav
 ```
 
 You'll get back:
 
 ```json
 {
-  "transcription": "This is a sample audio file for testing speech to text transcription with the Pulse API."
+  "status": "success",
+  "transcription": "Hello from smallest AI!"
 }
 ```
 
