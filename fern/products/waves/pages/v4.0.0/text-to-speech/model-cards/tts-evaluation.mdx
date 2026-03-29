@@ -1,0 +1,160 @@
+---
+title: "TTS Evaluation Script"
+description: "WebSocket-based evaluation script for measuring Lightning v3.1 TTFB and audio quality."
+icon: "flask-vial"
+---
+
+A standalone Python script for evaluating Lightning v3.1 synthesis performance over WebSocket. Connects to the streaming endpoint, sends text for synthesis, measures time-to-first-byte (TTFB), and saves the output as a WAV file.
+
+Use this to benchmark latency in your own environment, validate audio output quality, or integrate into automated evaluation pipelines.
+
+## Prerequisites
+
+```bash
+pip install websocket-client
+```
+
+## Configuration
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `WS_URL` | `wss://waves-api.smallest.ai/api/v1/lightning-v3.1/get_speech/stream` | WebSocket endpoint |
+| `TOKEN` | — | Your Smallest AI API key |
+| `VOICE_ID` | `quinn` | Voice identifier |
+| `SAMPLE_TEXT` | `Hi, this is sample text.` | Input text to synthesize |
+| `OUTPUT_PATH` | `output.wav` | Output file path |
+| `SAMPLE_RATE` | `44100` | Audio sample rate in Hz |
+| `SPEED` | `1.0` | Speech speed (0.5-2.0) |
+| `LANGUAGE` | `auto` | Language code or `auto` for detection |
+
+## Script
+
+```python
+#!/usr/bin/env python3
+
+import time
+import json
+import base64
+import wave
+from websocket import WebSocketApp
+
+# =========== CONFIG ===========
+WS_URL = "wss://waves-api.smallest.ai/api/v1/lightning-v3.1/get_speech/stream"
+TOKEN = "<YOUR_API_KEY>"
+
+HEADERS = {
+    "Authorization": f"Bearer {TOKEN}"
+}
+
+VOICE_ID    = "quinn"
+SAMPLE_TEXT = "Hi, this is sample text."
+OUTPUT_PATH = "output.wav"
+SAMPLE_RATE = 44100
+SPEED       = 1.0
+LANGUAGE    = "auto"
+
+
+def save_wav(chunks, path, sample_rate=44100):
+    """Decode base64 audio chunks and write a 16-bit mono WAV file."""
+    pcm_data = b"".join(base64.b64decode(c) for c in chunks)
+    with wave.open(path, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm_data)
+    print(f"Saved audio to: {path}")
+
+
+def tts_and_save(text, voice_id, output_path):
+    audio_chunks = []
+    start_time = None
+    ttfb_ms = None
+
+    def on_open(ws):
+        nonlocal start_time
+        payload = {
+            "voice_id": voice_id,
+            "text": text,
+            "language": LANGUAGE,
+            "sample_rate": SAMPLE_RATE,
+            "speed": SPEED,
+        }
+        start_time = time.time()
+        ws.send(json.dumps(payload))
+        print("Request sent...")
+
+    def on_message(ws, message):
+        nonlocal ttfb_ms
+        data = json.loads(message)
+        status = data.get("status") or data.get("payload", {}).get("status")
+
+        if status == "error":
+            raise Exception(data.get("message", "Unknown error"))
+
+        audio_b64 = data.get("data", {}).get("audio")
+
+        # Measure TTFB on first audio chunk
+        if audio_b64 and ttfb_ms is None:
+            ttfb_ms = (time.time() - start_time) * 1000
+            print(f"Time to first byte: {ttfb_ms:.1f} ms")
+
+        if audio_b64:
+            audio_chunks.append(audio_b64)
+
+        if status == "complete":
+            ws.close()
+
+    def on_error(ws, error):
+        print("WebSocket error:", error)
+        ws.close()
+
+    def on_close(ws, *args):
+        total_ms = (time.time() - start_time) * 1000
+        print(f"Total time: {total_ms:.1f} ms")
+
+        if audio_chunks:
+            save_wav(audio_chunks, output_path, sample_rate=SAMPLE_RATE)
+        else:
+            print("No audio received.")
+
+    ws = WebSocketApp(
+        WS_URL,
+        header=[f"{k}: {v}" for k, v in HEADERS.items()],
+        on_open=on_open,
+        on_message=on_message,
+        on_error=on_error,
+        on_close=on_close,
+    )
+    ws.run_forever()
+
+
+if __name__ == "__main__":
+    tts_and_save(SAMPLE_TEXT, VOICE_ID, OUTPUT_PATH)
+```
+
+## Usage
+
+1. Replace `<YOUR_API_KEY>` with your Smallest AI API key.
+2. Adjust `VOICE_ID`, `SAMPLE_TEXT`, `SAMPLE_RATE`, and other parameters as needed.
+3. Run the script:
+
+```bash
+python tts_eval.py
+```
+
+Expected output:
+
+```
+Request sent...
+Time to first byte: 187.3 ms
+Total time: 1243.6 ms
+Saved audio to: output.wav
+```
+
+## What It Measures
+
+| Metric | Description |
+|--------|-------------|
+| **TTFB** | Time from WebSocket send to first audio chunk received. Primary latency indicator for real-time applications. |
+| **Total time** | Time from send to connection close (all chunks received). Reflects full synthesis duration. |
+| **Audio output** | Saved WAV file for manual listening or automated quality evaluation (e.g., WVMOS, MOS scoring). |

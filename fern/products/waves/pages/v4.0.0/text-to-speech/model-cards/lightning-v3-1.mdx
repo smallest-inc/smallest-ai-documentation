@@ -1,20 +1,22 @@
 ---
 title: "Lightning v3.1"
-description: "Model card for Lightning v3.1 — high-fidelity, low-latency text-to-speech at 44 kHz with voice cloning, streaming, and multi-language support."
+description: "Model card for Lightning v3.1. High-fidelity, low-latency text-to-speech at 44 kHz with voice cloning, streaming, and 15-language support."
 icon: "sparkles"
 ---
 
-Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering natural, expressive, and realistic speech at 44 kHz. Optimized for real-time applications with ultra-low latency and voice cloning support, it delivers broadcast-quality audio with genuinely conversational characteristics.
+<Badge color="green">Latest Release</Badge>
+
+Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering natural, expressive, and realistic speech at 44 kHz. Optimized for real-time applications with ultra-low latency and voice cloning support, it delivers broadcast-quality audio with genuinely conversational characteristics. Now with 15 languages, automatic language detection, and code-switching.
 
 <CardGroup cols={4}>
   <Card title="44.1 kHz" icon="waveform-lines">
     Native sample rate
   </Card>
-  <Card title="200ms" icon="bolt">
+  <Card title="100ms" icon="bolt">
     Latency at 20 concurrent requests
   </Card>
-  <Card title="4 Languages" icon="globe">
-    English, Hindi, Spanish, Tamil
+  <Card title="15 Languages" icon="globe">
+    Auto-detection + code-switching
   </Card>
   <Card title="3.3x" icon="gauge-high">
     Real-time factor (faster than playback)
@@ -27,7 +29,7 @@ Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering n
 |---|---|
 | **Developed by** | Smallest AI |
 | **Model type** | Text-to-Speech / Speech Synthesis |
-| **Languages** | English, Hindi, Spanish, Tamil |
+| **Languages** | 15 (auto-detection + code-switching) |
 | **License** | Proprietary |
 | **Version** | v3.1 |
 | **Native sample rate** | 44,100 Hz |
@@ -39,10 +41,19 @@ Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering n
     Ultra-low latency architecture designed for conversational AI and live streaming.
   </Card>
   <Card title="Voice Cloning" icon="microphone">
-    Instant voice cloning with just 5-15 seconds of audio. Professional cloning available on demand.
+    Instant voice cloning with just 5-15 seconds of audio via API and console.
   </Card>
   <Card title="Streaming" icon="broadcast-tower">
     HTTP, SSE, and WebSocket support for real-time applications.
+  </Card>
+  <Card title="Multi-Language" icon="globe">
+    15 languages with automatic detection and code-switching. No restarts or reconnections needed.
+  </Card>
+  <Card title="High Fidelity" icon="waveform-lines">
+    Broadcast-quality 44.1 kHz audio with natural prosody, intonation, and conversational rhythm.
+  </Card>
+  <Card title="Pronunciation Control" icon="spell-check">
+    Custom pronunciation dictionaries for specialized vocabulary, brand names, and domain-specific terms.
   </Card>
 </CardGroup>
 
@@ -50,10 +61,12 @@ Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering n
 
 ## Performance & Benchmarks
 
-In blind listening tests against OpenAI GPT-4o-mini-TTS, Lightning v3.1 was preferred by listeners **76.2% of the time** — a 3.4x preference ratio.
+### Audio Generation Evaluation
+
+Full-sentence audio generation. The entire text is synthesized in a single pass and then evaluated.
 
 <Note>
-  **Evaluation:** Seed TTS dataset, 1,088 samples across English, Hindi, Spanish, and Tamil. LLM-as-a-Judge framework with ASR-based intelligibility testing.
+  **Evaluation:** Seed TTS dataset, 1,088 English samples. LLM-as-a-Judge framework.
 </Note>
 
 <Tabs>
@@ -67,7 +80,7 @@ In blind listening tests against OpenAI GPT-4o-mini-TTS, Lightning v3.1 was pref
 | | Native Sample Rate | 44.1 kHz | Highest fidelity among Lightning models |
 | **Intelligibility** | Word Error Rate (WER) | 6.3% | 93.7% word accuracy |
 | | Character Error Rate (CER) | 1.6% | Excellent character-level accuracy |
-| **Latency & Speed** | Latency | 200ms | At 20 concurrent requests |
+| **Latency & Speed** | Latency | 100ms | At 20 concurrent requests |
 | | Real-Time Factor (RTF) | 0.3 | 3.3x faster than playback |
 | | Speed Control | 0.5x - 2.0x | Adjustable playback speed |
 | | Max Chunk Size | 250 chars | Optimal: 140 characters per request |
@@ -93,72 +106,176 @@ In blind listening tests against OpenAI GPT-4o-mini-TTS, Lightning v3.1 was pref
   </Tab>
 </Tabs>
 
+### Agent Call Evaluation
+
+Chunk-by-chunk audio generation. Simulates real-world voice agent behavior where text is streamed and synthesized incrementally, as it happens during live calls.
+
+<Note>
+  **Evaluation:** Seed TTS dataset, 1,088 English samples. LLM-as-a-Judge framework.
+</Note>
+
+<Tabs>
+  <Tab title="Lightning v3.1">
+
+| Category | Metric | Score | Notes |
+|----------|--------|-------|-------|
+| **Audio Quality** | MOS | 3.89 | Highest among all models tested |
+| | Audio Quality | 3.80 | Broadcast-quality audio |
+| | Overall Naturalness | 3.33 | Most natural-sounding output |
+| | Naturalness | 2.67 | — |
+| **Intelligibility** | Word Error Rate (WER) | 5.38% | 94.6% word accuracy |
+| | Character Error Rate (CER) | 1.54% | Excellent character-level accuracy |
+| **Prosody** | Pronunciation | 3.80 | Near-perfect articulation |
+| | Intonation | 3.33 | Expressive pitch variation |
+| | Prosody | 3.07 | Natural conversational rhythm |
+
+  </Tab>
+  <Tab title="OpenAI">
+
+| Category | Metric | Score |
+|----------|--------|-------|
+| **Audio Quality** | MOS | 3.73 |
+| | Audio Quality | 3.79 |
+| | Overall Naturalness | 3.14 |
+| | Naturalness | 2.45 |
+| **Intelligibility** | Word Error Rate (WER) | 6.00% |
+| | Character Error Rate (CER) | 1.43% |
+| **Prosody** | Pronunciation | 3.66 |
+| | Intonation | 3.04 |
+| | Prosody | 2.76 |
+
+  </Tab>
+  <Tab title="Cartesia Sonic 3">
+
+| Category | Metric | Score |
+|----------|--------|-------|
+| **Audio Quality** | MOS | 3.66 |
+| | Audio Quality | 3.80 |
+| | Overall Naturalness | 3.25 |
+| | Naturalness | 2.67 |
+| **Intelligibility** | Word Error Rate (WER) | 5.29% |
+| | Character Error Rate (CER) | 1.84% |
+| **Prosody** | Pronunciation | 3.73 |
+| | Intonation | 3.07 |
+| | Prosody | 3.00 |
+
+  </Tab>
+  <Tab title="ElevenLabs Turbo 2.5">
+
+| Category | Metric | Score |
+|----------|--------|-------|
+| **Audio Quality** | MOS | 3.75 |
+| | Audio Quality | 3.73 |
+| | Overall Naturalness | 3.20 |
+| | Naturalness | 2.47 |
+| **Intelligibility** | Word Error Rate (WER) | 6.14% |
+| | Character Error Rate (CER) | 1.66% |
+| **Prosody** | Pronunciation | 3.67 |
+| | Intonation | 3.20 |
+| | Prosody | 2.93 |
+
+  </Tab>
+</Tabs>
+
+Want to reproduce these results? See the [TTS evaluation script](/waves/model-cards/text-to-speech/tts-evaluation) to measure TTFB and synthesis quality in your own environment.
+
 ---
 
 ## Supported Languages
 
 <Note>
-  **Automatic Language Detection & Language Switching:** Set `language` to `"auto"` (default) and Lightning v3.1 will automatically detect the language from input text. The model also supports language switching within a single session — no need to restart or reconnect when switching between supported languages.
+  **Automatic Language Detection & Code-Switching:** Set `language` to `"auto"` (default) and Lightning v3.1 will automatically detect the language from input text. The model also supports code-switching within a single session without requiring a restart or reconnection.
 </Note>
 
 | Language | Code | Status |
 |----------|------|--------|
 | English | `en` | Available |
-| Hindi | `hi` | Available |
 | Spanish | `es` | Available |
+| Hindi | `hi` | Available |
 | Tamil | `ta` | Available |
-| Italian | `it` | Coming soon |
-| French | `fr` | Coming soon |
-| Portuguese | `pt` | Coming soon |
-| Swedish | `sv` | Coming soon |
-| Dutch | `nl` | Coming soon |
-| German | `de` | Coming soon |
-| Telugu | `te` | Coming soon |
-| Malayalam | `ml` | Coming soon |
-| Kannada | `kn` | Coming soon |
-| Marathi | `mr` | Coming soon |
-| Gujarati | `gu` | Coming soon |
+| Kannada | `kn` | Available |
+| Telugu | `te` | Available |
+| Malayalam | `ml` | Available |
+| Marathi | `mr` | Available |
+| Gujarati | `gu` | Available |
+| French | `fr` | Available <Badge color="blue">Beta</Badge> |
+| Italian | `it` | Available <Badge color="blue">Beta</Badge> |
+| Dutch | `nl` | Available <Badge color="blue">Beta</Badge> |
+| Swedish | `sv` | Available <Badge color="blue">Beta</Badge> |
+| Portuguese | `pt` | Available <Badge color="blue">Beta</Badge> |
+| German | `de` | Available <Badge color="blue">Beta</Badge> |
 
 ---
 
 ## Voice Catalog
 
-### English Voices
+### English (US) — Best Voices
 
-| Voice ID | Name | Gender | Accent | Languages |
-|----------|------|--------|--------|-----------|
-| `magnus` | Magnus | Male | American | English |
-| `olivia` | Olivia | Female | American | English |
-| `daniel` | Daniel | Male | American | English |
-| `rachel` | Rachel | Female | American | English |
-| `nicole` | Nicole | Female | American | English |
-| `elizabeth` | Elizabeth | Female | American | English |
-| `kyle` | Kyle | Male | American | English |
+| Voice ID | Name | Gender |
+|----------|------|--------|
+| `quinn` | Quinn | Female |
+| `mia` | Mia | Female |
+| `magnus` | Magnus | Male |
+| `olivia` | Olivia | Female |
+| `daniel` | Daniel | Male |
+| `rachel` | Rachel | Female |
+| `nicole` | Nicole | Female |
+| `elizabeth` | Elizabeth | Female |
 
-### Hindi Voices
+### Hindi / English — Best Voices
 
-| Voice ID | Name | Gender | Accent | Languages |
-|----------|------|--------|--------|-----------|
-| `aarush` | Aarush | Male | Indian | English, Hindi |
-| `sakshi` | Sakshi | Female | Indian | English, Hindi |
-| `parth` | Parth | Male | Indian | English, Hindi |
-| `sana` | Sana | Female | Indian | English, Hindi |
-| `vivaan` | Vivaan | Male | Indian | English, Hindi |
+| Voice ID | Name | Gender |
+|----------|------|--------|
+| `neel` | Neel | Male |
+| `maithili` | Maithili | Female |
+| `devansh` | Devansh | Male |
+| `sameera` | Sameera | Female |
+| `mihir` | Mihir | Male |
+| `aarush` | Aarush | Male |
+| `sakshi` | Sakshi | Female |
+| `vivaan` | Vivaan | Male |
+| `srishti` | Srishti | Female |
+
+### Spanish — Best Voices
+
+| Voice ID | Name | Gender |
+|----------|------|--------|
+| `daniella` | Daniella | Female |
+| `sandra` | Sandra | Female |
+| `carlos` | Carlos | Male |
+| `jose` | Jose | Male |
+| `luis` | Luis | Male |
+| `mariana` | Mariana | Female |
+| `miguel` | Miguel | Male |
+
+### Other Indian Languages — Best Voices
+
+| Language | Voice ID | Name | Gender |
+|----------|----------|------|--------|
+| Tamil | `jeevan` | Jeevan | Male |
+| Tamil | `rajeshwari` | Rajeshwari | Female |
+| Malayalam | `vaisakh` | Vaisakh | Male |
+| Malayalam | `shibi` | Shibi | Female |
+| Telugu | `srihari` | Srihari | Male |
+| Telugu | `padmaja` | Padmaja | Female |
+| Marathi | `rupali` | Rupali | Female |
+| Marathi | `nilesh` | Nilesh | Male |
+| Gujarati | `niharika` | Niharika | Female |
+| Gujarati | `dhruvit` | Dhruvit | Male |
+| Kannada | `deepashri` | Deepashri | Female |
+| Kannada | `pranav` | Pranav | Male |
 
 ### Voice Cloning
 
-<CardGroup cols={2}>
-  <Card title="Instant Voice Cloning" icon="clock">
-    **Audio required:** 5-15 seconds
+<Card title="Instant Voice Cloning" icon="clock">
+  **Audio required:** 5-15 seconds
 
-    Self-serve voice cloning available via API and console. Captures core voice characteristics for quick replication.
-  </Card>
-  <Card title="Professional Voice Cloning" icon="star">
-    **Audio required:** 45+ minutes (high-quality)
+  Self-serve voice cloning available via API and console. Captures core voice characteristics for quick replication.
+</Card>
 
-    Near-perfect voice match capturing intonation, accent, emotions, and vocal nuances. Available on demand — contact [support@smallest.ai](mailto:support@smallest.ai) to get started.
-  </Card>
-</CardGroup>
+<Card title="Try Voice Cloning" icon="microphone" href="https://app.smallest.ai/dashboard/voice-cloning">
+  Clone a voice from a 5-15 second audio sample directly in the console. No code required.
+</Card>
 
 ---
 
@@ -168,9 +285,9 @@ In blind listening tests against OpenAI GPT-4o-mini-TTS, Lightning v3.1 was pref
 
 | Endpoint | Method | Use Case |
 |----------|--------|----------|
-| `/waves/v1/lightning-v3.1/get_speech` | POST | Synchronous synthesis |
-| `/waves/v1/lightning-v3.1/stream` | POST (SSE) | Server-sent events streaming |
-| `/waves/v1/lightning-v3.1/get_speech/stream` | WebSocket | Real-time streaming |
+| `https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech` | POST | Synchronous synthesis |
+| `https://api.smallest.ai/waves/v1/lightning-v3.1/stream` | POST (SSE) | Server-sent events streaming |
+| `wss://api.smallest.ai/waves/v1/lightning-v3.1/get_speech/stream` | WebSocket | Real-time streaming |
 
 ### Request Parameters
 
@@ -180,12 +297,12 @@ In blind listening tests against OpenAI GPT-4o-mini-TTS, Lightning v3.1 was pref
 | `voice_id` | string | Yes | — | Voice identifier |
 | `sample_rate` | integer | No | 44100 | Output sample rate (Hz) |
 | `speed` | float | No | 1.0 | Speech speed (0.5-2.0) |
-| `language` | string | No | `"auto"` | Language code (`en`, `hi`, `es`, `ta`) |
+| `language` | string | No | `"auto"` | Language code or `"auto"` for automatic detection |
 | `output_format` | string | No | `"pcm"` | Audio format |
 | `pronunciation_dicts` | array | No | — | Custom pronunciation IDs (WebSocket only) |
 
-<Card title="Quickstart" icon="rocket" href="/waves/documentation/text-to-speech/quickstart">
-  Get started in minutes with synchronous or streaming synthesis.
+<Card title="Quickstart" icon="rocket" href="/waves/documentation/text-to-speech-lightning/quickstart">
+  Generate your first audio in under a minute with a single API call.
 </Card>
 
 ---
@@ -205,9 +322,9 @@ In blind listening tests against OpenAI GPT-4o-mini-TTS, Lightning v3.1 was pref
 
 | Aspect | Recommendation |
 |--------|----------------|
-| **Language scripts** | English and Spanish in Latin script, Hindi in Devanagari |
+| **Language scripts** | Use native script for each language. English/Spanish/French/Italian/Dutch/Swedish/Portuguese/German in Latin script, Hindi/Marathi/Gujarati in Devanagari, Tamil/Kannada/Telugu/Malayalam in their native scripts |
 | **Break points** | Natural punctuation (`.` `!` `?` `,`) |
-| **Mixed language** | Avoid transliteration — use native script for each language |
+| **Mixed language** | Avoid transliteration. Use native script for each language |
 
 ### Number & Date Handling
 
@@ -228,6 +345,88 @@ In blind listening tests against OpenAI GPT-4o-mini-TTS, Lightning v3.1 was pref
 - Automatic geo-location based routing for lowest latency
 
 </Accordion>
+
+---
+
+## Best Practices
+
+### Code-Switching
+
+Lightning v3.1 supports real-time intra-session language switching via two mutually exclusive language groups. Each group shares a unified phoneme space, enabling seamless mid-utterance transitions between member languages without session re-initialization. Cross-group switching is not supported within a single session.
+
+#### Language Groups
+
+**Indic Group.** Optimized for South Asian language pairs with English as the bridging language.
+
+| Language | Code |
+|----------|------|
+| English | `en` |
+| Hindi | `hi` |
+| Tamil | `ta` |
+| Telugu | `te` |
+| Malayalam | `ml` |
+| Kannada | `kn` |
+| Marathi | `mr` |
+| Gujarati | `gu` |
+
+**Global Group.** Optimized for European language pairs with English and Hindi as bridging languages.
+
+| Language | Code |
+|----------|------|
+| English | `en` |
+| Hindi | `hi` |
+| Spanish | `es` |
+| French | `fr` |
+| Italian | `it` |
+| Portuguese | `pt` |
+| German | `de` |
+| Dutch | `nl` |
+| Swedish | `sv` |
+
+Intra-group switching is unrestricted. Any language within the same group can be interleaved at the token level. Cross-group switching (e.g., Tamil from Indic + French from Global) is architecturally unsupported and will produce undefined behavior.
+
+<Warning>
+`en` and `hi` exist in both groups. All other languages are exclusive to one group. The group is determined at session initialization based on the first non-shared language encountered. Design your session's language set accordingly.
+</Warning>
+
+#### Routing Examples
+
+```
+// Indic group — Hindi <-> Tamil interleaving
+"Valid: all languages within Indic group"
+
+// Global group — Spanish <-> French interleaving
+"Valid: all languages within Global group"
+
+// Cross-group — Tamil (Indic) + French (Global)
+"Invalid: cross-group switching unsupported"
+```
+
+### Voice Cloning
+
+#### Reference Audio
+
+- **Environment.** Record in a quiet room with no background noise, hiss, or rumble. Ambient sound is captured in the clone and cannot be removed after the fact.
+- **Speaking style.** Speak naturally in your normal conversational voice. The model captures timbre, accent, emotional tone, rhythm, and pacing automatically. Do not exaggerate unless a specific tone is intended.
+- **Audio length.** Provide 5 to 15 seconds of clean, continuous speech.
+
+#### Multi-Lingual Cloning
+
+- **Language matching.** For best results, record reference audio in the same language as your intended output. Cross-lingual cloning is supported (e.g., English reference used for Spanish output), but a language-matched reference produces higher fidelity.
+- **Accent retention.** When synthesizing in a different language than the reference, the original accent is preserved. A clone from a South Indian English speaker will retain that accent in Hindi or Tamil output. This is by design: the clone reproduces your voice, including accent characteristics. For accent-neutral output in a specific language, provide reference audio from a native speaker of that language.
+- **Script encoding.** Input text must use native script for each language (Devanagari for Hindi/Marathi/Gujarati, respective Brahmic scripts for Dravidian languages, Latin for European languages). Transliterated input degrades synthesis quality.
+- **Group constraint.** Cloned voices follow the same language group routing rules. A session initialized in the Indic group cannot switch to Global-exclusive languages, regardless of the voice's source language.
+
+For detailed recording examples and expressive cloning techniques, see [Voice Cloning Best Practices](/waves/documentation/best-practices/vc-best-practices).
+
+### Text Formatting
+
+- **Chunk boundaries.** Segment input at natural prosodic boundaries (`.` `!` `?` `,`). Maximum chunk size is 250 characters; optimal throughput at 140 characters per request.
+- **Script integrity.** Avoid transliteration. Use native script for each language. Mixed-script input within a single language token produces unpredictable phoneme mappings.
+- **Numeric normalization.** Use standard formats (`DD/MM/YYYY`, `HH:MM`). Phone numbers default to 3-4-3 digit grouping.
+- **Lexicon overrides.** Use [pronunciation dictionaries](/waves/documentation/text-to-speech-lightning/pronunciation-dictionaries) for domain-specific terms, brand names, and acronyms where default grapheme-to-phoneme conversion is insufficient.
+
+For comprehensive text formatting rules (numeric handling, date/time, symbols, chunking logic), see [TTS Best Practices](/waves/documentation/best-practices/tts-best-practices).
 
 ---
 
@@ -255,10 +454,10 @@ In blind listening tests against OpenAI GPT-4o-mini-TTS, Lightning v3.1 was pref
 
 ### Known Limitations
 
-- Mixed-language text (transliteration) may produce suboptimal results. Hindi text should be in Devanagari script (e.g., "नमस्ते"), not Latin (e.g., "Namaste"). English text should be in Latin script, not Devanagari.
+- Mixed-language text (transliteration) may produce suboptimal results. Hindi text should be in Devanagari script (e.g., "namaste" in Devanagari), not Latin. English text should be in Latin script, not Devanagari. Each language should use its native script.
 
 <Note>
-  **Recommendations:** Use proper script for each language. Break long text at natural punctuation points. Use [pronunciation dictionaries](/waves/documentation/text-to-speech/pronunciation-dictionaries) for specialized vocabulary. Test voice selection for your specific use case.
+  **Recommendations:** Use proper script for each language. Break long text at natural punctuation points. Use [pronunciation dictionaries](/waves/documentation/text-to-speech-lightning/pronunciation-dictionaries) for specialized vocabulary. Test voice selection for your specific use case.
 </Note>
 
 <Warning>
@@ -281,4 +480,4 @@ For compliance documentation (GDPR, SOC2, HIPAA), contact [support@smallest.ai](
 | **Support** | [support@smallest.ai](mailto:support@smallest.ai) |
 | **Documentation** | [docs.smallest.ai/waves](https://docs.smallest.ai/waves) |
 | **Console** | [app.smallest.ai](https://app.smallest.ai) |
-| **Community** | [Discord](https://discord.gg/5evETqguJs) |
+| **Community** | [Discord](https://discord.gg/9WtSXv26WE) |
