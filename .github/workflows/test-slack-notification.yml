@@ -1,0 +1,34 @@
+name: Test Slack Notification (delete after testing)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-slack:
+    name: Deliberate failure to test Slack
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail on purpose
+        run: |
+          echo "This step fails deliberately to test Slack notification"
+          exit 1
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "TEST: Slack notification is working",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*TEST: Slack Notification Working* :white_check_mark:\n\nThis is a test message. You can delete the `test-slack-notification.yml` workflow now.\n\n*Run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+                  }
+                }
+              ]
+            }
