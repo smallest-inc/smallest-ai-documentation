@@ -147,6 +147,125 @@ When you're done streaming, send an end signal:
 }
 ```
 
+## Live Microphone Input
+
+Stream audio from your microphone for real-time transcription:
+
+<CodeGroup>
+
+```python Python (PyAudio)
+import asyncio
+import websockets
+import json
+import os
+import pyaudio
+from urllib.parse import urlencode
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+SAMPLE_RATE = 16000
+CHUNK_SIZE = 4096
+
+params = {
+    "language": "en",
+    "encoding": "linear16",
+    "sample_rate": str(SAMPLE_RATE),
+}
+WS_URL = f"wss://api.smallest.ai/waves/v1/pulse/get_text?{urlencode(params)}"
+
+async def transcribe_mic():
+    audio = pyaudio.PyAudio()
+    stream = audio.open(
+        format=pyaudio.paInt16,
+        channels=1,
+        rate=SAMPLE_RATE,
+        input=True,
+        frames_per_buffer=CHUNK_SIZE,
+    )
+
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+
+    async with websockets.connect(WS_URL, additional_headers=headers) as ws:
+        print("Listening... (Ctrl+C to stop)")
+
+        async def send_audio():
+            try:
+                while True:
+                    data = stream.read(CHUNK_SIZE, exception_on_overflow=False)
+                    await ws.send(data)
+                    await asyncio.sleep(0.01)
+            except asyncio.CancelledError:
+                await ws.send(json.dumps({"type": "finalize"}))
+
+        async def receive_transcripts():
+            async for message in ws:
+                result = json.loads(message)
+                prefix = ">> " if result.get("is_final") else ".. "
+                print(f"{prefix}{result.get('transcript', '')}", end="\r" if not result.get("is_final") else "\n")
+
+        send_task = asyncio.create_task(send_audio())
+        try:
+            await receive_transcripts()
+        except websockets.exceptions.ConnectionClosed:
+            pass
+        finally:
+            send_task.cancel()
+            stream.stop_stream()
+            stream.close()
+            audio.terminate()
+
+asyncio.run(transcribe_mic())
+```
+
+```javascript Browser (Web Audio API)
+const API_KEY = "your-api-key"; // In production, get this from your backend
+
+const params = new URLSearchParams({
+  language: "en",
+  encoding: "linear16",
+  sample_rate: "16000",
+});
+
+const ws = new WebSocket(
+  `wss://api.smallest.ai/waves/v1/pulse/get_text?${params}`,
+  ["Authorization", `Bearer ${API_KEY}`]
+);
+
+// Get microphone access
+const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+const audioContext = new AudioContext({ sampleRate: 16000 });
+const source = audioContext.createMediaStreamSource(stream);
+const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+source.connect(processor);
+processor.connect(audioContext.destination);
+
+processor.onaudioprocess = (e) => {
+  if (ws.readyState === WebSocket.OPEN) {
+    const float32 = e.inputBuffer.getChannelData(0);
+    const int16 = new Int16Array(float32.length);
+    for (let i = 0; i < float32.length; i++) {
+      int16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768));
+    }
+    ws.send(int16.buffer);
+  }
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  if (data.is_final) {
+    console.log("Final:", data.transcript);
+  } else {
+    console.log("Partial:", data.transcript);
+  }
+};
+```
+
+</CodeGroup>
+
+<Note>
+**Python**: Install PyAudio with `pip install pyaudio websockets`. On macOS, you may need `brew install portaudio` first.
+</Note>
+
 ## Next Steps
 
 - Learn about [supported audio formats](/waves/documentation/speech-to-text-pulse/realtime-web-socket/audio-formats) for WebSocket streaming.
