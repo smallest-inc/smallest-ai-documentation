@@ -1,14 +1,17 @@
 name: Test Quickstart Code Samples
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'fern/products/waves/pages/v4.0.0/**/*.mdx'
+      - 'fern/products/atoms/pages/**/*.mdx'
   pull_request:
     paths:
-      - 'fern/products/waves/pages/v4.0.0/**/quickstart.mdx'
-      - 'fern/products/waves/pages/v4.0.0/getting-started/introduction.mdx'
-      - 'fern/products/waves/pages/v4.0.0/text-to-speech/how-to-tts.mdx'
-      - 'fern/products/waves/pages/v4.0.0/text-to-speech/stream-tts.mdx'
+      - 'fern/products/waves/pages/v4.0.0/**/*.mdx'
+      - 'fern/products/atoms/pages/**/*.mdx'
   schedule:
-    # Run weekly on Monday at 9am UTC to catch API changes
+    # Weekly Monday 9am UTC — catch API breaking changes
     - cron: '0 9 * * 1'
   workflow_dispatch:
 
@@ -19,62 +22,144 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Test TTS Sync endpoint
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: pip install requests
+
+      # ─── TTS Tests ───
+
+      - name: "TTS: Sync synthesis"
         run: |
-          response=$(curl -s -o /tmp/tts-output.wav -w "%{http_code}" \
+          response=$(curl -s -o /tmp/tts-sync.wav -w "%{http_code}" \
             -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech" \
             -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{"text":"Hello from Smallest AI.","voice_id":"magnus","sample_rate":24000,"output_format":"wav"}')
-          echo "TTS Sync: HTTP $response"
+          echo "HTTP $response, $(stat -c%s /tmp/tts-sync.wav) bytes"
           [ "$response" = "200" ] || exit 1
-          [ $(stat -c%s /tmp/tts-output.wav) -gt 1000 ] || exit 1
+          [ $(stat -c%s /tmp/tts-sync.wav) -gt 1000 ] || exit 1
 
-      - name: Test TTS SSE Stream endpoint
+      - name: "TTS: SSE streaming"
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" \
+          response=$(curl -s -o /tmp/tts-sse.raw -w "%{http_code}" \
             -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/stream" \
             -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{"text":"Hello from streaming.","voice_id":"magnus","sample_rate":24000}')
-          echo "TTS SSE: HTTP $response"
+          echo "HTTP $response, $(stat -c%s /tmp/tts-sse.raw) bytes"
           [ "$response" = "200" ] || exit 1
 
-      - name: Download sample audio
+      - name: "TTS: Python SDK-style call"
         run: |
-          curl -L -o /tmp/audio.wav \
-            "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
-          [ $(stat -c%s /tmp/audio.wav) -gt 1000 ] || exit 1
+          python3 -c "
+          import requests, os
+          r = requests.post(
+              'https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech',
+              headers={'Authorization': 'Bearer ${{ secrets.SMALLEST_API_KEY }}', 'Content-Type': 'application/json'},
+              json={'text': 'Modern problems require modern solutions.', 'voice_id': 'magnus', 'sample_rate': 24000, 'output_format': 'wav'},
+          )
+          assert r.status_code == 200, f'Expected 200, got {r.status_code}: {r.text}'
+          assert len(r.content) > 1000, f'Audio too small: {len(r.content)} bytes'
+          print(f'OK: {len(r.content)} bytes')
+          "
 
-      - name: Test STT Pre-recorded (file upload)
+      # ─── STT Tests ───
+
+      - name: "STT: Download sample audio"
+        run: |
+          curl -sL -o /tmp/audio.wav \
+            "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
+          size=$(stat -c%s /tmp/audio.wav)
+          echo "Downloaded $size bytes"
+          [ "$size" -gt 1000 ] || exit 1
+
+      - name: "STT: Pre-recorded (file upload)"
         run: |
           result=$(curl -s -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
             -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
             -H "Content-Type: audio/wav" \
             --data-binary "@/tmp/audio.wav")
-          echo "STT file upload: $result"
+          echo "$result"
           echo "$result" | grep -q '"status":"success"' || exit 1
+          echo "$result" | grep -q '"transcription"' || exit 1
 
-      - name: Test STT Pre-recorded (URL)
+      - name: "STT: Pre-recorded (URL)"
         run: |
           result=$(curl -s -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
             -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{"url":"https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"}')
-          echo "STT URL: $result"
+          echo "$result"
           echo "$result" | grep -q '"status":"success"' || exit 1
 
-      - name: Test Get Voices
+      - name: "STT: Pre-recorded with features (timestamps + diarize)"
+        run: |
+          result=$(curl -s -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en&word_timestamps=true&diarize=true" \
+            -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
+            -H "Content-Type: audio/wav" \
+            --data-binary "@/tmp/audio.wav")
+          echo "$result" | head -c 500
+          echo "$result" | grep -q '"status":"success"' || exit 1
+          echo "$result" | grep -q '"words"' || exit 1
+
+      - name: "STT: Python URL-based call (as documented in quickstart)"
+        run: |
+          python3 -c "
+          import requests
+          r = requests.post(
+              'https://api.smallest.ai/waves/v1/pulse/get_text',
+              params={'language': 'en'},
+              headers={'Authorization': 'Bearer ${{ secrets.SMALLEST_API_KEY }}', 'Content-Type': 'application/json'},
+              json={'url': 'https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav'},
+              timeout=120,
+          )
+          r.raise_for_status()
+          result = r.json()
+          assert result['status'] == 'success', f'Expected success, got {result}'
+          print(f'OK: {result[\"transcription\"][:80]}...')
+          "
+
+      # ─── Other Endpoints ───
+
+      - name: "Voices: Get voice list"
         run: |
           response=$(curl -s -o /dev/null -w "%{http_code}" \
             "https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices" \
             -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}")
-          echo "Get Voices: HTTP $response"
+          echo "HTTP $response"
           [ "$response" = "200" ] || exit 1
 
-      - name: Test sample audio URL is accessible
+      # ─── External URLs ───
+
+      - name: "External: Cookbook audio sample accessible"
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" -L \
+          response=$(curl -sL -o /dev/null -w "%{http_code}" \
             "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav")
-          echo "Cookbook audio URL: HTTP $response"
+          echo "HTTP $response"
           [ "$response" = "200" ] || exit 1
+
+      # ─── Slack Notification on Failure ───
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "Docs code sample tests failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Docs Code Sample Tests Failed* :x:\n\nOne or more API code samples in the documentation are broken.\n\n*Trigger:* `${{ github.event_name }}` on `${{ github.ref_name }}`\n*Run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+                  }
+                }
+              ]
+            }
