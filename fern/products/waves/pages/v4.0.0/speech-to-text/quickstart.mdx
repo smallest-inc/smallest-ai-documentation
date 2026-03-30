@@ -48,21 +48,13 @@ You'll get back:
 
 ## Step 3: Build It Into Your App
 
-<Note>
-These examples use a local `audio.wav` file. You can use any WAV file, or download our sample:
-
-```bash
-curl -L -o audio.wav "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
-```
-</Note>
-
 <CodeGroup>
 
-```bash cURL (file upload)
+```bash cURL
 curl -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
   -H "Authorization: Bearer $SMALLEST_API_KEY" \
-  -H "Content-Type: audio/wav" \
-  --data-binary "@audio.wav"
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"}'
 ```
 
 ```python Python
@@ -76,9 +68,11 @@ response = requests.post(
     params={"language": "en"},
     headers={
         "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "audio/wav",
+        "Content-Type": "application/json",
     },
-    data=open("audio.wav", "rb").read(),
+    json={
+        "url": "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
+    },
     timeout=120,
 )
 
@@ -87,10 +81,6 @@ print(result["transcription"])
 ```
 
 ```javascript JavaScript
-const fs = require("fs");
-
-const audioData = fs.readFileSync("audio.wav");
-
 const params = new URLSearchParams({ language: "en" });
 const response = await fetch(
   `https://api.smallest.ai/waves/v1/pulse/get_text?${params}`,
@@ -98,9 +88,11 @@ const response = await fetch(
     method: "POST",
     headers: {
       Authorization: `Bearer ${process.env.SMALLEST_API_KEY}`,
-      "Content-Type": "audio/wav",
+      "Content-Type": "application/json",
     },
-    body: audioData,
+    body: JSON.stringify({
+      url: "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
+    }),
   }
 );
 
