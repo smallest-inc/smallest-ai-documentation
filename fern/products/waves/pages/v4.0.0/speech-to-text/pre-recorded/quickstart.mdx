@@ -43,17 +43,17 @@ The API supports two input methods: **Raw Audio Bytes** and **Audio URL**. For d
 
 Upload audio files directly by sending raw audio data:
 
-<Tip>
-Need a test file? Download our sample: `curl -L -o sample.wav "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"`
-</Tip>
-
 <CodeGroup>
 ```bash cURL
+# Download sample audio
+curl -L -o sample.wav "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
+
+# Transcribe
 curl --request POST \
   --url "https://api.smallest.ai/waves/v1/pulse/get_text?language=en&word_timestamps=true" \
   --header "Authorization: Bearer $SMALLEST_API_KEY" \
   --header "Content-Type: audio/wav" \
-  --data-binary "@/path/to/audio.wav"
+  --data-binary "@sample.wav"
 ```
 
 ```python Python
@@ -61,18 +61,21 @@ import os
 import requests
 
 API_KEY = os.environ["SMALLEST_API_KEY"]
-endpoint = "https://api.smallest.ai/waves/v1/pulse/get_text"
-params = {
-    "language": "en",
-    "word_timestamps": "true",
-}
-headers = {
-    "Authorization": f"Bearer {API_KEY}",
-    "Content-Type": "audio/wav",
-}
+SAMPLE_URL = "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
 
-with open("sample.wav", "rb") as audio:
-    response = requests.post(endpoint, params=params, headers=headers, data=audio.read(), timeout=120)
+# Download sample audio
+audio_data = requests.get(SAMPLE_URL).content
+
+response = requests.post(
+    "https://api.smallest.ai/waves/v1/pulse/get_text",
+    params={"language": "en", "word_timestamps": "true"},
+    headers={
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "audio/wav",
+    },
+    data=audio_data,
+    timeout=120,
+)
 
 response.raise_for_status()
 result = response.json()
@@ -80,16 +83,12 @@ print(result["transcription"])
 ```
 
 ```javascript JavaScript
-import fetch from "node-fetch";
-import fs from "fs";
-
 const endpoint = "https://api.smallest.ai/waves/v1/pulse/get_text";
-const params = new URLSearchParams({
-  language: "en",
-  word_timestamps: "true",
-});
+const params = new URLSearchParams({ language: "en", word_timestamps: "true" });
 
-const audioBuffer = fs.readFileSync("sample.wav");
+// Download sample audio
+const audioResponse = await fetch("https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav");
+const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
 
 const response = await fetch(`${endpoint}?${params}`, {
   method: "POST",
@@ -100,7 +99,6 @@ const response = await fetch(`${endpoint}?${params}`, {
   body: audioBuffer,
 });
 
-if (!response.ok) throw new Error(await response.text());
 const data = await response.json();
 console.log(data.transcription);
 ```
@@ -117,7 +115,7 @@ curl --request POST \
   --header "Authorization: Bearer $SMALLEST_API_KEY" \
   --header "Content-Type: application/json" \
   --data '{
-    "url": "https://example.com/audio.mp3"
+    "url": "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
   }'
 ```
 
@@ -136,7 +134,7 @@ headers = {
     "Content-Type": "application/json",
 }
 body = {
-    "url": "https://example.com/audio.mp3"
+    "url": "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
 }
 
 response = requests.post(endpoint, params=params, headers=headers, json=body, timeout=120)
@@ -161,7 +159,7 @@ const response = await fetch(`${endpoint}?${params}`, {
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
-    url: "https://example.com/audio.mp3"
+    url: "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
   }),
 });
 

@@ -67,6 +67,8 @@ ws.onmessage = (event) => {
 import asyncio
 import websockets
 import json
+import os
+import requests
 from urllib.parse import urlencode
 
 BASE_WS_URL = "wss://api.smallest.ai/waves/v1/pulse/get_text"
@@ -78,27 +80,37 @@ params = {
 }
 WS_URL = f"{BASE_WS_URL}?{urlencode(params)}"
 
-API_KEY = "SMALLEST_API_KEY"
+API_KEY = os.environ["SMALLEST_API_KEY"]
+SAMPLE_URL = "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
+CHUNK_SIZE = 4096
 
-async def connect():
-    headers = {
-        "Authorization": f"Bearer {API_KEY}"
-    }
-    
+async def transcribe():
+    # Download sample audio
+    audio_data = requests.get(SAMPLE_URL).content
+    # Skip WAV header (44 bytes) to get raw PCM
+    pcm_data = audio_data[44:]
+
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+
     async with websockets.connect(WS_URL, additional_headers=headers) as ws:
-        print("Connected to STT WebSocket")
-        
-        # Send audio chunks
-        # audio_chunk = b"..."
-        # await ws.send(audio_chunk)
-        
-        # Listen for transcriptions
+        print("Connected to Pulse STT WebSocket")
+
+        # Send audio in chunks
+        for i in range(0, len(pcm_data), CHUNK_SIZE):
+            await ws.send(pcm_data[i:i + CHUNK_SIZE])
+
+        # Signal end of audio
+        await ws.send(json.dumps({"type": "finalize"}))
+
+        # Receive transcription results
         async for message in ws:
             data = json.loads(message)
-            print(f"Transcript: {data.get('transcript')}")
-            print(f"Is final: {data.get('is_final')}")
+            if data.get("is_final"):
+                print(f"Final: {data.get('transcript')}")
+            else:
+                print(f"Partial: {data.get('transcript')}")
 
-asyncio.run(connect())
+asyncio.run(transcribe())
 ```
 </CodeGroup>
 
