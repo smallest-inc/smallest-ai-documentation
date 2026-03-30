@@ -1,0 +1,80 @@
+name: Test Quickstart Code Samples
+
+on:
+  pull_request:
+    paths:
+      - 'fern/products/waves/pages/v4.0.0/**/quickstart.mdx'
+      - 'fern/products/waves/pages/v4.0.0/getting-started/introduction.mdx'
+      - 'fern/products/waves/pages/v4.0.0/text-to-speech/how-to-tts.mdx'
+      - 'fern/products/waves/pages/v4.0.0/text-to-speech/stream-tts.mdx'
+  schedule:
+    # Run weekly on Monday at 9am UTC to catch API changes
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  test-api-samples:
+    name: Verify API code samples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test TTS Sync endpoint
+        run: |
+          response=$(curl -s -o /tmp/tts-output.wav -w "%{http_code}" \
+            -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech" \
+            -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"text":"Hello from Smallest AI.","voice_id":"magnus","sample_rate":24000,"output_format":"wav"}')
+          echo "TTS Sync: HTTP $response"
+          [ "$response" = "200" ] || exit 1
+          [ $(stat -c%s /tmp/tts-output.wav) -gt 1000 ] || exit 1
+
+      - name: Test TTS SSE Stream endpoint
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/stream" \
+            -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"text":"Hello from streaming.","voice_id":"magnus","sample_rate":24000}')
+          echo "TTS SSE: HTTP $response"
+          [ "$response" = "200" ] || exit 1
+
+      - name: Download sample audio
+        run: |
+          curl -L -o /tmp/audio.wav \
+            "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
+          [ $(stat -c%s /tmp/audio.wav) -gt 1000 ] || exit 1
+
+      - name: Test STT Pre-recorded (file upload)
+        run: |
+          result=$(curl -s -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
+            -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
+            -H "Content-Type: audio/wav" \
+            --data-binary "@/tmp/audio.wav")
+          echo "STT file upload: $result"
+          echo "$result" | grep -q '"status":"success"' || exit 1
+
+      - name: Test STT Pre-recorded (URL)
+        run: |
+          result=$(curl -s -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
+            -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"url":"https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"}')
+          echo "STT URL: $result"
+          echo "$result" | grep -q '"status":"success"' || exit 1
+
+      - name: Test Get Voices
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices" \
+            -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}")
+          echo "Get Voices: HTTP $response"
+          [ "$response" = "200" ] || exit 1
+
+      - name: Test sample audio URL is accessible
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" -L \
+            "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav")
+          echo "Cookbook audio URL: HTTP $response"
+          [ "$response" = "200" ] || exit 1
