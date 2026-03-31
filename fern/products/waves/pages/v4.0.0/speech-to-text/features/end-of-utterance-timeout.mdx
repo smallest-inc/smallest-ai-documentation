@@ -1,0 +1,77 @@
+---
+title: 'End-of-Utterance Timeout'
+description: 'Control how long Pulse waits after speech ends before finalizing the transcript'
+---
+
+<Badge color="purple">Real-Time</Badge>
+
+End-of-utterance (EOU) timeout controls how long the model waits in silence after a speaker stops talking before it flushes the transcript as final. Tuning this value lets you balance responsiveness against cutting users off mid-thought.
+
+## How It Works
+
+When speech pauses, Pulse starts a silence timer. If no additional speech is detected within the `eou_timeout_ms` window, the current transcript segment is returned with `is_final: true`.
+
+- **Lower values**: faster turn detection, but more likely to split natural pauses
+- **Higher values**: more tolerant of pauses, but slower finalization
+
+## Enabling EOU Timeout
+
+<Note>
+EOU timeout is currently only available for the Real-Time WebSocket API.
+</Note>
+
+Add `eou_timeout_ms` to your WebSocket connection query parameters. The value must be an integer from `100` to `10000`. Default is `800`.
+
+### Real-Time WebSocket API
+
+```javascript
+const url = new URL("wss://api.smallest.ai/waves/v1/pulse/get_text");
+url.searchParams.append("language", "en");
+url.searchParams.append("encoding", "linear16");
+url.searchParams.append("sample_rate", "16000");
+url.searchParams.append("eou_timeout_ms", "300"); // fast turn-taking
+
+const ws = new WebSocket(url.toString(), {
+  headers: {
+    Authorization: `Bearer ${API_KEY}`,
+  },
+});
+```
+
+## How to Tune It
+
+Start at the default `800` ms, then tune based on your use case:
+
+- Decrease for voice agents that need faster turn-taking
+- Increase for meeting or dictation workflows where speakers pause mid-sentence
+
+## Tuning Guide
+
+| Value | Behavior | Best for |
+| --- | --- | --- |
+| `200-400ms` | Aggressive - responds quickly after short silence | Voice agents, IVR systems, real-time assistants |
+| `500-800ms` | Balanced (default range) - handles natural pauses | Conversational AI, general-purpose transcription |
+| `1000-2000ms` | Patient - waits through longer pauses | Meeting transcription, dictation, accessibility |
+| `3000ms+` | Very patient - rarely flushes early | Lecture capture, users who pause frequently |
+
+## Trade-offs
+
+| Dimension | Low timeout (e.g. `300ms`) | High timeout (e.g. `2000ms`) |
+| --- | --- | --- |
+| Response speed | Fast - transcript finalizes quickly | Slow - waits longer before flushing |
+| Turn accuracy | May split mid-sentence pauses into separate turns | Captures full thoughts including natural pauses |
+| Best for | Voice agents that need snappy replies | Transcription where completeness matters |
+
+## Example
+
+A voice agent needs to detect when the caller is done speaking and respond immediately:
+
+```bash
+wss://api.smallest.ai/waves/v1/pulse/get_text?language=en&encoding=linear16&sample_rate=16000&eou_timeout_ms=300
+```
+
+A meeting transcription system should wait for natural pauses:
+
+```bash
+wss://api.smallest.ai/waves/v1/pulse/get_text?language=en&encoding=linear16&sample_rate=16000&eou_timeout_ms=1500
+```
