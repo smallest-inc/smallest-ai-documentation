@@ -1,0 +1,123 @@
+---
+title: "Pipecat"
+description: "Build real-time voice AI pipelines using Smallest AI TTS with Pipecat."
+icon: "microphone-lines"
+---
+
+This guide walks you through integrating [Smallest AI](https://smallest.ai) TTS into a [Pipecat](https://github.com/pipecat-ai/pipecat) voice pipeline. Pipecat is an open-source Python framework for building real-time voice and multimodal conversational AI agents using a frame-based architecture.
+
+## Code Examples Repository
+
+You can find the full example for this setup in the Pipecat repository:
+
+[Pipecat Example — Smallest AI TTS](https://github.com/pipecat-ai/pipecat/blob/main/examples/foundational/07zl-interruptible-smallest.py)
+
+## Common Steps
+
+### 1. Create a Virtual Environment
+
+To ensure your Python environment is isolated, create a virtual environment:
+
+```bash
+python3 -m venv venv
+```
+
+Activate the virtual environment:
+
+- On Linux/Mac:
+  ```bash
+  source venv/bin/activate
+  ```
+
+- On Windows:
+  ```bash
+  venv\Scripts\activate
+  ```
+
+### 2. Install Pipecat with Smallest AI support
+
+Install the `pipecat-ai` package with the `smallest` extra, which includes WebSocket streaming support:
+
+```bash
+pip install "pipecat-ai[smallest]"
+```
+
+For running the full voice-agent example with Daily transport, also install:
+
+```bash
+pip install "pipecat-ai[smallest,daily,openai,deepgram,silero]"
+```
+
+### 3. Set Up a Daily Room
+
+Pipecat uses [Daily](https://www.daily.co) as its WebRTC transport layer. Sign in at [Daily Dashboard](https://dashboard.daily.co) and create a room to get a room URL and API key.
+
+### 4. Create a `.env` File
+
+Create a `.env` file in the project root directory with the following keys:
+
+```bash
+SMALLEST_API_KEY=...
+DAILY_API_KEY=...
+DAILY_SAMPLE_ROOM_URL=...
+OPENAI_API_KEY=...
+DEEPGRAM_API_KEY=...
+```
+
+---
+
+## Usage
+
+### Initialising `SmallestTTSService`
+
+Import and configure the service in your Pipecat pipeline:
+
+```python
+from pipecat.services.smallest.tts import SmallestTTSService
+
+tts = SmallestTTSService(
+    api_key=os.getenv("SMALLEST_API_KEY"),
+    voice_id="sophia",      # default voice
+    model="lightning-v3.1", # default model
+)
+```
+
+Available configuration options:
+
+| Parameter    | Type  | Default            | Description                                              |
+| ------------ | ----- | ------------------ | -------------------------------------------------------- |
+| `api_key`    | `str` | —                  | Your Smallest AI API key (required)                      |
+| `voice_id`   | `str` | `sophia`           | Voice to use for synthesis                               |
+| `model`      | `str` | `lightning-v3.1`   | TTS model name                                           |
+| `sample_rate`| `int` | `24000`            | Audio sample rate in Hz                                  |
+| `base_url`   | `str` | `wss://waves-api.smallest.ai` | WebSocket base URL                        |
+
+### Running the Full Voice Agent Example
+
+The example script at `examples/foundational/07zl-interruptible-smallest.py` sets up a complete interruptible voice bot using:
+
+- **STT**: Deepgram (real-time WebSocket transcription)
+- **LLM**: OpenAI GPT-4o
+- **TTS**: Smallest AI Lightning v3.1 (WebSocket streaming)
+- **Transport**: Daily WebRTC
+
+Run it with:
+
+```bash
+python examples/foundational/07zl-interruptible-smallest.py
+```
+
+Or connect to a specific Daily room directly:
+
+```bash
+python examples/foundational/07zl-interruptible-smallest.py --url https://your-domain.daily.co/your-room
+```
+
+---
+
+## Notes
+
+- The `SmallestTTSService` uses WebSocket streaming for low-latency, real-time audio delivery — ideal for live voice agents.
+- The service is interruptible: if a user speaks while the bot is talking, audio generation stops immediately and the pipeline re-engages.
+- Ensure that you have added the correct API keys in the `.env` file before running the scripts.
+- For any issues or questions, feel free to open an issue in the [Pipecat repository](https://github.com/pipecat-ai/pipecat) or contact us on [Discord](https://discord.gg/Ub25S48hSf).
