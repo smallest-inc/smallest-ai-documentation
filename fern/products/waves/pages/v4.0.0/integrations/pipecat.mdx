@@ -1,16 +1,16 @@
 ---
 title: "Pipecat"
-description: "Build real-time voice AI pipelines using Smallest AI TTS with Pipecat."
+description: "Build real-time voice AI pipelines using Smallest AI TTS and STT with Pipecat."
 icon: "microphone-lines"
 ---
 
-This guide walks you through integrating [Smallest AI](https://smallest.ai) TTS into a [Pipecat](https://github.com/pipecat-ai/pipecat) voice pipeline. Pipecat is an open-source Python framework for building real-time voice and multimodal conversational AI agents using a frame-based architecture.
+This guide walks you through integrating [Smallest AI](https://smallest.ai) TTS and STT into a [Pipecat](https://github.com/pipecat-ai/pipecat) voice pipeline. Pipecat is an open-source Python framework for building real-time voice and multimodal conversational AI agents using a frame-based architecture.
 
 ## Code Examples Repository
 
 You can find the full example for this setup in the Pipecat repository:
 
-[Pipecat Example — Smallest AI TTS](https://github.com/pipecat-ai/pipecat/blob/main/examples/foundational/07zl-interruptible-smallest.py)
+[Pipecat Example — Smallest AI TTS + STT](https://github.com/pipecat-ai/pipecat/blob/main/examples/foundational/07zl-interruptible-smallest.py)
 
 ## Common Steps
 
@@ -36,7 +36,7 @@ Activate the virtual environment:
 
 ### 2. Install Pipecat with Smallest AI support
 
-Install the `pipecat-ai` package with the `smallest` extra, which includes WebSocket streaming support:
+Install the `pipecat-ai` package with the `smallest` extra, which includes both TTS WebSocket streaming and STT support:
 
 ```bash
 pip install "pipecat-ai[smallest]"
@@ -45,7 +45,7 @@ pip install "pipecat-ai[smallest]"
 For running the full voice-agent example with Daily transport, also install:
 
 ```bash
-pip install "pipecat-ai[smallest,daily,openai,deepgram,silero]"
+pip install "pipecat-ai[smallest,daily,openai,silero]"
 ```
 
 ### 3. Set Up a Daily Room
@@ -61,7 +61,6 @@ SMALLEST_API_KEY=...
 DAILY_API_KEY=...
 DAILY_SAMPLE_ROOM_URL=...
 OPENAI_API_KEY=...
-DEEPGRAM_API_KEY=...
 ```
 
 ---
@@ -70,7 +69,7 @@ DEEPGRAM_API_KEY=...
 
 ### Initialising `SmallestTTSService`
 
-Import and configure the service in your Pipecat pipeline:
+Import and configure the TTS service in your Pipecat pipeline:
 
 ```python
 from pipecat.services.smallest.tts import SmallestTTSService
@@ -92,11 +91,40 @@ Available configuration options:
 | `sample_rate`| `int` | `24000`            | Audio sample rate in Hz                                  |
 | `base_url`   | `str` | `wss://waves-api.smallest.ai` | WebSocket base URL                        |
 
+---
+
+### Initialising `SmallestSTTService`
+
+Import and configure the STT service to transcribe speech using Smallest AI's Pulse model:
+
+```python
+from pipecat.services.smallest.stt import SmallestSTTService
+
+stt = SmallestSTTService(
+    api_key=os.getenv("SMALLEST_API_KEY"),
+    sample_rate=16000,  # default sample rate
+    language="en",      # default language
+)
+```
+
+Available configuration options:
+
+| Parameter     | Type  | Default                        | Description                                              |
+| ------------- | ----- | ------------------------------ | -------------------------------------------------------- |
+| `api_key`     | `str` | —                              | Your Smallest AI API key (required)                      |
+| `sample_rate` | `int` | `16000`                        | Audio sample rate in Hz                                  |
+| `language`    | `str` | `en`                           | Language code for transcription                          |
+| `base_url`    | `str` | `wss://api.smallest.ai`        | WebSocket base URL                                       |
+
+The `SmallestSTTService` connects to the Pulse real-time WebSocket endpoint (`wss://api.smallest.ai/waves/v1/pulse/get_text`) and streams audio frames from the pipeline, returning transcription results with low latency (64ms TTFT).
+
+---
+
 ### Running the Full Voice Agent Example
 
 The example script at `examples/foundational/07zl-interruptible-smallest.py` sets up a complete interruptible voice bot using:
 
-- **STT**: Deepgram (real-time WebSocket transcription)
+- **STT**: Smallest AI Pulse (real-time WebSocket transcription)
 - **LLM**: OpenAI GPT-4o
 - **TTS**: Smallest AI Lightning v3.1 (WebSocket streaming)
 - **Transport**: Daily WebRTC
@@ -118,6 +146,7 @@ python examples/foundational/07zl-interruptible-smallest.py --url https://your-d
 ## Notes
 
 - The `SmallestTTSService` uses WebSocket streaming for low-latency, real-time audio delivery — ideal for live voice agents.
-- The service is interruptible: if a user speaks while the bot is talking, audio generation stops immediately and the pipeline re-engages.
+- The `SmallestSTTService` uses the Pulse real-time WebSocket API, providing state-of-the-art 64ms TTFT for live transcription.
+- The pipeline is interruptible: if a user speaks while the bot is talking, audio generation stops immediately and the pipeline re-engages.
 - Ensure that you have added the correct API keys in the `.env` file before running the scripts.
 - For any issues or questions, feel free to open an issue in the [Pipecat repository](https://github.com/pipecat-ai/pipecat) or contact us on [Discord](https://discord.gg/9WtSXv26WE).
