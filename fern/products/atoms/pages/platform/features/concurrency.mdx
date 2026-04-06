@@ -1,0 +1,215 @@
+---
+title: "Concurrency"
+sidebarTitle: "Concurrency"
+description: "Control how many simultaneous calls your agents can handle with org-level limits and per-agent reservations."
+---
+
+Concurrency controls how many calls can be active at the same time across your organization. Every plan comes with a concurrency limit — for example, 20 concurrent calls on Standard or 100 on Enterprise.
+
+**Location:** Left Sidebar → Concurrency
+
+---
+
+## How It Works
+
+Your organization has a **concurrency pool** — a fixed number of slots that represent how many calls can run simultaneously. When a call starts, it takes a slot. When it ends, the slot is freed for the next call.
+
+If all slots are full, new calls are **queued** and wait until a slot opens up.
+
+<Note>
+  The concurrency limit applies across **all call types** — webcall, chat, telephony outbound, and telephony
+  inbound all share the same pool.
+</Note>
+
+---
+
+## Reserved vs Shared Slots
+
+By default, all your concurrency slots are **shared** — any agent can use any available slot, first-come first-served. This works well when you have a single agent or when all agents have equal priority.
+
+But when you have multiple agents with different priorities, you can **reserve** slots for specific agents. This guarantees that important agents always have capacity, even during peak traffic.
+
+### Shared Pool (Default)
+
+With no reservations configured, all slots are shared:
+
+```
+Organization Limit: 20 slots
+├── All 20 slots are shared
+├── Agent A can use up to 20
+├── Agent B can use up to 20
+└── But combined, they cannot exceed 20
+```
+
+**Example:** Your org has 20 slots. Agent A is handling 15 calls and Agent B wants to make 10 calls. Agent B can only get 5 slots (20 - 15 = 5 available). The remaining 5 calls from Agent B will be queued.
+
+### Reserved Slots
+
+When you reserve slots for an agent, those slots are **guaranteed** — no other agent can use them. This is useful when an agent handles critical calls that should never be queued.
+
+```
+Organization Limit: 20 slots
+├── Agent A: 12 reserved (guaranteed)
+│   ├── Webcall: 2
+│   ├── Chat: 3
+│   ├── Outbound: 4
+│   └── Inbound: 3
+├── Agent B: 5 reserved (guaranteed)
+│   ├── Webcall: 1
+│   ├── Chat: 1
+│   ├── Outbound: 2
+│   └── Inbound: 1
+└── Shared pool: 3 slots (20 - 12 - 5 = 3)
+    └── Any agent can use these on a first-come basis
+```
+
+---
+
+## Reserved + Shared: How They Work Together
+
+Here's the key rule: **reserved slots are guaranteed, and agents can also use shared slots when they need more capacity.**
+
+Let's walk through a scenario:
+
+<Steps>
+  <Step title="Starting state">
+    Org limit: 20. Agent A has 12 reserved, Agent B has 5 reserved. Shared pool: 3.
+  </Step>
+  <Step title="Agent A gets busy">
+    Agent A receives 12 calls → fills all 12 reserved slots. No shared slots used yet.
+  </Step>
+  <Step title="Agent A needs more">
+    Agent A receives 3 more calls → reserved slots are full, so it takes 3 slots from the shared pool. Shared
+    pool is now empty.
+  </Step>
+  <Step title="Agent B arrives">
+    Agent B receives 5 calls → even though the shared pool is empty, Agent B's 5 **reserved slots are
+    guaranteed**. All 5 calls get through immediately.
+  </Step>
+  <Step title="Org is full">
+    Total: Agent A (12 reserved + 3 shared) + Agent B (5 reserved) = 20. The org is at capacity. Any new calls
+    for either agent will be **queued** until a slot frees up.
+  </Step>
+</Steps>
+
+<Warning>
+  Reserved slots for one agent **cannot** be used by another agent, even if they're sitting idle. If Agent A
+  has 12 reserved slots but is only using 4, those 8 empty reserved slots are not available to Agent B —
+  they're held for Agent A.
+</Warning>
+
+---
+
+## Who Can Use What
+
+| Slot Type                          | Who can use it? | When?                                                  |
+| ---------------------------------- | --------------- | ------------------------------------------------------ |
+| **Agent's own reserved slots**     | Only that agent | Always available, guaranteed                           |
+| **Shared pool**                    | Any agent       | First-come first-served, after reserved slots are full |
+| **Another agent's reserved slots** | Nobody else     | Never — reserved slots are exclusive                   |
+
+### Quick Examples
+
+**Scenario 1: Agent within its reservation**
+
+> Agent A has 10 reserved, currently running 7 calls → using 7 reserved slots, 0 shared.
+
+**Scenario 2: Agent exceeding its reservation**
+
+> Agent A has 10 reserved, currently running 14 calls → using 10 reserved + 4 shared.
+
+**Scenario 3: Shared pool is full**
+
+> Shared pool has 5 slots, all in use. Agent B has 8 reserved and is running 6 calls → Agent B gets its 6 calls through reserved slots, no shared needed.
+
+**Scenario 4: Agent with no reservations**
+
+> Agent C has 0 reserved. It can only use the shared pool. If the shared pool is full, Agent C's calls are queued.
+
+---
+
+## Setting Up Reservations
+
+### Viewing Your Concurrency
+
+Navigate to **Concurrency** in the sidebar. You'll see:
+
+- **Total concurrency** — your org's limit (based on your plan)
+- **Reserved bar** — colored segments showing each agent's reservation
+- **Shared** — the remaining unreserved portion (grey)
+
+### Adding an Agent Reservation
+
+1. Click the **Add** button
+2. Select the agent you want to reserve slots for
+3. Set the number of reserved slots per call type:
+   - **Webcall** — browser-based voice calls
+   - **Chat** — text chat conversations
+   - **Outbound** — telephony calls your agent makes
+   - **Inbound** — telephony calls your agent receives
+4. Click **Save**
+
+### Editing Reservations
+
+Click the **...** menu next to any agent in the table, then select **Edit reservations** to change the values.
+
+### Removing an Agent
+
+Click the **...** menu and select **Remove agent** to set all reservations to 0. The freed slots return to the shared pool immediately.
+
+<Tip>
+  Changes take effect **immediately**. If you reduce an agent's reservation while it has active calls, those
+  calls continue running — no calls are ever dropped. The new limits apply to the next call that needs a slot.
+</Tip>
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Start without reservations">
+    If you're just getting started or have a single agent, you don't need reservations. The shared pool works
+    perfectly for simple setups.
+  </Accordion>
+  <Accordion title="Reserve for high-priority agents">
+    Only reserve slots for agents that handle critical workflows — like customer support or payment
+    processing. Let lower-priority agents share the remaining pool.
+  </Accordion>
+  <Accordion title="Don't over-reserve">
+    If you reserve all your slots, the shared pool becomes 0. Agents can still work, but they can't exceed
+    their reservations even if other agents are idle. Leave some shared capacity for flexibility.
+  </Accordion>
+  <Accordion title="Monitor during peak hours">
+    Watch the Concurrency page during high traffic. If agents are consistently queuing, consider upgrading
+    your plan or adjusting reservations.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="What happens when my org hits the concurrency limit?">
+    New calls are queued and wait for a slot to free up. Calls are dispatched in order as slots become
+    available. No calls are dropped — they just wait.
+  </Accordion>
+  <Accordion title="Can I reserve more slots than my org limit?">
+    No. The total reserved across all agents cannot exceed your org's concurrency limit.
+  </Accordion>
+  <Accordion title="Do reserved slots count separately per call type?">
+    Reservations are set per call type (webcall, chat, outbound, inbound), but they all draw from the same
+    org-level pool. An agent's total reservation is the sum across all types.
+  </Accordion>
+  <Accordion title="What if I don't configure any reservations?">
+    Everything works as a shared pool — all agents compete equally for slots. This is the default behavior and
+    works well for most use cases.
+  </Accordion>
+  <Accordion title="Can I change reservations while calls are active?">
+    Yes. Changes apply immediately to new calls. Active calls are never interrupted — they continue until they
+    end naturally.
+  </Accordion>
+  <Accordion title="How do I increase my concurrency limit?">
+    Your concurrency limit is determined by your plan. Contact sales or upgrade your plan to increase it.
+  </Accordion>
+</AccordionGroup>
