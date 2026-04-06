@@ -78,6 +78,16 @@ channels:
               minimum: 0.5
               maximum: 2.0
               default: 1
+            session_id:
+              type: string
+              description: Optional client-provided session identifier for correlation. Only alphanumeric characters, hyphens, underscores, and dots allowed. Max 128 characters. Echoed back in responses as `external_session_id`.
+              maxLength: 128
+              pattern: "^[a-zA-Z0-9_\\-.]+$"
+            request_id:
+              type: string
+              description: Optional client-provided request identifier for correlation. Only alphanumeric characters, hyphens, underscores, and dots allowed. Max 128 characters. Echoed back in responses as `external_request_id`.
+              maxLength: 128
+              pattern: "^[a-zA-Z0-9_\\-.]+$"
         examples:
           - name: basicTts
             payload:
@@ -92,9 +102,18 @@ channels:
         payload:
           type: object
           properties:
+            session_id:
+              type: string
+              description: Internal session identifier (system-generated, stable for the WebSocket connection lifetime).
             request_id:
               type: string
-              description: Unique identifier for the TTS request
+              description: Internal request identifier (system-generated UUID, unique per TTS synthesis).
+            external_session_id:
+              type: string
+              description: Echoed client-provided session_id (omitted if not provided).
+            external_request_id:
+              type: string
+              description: Echoed client-provided request_id (omitted if not provided).
             status:
               type: string
               enum:
@@ -110,13 +129,19 @@ channels:
         examples:
           - name: audioChunk
             payload:
-              request_id: req_abc123
+              session_id: ws_550e8400-e29b
+              request_id: task_6ba7b810-9dad
+              external_session_id: my-session-123
+              external_request_id: my-request-456
               status: chunk
               data:
                 audio: SGVsbG8gV29ybGQ=
           - name: completionStatus
             payload:
-              request_id: req_abc123
+              session_id: ws_550e8400-e29b
+              request_id: task_6ba7b810-9dad
+              external_session_id: my-session-123
+              external_request_id: my-request-456
               status: complete
 operations:
   LightningV31TtsRequest:
@@ -155,9 +180,18 @@ components:
     CompletionStatus:
       type: object
       properties:
+        session_id:
+          type: string
+          description: Internal session identifier (system-generated).
         request_id:
           type: string
-          description: Unique identifier for the TTS request
+          description: Internal request identifier (system-generated).
+        external_session_id:
+          type: string
+          description: Echoed client-provided session_id.
+        external_request_id:
+          type: string
+          description: Echoed client-provided request_id.
         status:
           type: string
           enum:

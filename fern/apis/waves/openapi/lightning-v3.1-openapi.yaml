@@ -45,6 +45,23 @@ paths:
       responses:
         "200":
           description: Synthesized speech retrieved successfully.
+          headers:
+            X-Session-Id:
+              schema:
+                type: string
+              description: Internal session identifier (system-generated UUID).
+            X-Request-Id:
+              schema:
+                type: string
+              description: Internal request identifier (system-generated UUID).
+            X-External-Session-Id:
+              schema:
+                type: string
+              description: Echoed client-provided session_id (empty if not provided).
+            X-External-Request-Id:
+              schema:
+                type: string
+              description: Echoed client-provided request_id (empty if not provided).
           content:
             audio/wav:
               schema:
@@ -118,6 +135,23 @@ paths:
       responses:
         "200":
           description: Synthesized speech retrieved successfully.
+          headers:
+            X-Session-Id:
+              schema:
+                type: string
+              description: Internal session identifier (system-generated UUID).
+            X-Request-Id:
+              schema:
+                type: string
+              description: Internal request identifier (system-generated UUID).
+            X-External-Session-Id:
+              schema:
+                type: string
+              description: Echoed client-provided session_id (empty if not provided).
+            X-External-Request-Id:
+              schema:
+                type: string
+              description: Echoed client-provided request_id (empty if not provided).
           content:
             text/event-stream:
               example:
@@ -228,6 +262,16 @@ components:
             type: string
             description: The ID of the pronunciation dictionary to use for speech generation.
           description: The IDs of the pronunciation dictionaries to use for speech generation.
+        session_id:
+          type: string
+          description: Optional client-provided session identifier for correlation. Only alphanumeric characters, hyphens, underscores, and dots are allowed. Max 128 characters. Echoed back in response headers as `X-External-Session-Id`.
+          maxLength: 128
+          pattern: "^[a-zA-Z0-9_\\-.]+$"
+        request_id:
+          type: string
+          description: Optional client-provided request identifier for correlation. Only alphanumeric characters, hyphens, underscores, and dots are allowed. Max 128 characters. Echoed back in response headers as `X-External-Request-Id`.
+          maxLength: 128
+          pattern: "^[a-zA-Z0-9_\\-.]+$"
 
   securitySchemes:
     bearerAuth:
