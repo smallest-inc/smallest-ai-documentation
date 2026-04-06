@@ -19,18 +19,14 @@ Inverse Text Normalization automatically converts spoken numbers, dates, currenc
 ## Recommended Setup for Agentic Use Cases
 
 <Note>
-ITN normalizes **finalized transcripts** (`is_final: true`). For the best results in voice agent and conversational AI pipelines:
+Since ITN normalizes only finalized transcripts, it is recommended that you control finalization from your end for the best results:
 
-1. **Disable word-count finalization**: Set `finalize_on_words=false` so the server doesn't split utterances mid-phrase
-2. **Match EOU timeout to your VAD**: Set `eou_timeout_ms` to match your Voice Activity Detection silence threshold (e.g., 600ms). The EOU timeout controls when the pipeline finalizes after detecting a pause — ITN normalizes these EOU-triggered finals
-3. **Use manual finalize to end the stream**: Send `{"type": "finalize"}` to flush remaining audio when the conversation turn ends
+1. Set `finalize_on_words=false` so the server does not finalize internally based on word count
+2. Set `eou_timeout_ms` to match your VAD (Voice Activity Detection) silence threshold
+3. When your VAD detects that the user has stopped speaking, send `{"type": "finalize"}` — this finalizes the entire chunk and ITN normalizes it as a whole
 
-This gives you natural utterance boundaries based on speech pauses rather than arbitrary word counts, producing cleaner ITN results for downstream LLM input, form filling, and command parsing.
+This approach is especially useful for agentic use cases where you want clean, fully-normalized utterances for downstream LLM processing.
 </Note>
-
-<Warning>
-**Manual finalize limitation**: Currently, transcripts triggered by `{"type": "finalize"}` messages may not be ITN-normalized. ITN runs reliably on EOU-timeout-triggered finals and word-count-triggered finals. If you need ITN on the final chunk, ensure there's a natural pause before sending the finalize message so the EOU timeout triggers first.
-</Warning>
 
 ## Enabling ITN
 
@@ -204,7 +200,7 @@ ws.onmessage = (event) => {
 
 ### Python — Agentic Setup (Recommended for Voice AI)
 
-Disable word-count finalization and match `eou_timeout_ms` to your VAD threshold. The EOU timeout triggers finalization on natural speech pauses, and ITN normalizes each finalized chunk:
+Disable internal word-count finalization, set `eou_timeout_ms` to match your VAD, and send `{"type": "finalize"}` when your VAD detects end-of-speech. This finalizes the entire chunk and ITN normalizes it as a whole:
 
 ```python
 params = {
@@ -212,7 +208,7 @@ params = {
     "encoding": "linear16",
     "sample_rate": "16000",
     "itn_normalize": "true",
-    "finalize_on_words": "false",   # Disable word-count finalization
+    "finalize_on_words": "false",   # Disable internal word-count finalization
     "eou_timeout_ms": "600",        # Match your VAD silence threshold
     "word_timestamps": "true",
 }
@@ -226,15 +222,14 @@ async def transcribe_agentic(audio_file: str):
             while chunk := f.read(4096):
                 await ws.send(chunk)
 
-        # End the stream — wait briefly so EOU can finalize the last chunk
-        await asyncio.sleep(1)
+        # VAD detected end-of-speech → send finalize
+        # ITN normalizes the entire accumulated chunk
         await ws.send(json.dumps({"type": "finalize"}))
 
         async for message in ws:
             data = json.loads(message)
             if data.get("is_final"):
                 print(f"Final: {data['transcript']}")
-                # EOU-triggered: "$25", "January 15 2026"
             if data.get("is_last"):
                 break
 ```
