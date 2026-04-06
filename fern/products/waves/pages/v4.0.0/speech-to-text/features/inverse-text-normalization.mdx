@@ -1,0 +1,289 @@
+---
+title: 'Inverse Text Normalization (ITN)'
+description: 'Convert spoken-form transcripts into written form in real time'
+---
+
+<Badge color="purple">Real-Time</Badge>
+
+Inverse Text Normalization automatically converts spoken numbers, dates, currencies, and other entities into their written equivalents. When enabled, ITN runs as a post-processing step on every finalized transcript — no changes to your audio pipeline required.
+
+| Spoken (ASR output) | Written (with ITN) |
+|---|---|
+| "the total is twenty five dollars" | "the total is $25" |
+| "call me at nine one zero five five five twelve thirty four" | "call me at 910-555-1234" |
+| "the meeting is on january fifteenth twenty twenty six" | "the meeting is on January 15th, 2026" |
+| "it costs three point five percent" | "it costs 3.5%" |
+| "send it to john at gmail dot com" | "send it to john@gmail.com" |
+| "i live at one two three main street" | "i live at 123 Main Street" |
+
+## Recommended Setup for Agentic Use Cases
+
+<Note>
+Since ITN normalizes only finalized transcripts, it is recommended that you control finalization from your end for the best results:
+
+1. Set `finalize_on_words=false` so the server does not finalize internally based on word count
+2. Set `eou_timeout_ms` to match your VAD (Voice Activity Detection) silence threshold
+3. When your VAD detects that the user has stopped speaking, send `{"type": "finalize"}` — this finalizes the entire chunk and ITN normalizes it as a whole
+
+This approach is especially useful for agentic use cases where you want clean, fully-normalized utterances for downstream LLM processing.
+</Note>
+
+## Enabling ITN
+
+Pass `itn_normalize=true` as a query parameter when connecting:
+
+```
+wss://api.smallest.ai/waves/v1/pulse/get_text?language=en&itn_normalize=true
+```
+
+ITN is **disabled by default**. When disabled, transcripts are returned in spoken form as usual.
+
+## Parameters
+
+These parameters can be combined with `itn_normalize` to control transcription behavior:
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `itn_normalize` | boolean | `false` | Enable inverse text normalization |
+| `max_words` | integer | pipeline default | Max words before forced finalization. Useful for keeping ITN chunks short and accurate |
+| `eou_timeout_ms` | integer | `800` | End-of-utterance silence timeout in milliseconds. Lower values finalize faster |
+| `finalize_on_words` | boolean | `true` | When `false`, disables automatic word-count-based finalization. Use this when you want full control over when to finalize via the `finalize` message |
+| `word_timestamps` | boolean | `false` | Include per-word timestamps. ITN remaps timestamps when words collapse (e.g., "one two three" → "123" spans all three source timestamps) |
+| `numerals` | string | `"auto"` | Digit formatting. When ITN is enabled, this is typically left as `"auto"` since ITN handles number conversion |
+
+## Supported Semiotic Classes
+
+ITN covers all standard semiotic classes:
+
+| Class | Example (spoken → written) |
+|---|---|
+| **Cardinal** | "one hundred twenty three" → "123" |
+| **Ordinal** | "twenty first" → "21st" |
+| **Money** | "twenty five dollars" → "$25" |
+| **Telephone** | "nine one zero five five five one two three four" → "910-555-1234" |
+| **Date** | "january fifteenth twenty twenty six" → "January 15th, 2026" |
+| **Time** | "three thirty p m" → "3:30 PM" |
+| **Decimal** | "three point one four" → "3.14" |
+| **Measure** | "five kilograms" → "5 kg" |
+| **Electronic** | "john at gmail dot com" → "john@gmail.com" |
+| **Address** | "one two three main street" → "123 Main Street" |
+| **Verbatim** | "a b c" → "ABC" |
+
+## Finalize Control
+
+You can force-finalize the current utterance at any time by sending a JSON text message over the WebSocket:
+
+```json
+{ "type": "finalize" }
+```
+
+This promotes all accumulated tokens to a final transcript immediately, without closing the stream. The stream stays open for subsequent audio.
+
+This is especially useful with `finalize_on_words=false`, where automatic finalization is disabled and you control exactly when each utterance boundary occurs. Common use cases:
+
+- **Form filling** — Finalize after each form field to get a clean ITN result per field
+- **Voice commands** — Finalize on button release or keyword detection
+- **Turn-based conversations** — Finalize when the other party starts speaking
+
+The server responds with a final transcript that has `from_finalize: true`:
+
+```json
+{
+  "session_id": "sess_abc123",
+  "transcript": "the total is $25.",
+  "is_final": true,
+  "is_last": false,
+  "from_finalize": true,
+  "words": [...],
+  "full_transcript": "the total is $25."
+}
+```
+
+If there are no pending tokens when you send finalize, you still get a response (empty transcript with `from_finalize: true`) so your request/response indexing stays in sync.
+
+### End Stream
+
+To close the stream and flush remaining audio, send:
+
+```json
+{ "type": "finalize" }
+```
+
+This flushes any remaining audio, returns the final transcript with `is_last: true`, and closes the connection.
+
+## Examples
+
+### Python — WebSocket with ITN
+
+```python
+import asyncio
+import websockets
+import json
+from urllib.parse import urlencode
+
+BASE_WS_URL = "wss://api.smallest.ai/waves/v1/pulse/get_text"
+params = {
+    "language": "en",
+    "encoding": "linear16",
+    "sample_rate": "16000",
+    "word_timestamps": "true",
+    "itn_normalize": "true",
+}
+WS_URL = f"{BASE_WS_URL}?{urlencode(params)}"
+
+API_KEY = "YOUR_API_KEY"
+
+async def transcribe(audio_file: str):
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+
+    async with websockets.connect(WS_URL, additional_headers=headers) as ws:
+        # Stream audio in 4096-byte chunks
+        with open(audio_file, "rb") as f:
+            while chunk := f.read(4096):
+                await ws.send(chunk)
+
+        # Signal end of audio
+        await ws.send(json.dumps({"type": "finalize"}))
+
+        # Receive transcriptions
+        async for message in ws:
+            data = json.loads(message)
+            if data.get("is_final"):
+                print(f"Final: {data['transcript']}")
+                # With ITN: "the total is $25."
+                # Without:  "the total is twenty five dollars."
+            else:
+                print(f"Interim: {data['transcript']}")
+
+            if data.get("is_last"):
+                break
+
+asyncio.run(transcribe("audio.wav"))
+```
+
+### JavaScript — WebSocket with ITN
+
+```javascript
+const API_KEY = "YOUR_API_KEY";
+
+const url = new URL("wss://api.smallest.ai/waves/v1/pulse/get_text");
+url.searchParams.append("language", "en");
+url.searchParams.append("encoding", "linear16");
+url.searchParams.append("sample_rate", "16000");
+url.searchParams.append("word_timestamps", "true");
+url.searchParams.append("itn_normalize", "true");
+
+const ws = new WebSocket(url.toString(), {
+  headers: { Authorization: `Bearer ${API_KEY}` },
+});
+
+ws.onopen = () => {
+  console.log("Connected — streaming audio with ITN enabled");
+  // Start sending audio chunks as binary messages
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  if (data.is_final) {
+    console.log("Final:", data.transcript);
+    // "call me at 910-555-1234"
+  } else {
+    console.log("Interim:", data.transcript);
+  }
+
+  if (data.is_last) {
+    ws.close();
+  }
+};
+```
+
+### Python — Agentic Setup (Recommended for Voice AI)
+
+Disable internal word-count finalization, set `eou_timeout_ms` to match your VAD, and send `{"type": "finalize"}` when your VAD detects end-of-speech. This finalizes the entire chunk and ITN normalizes it as a whole:
+
+```python
+params = {
+    "language": "en",
+    "encoding": "linear16",
+    "sample_rate": "16000",
+    "itn_normalize": "true",
+    "finalize_on_words": "false",   # Disable internal word-count finalization
+    "eou_timeout_ms": "600",        # Match your VAD silence threshold
+    "word_timestamps": "true",
+}
+WS_URL = f"{BASE_WS_URL}?{urlencode(params)}"
+
+async def transcribe_agentic(audio_file: str):
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+
+    async with websockets.connect(WS_URL, additional_headers=headers) as ws:
+        with open(audio_file, "rb") as f:
+            while chunk := f.read(4096):
+                await ws.send(chunk)
+
+        # VAD detected end-of-speech → send finalize
+        # ITN normalizes the entire accumulated chunk
+        await ws.send(json.dumps({"type": "finalize"}))
+
+        async for message in ws:
+            data = json.loads(message)
+            if data.get("is_final"):
+                print(f"Final: {data['transcript']}")
+            if data.get("is_last"):
+                break
+```
+
+### Combining ITN with Other Features
+
+ITN works alongside all other post-processing features:
+
+```python
+params = {
+    "language": "en",
+    "encoding": "linear16",
+    "sample_rate": "16000",
+    "itn_normalize": "true",
+    "redact_pii": "true",           # Redact names, SSN, emails, phone numbers
+    "diarize": "true",              # Speaker diarization
+    "word_timestamps": "true",
+}
+```
+
+Processing order: **ITN** → Numerals → Profanity Filter → PII/PCI Redaction
+
+## Response Format
+
+When ITN is enabled, final responses contain the normalized transcript:
+
+```json
+{
+  "session_id": "sess_abc123",
+  "transcript": "the total is $25.",
+  "is_final": true,
+  "is_last": false,
+  "language": "en",
+  "words": [
+    { "word": "the", "start": 0.48, "end": 0.56, "confidence": 0.98 },
+    { "word": "total", "start": 0.56, "end": 0.80, "confidence": 0.97 },
+    { "word": "is", "start": 0.80, "end": 0.96, "confidence": 0.99 },
+    { "word": "$25.", "start": 0.96, "end": 1.44, "confidence": 0.95 }
+  ],
+  "full_transcript": "the total is $25."
+}
+```
+
+**Key behaviors:**
+
+- **Word timestamps are remapped.** When multiple spoken words collapse into one written token (e.g., "twenty five dollars" → "$25"), the output word spans the full time range of all source words and takes the max confidence.
+- **Punctuation is preserved.** Periods, commas, and other punctuation from ASR output are stripped before ITN and reattached to the correct output token afterward.
+- **Interim responses are not normalized.** ITN only runs on finalized transcripts (`is_final: true`) to avoid unnecessary processing on text that may still change.
+- **Capitalization is preserved.** ITN runs in cased mode, so proper nouns and sentence-initial caps from the ASR model are maintained.
+
+## How It Works
+
+1. **End-of-utterance detection** — The ASR pipeline detects a natural pause or hits the `max_words` limit, producing a finalized transcript. Or you send `{"type": "finalize"}` to force it.
+2. **Punctuation stripping** — Trailing punctuation (`.` `,` `!` `?` `;` `:`) is stripped from each word before normalization, since the underlying FST engine cannot parse through punctuation.
+3. **ITN normalization** — The text is passed through a Weighted Finite State Transducer (WFST) that converts spoken-form entities to written form with word alignment tracking.
+4. **Punctuation reattachment** — Stripped punctuation is mapped back to the correct output token using the word alignment from step 3.
+5. **Timestamp remapping** — Word-level timestamps from ASR are remapped to the ITN output using the alignment, spanning collapsed words.

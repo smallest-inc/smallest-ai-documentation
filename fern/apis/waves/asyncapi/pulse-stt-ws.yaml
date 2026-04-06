@@ -140,6 +140,23 @@ servers:
             keywords:
               type: string
               description: "Comma-separated list of words/phrases to boost, each optionally followed by :INTENSIFIER (e.g. NVIDIA:5,Jensen). Intensifier defaults to 1.0 if omitted. Max 100 keywords per session."
+            itn_normalize:
+              type: string
+              enum:
+                - "true"
+                - "false"
+              default: "false"
+              description: "Enable Inverse Text Normalization to convert spoken-form entities (numbers, dates, currencies, phone numbers, etc.) into written form in finalized transcripts."
+            finalize_on_words:
+              type: string
+              enum:
+                - "true"
+                - "false"
+              default: "true"
+              description: "When false, disables automatic word-count-based finalization. Use with itn_normalize for agentic pipelines where you control finalization via the finalize message."
+            max_words:
+              type: integer
+              description: "Maximum number of words before forced finalization. Useful for keeping ITN chunks short and accurate."
 channels:
   pulseStream:
     address: /waves/v1/pulse/get_text
@@ -197,6 +214,10 @@ channels:
               type: boolean
               default: false
               description: Indicates if this is the last transcription in the session
+            from_finalize:
+              type: boolean
+              default: false
+              description: True when this final transcript was triggered by a manual finalize message rather than automatic finalization
             words:
               type: array
               description: Word-level timestamps (when word_timestamps=true)
