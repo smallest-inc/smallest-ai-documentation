@@ -1,11 +1,17 @@
 ---
 title: Metrics Setup
-description: Configure Prometheus, ServiceMonitor, and custom metrics for autoscaling
+description: Configure Prometheus, ServiceMonitor, and custom metrics collection for Lightning ASR
 ---
 
 ## Overview
 
-The metrics setup enables autoscaling by collecting Lightning ASR metrics with Prometheus and exposing them to Kubernetes HPA through the Prometheus Adapter.
+This page focuses on collecting and validating Lightning ASR metrics with Prometheus and exposing them through the Prometheus Adapter.
+
+<Warning>
+Autoscaling documentation is currently under active development.
+Use this page as a metrics reference.
+If you need autoscaling now, configure your own HPA/KEDA rules using these metrics.
+</Warning>
 
 ## Architecture
 
@@ -15,8 +21,6 @@ graph LR
     Metrics[/metrics Endpoint/] -->|Discovered By| SM[ServiceMonitor]
     SM -->|Scraped By| Prom[Prometheus]
     Prom -->|Queried By| Adapter[Prometheus Adapter]
-    Adapter -->|Supplies Metrics| HPA[HPA Controller]
-    HPA -->|Scales| ASR
 
     style Prom fill:#E6522C
     style ASR fill:#0D9373
@@ -81,6 +85,33 @@ prometheus-adapter:
           matches: "^(.*)$"
           as: "${1}"
         metricsQuery: "asr_active_requests{<<.LabelMatchers>>}"
+      - seriesQuery: "asr_batch_queue_depth"
+        resources:
+          overrides:
+            namespace: {resource: "namespace"}
+            pod: {resource: "pod"}
+        name:
+          matches: "^(.*)$"
+          as: "${1}"
+        metricsQuery: "asr_batch_queue_depth{<<.LabelMatchers>>}"
+      - seriesQuery: "asr_active_streams"
+        resources:
+          overrides:
+            namespace: {resource: "namespace"}
+            pod: {resource: "pod"}
+        name:
+          matches: "^(.*)$"
+          as: "${1}"
+        metricsQuery: "asr_active_streams{<<.LabelMatchers>>}"
+      - seriesQuery: "asr_stream_queue_depth"
+        resources:
+          overrides:
+            namespace: {resource: "namespace"}
+            pod: {resource: "pod"}
+        name:
+          matches: "^(.*)$"
+          as: "${1}"
+        metricsQuery: "asr_stream_queue_depth{<<.LabelMatchers>>}"
 ```
 
 ## Available Metrics
@@ -99,37 +130,22 @@ Lightning ASR exposes the following metrics:
     <tr>
       <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><code>asr_active_requests</code></td>
       <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Gauge</td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Current number of active transcription requests</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Active batch requests currently being processed on GPU</td>
     </tr>
     <tr>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><code>asr_total_requests</code></td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Counter</td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Total requests processed</td>
-    </tr>
-    <tr>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><code>asr_failed_requests</code></td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Counter</td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Total failed requests</td>
-    </tr>
-    <tr>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><code>asr_request_duration_seconds</code></td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Histogram</td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Request processing time</td>
-    </tr>
-    <tr>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><code>asr_model_load_time_seconds</code></td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><code>asr_batch_queue_depth</code></td>
       <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Gauge</td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Time to load model on startup</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Requests waiting in the batch queue</td>
     </tr>
     <tr>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><code>asr_gpu_utilization</code></td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}><code>asr_active_streams</code></td>
       <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Gauge</td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>GPU utilization percentage</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Active streaming sessions</td>
     </tr>
     <tr>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomLeftRadius: '8px' }}><code>asr_gpu_memory_used_bytes</code></td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomLeftRadius: '8px' }}><code>asr_stream_queue_depth</code></td>
       <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Gauge</td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomRightRadius: '8px' }}>GPU memory used</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomRightRadius: '8px' }}>Pending sessions in the streaming Redis queue</td>
     </tr>
   </tbody>
 </table>
@@ -147,7 +163,7 @@ kubectl port-forward -n default svc/smallest-prometheus-stack-prometheus 9090:90
 Open http://localhost:9090 and verify:
 
 1. **Status → Targets**: Lightning ASR endpoints should be "UP"
-2. **Graph**: Query `asr_active_requests` - should return data
+2. **Graph**: Query `asr_active_requests` or `asr_batch_queue_depth` - should return data
 3. **Status → Service Discovery**: Should show ServiceMonitor
 
 ### Check ServiceMonitor
@@ -190,8 +206,9 @@ kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1" | jq -r '.resources[].na
 Expected output:
 ```
 pods/asr_active_requests
-pods/asr_total_requests
-pods/asr_failed_requests
+pods/asr_batch_queue_depth
+pods/asr_active_streams
+pods/asr_stream_queue_depth
 ```
 
 Query specific metric:
@@ -204,7 +221,7 @@ kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1/namespaces/smallest/pods/
 
 ### Add New Custom Metrics
 
-To expose additional metrics to HPA:
+To expose additional metrics for your own autoscaling setup:
 
 ```yaml values.yaml
 prometheus-adapter:
@@ -220,16 +237,38 @@ prometheus-adapter:
           as: "${1}"
         metricsQuery: "asr_active_requests{<<.LabelMatchers>>}"
       
-      - seriesQuery: "asr_gpu_utilization"
+      - seriesQuery: "asr_batch_queue_depth"
         resources:
           overrides:
             namespace: {resource: "namespace"}
             pod: {resource: "pod"}
         name:
-          as: "gpu_utilization"
-        metricsQuery: "avg_over_time(asr_gpu_utilization{<<.LabelMatchers>>}[2m])"
+          matches: "^(.*)$"
+          as: "${1}"
+        metricsQuery: "asr_batch_queue_depth{<<.LabelMatchers>>}"
+
+      - seriesQuery: "asr_active_streams"
+        resources:
+          overrides:
+            namespace: {resource: "namespace"}
+            pod: {resource: "pod"}
+        name:
+          matches: "^(.*)$"
+          as: "${1}"
+        metricsQuery: "asr_active_streams{<<.LabelMatchers>>}"
+
+      - seriesQuery: "asr_stream_queue_depth"
+        resources:
+          overrides:
+            namespace: {resource: "namespace"}
+            pod: {resource: "pod"}
+        name:
+          matches: "^(.*)$"
+          as: "${1}"
+        metricsQuery: "asr_stream_queue_depth{<<.LabelMatchers>>}"
 ```
 
+{/*
 ### External Metrics
 
 For cluster-wide metrics:
@@ -260,6 +299,7 @@ spec:
           type: Value
           value: "5"
 ```
+*/}
 
 ## Prometheus Configuration
 
@@ -306,7 +346,7 @@ kube-prometheus-stack:
 ```
 
 <Tip>
-Lower intervals (e.g., 15s) provide faster HPA response but increase storage.
+Lower intervals (e.g., 15s) provide faster metrics response but increase storage.
 </Tip>
 
 ## Recording Rules
@@ -329,17 +369,20 @@ kube-prometheus-stack:
             - name: asr_aggregations
               interval: 30s
               rules:
-                - record: asr:requests:rate5m
-                  expr: rate(asr_total_requests[5m])
-                
                 - record: asr:requests:active_avg
                   expr: avg(asr_active_requests) by (namespace)
                 
-                - record: asr:gpu:utilization_avg
-                  expr: avg(asr_gpu_utilization) by (namespace)
+                - record: asr:batch_queue:depth_avg
+                  expr: avg(asr_batch_queue_depth) by (namespace)
+
+                - record: asr:streams:active_avg
+                  expr: avg(asr_active_streams) by (namespace)
+
+                - record: asr:stream_queue:depth_avg
+                  expr: avg(asr_stream_queue_depth) by (namespace)
 ```
 
-Use recording rules in HPA for better performance.
+Use recording rules in your autoscaling queries for better performance.
 
 ## Alerting Rules
 
@@ -354,32 +397,32 @@ kube-prometheus-stack:
           groups:
             - name: asr_alerts
               rules:
-                - alert: HighErrorRate
-                  expr: rate(asr_failed_requests[5m]) > 0.1
+                - alert: HighBatchQueueDepth
+                  expr: asr_batch_queue_depth > 20
                   for: 5m
                   labels:
                     severity: warning
                   annotations:
-                    summary: "High ASR error rate"
-                    description: "Error rate is {{ $value }} errors/sec"
+                    summary: "ASR batch queue depth is high"
+                    description: "{{ $value }} requests are waiting in the batch queue"
                 
-                - alert: HighQueueLength
-                  expr: asr_active_requests > 50
+                - alert: HighStreamQueueDepth
+                  expr: asr_stream_queue_depth > 30
                   for: 2m
                   labels:
                     severity: warning
                   annotations:
-                    summary: "ASR queue backing up"
-                    description: "{{ $value }} requests queued"
+                    summary: "ASR stream queue depth is high"
+                    description: "{{ $value }} streaming sessions are waiting in Redis"
                 
-                - alert: GPUMemoryHigh
-                  expr: asr_gpu_memory_used_bytes / 24000000000 > 0.9
+                - alert: HighActiveStreams
+                  expr: asr_active_streams > 100
                   for: 5m
                   labels:
                     severity: warning
                   annotations:
-                    summary: "GPU memory usage high"
-                    description: "GPU memory at {{ $value | humanizePercentage }}"
+                    summary: "ASR active streams are high"
+                    description: "{{ $value }} active streaming sessions"
 ```
 
 ## Debugging Metrics
@@ -399,9 +442,17 @@ Expected output:
 # TYPE asr_active_requests gauge
 asr_active_requests{pod="lightning-asr-xxx"} 3
 
-# HELP asr_total_requests Total requests processed
-# TYPE asr_total_requests counter
-asr_total_requests{pod="lightning-asr-xxx"} 1523
+# HELP asr_batch_queue_depth Requests waiting in the batch queue
+# TYPE asr_batch_queue_depth gauge
+asr_batch_queue_depth{pod="lightning-asr-xxx"} 2
+
+# HELP asr_active_streams Active streaming sessions
+# TYPE asr_active_streams gauge
+asr_active_streams{pod="lightning-asr-xxx"} 14
+
+# HELP asr_stream_queue_depth Pending sessions in the streaming Redis queue
+# TYPE asr_stream_queue_depth gauge
+asr_stream_queue_depth{pod="lightning-asr-xxx"} 1
 
 ...
 ```
@@ -412,8 +463,9 @@ Access Prometheus UI and test queries:
 
 ```promql
 asr_active_requests
-rate(asr_total_requests[5m])
-histogram_quantile(0.95, asr_request_duration_seconds_bucket)
+asr_batch_queue_depth
+asr_active_streams
+asr_stream_queue_depth
 ```
 
 ### Check Prometheus Targets
@@ -505,18 +557,18 @@ kube-prometheus-stack:
 ## Best Practices
 
 <AccordionGroup>
-  <Accordion title="Use Recording Rules">
+  <Accordion title="Use Recording Rules" icon="clock">
     Pre-compute expensive queries:
     
     ```yaml
-    - record: asr:requests:rate5m
-      expr: rate(asr_total_requests[5m])
+    - record: asr:batch_queue:depth_avg
+      expr: avg(asr_batch_queue_depth) by (namespace)
     ```
     
-    Then use in HPA instead of raw query
+    Then use this in your autoscaling logic instead of a raw query
   </Accordion>
 
-  <Accordion title="Set Appropriate Scrape Intervals">
+  <Accordion title="Set Appropriate Scrape Intervals" icon="stopwatch">
     Balance responsiveness vs storage:
     
     - Fast autoscaling: 15s
@@ -524,7 +576,7 @@ kube-prometheus-stack:
     - Cost-optimized: 60s
   </Accordion>
 
-  <Accordion title="Enable Persistence">
+  <Accordion title="Enable Persistence" icon="database">
     Always persist Prometheus data:
     
     ```yaml
@@ -537,7 +589,7 @@ kube-prometheus-stack:
     ```
   </Accordion>
 
-  <Accordion title="Monitor Prometheus Itself">
+  <Accordion title="Monitor Prometheus Itself" icon="chart-bar">
     Track Prometheus performance:
     
     - Query duration
@@ -546,24 +598,19 @@ kube-prometheus-stack:
     - TSDB size
   </Accordion>
 
-  <Accordion title="Use Grafana for Visualization">
+  <Accordion title="Use Grafana for Visualization" icon="chart-line">
     Don't rely on Prometheus UI
     
     Use Grafana dashboards for ops
     
-    See [Grafana Dashboards](/waves/self-host/kubernetes-setup/autoscaling/grafana-dashboards)
+    See [Grafana Dashboards](/v4.0.0/content/on-prem/kubernetes/autoscaling/grafana-dashboards)
   </Accordion>
 </AccordionGroup>
 
 ## What's Next?
 
-<CardGroup cols={2}>
-  <Card title="HPA Configuration" href="/waves/self-host/kubernetes-setup/autoscaling/hpa-configuration">
-    Use metrics for autoscaling
-  </Card>
-
-  <Card title="Grafana Dashboards" href="/waves/self-host/kubernetes-setup/autoscaling/grafana-dashboards">
+<CardGroup cols={1}>
+  <Card title="Grafana Dashboards" icon="dashboard" href="/v4.0.0/content/on-prem/kubernetes/autoscaling/grafana-dashboards">
     Visualize metrics
   </Card>
 </CardGroup>
-
