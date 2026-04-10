@@ -35,8 +35,9 @@ The WebSocket connection accepts the following query parameters:
 | `eou_timeout_ms`      | number | `800`   | End-of-utterance timeout in milliseconds. Controls how long the model waits after the user stops speaking before flushing the transcript as final. Range: `100` to `10000` |
 | `diarize`             | string | `false` | Enable speaker diarization to identify and label different speakers in the audio. When enabled, each word in the transcription includes `speaker` (integer ID) and `speaker_confidence` (float 0-1) fields. Options: `true`, `false` |
 | `keywords`            | string | —       | Comma-separated list of words/phrases to boost, each optionally followed by `:INTENSIFIER` (e.g. `NVIDIA:5,Jensen`). Intensifier defaults to `1.0` if omitted. Max 100 keywords per session. See [Keyword Boosting](/waves/documentation/speech-to-text-pulse/features/keyword-boosting) |
-
-### Webhook Configuration
+| `itn_normalize`       | string | `false` | Enable Inverse Text Normalization to convert spoken-form entities (numbers, dates, currencies, phone numbers, etc.) into written form in finalized transcripts. Options: `true`, `false`. See [ITN](/waves/documentation/speech-to-text-pulse/features/inverse-text-normalization) |
+| `finalize_on_words`   | string | `true`  | When `false`, disables automatic word-count-based finalization. Use with `itn_normalize` for agentic pipelines where you control finalization via the `finalize` message. Options: `true`, `false` |
+| `max_words`           | integer | —      | Maximum number of words before forced finalization. Useful for keeping ITN chunks short and accurate |
 
 ## Connection Flow
 
@@ -106,6 +107,7 @@ The server responds with JSON messages containing transcription results:
 | `transcript`      | string  | Partial or complete transcription text for the current segment       |
 | `is_final`        | boolean | Indicates if this is the final transcription for the current segment |
 | `is_last`         | boolean | Indicates if this is the last transcription in the session           |
+| `from_finalize`   | boolean | `true` when this final transcript was triggered by a manual `finalize` message rather than automatic finalization. Only present when `itn_normalize=true` |
 | `language`        | string  | Detected primary language code, returns only when `is_final=True` |
 | `languages`       | array   | List of languages detected in the audio included in Responses where `is_final` is `true` |
 
