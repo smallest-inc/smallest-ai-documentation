@@ -33,6 +33,19 @@ Activate it:
 
 ### 2. Install Pipecat with Smallest AI support
 
+The `smallest` extra installs both the TTS and STT services for Smallest AI:
+
+```bash
+pip install "pipecat-ai[smallest]"
+```
+
+To run the full voice agent example, you also need:
+
+- **`daily`** — Daily transport, which the bot uses to manage audio rooms and connect participants
+- **`openai`** — OpenAI LLM service for the language model
+- **`silero`** — Silero VAD for voice activity detection and interruption handling
+- **`runner`** — Pipecat development runner that creates Daily rooms automatically and serves the bot locally
+
 ```bash
 pip install "pipecat-ai[smallest,daily,openai,silero,runner]"
 ```
@@ -96,144 +109,6 @@ The TTS service uses WebSocket streaming for low-latency, real-time audio delive
 
 ---
 
-## Full Pipeline Example
-
-The example sets up a complete interruptible voice bot using:
-
-- **STT**: Smallest AI Pulse (real-time WebSocket transcription)
-- **LLM**: OpenAI GPT-4o
-- **TTS**: Smallest AI Lightning (WebSocket streaming)
-- **Transport**: Daily
-
-```python
-import os
-
-from dotenv import load_dotenv
-from loguru import logger
-
-from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.frames.frames import LLMRunFrame
-from pipecat.pipeline.pipeline import Pipeline
-from pipecat.pipeline.runner import PipelineRunner
-from pipecat.pipeline.task import PipelineParams, PipelineTask
-from pipecat.processors.aggregators.llm_context import LLMContext
-from pipecat.processors.aggregators.llm_response_universal import (
-    LLMContextAggregatorPair,
-    LLMUserAggregatorParams,
-)
-from pipecat.runner.types import RunnerArguments
-from pipecat.runner.utils import create_transport
-from pipecat.services.openai.llm import OpenAILLMService
-from pipecat.services.smallest.stt import SmallestSTTService
-from pipecat.services.smallest.tts import SmallestTTSService
-from pipecat.transcriptions.language import Language
-from pipecat.transports.base_transport import BaseTransport, TransportParams
-from pipecat.transports.daily.transport import DailyParams
-from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams
-
-load_dotenv(override=True)
-
-
-transport_params = {
-    "daily": lambda: DailyParams(
-        audio_in_enabled=True,
-        audio_out_enabled=True,
-    ),
-    "twilio": lambda: FastAPIWebsocketParams(
-        audio_in_enabled=True,
-        audio_out_enabled=True,
-    ),
-    "webrtc": lambda: TransportParams(
-        audio_in_enabled=True,
-        audio_out_enabled=True,
-    ),
-}
-
-
-async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
-    logger.info("Starting bot")
-
-    stt = SmallestSTTService(
-        api_key=os.getenv("SMALLEST_API_KEY"),
-        settings=SmallestSTTService.Settings(
-            language=Language.EN,
-        ),
-    )
-
-    tts = SmallestTTSService(
-        api_key=os.getenv("SMALLEST_API_KEY"),
-        settings=SmallestTTSService.Settings(
-            voice="sophia",
-        ),
-    )
-
-    llm = OpenAILLMService(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        settings=OpenAILLMService.Settings(
-            system_instruction=(
-                "You are a helpful LLM in a WebRTC call. Your goal is to demonstrate "
-                "your capabilities in a succinct way. Your output will be spoken aloud, "
-                "so avoid special characters that can't easily be spoken, such as emojis "
-                "or bullet points. Respond to what the user said in a creative and helpful way."
-            ),
-        ),
-    )
-
-    context = LLMContext()
-    user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
-        context,
-        user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()),
-    )
-
-    pipeline = Pipeline(
-        [
-            transport.input(),
-            stt,
-            user_aggregator,
-            llm,
-            tts,
-            transport.output(),
-            assistant_aggregator,
-        ]
-    )
-
-    task = PipelineTask(
-        pipeline,
-        params=PipelineParams(
-            enable_metrics=True,
-            enable_usage_metrics=True,
-        ),
-    )
-
-    @transport.event_handler("on_client_connected")
-    async def on_client_connected(transport, client):
-        logger.info("Client connected")
-        context.add_message({"role": "user", "content": "Please introduce yourself to the user."})
-        await task.queue_frames([LLMRunFrame()])
-
-    @transport.event_handler("on_client_disconnected")
-    async def on_client_disconnected(transport, client):
-        logger.info("Client disconnected")
-        await task.cancel()
-
-    runner = PipelineRunner(handle_sigint=runner_args.handle_sigint)
-    await runner.run(task)
-
-
-async def bot(runner_args: RunnerArguments):
-    """Main bot entry point compatible with Pipecat Cloud."""
-    transport = await create_transport(runner_args, transport_params)
-    await run_bot(transport, runner_args)
-
-
-if __name__ == "__main__":
-    from pipecat.runner.run import main
-
-    main()
-```
-
----
-
 ## Running the Example
 
 Clone the Pipecat repository and navigate to the examples directory:
@@ -243,7 +118,7 @@ git clone https://github.com/pipecat-ai/pipecat.git
 cd pipecat/examples/voice
 ```
 
-Create a `.env` file with the keys listed in the Setup section above.
+Create a `.env` file with the keys listed in the Setup section above, then run:
 
 **Daily transport — server mode (recommended):**
 
@@ -260,6 +135,8 @@ python voice-smallest.py -d
 ```
 
 The room URL is printed in the terminal. Open it in your browser to join.
+
+The full source for `voice-smallest.py` is at [`examples/voice/voice-smallest.py`](https://github.com/pipecat-ai/pipecat/blob/main/examples/voice/voice-smallest.py). It sets up a complete interruptible voice bot using Smallest AI STT + TTS, OpenAI for the LLM, Silero VAD for interruptions, and Daily as the transport — all wired together with the Pipecat runner.
 
 ---
 
