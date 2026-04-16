@@ -6,147 +6,141 @@ icon: "microphone-lines"
 
 This guide walks you through integrating [Smallest AI](https://smallest.ai) TTS and STT into a [Pipecat](https://github.com/pipecat-ai/pipecat) voice pipeline. Pipecat is an open-source Python framework for building real-time voice and multimodal conversational AI agents using a frame-based architecture.
 
-## Code Examples Repository
+## Code Example
 
-You can find the full example for this setup in the Pipecat repository:
+The complete runnable example lives in the Pipecat repository:
 
 [Pipecat Example — Smallest AI TTS + STT](https://github.com/pipecat-ai/pipecat/blob/main/examples/voice/voice-smallest.py)
 
-## Common Steps
+## Setup
 
 ### 1. Create a Virtual Environment
 
-To ensure your Python environment is isolated, create a virtual environment:
-
 ```bash
-python3 -m venv venv
+python3.11 -m venv .venv
 ```
 
-Activate the virtual environment:
+Activate it:
 
 - On Linux/Mac:
   ```bash
-  source venv/bin/activate
+  source .venv/bin/activate
   ```
-
 - On Windows:
   ```bash
-  venv\Scripts\activate
+  .venv\Scripts\activate
   ```
 
 ### 2. Install Pipecat with Smallest AI support
 
-Install the `pipecat-ai` package with the `smallest` extra, which includes both TTS WebSocket streaming and STT support:
+The `smallest` extra installs both the TTS and STT services for Smallest AI:
 
 ```bash
 pip install "pipecat-ai[smallest]"
 ```
 
-For running the full voice-agent example with Daily transport, also install:
+To run the full voice agent example, you also need:
+
+- **`daily`** — Daily transport, which the bot uses to manage audio rooms and connect participants
+- **`openai`** — OpenAI LLM service for the language model
+- **`silero`** — Silero VAD for voice activity detection and interruption handling
+- **`runner`** — Pipecat development runner that creates Daily rooms automatically and serves the bot locally
 
 ```bash
-pip install "pipecat-ai[smallest,daily,openai,silero]"
+pip install "pipecat-ai[smallest,daily,openai,silero,runner]"
 ```
 
-### 3. Set Up a Daily Room
-
-Pipecat uses [Daily](https://www.daily.co) as its WebRTC transport layer. Sign in at [Daily Dashboard](https://dashboard.daily.co) and create a room to get a room URL and API key.
-
-### 4. Create a `.env` File
-
-Create a `.env` file in the project root directory with the following keys:
+### 3. Create a `.env` file
 
 ```bash
 SMALLEST_API_KEY=...
 DAILY_API_KEY=...
-DAILY_SAMPLE_ROOM_URL=...
 OPENAI_API_KEY=...
 ```
 
+`DAILY_API_KEY` is required — the Pipecat runner creates a Daily room automatically at startup. If you want to reuse an existing room instead of creating a new one each run, set the optional `DAILY_ROOM_URL` variable.
+
 ---
 
-## Usage
+## Services
 
-### Initialising `SmallestTTSService`
+### `SmallestSTTService`
 
-Import and configure the TTS service in your Pipecat pipeline:
+```python
+from pipecat.services.smallest.stt import SmallestSTTService
+from pipecat.transcriptions.language import Language
+
+stt = SmallestSTTService(
+    api_key=os.getenv("SMALLEST_API_KEY"),
+    settings=SmallestSTTService.Settings(
+        language=Language.EN,
+    ),
+)
+```
+
+| Parameter  | Type       | Default       | Description                         |
+| ---------- | ---------- | ------------- | ----------------------------------- |
+| `api_key`  | `str`      | —             | Your Smallest AI API key (required) |
+| `language` | `Language` | `Language.EN` | Language for transcription          |
+
+The STT service connects to the Pulse real-time WebSocket endpoint (`wss://api.smallest.ai/waves/v1/pulse/get_text`) and streams audio frames from the pipeline, returning transcriptions with 64ms TTFT.
+
+---
+
+### `SmallestTTSService`
 
 ```python
 from pipecat.services.smallest.tts import SmallestTTSService
 
 tts = SmallestTTSService(
     api_key=os.getenv("SMALLEST_API_KEY"),
-    voice_id="sophia",      # default voice
-    model="lightning-v3.1", # default model
+    settings=SmallestTTSService.Settings(
+        voice="sophia",
+    ),
 )
 ```
 
-Available configuration options:
+| Parameter | Type  | Default  | Description                         |
+| --------- | ----- | -------- | ----------------------------------- |
+| `api_key` | `str` | —        | Your Smallest AI API key (required) |
+| `voice`   | `str` | `sophia` | Voice ID for synthesis              |
 
-| Parameter    | Type  | Default            | Description                                              |
-| ------------ | ----- | ------------------ | -------------------------------------------------------- |
-| `api_key`    | `str` | —                  | Your Smallest AI API key (required)                      |
-| `voice_id`   | `str` | `sophia`           | Voice to use for synthesis                               |
-| `model`      | `str` | `lightning-v3.1`   | TTS model name                                           |
-| `sample_rate`| `int` | `24000`            | Audio sample rate in Hz                                  |
-| `base_url`   | `str` | `wss://waves-api.smallest.ai` | WebSocket base URL                        |
+The TTS service uses WebSocket streaming for low-latency, real-time audio delivery.
 
 ---
 
-### Initialising `SmallestSTTService`
+## Running the Example
 
-Import and configure the STT service to transcribe speech using Smallest AI's Pulse model:
-
-```python
-from pipecat.services.smallest.stt import SmallestSTTService
-
-stt = SmallestSTTService(
-    api_key=os.getenv("SMALLEST_API_KEY"),
-    sample_rate=16000,  # default sample rate
-    language="en",      # default language
-)
-```
-
-Available configuration options:
-
-| Parameter     | Type  | Default                        | Description                                              |
-| ------------- | ----- | ------------------------------ | -------------------------------------------------------- |
-| `api_key`     | `str` | —                              | Your Smallest AI API key (required)                      |
-| `sample_rate` | `int` | `16000`                        | Audio sample rate in Hz                                  |
-| `language`    | `str` | `en`                           | Language code for transcription                          |
-| `base_url`    | `str` | `wss://api.smallest.ai`        | WebSocket base URL                                       |
-
-The `SmallestSTTService` connects to the Pulse real-time WebSocket endpoint (`wss://api.smallest.ai/waves/v1/pulse/get_text`) and streams audio frames from the pipeline, returning transcription results with low latency (64ms TTFT).
-
----
-
-### Running the Full Voice Agent Example
-
-The example script at `examples/voice/voice-smallest.py` sets up a complete interruptible voice bot using:
-
-- **STT**: Smallest AI Pulse (real-time WebSocket transcription)
-- **LLM**: OpenAI GPT-4o
-- **TTS**: Smallest AI Lightning v3.1 (WebSocket streaming)
-- **Transport**: Daily WebRTC
-
-Run it with:
+Clone the Pipecat repository and navigate to the examples directory:
 
 ```bash
-python examples/voice/voice-smallest.py
+git clone https://github.com/pipecat-ai/pipecat.git
+cd pipecat/examples/voice
 ```
 
-Or connect to a specific Daily room directly:
+Create a `.env` file with the keys listed in the Setup section above, then run:
+
+**Daily transport — server mode (recommended):**
 
 ```bash
-python examples/voice/voice-smallest.py --url https://your-domain.daily.co/your-room
+python voice-smallest.py -t daily
 ```
+
+Open `http://localhost:7860` in your browser. The runner creates a Daily room automatically and redirects you to it.
+
+**Daily transport — direct mode (no web server, for quick testing):**
+
+```bash
+python voice-smallest.py -d
+```
+
+The room URL is printed in the terminal. Open it in your browser to join.
+
+The full source for `voice-smallest.py` is at [`examples/voice/voice-smallest.py`](https://github.com/pipecat-ai/pipecat/blob/main/examples/voice/voice-smallest.py). It sets up a complete interruptible voice bot using Smallest AI STT + TTS, OpenAI for the LLM, Silero VAD for interruptions, and Daily as the transport — all wired together with the Pipecat runner.
 
 ---
 
 ## Notes
 
-- The `SmallestTTSService` uses WebSocket streaming for low-latency, real-time audio delivery — ideal for live voice agents.
-- The `SmallestSTTService` uses the Pulse real-time WebSocket API, providing state-of-the-art 64ms TTFT for live transcription.
-- The pipeline is interruptible: if a user speaks while the bot is talking, audio generation stops immediately and the pipeline re-engages.
-- Ensure that you have added the correct API keys in the `.env` file before running the scripts.
-- For any issues or questions, feel free to open an issue in the [Pipecat repository](https://github.com/pipecat-ai/pipecat) or contact us on [Discord](https://discord.gg/9WtSXv26WE).
+- The pipeline is interruptible: if a user speaks while the bot is talking, audio stops immediately and the pipeline re-engages — no custom logic needed.
+- For any issues or questions, open an issue in the [Pipecat repository](https://github.com/pipecat-ai/pipecat) or contact us on [Discord](https://discord.gg/9WtSXv26WE).
