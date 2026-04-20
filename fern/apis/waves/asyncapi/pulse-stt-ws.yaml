@@ -173,23 +173,31 @@ servers:
             keywords:
               type: string
               description: |
-                Boost recognition of specific words or phrases for this session. Useful
-                for product names, jargon, proper nouns, and other domain-specific
-                terms the model might otherwise mis-transcribe.
+                Boost recognition of specific words or phrases for this session.
+                Useful for product names, jargon, proper nouns, and other
+                domain-specific terms the model might otherwise mis-transcribe.
+                **WebSocket only** — the HTTP `/pulse/get_text` endpoint accepts
+                the query param but does not apply the boost.
 
-                **Format:** a single comma-separated string (not a JSON array). Each
-                entry is a word or phrase, optionally followed by `:INTENSIFIER` — a
-                numeric boost multiplier. The intensifier defaults to `1.0` when
-                omitted; higher values bias recognition more aggressively toward the
-                keyword.
+                **Format:** a single comma-separated string (not a JSON array).
+                Each entry is a word or phrase, optionally followed by
+                `:INTENSIFIER` — a numeric boost multiplier. Defaults to `1.0`
+                when omitted.
 
                 **Example:** `NVIDIA:5,Jensen Huang,small language model:3.5,Waves`
 
                 - Phrases can include spaces (`small language model:3.5`).
                 - Intensifier accepts integers or decimals (`2`, `2.5`, `0.5`).
-                - Mixing entries with and without intensifiers in the same list is fine.
+                - Mixing entries with and without intensifiers is fine.
                 - Maximum 100 keywords per session.
-              example: "NVIDIA:5,Jensen Huang,small language model:3.5,Waves"
+
+                **INTENSIFIER range:** `0` to `20`. Recommended value is `6`.
+                Higher values bias recognition more aggressively toward the
+                keyword, but also **increase the risk of hallucination and
+                repetition** in the transcript. Values of `10` or above are
+                not recommended — the model may insert the keyword even when
+                it was not spoken. Start around `3–6` and tune from there.
+              example: "NVIDIA:6,Jensen Huang,small language model:3.5,Waves"
             itn_normalize:
               type: string
               enum:
