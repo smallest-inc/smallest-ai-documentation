@@ -16,7 +16,6 @@ allow-listed in scripts/.nav-ignore.
 """
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 

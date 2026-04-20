@@ -56,6 +56,11 @@ NAV_CONFIGS = [
     REPO_ROOT / "fern" / "products" / "waves" / "versions" / "v2.2.0.yml",
 ]
 
+MD_LINK_RE = re.compile(r'(?<!!)\[[^\]]*\]\((/[^)]+)\)')         # [text](/path) — NOT image
+IMG_MD_RE = re.compile(r'!\[[^\]]*\]\((/[^)]+)\)')               # ![](/path) — skip (asset)
+HREF_RE = re.compile(r'href\s*=\s*["\'](/[^"\']+)["\']')         # href="/path"
+IMG_SRC_RE = re.compile(r'<img[^>]*src\s*=\s*["\'](/[^"\']+)["\']')  # <img src="/path"> — skip
+
 
 def nav_registered_files() -> set[Path]:
     """Return the set of MDX files registered in any nav YAML."""
@@ -80,11 +85,6 @@ def nav_registered_files() -> set[Path]:
 
         walk(data)
     return found
-
-MD_LINK_RE = re.compile(r'(?<!!)\[[^\]]*\]\((/[^)]+)\)')         # [text](/path) — NOT image
-IMG_MD_RE = re.compile(r'!\[[^\]]*\]\((/[^)]+)\)')               # ![](/path) — skip (asset)
-HREF_RE = re.compile(r'href\s*=\s*["\'](/[^"\']+)["\']')         # href="/path"
-IMG_SRC_RE = re.compile(r'<img[^>]*src\s*=\s*["\'](/[^"\']+)["\']')  # <img src="/path"> — skip
 
 
 def extract_internal_links(content: str) -> set[str]:
