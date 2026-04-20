@@ -213,6 +213,10 @@ curl -H "Authorization: Bearer $SMALLEST_API_KEY" \
   `GET /agent/{id}/workflow` returns `{prompt, tools}` for the active version only. The `versionId` query parameter on this endpoint is currently ignored — to inspect a non-active version's config, call `GET /agent/{id}/versions/{versionId}` instead.
 </Note>
 
+<Warning>
+  `PATCH /workflow/{id}` still works but **bypasses versioning**. It writes directly to the legacy workflow document: the change is not captured as a version, and any field missing from the PATCH payload can be silently wiped. On a versioned agent, always go through `PATCH /agent/{id}/drafts/{draftId}/config` and publish.
+</Warning>
+
 ---
 
 ## Related

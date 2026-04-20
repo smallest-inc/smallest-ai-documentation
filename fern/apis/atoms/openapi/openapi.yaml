@@ -464,11 +464,138 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
-  # ----- DEPRECATED: Workflow endpoints -----
-  # GET /agent/{id}/workflow and PATCH /workflow/{id} are deprecated.
-  # Workflow agents are being sunset. Config reads go through
-  # GET /agent/{id}?draftId=X and writes through
-  # PATCH /agent/{id}/drafts/{draftId}/config.
+  # ── Deprecated: Workflow endpoints (still live) ────────────────────────
+  # Both still work in production and are actively used by customers, but
+  # they bypass the versioning system. Prefer PATCH /agent/{id}/drafts/{draftId}/config
+  # for writes and GET /agent/{id} for reads.
+
+  /agent/{id}/workflow:
+    get:
+      summary: Get agent workflow
+      deprecated: true
+      description: |
+        **Deprecated** — prefer `GET /agent/{id}` (config is resolved into `_resolvedConfig`
+        including prompt, tools, and post-call analytics).
+
+        Returns the active version's prompt and tools for single-prompt agents, or the
+        workflow graph data for workflow_graph agents. Customers still rely on this to
+        fetch their current prompt + tools — endpoint is kept live for now.
+
+        **Caveat:** the `versionId` query param (if passed) is silently ignored.
+        The response always reflects the currently-active version. To inspect a
+        non-active version, use `GET /agent/{id}/versions/{versionId}`.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: The ID of the agent
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: The active version's workflow.
+                    properties:
+                      prompt:
+                        type: string
+                        description: Active prompt (single-prompt agents only).
+                      tools:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Tool"
+                        description: Active tool list (single-prompt agents only).
+                      type:
+                        $ref: "#/components/schemas/WorkflowType"
+                        description: Workflow type. Present for workflow_graph agents.
+                      data:
+                        oneOf:
+                          - $ref: "#/components/schemas/WorkflowGraphData"
+                          - $ref: "#/components/schemas/SinglePromptData"
+                        description: Graph data for workflow_graph agents.
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Agent not found
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /workflow/{id}:
+    patch:
+      summary: Update workflow configuration
+      deprecated: true
+      description: |
+        **Deprecated** — use `PATCH /agent/{id}/drafts/{draftId}/config` instead.
+
+        Directly mutates the legacy workflow document for an agent. This write path
+        bypasses the versioning system entirely: the change is not captured as a
+        new version, and future version activations may overwrite the legacy doc
+        back to whatever the version snapshot contains.
+
+        ⚠ **Writing here on a versioned agent can silently wipe tools, prompt, or
+        other fields that were missing from the PATCH payload.** Only use this if
+        you know the agent is not using versioning, or if you are intentionally
+        hot-patching the legacy doc.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: The workflow ID (found at `agent.workflowId` on the agent document).
+          schema:
+            type: string
+            example: "60d0fe4f5311236168a109ca"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  $ref: "#/components/schemas/WorkflowType"
+                workflowGraph:
+                  type: object
+                  description: Required when `type = workflow_graph`. Exactly one of `workflowGraph` or `singlePromptConfig` must be provided.
+                  properties:
+                    nodes:
+                      type: array
+                      items:
+                        type: object
+                    edges:
+                      type: array
+                      items:
+                        type: object
+                singlePromptConfig:
+                  $ref: "#/components/schemas/SinglePromptConfig"
+      responses:
+        "200":
+          description: Workflow updated successfully.
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Workflow not found.
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
 
   /conversation:
     get:
