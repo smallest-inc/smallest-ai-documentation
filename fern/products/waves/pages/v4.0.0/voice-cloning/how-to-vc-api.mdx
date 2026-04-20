@@ -135,6 +135,32 @@ curl -H "Authorization: Bearer $SMALLEST_API_KEY" \
 
 Returns every clone on your organization along with `modelIds` (compatible models), `status`, `language`, and creation time.
 
+## Check model compatibility before using a clone
+
+The `modelIds` array in the list response tells you which TTS models a clone works with. Check it before passing `voice_id` to a TTS call:
+
+```bash
+curl -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  "https://api.smallest.ai/waves/v1/voice-cloning" \
+  | jq '.data[] | {displayName, voiceId, modelIds}'
+```
+
+```json
+{ "displayName": "my-voice",   "voiceId": "voice_abc", "modelIds": ["lightning-v3.1"] }
+{ "displayName": "old-voice",  "voiceId": "voice_xyz", "modelIds": ["lightning-large"] }
+```
+
+| `modelIds` contains | Works with |
+|---|---|
+| `lightning-v3.1` | `POST /waves/v1/lightning-v3.1/get_speech` and the streaming/WebSocket v3.1 endpoints |
+| `lightning-large` only | `POST /waves/v1/lightning-large/get_speech` only — will return an empty audio response on `lightning-v3.1` |
+
+Clones created via the current `POST /waves/v1/voice-cloning` endpoint always produce `lightning-v3.1`-compatible voices. The older `POST /waves/v1/lightning-large/add_voice` endpoint (deprecated) only produces `lightning-large`-compatible voices — those will not work if you try to use them with `lightning-v3.1`.
+
+<Note>
+  If you see a short (~100–200 byte) WAV response from a TTS request with a cloned voice, the most common cause is using a `lightning-large`-only clone on the `lightning-v3.1` endpoint. Check `modelIds` on the clone.
+</Note>
+
 ## Delete a clone
 
 The current public delete endpoint lives at `/waves/v1/lightning-large` despite the path suggesting otherwise — it deletes any voice clone on your organization regardless of the underlying model.
