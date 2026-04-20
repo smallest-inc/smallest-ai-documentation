@@ -1,0 +1,201 @@
+---
+title: "Instant Voice Clone (REST API)"
+sidebarTitle: "Instant Clone (API)"
+description: "Create a voice clone in a single HTTP call using the unified voice cloning API."
+icon: "compact-disc"
+---
+
+Create an instant voice clone via a single `POST` call. Uploads the audio, runs preprocessing, and returns pre-generated sample clips of the cloned voice — all in one request.
+
+<Tip>
+  This is the recommended way to clone voices programmatically. It replaces the older two-step flow and the model-specific `/lightning-large/add_voice` endpoint, which are both now deprecated.
+</Tip>
+
+## Requirements
+
+- A Smallest AI API key — grab one from the [API Keys page](https://app.smallest.ai/dashboard/api-keys).
+- A clean audio sample, 5–15 seconds, under 5 MB. Supported types: `.mp3`, `.wav`, `.mp4`, `.webm`.
+
+```bash
+export SMALLEST_API_KEY=sk_your_key_here
+```
+
+## Create the clone
+
+<CodeBlocks>
+```bash title="cURL"
+curl -X POST "https://api.smallest.ai/waves/v1/voice-cloning" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -F "displayName=my-custom-voice" \
+  -F "file=@/path/to/sample.wav" \
+  -F "language=en" \
+  -F "accent=general" \
+  -F "tags=english,friendly"
+```
+
+```python title="Python (requests)"
+import os
+import requests
+
+with open("sample.wav", "rb") as f:
+    response = requests.post(
+        "https://api.smallest.ai/waves/v1/voice-cloning",
+        headers={"Authorization": f"Bearer {os.environ['SMALLEST_API_KEY']}"},
+        data={
+            "displayName": "my-custom-voice",
+            "language": "en",
+            "accent": "general",
+            "tags": "english,friendly",
+        },
+        files={"file": f},
+    )
+
+response.raise_for_status()
+clone = response.json()["data"]
+print("voice_id:", clone["voiceId"])
+print("sample clips:", [s["audioUrl"] for s in clone["samples"]])
+```
+
+```javascript title="Node.js (fetch + FormData)"
+import fs from "node:fs";
+
+const form = new FormData();
+form.append("displayName", "my-custom-voice");
+form.append("language", "en");
+form.append("accent", "general");
+form.append("tags", "english,friendly");
+form.append("file", new Blob([fs.readFileSync("sample.wav")]), "sample.wav");
+
+const res = await fetch("https://api.smallest.ai/waves/v1/voice-cloning", {
+  method: "POST",
+  headers: { Authorization: `Bearer ${process.env.SMALLEST_API_KEY}` },
+  body: form,
+});
+
+const { data } = await res.json();
+console.log("voice_id:", data.voiceId);
+```
+</CodeBlocks>
+
+## Request fields
+
+| Field | Required | Description |
+|---|---|---|
+| `displayName` | Yes | Human-readable name for the clone. 1–500 characters. |
+| `file` | Yes | Audio file. Max 5 MB. |
+| `model` | No | Defaults to `lightning-v3.1`. `lightning-v2` is rejected with a deprecation error. |
+| `language` | No | Target language code. Must be one supported by `lightning-v3.1` (e.g. `en`, `hi`). |
+| `description` | No | Longer note about the clone. |
+| `accent` | No | Accent label (e.g. `general`, `indian`). |
+| `tags` | No | Comma-separated list. The server splits on commas and trims whitespace. |
+
+## Response shape
+
+```json
+{
+  "message": "Voice clone created successfully",
+  "data": {
+    "voiceId": "voice_dLP5T67Qw7",
+    "displayName": "my-custom-voice",
+    "status": "completed",
+    "language": "en",
+    "model": { "_id": "...", "modelName": "lightning-v3.1" },
+    "audioFileNames": ["sample.wav"],
+    "createdAt": "2026-04-20T09:42:17.103Z",
+    "organizationId": "69561896a37fd214b9a8d33c",
+    "samples": [
+      {
+        "text": "Hello! This is a sample of what I sound like.",
+        "audioUrl": "https://..."
+      }
+    ]
+  }
+}
+```
+
+Use `data.voiceId` directly in any TTS call:
+
+```bash
+curl -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Hello, this is my cloned voice.",
+    "voice_id": "voice_dLP5T67Qw7"
+  }' \
+  -o output.wav
+```
+
+## List your clones
+
+```bash
+curl -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  "https://api.smallest.ai/waves/v1/voice-cloning"
+```
+
+Returns every clone on your organization along with `modelIds` (compatible models), `status`, `language`, and creation time.
+
+## Check model compatibility before using a clone
+
+The `modelIds` array in the list response tells you which TTS models a clone works with. Check it before passing `voice_id` to a TTS call:
+
+```bash
+curl -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  "https://api.smallest.ai/waves/v1/voice-cloning" \
+  | jq '.data[] | {displayName, voiceId, modelIds}'
+```
+
+```json
+{ "displayName": "my-voice",   "voiceId": "voice_abc", "modelIds": ["lightning-v3.1"] }
+{ "displayName": "old-voice",  "voiceId": "voice_xyz", "modelIds": ["lightning-large"] }
+```
+
+| `modelIds` contains | Works with |
+|---|---|
+| `lightning-v3.1` | `POST /waves/v1/lightning-v3.1/get_speech` and the streaming/WebSocket v3.1 endpoints |
+| `lightning-large` only | `POST /waves/v1/lightning-large/get_speech` only — will return an empty audio response on `lightning-v3.1` |
+
+Clones created via the current `POST /waves/v1/voice-cloning` endpoint always produce `lightning-v3.1`-compatible voices. The older `POST /waves/v1/lightning-large/add_voice` endpoint (deprecated) only produces `lightning-large`-compatible voices — those will not work if you try to use them with `lightning-v3.1`.
+
+<Note>
+  If you see a short (~100–200 byte) WAV response from a TTS request with a cloned voice, the most common cause is using a `lightning-large`-only clone on the `lightning-v3.1` endpoint. Check `modelIds` on the clone.
+</Note>
+
+## Delete a clone
+
+The current public delete endpoint lives at `/waves/v1/lightning-large` despite the path suggesting otherwise — it deletes any voice clone on your organization regardless of the underlying model.
+
+```bash
+curl -X DELETE "https://api.smallest.ai/waves/v1/lightning-large" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "voiceId": "voice_dLP5T67Qw7" }'
+```
+
+## Errors
+
+| Status | Cause |
+|---|---|
+| 400 `No file provided` | The `file` form field is missing. |
+| 400 `clone limit exceeded, consider upgrading` | You've hit your org's instant voice-clone limit. |
+| 400 `Invalid language. Supported: ...` | `language` is not supported by `lightning-v3.1`. |
+| 400 `Voice cloning for lightning-v2 is deprecated. Please use lightning-v3.1` | `model=lightning-v2` was passed. |
+| 401 | API key missing or invalid. |
+| 500 with `error_code=voice_clone_timeout` | Preprocessing or sample generation exceeded the timeout. Retry. |
+| 500 with `error_code=voice_clone_error` | Model returned an error while processing the sample. Try a cleaner sample. |
+
+## Migrating from the legacy endpoint
+
+If you're currently using `POST /waves/v1/lightning-large/add_voice`, switch to `POST /waves/v1/voice-cloning`:
+
+- **Same auth** — `Authorization: Bearer $SMALLEST_API_KEY`.
+- **Same multipart shape** for `displayName` + `file`.
+- **New optional fields** — `language`, `description`, `accent`, `tags`.
+- **Response includes `samples`** — pre-generated audio clips of the cloned voice, which the legacy endpoint did not provide.
+- **Default model is `lightning-v3.1`** — the new unified TTS model. Voices cloned via the legacy endpoint only worked on `lightning-large` and returned empty audio on `lightning-v3.1`.
+
+The legacy endpoint still works but is marked deprecated in the API reference.
+
+---
+
+Need help? Email [support@smallest.ai](mailto:support@smallest.ai) or ask on [Discord](https://discord.gg/9WtSXv26WE).
