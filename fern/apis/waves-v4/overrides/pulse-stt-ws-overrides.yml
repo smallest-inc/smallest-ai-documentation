@@ -125,13 +125,44 @@ channels:
         required: false
         location: $message.header#/numerals
       format:
-        description: "Enable punctuation and capitalization formatting in transcript responses."
+        description: |
+          Master formatting switch for transcript responses. When `false`,
+          forces `punctuate=false`, `capitalize=false`, and also disables
+          Inverse Text Normalization (ITN) so it cannot silently reintroduce
+          punctuation or casing.
+
+          When `true`, the `punctuate` and `capitalize` params take effect
+          independently. Leave `format=true` and use those two to fine-tune.
         enum:
           - "true"
           - "false"
         default: "true"
         required: false
         location: $message.header#/format
+      punctuate:
+        description: |
+          When `false`, strips end-of-sentence punctuation (`.`, `,`, `?`, `!`)
+          from the transcript, `full_transcript`, `words[].word`, and
+          `utterances[].transcript`. Does not affect casing — use `capitalize`
+          for that. Overridden to `false` when `format=false`.
+        enum:
+          - "true"
+          - "false"
+        default: "true"
+        required: false
+        location: $message.header#/punctuate
+      capitalize:
+        description: |
+          When `false`, lowercases the entire transcript output (final
+          transcript, `full_transcript`, `words[].word`, and
+          `utterances[].transcript`). Does not affect punctuation — use
+          `punctuate` for that. Overridden to `false` when `format=false`.
+        enum:
+          - "true"
+          - "false"
+        default: "true"
+        required: false
+        location: $message.header#/capitalize
       eou_timeout_ms:
         description: "Time in milliseconds to wait after speech ends before flushing the transcript."
         default: 800

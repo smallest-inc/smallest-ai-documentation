@@ -123,7 +123,40 @@ servers:
                 - "true"
                 - "false"
               default: "true"
-              description: Enable punctuation and capitalization formatting in transcript responses.
+              description: |
+                Master formatting switch for transcript responses. When `false`,
+                forces `punctuate=false`, `capitalize=false`, and also disables
+                Inverse Text Normalization (ITN) so it cannot silently
+                reintroduce punctuation or casing.
+
+                When `true`, the `punctuate` and `capitalize` params take effect
+                independently. Leave `format=true` and use those two to fine-tune.
+            punctuate:
+              type: string
+              enum:
+                - "true"
+                - "false"
+              default: "true"
+              description: |
+                When `false`, strips end-of-sentence punctuation (`.`, `,`, `?`, `!`)
+                from the final transcript, `full_transcript`, `words[].word`, and
+                `utterances[].transcript`. Does not affect casing — use `capitalize`
+                for that.
+
+                Overridden to `false` when `format=false`.
+            capitalize:
+              type: string
+              enum:
+                - "true"
+                - "false"
+              default: "true"
+              description: |
+                When `false`, lowercases the entire transcript output (final
+                transcript, `full_transcript`, `words[].word`, and
+                `utterances[].transcript`). Does not affect punctuation — use
+                `punctuate` for that.
+
+                Overridden to `false` when `format=false`.
             eou_timeout_ms:
               type: integer
               minimum: 100

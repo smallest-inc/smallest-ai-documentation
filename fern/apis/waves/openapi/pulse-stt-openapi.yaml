@@ -137,6 +137,45 @@ paths:
             enum: ["true", "false"]
             default: "false"
           description: Whether to predict speaker emotions
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["true", "false"]
+            default: "true"
+          description: |
+            Master formatting switch for the transcript. When `false`, forces
+            `punctuate=false`, `capitalize=false`, and also disables Inverse
+            Text Normalization (ITN) so it cannot silently reintroduce
+            punctuation or casing.
+
+            When `true`, the `punctuate` and `capitalize` params take effect
+            independently. Leave `format=true` and use those two to fine-tune.
+        - name: punctuate
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["true", "false"]
+            default: "true"
+          description: |
+            When `false`, strips end-of-sentence punctuation (`.`, `,`, `?`, `!`)
+            from the transcript, `full_transcript`, `words[].word`, and
+            `utterances[].transcript`. Does not affect casing — use
+            `capitalize` for that. Overridden to `false` when `format=false`.
+        - name: capitalize
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["true", "false"]
+            default: "true"
+          description: |
+            When `false`, lowercases the entire transcript output (transcript,
+            `full_transcript`, `words[].word`, and `utterances[].transcript`).
+            Does not affect punctuation — use `punctuate` for that. Overridden
+            to `false` when `format=false`.
         - name: keywords
           in: query
           required: false
