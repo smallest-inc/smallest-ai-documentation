@@ -72,7 +72,13 @@ servers:
               description: Audio encoding format
             sample_rate:
               type: integer
-              description: "Audio sample rate in Hz. Supported values: 8000, 16000, 22050, 24000, 44100, 48000"
+              enum:
+                - 8000
+                - 16000
+                - 24000
+                - 44100
+                - 48000
+              description: "Audio sample rate in Hz. Supported values: 8000, 16000, 24000, 44100, 48000."
               default: 16000
             word_timestamps:
               type: string
@@ -123,7 +129,40 @@ servers:
                 - "true"
                 - "false"
               default: "true"
-              description: Enable punctuation and capitalization formatting in transcript responses.
+              description: |
+                Master formatting switch for transcript responses. When `false`,
+                forces `punctuate=false`, `capitalize=false`, and also disables
+                Inverse Text Normalization (ITN) so it cannot silently
+                reintroduce punctuation or casing.
+
+                When `true`, the `punctuate` and `capitalize` params take effect
+                independently. Leave `format=true` and use those two to fine-tune.
+            punctuate:
+              type: string
+              enum:
+                - "true"
+                - "false"
+              default: "true"
+              description: |
+                When `false`, strips end-of-sentence punctuation (`.`, `,`, `?`, `!`)
+                from the final transcript, `full_transcript`, `words[].word`, and
+                `utterances[].transcript`. Does not affect casing — use `capitalize`
+                for that.
+
+                Overridden to `false` when `format=false`.
+            capitalize:
+              type: string
+              enum:
+                - "true"
+                - "false"
+              default: "true"
+              description: |
+                When `false`, lowercases the entire transcript output (final
+                transcript, `full_transcript`, `words[].word`, and
+                `utterances[].transcript`). Does not affect punctuation — use
+                `punctuate` for that.
+
+                Overridden to `false` when `format=false`.
             eou_timeout_ms:
               type: integer
               minimum: 100
@@ -139,7 +178,32 @@ servers:
               description: Enable speaker diarization to identify different speakers in the audio.
             keywords:
               type: string
-              description: "Comma-separated list of words/phrases to boost, each optionally followed by :INTENSIFIER (e.g. NVIDIA:5,Jensen). Intensifier defaults to 1.0 if omitted. Max 100 keywords per session."
+              description: |
+                Boost recognition of specific words or phrases for this session.
+                Useful for product names, jargon, proper nouns, and other
+                domain-specific terms the model might otherwise mis-transcribe.
+                **Streaming (WebSocket) only** — not supported on the HTTP
+                `/pulse/get_text` endpoint.
+
+                **Format:** a single comma-separated string (not a JSON array).
+                Each entry is a word or phrase, optionally followed by
+                `:INTENSIFIER` — a numeric boost multiplier. Defaults to `1.0`
+                when omitted.
+
+                **Example:** `NVIDIA:5,Jensen Huang,small language model:3.5,Waves`
+
+                - Phrases can include spaces (`small language model:3.5`).
+                - Intensifier accepts integers or decimals (`2`, `2.5`, `0.5`).
+                - Mixing entries with and without intensifiers is fine.
+                - Maximum 100 keywords per session.
+
+                **INTENSIFIER range:** `0` to `20`. Recommended value is `6`.
+                Higher values bias recognition more aggressively toward the
+                keyword, but also **increase the risk of hallucination and
+                repetition** in the transcript. Values of `10` or above are
+                not recommended — the model may insert the keyword even when
+                it was not spoken. Start around `3–6` and tune from there.
+              example: "NVIDIA:6,Jensen Huang,small language model:3.5,Waves"
             itn_normalize:
               type: string
               enum:
