@@ -1,0 +1,345 @@
+---
+title: "React Native"
+sidebarTitle: "React Native"
+description: "Connect a React Native app to the Smallest Atoms agent over raw WebSocket. Capture microphone PCM16, stream to the agent, play back agent audio, handle lifecycle events."
+---
+
+React Native apps talk to the Atoms agent through the same raw WebSocket protocol documented in the [Realtime Agent API reference](/atoms/api-reference/api-reference/realtime-agent/realtime-agent). The browser [WebSocket SDK](/atoms/developer-guide/integrate/web-socket-sdk) does not run in React Native because it depends on `navigator.mediaDevices.getUserMedia` and the Web Audio API, neither of which exist in the RN JavaScript runtime. The raw protocol is identical, so you reproduce the same connect + audio flow using platform-native capture and playback.
+
+<Note>
+  The code on this page is compile-correct against the referenced packages but has not been validated on a physical device. Verify microphone permission, audio routing, and latency on your target hardware before shipping.
+</Note>
+
+## When to use React Native
+
+- Your existing app is React Native and you want to embed an in-app voice agent without bringing in WebRTC.
+- You are building a cross-platform mobile client and want the JavaScript-side logic to look similar to the browser SDK.
+- You do not need character-level TTS alignment timings (the raw protocol does not emit them).
+
+For iOS-only apps with strict binary-size or battery budgets, prefer the [iOS (Swift)](/atoms/developer-guide/integrate/mobile/ios-swift) native path. For Flutter, see the [Flutter](/atoms/developer-guide/integrate/mobile/flutter) guide.
+
+## Dependencies
+
+```bash
+npm install @dr.pogodin/react-native-audio react-native-permissions
+```
+
+| Package | Role | Why this one |
+|---|---|---|
+| React Native built-in `WebSocket` | Transport | No extra dependency. Works identically on iOS and Android. |
+| `@dr.pogodin/react-native-audio` | Microphone PCM16 capture and PCM playback | Exposes a raw Int16 callback at an arbitrary sample rate. Actively maintained, compatible with Expo dev builds and bare React Native. |
+| `react-native-permissions` | Runtime microphone permission | Required on both iOS and Android. Wraps platform APIs so the same call works everywhere. |
+
+### Alternatives worth knowing
+
+- **`react-native-audio-api`** (Software Mansion). Implements a Web Audio-like API for React Native. Good pick if you are porting browser audio code directly. Still young; consult current docs for sample-rate support.
+- **`expo-av`**. Works in Expo managed and dev builds. Limited to higher-level recording APIs, harder to get raw PCM16 frames at a fixed sample rate. Not recommended for realtime voice.
+
+## Permissions
+
+### iOS
+
+Add to `ios/<AppName>/Info.plist`:
+
+```xml
+<key>NSMicrophoneUsageDescription</key>
+<string>We need the microphone to let you talk to the voice agent.</string>
+```
+
+### Android
+
+Add to `android/app/src/main/AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+```
+
+### Request at runtime
+
+```typescript
+import { PERMISSIONS, request, RESULTS } from "react-native-permissions";
+import { Platform } from "react-native";
+
+async function ensureMicPermission(): Promise<boolean> {
+  const perm = Platform.OS === "ios"
+    ? PERMISSIONS.IOS.MICROPHONE
+    : PERMISSIONS.ANDROID.RECORD_AUDIO;
+  const result = await request(perm);
+  return result === RESULTS.GRANTED;
+}
+```
+
+## Quickstart
+
+A minimal agent session: request permission, open the WebSocket, stream mic audio, play agent audio, tear down.
+
+```typescript
+import { useEffect, useRef, useState } from "react";
+import { View, Button, Text } from "react-native";
+import AudioRecord from "@dr.pogodin/react-native-audio";
+import { Buffer } from "buffer";
+
+const API_KEY = "sk_...";
+const AGENT_ID = "...";
+const SAMPLE_RATE = 24000;
+
+export function VoiceAgentScreen() {
+  const wsRef = useRef<WebSocket | null>(null);
+  const [status, setStatus] = useState<"idle" | "connecting" | "connected" | "error">("idle");
+
+  async function start() {
+    const granted = await ensureMicPermission();
+    if (!granted) { setStatus("error"); return; }
+
+    const url =
+      `wss://api.smallest.ai/atoms/v1/agent/connect` +
+      `?token=${encodeURIComponent(API_KEY)}` +
+      `&agent_id=${encodeURIComponent(AGENT_ID)}` +
+      `&mode=webcall&sample_rate=${SAMPLE_RATE}`;
+
+    setStatus("connecting");
+    const ws = new WebSocket(url);
+    wsRef.current = ws;
+
+    ws.onopen = () => startMic(ws);
+    ws.onmessage = (e) => handleServerEvent(e.data);
+    ws.onerror = () => setStatus("error");
+    ws.onclose = () => {
+      AudioRecord.stop();
+      setStatus("idle");
+    };
+  }
+
+  function stop() {
+    wsRef.current?.close();
+  }
+
+  useEffect(() => () => wsRef.current?.close(), []);
+
+  return (
+    <View style={{ padding: 20 }}>
+      <Text>Status: {status}</Text>
+      {status === "idle"      && <Button title="Start call"  onPress={start} />}
+      {status === "connected" && <Button title="End call"    onPress={stop}  />}
+    </View>
+  );
+}
+```
+
+### Microphone capture
+
+Start capture on `ws.onopen` and send each frame as a base64-encoded `input_audio_buffer.append` message.
+
+```typescript
+function startMic(ws: WebSocket) {
+  AudioRecord.init({
+    sampleRate:    SAMPLE_RATE,   // must match URL sample_rate
+    channels:      1,             // mono
+    bitsPerSample: 16,            // linear PCM16
+    audioSource:   6,             // Android: VOICE_COMMUNICATION (echo cancellation)
+    wavFile:       "",            // don't write to disk
+  });
+
+  AudioRecord.on("data", (base64Chunk: string) => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({
+      type:  "input_audio_buffer.append",
+      audio: base64Chunk,          // already base64-encoded PCM16
+    }));
+  });
+
+  AudioRecord.start();
+}
+```
+
+### Server events
+
+The server sends six event types. The ones you must handle in a minimum viable integration:
+
+| Event | What to do |
+|---|---|
+| `session.created` | Set status to "connected". Start the call timer if you show one. |
+| `output_audio.delta` | Decode base64, feed the PCM16 buffer to playback. |
+| `agent_start_talking` | Show the "agent speaking" UI. Optionally mute the mic to reduce echo. |
+| `agent_stop_talking` | Hide the "agent speaking" UI. Unmute the mic. |
+| `session.closed` | Clean up and reset to idle. |
+| `interruption` | User barged in. Truncate any queued agent audio. |
+
+```typescript
+function handleServerEvent(raw: string) {
+  const ev = JSON.parse(raw);
+  switch (ev.type) {
+    case "session.created":
+      setStatus("connected");
+      break;
+    case "output_audio.delta":
+      playPcm16(Buffer.from(ev.audio, "base64"));
+      break;
+    case "agent_start_talking":
+      setSpeaking(true);
+      break;
+    case "agent_stop_talking":
+      setSpeaking(false);
+      break;
+    case "interruption":
+      flushPlaybackQueue();     // drop any buffered audio
+      break;
+    case "session.closed":
+      setStatus("idle");
+      break;
+  }
+}
+```
+
+### Playback
+
+`@dr.pogodin/react-native-audio` exposes a streaming playback API. The key is to keep feeding PCM16 chunks as they arrive and let the native side schedule them without gaps.
+
+```typescript
+import { AudioTrack } from "@dr.pogodin/react-native-audio";
+
+const playback = new AudioTrack({
+  sampleRate:    SAMPLE_RATE,
+  channels:      1,
+  bitsPerSample: 16,
+  bufferSize:    4096,
+});
+
+playback.start();
+
+function playPcm16(chunk: Buffer) {
+  playback.write(chunk.toString("base64"));
+}
+
+function flushPlaybackQueue() {
+  playback.flush();
+}
+```
+
+## Full session handling
+
+### Turn lifecycle
+
+A single conversational turn has this sequence on the wire:
+
+1. Client keeps streaming `input_audio_buffer.append` from the mic.
+2. Server detects end of user utterance, runs STT → LLM → TTS.
+3. Server sends `agent_start_talking`.
+4. Server sends a stream of `output_audio.delta` chunks.
+5. Server sends `agent_stop_talking`.
+6. Back to step 1.
+
+The client does not send `input_audio_buffer.commit` in normal conversational flow. The server's VAD handles turn boundaries. You only send `commit` if you implement explicit push-to-talk and want to force an immediate response.
+
+### Backpressure on playback
+
+The server emits `output_audio.delta` faster than realtime when the LLM finishes early. If you play each chunk as it arrives, audio will overlap. Feed the chunks into a ring buffer that the audio thread drains at the sample rate. `AudioTrack.write` from `@dr.pogodin/react-native-audio` handles this internally when you keep calling `write` on every chunk.
+
+### Interruptions
+
+When the server emits `interruption`, the user has spoken while the agent was talking. The agent's remaining TTS output for that turn is invalid; drop it. Call `playback.flush()` or your ring buffer's equivalent. A new `agent_start_talking` will follow shortly.
+
+## Platform gotchas
+
+### iOS: AVAudioSession is not your concern in RN
+
+React Native's JS runtime does not interact with `AVAudioSession` directly. The audio capture library configures it. If you have other audio-producing libraries in your app (music player, video), coordinate via their public APIs. Mis-configuration across libraries can cause one to silence the other.
+
+### iOS: background voice calls
+
+If the call should continue when the user locks the screen or switches apps, add `audio` to `UIBackgroundModes` in `Info.plist`:
+
+```xml
+<key>UIBackgroundModes</key>
+<array>
+  <string>audio</string>
+</array>
+```
+
+This is stricter than the typical background fetch; Apple reviews for actual VoIP use. If the app is rejected, you either need to end the call when backgrounded or use `voip` mode with CallKit integration.
+
+### Android: foreground service for long calls
+
+Android kills background mic access aggressively. For calls longer than ~30 seconds in the background, run a foreground service. Reference the Android guide's [foreground services for phone calls](https://developer.android.com/guide/components/foreground-services#voice-or-video-calls-or-ongoing-phone-calls) page.
+
+### Incoming phone call interruption
+
+Both platforms fire audio session interruptions when a phone call comes in. The capture library's `data` callback stops firing. Listen for your app's focus-loss event (`AppState` in React Native) and tear down the WebSocket gracefully:
+
+```typescript
+import { AppState } from "react-native";
+
+useEffect(() => {
+  const sub = AppState.addEventListener("change", (state) => {
+    if (state !== "active" && wsRef.current) {
+      wsRef.current.close(1000, "backgrounded");
+    }
+  });
+  return () => sub.remove();
+}, []);
+```
+
+### Echo cancellation
+
+Set `audioSource: 6` (Android `VOICE_COMMUNICATION`) in `AudioRecord.init`. This routes capture through the platform AEC pipeline. On iOS, `@dr.pogodin/react-native-audio` uses the `voiceChat` audio mode automatically when you initialize with VoIP-style parameters.
+
+Without AEC, the agent hears its own audio through the mic and starts talking to itself.
+
+### Bluetooth audio routing
+
+If the user connects a Bluetooth headset mid-call, the audio session reroutes automatically on both platforms. Test this flow: some devices buffer poorly and introduce perceptible lag for a few seconds after the route change.
+
+## Production hardening
+
+### Reconnect on transient network loss
+
+`ws.onclose` with a non-1000 code is a network drop. Reconnect with exponential backoff up to 30 s. Do not retry on 1000 (clean close) or 4401 / 4403 (auth failure):
+
+```typescript
+let reconnectMs = 500;
+
+ws.onclose = (e) => {
+  if (e.code === 1000 || e.code === 4401 || e.code === 4403) return;
+  setTimeout(start, Math.min(reconnectMs *= 2, 30000));
+};
+```
+
+### App lifecycle
+
+Tear down the WebSocket and audio pipeline on `AppState` change to `background` and `inactive`. Do not try to keep the call alive across a full suspension. iOS will kill the socket anyway and the user sees a confusing silence.
+
+### Battery
+
+Realtime audio + open WebSocket consumes roughly 3–5 % battery per minute on modern phones. For support-use calls (short, bounded duration), this is fine. For background companion apps, design for short sessions.
+
+### Error events
+
+Subscribe to the server's `error` event and surface non-transient errors to the user:
+
+```typescript
+case "error":
+  console.error(`[${ev.code}] ${ev.message}`);
+  if (ev.code === "401" || ev.code === "403") {
+    // auth failure: user-visible, show "please sign in again"
+  }
+  break;
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Realtime Agent WebSocket API" icon="plug" href="/atoms/api-reference/api-reference/realtime-agent/realtime-agent">
+    The full wire protocol with every message type, payload, and error code.
+  </Card>
+  <Card title="WebSocket SDK (browser)" icon="code" href="/atoms/developer-guide/integrate/web-socket-sdk">
+    The JavaScript SDK for browser runtimes.
+  </Card>
+  <Card title="iOS (Swift)" icon="apple" href="/atoms/developer-guide/integrate/mobile/ios-swift">
+    Native Swift integration with URLSessionWebSocketTask and AVAudioEngine.
+  </Card>
+  <Card title="Error reference" icon="triangle-exclamation" href="/atoms/atoms-platform/troubleshooting/error-reference">
+    HTTP status codes returned by every Atoms endpoint.
+  </Card>
+</CardGroup>
