@@ -60,9 +60,11 @@ def load_ignore_list() -> set[Path]:
 def extract_mdx_paths_from_nav(nav_file: Path) -> set[Path]:
     """Walk a Fern nav YAML and return every .mdx path resolved to absolute.
 
-    Nav entries look like:
+    Handles two nav shapes:
         - page: Foo
-          path: ../pages/foo.mdx
+          path: ../pages/foo.mdx            # single page
+
+        - changelog: ../pages/.../entries   # folder of date-named entry MDX files
 
     Paths are resolved relative to the YAML file's own directory.
     """
@@ -79,6 +81,12 @@ def extract_mdx_paths_from_nav(nav_file: Path) -> set[Path]:
         if isinstance(node, dict):
             if "path" in node and isinstance(node["path"], str) and node["path"].endswith(".mdx"):
                 paths.add((base_dir / node["path"]).resolve())
+            if "changelog" in node and isinstance(node["changelog"], str):
+                # Fern renders every .mdx in the folder as a changelog entry.
+                entries_dir = (base_dir / node["changelog"]).resolve()
+                if entries_dir.is_dir():
+                    for mdx in entries_dir.rglob("*.mdx"):
+                        paths.add(mdx.resolve())
             for v in node.values():
                 walk(v)
         elif isinstance(node, list):
