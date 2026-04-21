@@ -1,0 +1,241 @@
+---
+title: "Browser SDK"
+sidebarTitle: "Browser SDK"
+description: "Embed a Smallest voice agent in any web page with @smallest-ai/agent-sdk — microphone capture, audio playback, and event handling in a few lines."
+---
+
+`@smallest-ai/agent-sdk` is the official JavaScript client for embedding a Smallest agent in a browser. It handles the WebSocket handshake, microphone capture, and audio playback, and exposes a small event API on top.
+
+This page is for **browser runtimes only** — React / Vue / vanilla JS / anything that runs in a web page. For React Native, iOS, Android, Python, or Go, use the [Realtime Agent WebSocket API](/atoms/api-reference/api-reference/realtime-agent/realtime-agent) directly — a dedicated Raw WebSocket Protocol guide with tested reference clients for those runtimes is in progress. The SDK relies on browser-only APIs (`navigator.mediaDevices.getUserMedia`, `AudioContext`) that don't exist in those runtimes.
+
+<Info>
+  Before you start, you need an API key (from [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys)) and an agent ID. If you don't have an agent yet, follow the [Quickstart](/atoms/developer-guide/get-started/quickstart) or create one from the [Agents dashboard](https://app.smallest.ai/dashboard/agents).
+</Info>
+
+## Install
+
+<CodeBlocks>
+  ```bash npm
+  npm install @smallest-ai/agent-sdk
+  ```
+  ```bash pnpm
+  pnpm add @smallest-ai/agent-sdk
+  ```
+  ```bash yarn
+  yarn add @smallest-ai/agent-sdk
+  ```
+  ```html CDN
+  <script src="https://cdn.jsdelivr.net/npm/@smallest-ai/agent-sdk/dist/agent-sdk.browser.js"></script>
+  <!-- When loaded via CDN, the SDK is exposed on window.AtomsSdk -->
+  ```
+</CodeBlocks>
+
+## Quickstart
+
+```typescript
+import { AtomsAgent } from "@smallest-ai/agent-sdk";
+
+const agent = new AtomsAgent({
+  apiKey:  "sk_...",   // your Smallest API key
+  agentId: "...",      // the agent you want to talk to
+});
+
+agent.on("session_started", (e) => {
+  console.log("Session started:", e.session_id, e.call_id);
+});
+agent.on("agent_start_talking", () => console.log("Agent is speaking..."));
+agent.on("agent_stop_talking",  () => console.log("Agent stopped."));
+agent.on("error",               (e) => console.error(`[${e.code}] ${e.message}`));
+
+await agent.connect();
+// The microphone is captured automatically. Speak, and the agent replies
+// through your speakers. When done:  agent.disconnect();
+```
+
+The CDN equivalent uses the global `AtomsSdk` namespace:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/@smallest-ai/agent-sdk/dist/agent-sdk.browser.js"></script>
+<script>
+  const agent = new AtomsSdk.AtomsAgent({
+    apiKey:  "sk_...",
+    agentId: "...",
+  });
+  agent.on("session_started", (e) => console.log("connected:", e.session_id));
+  agent.connect();
+</script>
+```
+
+<Warning>
+  The SDK calls `navigator.mediaDevices.getUserMedia()` on `connect()`. Browsers only expose microphone access on **secure contexts** — HTTPS in production, and `http://localhost` / `http://127.0.0.1` during development. A plain HTTP page on a non-loopback host will throw.
+</Warning>
+
+## Configuration
+
+```typescript
+interface AtomsAgentConfig {
+  apiKey:         string;    // Required. Your Smallest API key.
+  agentId:        string;    // Required. The agent to connect to.
+  baseUrl?:       string;    // Default: wss://api.smallest.ai. Only override for local dev.
+  sampleRate?:    number;    // Default: 24000. Audio sample rate in Hz.
+  autoCaptureMic?: boolean;  // Default: true. Set false to call .unmute() manually later.
+}
+```
+
+## Methods
+
+| Method | Returns | Description |
+|---|---|---|
+| `connect()` | `Promise<void>` | Open the WebSocket and start the session. If `autoCaptureMic` is `true`, the microphone starts immediately. |
+| `disconnect()` | `void` | End the session and release microphone + audio resources. |
+| `sendText(text)` | `void` | Send a text message to the agent (for chat-style input). The agent's reply comes back as audio via `output_audio.delta` → playback. |
+| `mute()` | `void` | Stop sending microphone audio. WebSocket stays open. |
+| `unmute()` | `void` | Resume sending microphone audio. |
+| `isConnected` (getter) | `boolean` | `true` after `connect()` resolves, until `disconnect()` or the server ends the session. |
+| `isMuted` (getter) | `boolean` | `true` while muted. |
+
+## Events
+
+Subscribe with `agent.on(eventName, handler)`. The SDK emits these events:
+
+| Event | Payload | Fires when |
+|---|---|---|
+| `session_started` | `{ session_id: string, call_id: string }` | Connection + session handshake complete. Use `call_id` to look up the call log afterwards or to subscribe to live transcripts via SSE. |
+| `session_ended` | `{ reason: string }` | Session is over. Common `reason` values: `client_requested`, `websocket_closed`, a server-side error tag. |
+| `agent_start_talking` | _(no payload)_ | Server begins streaming agent TTS for a turn. Useful for "agent speaking..." UI cues and for pausing other audio on the page. |
+| `agent_stop_talking` | _(no payload)_ | Server finished the current turn. |
+| `error` | `{ code: string, message: string }` | Non-fatal session error. Fatal errors also trigger `session_ended`. |
+| `transcript` | `{ role: "user" \| "agent", text: string }` | Reserved — the SDK wires this up, but the production pipeline does not currently stream transcripts over this WebSocket. Use `GET /atoms/v1/conversation/{callId}` post-call for the full transcript, or the SSE live-transcripts endpoint mid-session. |
+
+## Patterns
+
+### Push-to-talk
+
+Start connected but muted; toggle on a button press.
+
+```typescript
+const agent = new AtomsAgent({
+  apiKey:          "sk_...",
+  agentId:         "...",
+  autoCaptureMic:  false,  // don't start the mic on connect
+});
+
+await agent.connect();
+
+// On pointerdown / spacebar-down / etc.
+talkButton.addEventListener("pointerdown", () => agent.unmute());
+talkButton.addEventListener("pointerup",   () => agent.mute());
+```
+
+### Agent-speaking indicator
+
+Toggle a UI state around TTS output so the user sees when to wait vs when to speak.
+
+```typescript
+agent.on("agent_start_talking", () => setSpeaking(true));
+agent.on("agent_stop_talking",  () => setSpeaking(false));
+```
+
+### Clean teardown on page unload
+
+```typescript
+window.addEventListener("beforeunload", () => {
+  if (agent.isConnected) agent.disconnect();
+});
+```
+
+### Sending text
+
+Useful for button-driven flows, or as a fallback when the microphone isn't available.
+
+```typescript
+await agent.connect();
+sendButton.addEventListener("click", () => {
+  agent.sendText(inputEl.value);
+});
+```
+
+## Error handling
+
+```typescript
+agent.on("error", (e) => {
+  switch (e.code) {
+    case "401":
+    case "403":
+      console.error("auth failed — check API key");
+      break;
+    case "invalid_event":
+      console.error("SDK sent malformed event:", e.message);
+      break;
+    default:
+      console.error(`[${e.code}] ${e.message}`);
+  }
+});
+
+try {
+  await agent.connect();
+} catch (err) {
+  // connect() rejects on WebSocket handshake failures, mic permission denials, etc.
+  console.error("connect failed:", err.message);
+}
+```
+
+## Testing the integration
+
+A minimal smoke test you can run locally to verify the SDK reaches your agent and produces audio — no build step required:
+
+```html
+<!doctype html>
+<meta charset="utf-8">
+<title>Atoms SDK smoke test</title>
+<pre id="log"></pre>
+<script src="https://cdn.jsdelivr.net/npm/@smallest-ai/agent-sdk/dist/agent-sdk.browser.js"></script>
+<script>
+  const log = (...args) => {
+    document.getElementById('log').textContent +=
+      args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ') + '\n';
+  };
+  const params = new URLSearchParams(location.search);
+  const agent  = new AtomsSdk.AtomsAgent({
+    apiKey:  params.get('key'),
+    agentId: params.get('agent'),
+  });
+  agent.on("session_started",    (e) => log("session_started", e));
+  agent.on("agent_start_talking",()  => log("agent_start_talking"));
+  agent.on("agent_stop_talking", ()  => log("agent_stop_talking"));
+  agent.on("error",              (e) => log("error", e));
+  agent.connect().then(() => log("connected"));
+</script>
+```
+
+Serve it from `localhost` (browsers gate the microphone behind HTTPS or loopback) and open with your key and agent ID in the query string:
+
+```bash
+python3 -m http.server 8765
+# then open: http://localhost:8765/smoke.html?key=sk_...&agent=...
+```
+
+You should see, in this order: `session_started` with a `session_id` + `call_id`, then `agent_start_talking`, then (after the agent's first turn) `agent_stop_talking`. If the agent has a greeting prompt it'll speak through your speakers.
+
+## Limits + roadmap
+
+- **Browser only.** The SDK uses `navigator.mediaDevices.getUserMedia` and `AudioContext` directly. There is no React Native / Node / Cordova entry point.
+- **WebSocket transport only.** The SDK doesn't use WebRTC.
+- **No TTS alignment timings.** The SDK plays back audio as it arrives; it doesn't expose per-character timing for client-side caption sync.
+- **`transcript` event isn't currently emitted over this WebSocket.** Use the [post-call conversation API](/atoms/api-reference/api-reference/logs/get-conversation-log-by-id) or the [SSE live-transcripts stream](/atoms/developer-guide/operate/analytics/sse-for-live-transcripts) instead.
+
+For non-browser runtimes, talk to the [Realtime Agent WebSocket API](/atoms/api-reference/api-reference/realtime-agent/realtime-agent) directly. A Raw WebSocket Protocol guide with tested reference clients for Python, React Native (via `react-native-webrtc` + raw WS), Swift, and Kotlin is in progress.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Agent WebSocket API reference" icon="plug" href="/atoms/api-reference/api-reference/realtime-agent/realtime-agent">
+    Full wire protocol — every message type, payload, and error code.
+  </Card>
+  <Card title="Post-Call Analytics" icon="chart-bar" href="/atoms/developer-guide/operate/analytics/post-call-analytics">
+    Disposition metrics and full transcripts after each call.
+  </Card>
+  <Card title="Live Transcripts (SSE)" icon="rss" href="/atoms/developer-guide/operate/analytics/sse-for-live-transcripts">
+    Stream user + agent utterances mid-call.
+  </Card>
+</CardGroup>
