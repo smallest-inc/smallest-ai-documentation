@@ -53,6 +53,11 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install pyyaml
+        # Needed by check_links.py's newly-registered-page detection
+        # (reads nav YAMLs both on this branch and on origin/main).
+        run: pip install pyyaml
+
       - name: Determine changed MDX files
         id: changed
         run: |
@@ -74,4 +79,12 @@ jobs:
 
       - name: Run link check on changed files
         if: steps.changed.outputs.skip != 'true'
-        run: python3 scripts/check_links.py ${{ steps.changed.outputs.files }}
+        run: |
+          # Use the PR base SHA as pending-base so --pending-base resolves
+          # deterministically in CI (origin/main isn't always present as a ref).
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          python3 scripts/check_links.py --pending-base "$base" ${{ steps.changed.outputs.files }}

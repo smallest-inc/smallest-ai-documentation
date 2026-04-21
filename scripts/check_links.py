@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -130,6 +131,61 @@ def extract_internal_links(content: str, base: str = DEFAULT_BASE) -> set[str]:
     return urls
 
 
+def newly_registered_mdx_stems(base_ref: str) -> set[str]:
+    """Return the stems of MDX files newly registered in nav on this branch
+    vs base_ref. Catches both (a) files added and registered in this PR and
+    (b) pre-existing orphan files that this PR registers for the first time.
+
+    Used to mark 404s as "pending deploy" rather than "broken" when a
+    cross-link points at a page made visible in the same PR.
+
+    Heuristic: matches when the URL's last path segment equals the MDX
+    file's stem. Handles the common case where Fern's slug == file stem.
+    Falls through (treated as broken) when display-name-derived slug
+    differs from stem (e.g. websocket-sdk.mdx rendered as /web-socket-sdk).
+    """
+    # Current-branch registered set
+    current = {p.name for p in nav_registered_files()}
+    # Base-ref registered set — read each nav YAML as it existed at base_ref
+    base_registered: set[str] = set()
+    for cfg in NAV_CONFIGS:
+        if not cfg.exists():
+            continue
+        try:
+            base_yaml = subprocess.check_output(
+                ["git", "show", f"{base_ref}:{cfg.relative_to(REPO_ROOT)}"],
+                cwd=REPO_ROOT,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+        except subprocess.CalledProcessError:
+            continue
+        if yaml is None:
+            continue
+        data = yaml.safe_load(base_yaml)
+        base_dir = cfg.parent
+
+        def walk(node):
+            if isinstance(node, dict):
+                if "path" in node and isinstance(node["path"], str) and node["path"].endswith(".mdx"):
+                    base_registered.add((base_dir / node["path"]).resolve().name)
+                if "changelog" in node and isinstance(node["changelog"], str):
+                    entries_dir = (base_dir / node["changelog"]).resolve()
+                    if entries_dir.is_dir():
+                        for mdx in entries_dir.rglob("*.mdx"):
+                            base_registered.add(mdx.resolve().name)
+                for v in node.values():
+                    walk(v)
+            elif isinstance(node, list):
+                for item in node:
+                    walk(item)
+
+        walk(data)
+
+    newly = current - base_registered
+    return {Path(n).stem for n in newly}
+
+
 def probe(url: str, base: str) -> tuple[str, int, str]:
     """HEAD-check a single URL. Return (url, status_code, note)."""
     full = base.rstrip('/') + url
@@ -152,6 +208,10 @@ def main() -> int:
     ap.add_argument(
         '--all-files', action='store_true',
         help='Check every MDX file including orphans and frozen versions. Default behaviour is to only check files registered in a nav YAML (i.e. pages that actually render on docs.smallest.ai).',
+    )
+    ap.add_argument(
+        '--pending-base', default='origin/main',
+        help='Git ref to diff against when detecting pages added in this branch. A 404 on a URL whose last segment matches a newly-added MDX stem is reported as PENDING rather than broken. Default: origin/main.',
     )
     args = ap.parse_args()
 
@@ -191,17 +251,33 @@ def main() -> int:
 
     print(f'Checking {len(url_sources)} unique internal URL(s) across {len(targets)} file(s) against {args.base} ...')
 
+    pending_stems = newly_registered_mdx_stems(args.pending_base)
+
     broken: list[tuple[str, int, list[str]]] = []
+    pending: list[tuple[str, int, list[str]]] = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = {pool.submit(probe, url, args.base): url for url in url_sources}
         for fut in as_completed(futures):
             url, code, note = fut.result()
             # 2xx and 3xx are acceptable (Fern commonly returns 307 for redirect-to-first-endpoint)
             if code < 200 or code >= 400:
-                broken.append((url, code, url_sources[url]))
+                last_segment = url.rstrip('/').rsplit('/', 1)[-1]
+                if last_segment in pending_stems:
+                    pending.append((url, code, url_sources[url]))
+                else:
+                    broken.append((url, code, url_sources[url]))
+
+    if pending:
+        print()
+        print(f'⏳ {len(pending)} link(s) pending deploy (points at a page added in this branch):')
+        for url, code, sources in sorted(pending):
+            print(f'  {code}  {url}')
+            for src in sources[:2]:
+                print(f'        in: {src}')
 
     if not broken:
-        print(f'✅ All {len(url_sources)} internal link(s) resolve.')
+        resolved = len(url_sources) - len(pending)
+        print(f'✅ {resolved} internal link(s) resolve; {len(pending)} pending deploy.')
         return 0
 
     print()
