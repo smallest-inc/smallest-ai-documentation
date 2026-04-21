@@ -325,6 +325,39 @@ ws.onmessage = (event) => {
 };
 ```
 
+## Common API errors
+
+These apply to both the WebSocket handshake and any REST call you make to set up a session.
+
+### 401 Unauthorized
+
+Missing or invalid `Authorization` header on the WebSocket handshake or REST call.
+
+**Fix.** Send `Authorization: Bearer <KEY>` with a single space and no quotes. Browsers cannot set custom headers on WebSocket handshakes, so browser clients must instead use the `?token=<KEY>` query parameter where supported. Check the key has not been rotated at [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys).
+
+### 403 Forbidden
+
+The key is valid but lacks permission for this resource.
+
+**Common causes.**
+- Key from a different workspace.
+- Key scoped to a different product (for example, an Atoms key on a Waves STT endpoint).
+- Workspace trial or usage limit reached.
+
+**Fix.** Confirm the key was generated in the intended workspace at [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys).
+
+### 429 Too Many Requests
+
+The request exceeded the current rate limit. Rare on a single WebSocket session but possible when opening many sessions concurrently.
+
+**Fix.** Retry with exponential backoff starting at 500 ms, doubling up to 30 s. Respect the `Retry-After` header if present.
+
+### 500 Internal Server Error
+
+A server-side issue.
+
+**Fix.** Retry once after a short delay. If it persists, file a support ticket and include the `x-request-id` response header.
+
 ## Getting Help
 
 If you continue to experience issues:
