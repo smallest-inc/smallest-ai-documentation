@@ -1,0 +1,485 @@
+asyncapi: 3.0.0
+info:
+  title: Atoms Agent WebSocket API
+  version: 1.0.0
+  description: |
+    WebSocket endpoint for real-time voice and text conversations with an Atoms
+    agent. Designed for client-side applications (browser, React Native, mobile,
+    desktop) that need a direct, persistent connection without going through
+    the WebRTC-based webcall flow.
+
+    Two transports use this endpoint under the hood:
+    - The official `@smallest-ai/agent-sdk` JavaScript/TypeScript SDK wraps this
+      protocol and handles mic capture, audio resampling, and event dispatch.
+    - Non-JS clients (Swift, Kotlin, Python, Go) can implement the protocol
+      directly — all messages are JSON, audio payloads are base64-encoded.
+
+    All session orchestration is server-side: the backend creates the agent
+    session, connects to the STT/LLM/TTS pipeline via NATS, and bridges
+    transcripts and audio back over the same WebSocket.
+  contact:
+    name: Smallest AI Support
+    email: support@smallest.ai
+servers:
+  production:
+    host: api.smallest.ai
+    pathname: /atoms/v1/agent/connect
+    protocol: wss
+    description: Production Agent WebSocket endpoint
+    security:
+      - $ref: "#/components/securitySchemes/bearerAuth"
+    bindings:
+      ws:
+        query:
+          type: object
+          required:
+            - agent_id
+          properties:
+            agent_id:
+              type: string
+              description: The Atoms agent to connect to. Required.
+              example: "69da0b4c20c0e03cfa4ee258"
+            token:
+              type: string
+              description: |
+                API key. Alternative to the `Authorization: Bearer <key>`
+                header — useful for browser and React Native clients where
+                setting custom headers on WebSocket handshakes is awkward.
+                Provide this OR the Authorization header, not both.
+              example: "sk_your_key"
+            mode:
+              type: string
+              enum:
+                - webcall
+                - chat
+              default: webcall
+              description: |
+                Session mode.
+                - `webcall` — full voice pipeline (STT → LLM → TTS). The
+                  client sends audio via `input_audio_buffer.append` and
+                  receives audio via `output_audio.delta`.
+                - `chat` — text-only pipeline. The client sends text via
+                  `input_text.send` and receives transcripts. No TTS audio
+                  is produced.
+            sample_rate:
+              type: integer
+              description: |
+                Optional sample rate hint for the incoming audio stream (Hz).
+                Server responds with the negotiated sample rate in the
+                `session.created` event. Typical values: 16000, 24000, 44100.
+
+channels:
+  agentSession:
+    address: /atoms/v1/agent/connect
+    title: Agent Session
+    description: |
+      A bidirectional session with an Atoms agent. Open the connection with
+      your API key and an `agent_id`; the server creates a session, bridges
+      audio and transcripts to the STT/LLM/TTS pipeline, and streams events
+      back until the client closes or the server ends the session.
+    messages:
+      inputAudioAppend:
+        $ref: "#/components/messages/inputAudioAppend"
+      inputAudioCommit:
+        $ref: "#/components/messages/inputAudioCommit"
+      inputTextSend:
+        $ref: "#/components/messages/inputTextSend"
+      sessionUpdate:
+        $ref: "#/components/messages/sessionUpdate"
+      sessionClose:
+        $ref: "#/components/messages/sessionClose"
+      sessionCreated:
+        $ref: "#/components/messages/sessionCreated"
+      sessionClosed:
+        $ref: "#/components/messages/sessionClosed"
+      outputAudioDelta:
+        $ref: "#/components/messages/outputAudioDelta"
+      transcript:
+        $ref: "#/components/messages/transcript"
+      agentStartTalking:
+        $ref: "#/components/messages/agentStartTalking"
+      agentStopTalking:
+        $ref: "#/components/messages/agentStopTalking"
+      error:
+        $ref: "#/components/messages/error"
+
+operations:
+  sendInputAudioAppend:
+    action: send
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: Stream an audio chunk from the client mic
+    messages:
+      - $ref: "#/channels/agentSession/messages/inputAudioAppend"
+  sendInputAudioCommit:
+    action: send
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: Commit the buffered audio (force turn boundary)
+    messages:
+      - $ref: "#/channels/agentSession/messages/inputAudioCommit"
+  sendInputText:
+    action: send
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: Send a text message to the agent (chat mode)
+    messages:
+      - $ref: "#/channels/agentSession/messages/inputTextSend"
+  sendSessionUpdate:
+    action: send
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: Reserved for session-config updates (no-op currently)
+    messages:
+      - $ref: "#/channels/agentSession/messages/sessionUpdate"
+  sendSessionClose:
+    action: send
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: End the session cleanly
+    messages:
+      - $ref: "#/channels/agentSession/messages/sessionClose"
+  receiveSessionCreated:
+    action: receive
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: Session negotiated successfully; streaming can begin
+    messages:
+      - $ref: "#/channels/agentSession/messages/sessionCreated"
+  receiveSessionClosed:
+    action: receive
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: Session ended (client-requested, server-initiated, or websocket close)
+    messages:
+      - $ref: "#/channels/agentSession/messages/sessionClosed"
+  receiveOutputAudioDelta:
+    action: receive
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: Audio chunk produced by the agent's TTS (webcall mode)
+    messages:
+      - $ref: "#/channels/agentSession/messages/outputAudioDelta"
+  receiveTranscript:
+    action: receive
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: Transcript of user speech or agent response text
+    messages:
+      - $ref: "#/channels/agentSession/messages/transcript"
+  receiveAgentStartTalking:
+    action: receive
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: Agent has started producing TTS audio
+    messages:
+      - $ref: "#/channels/agentSession/messages/agentStartTalking"
+  receiveAgentStopTalking:
+    action: receive
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: Agent has finished its current turn
+    messages:
+      - $ref: "#/channels/agentSession/messages/agentStopTalking"
+  receiveError:
+    action: receive
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: A session-level error was raised
+    messages:
+      - $ref: "#/channels/agentSession/messages/error"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API Key
+      description: |
+        API key passed as `Authorization: Bearer <SMALLEST_API_KEY>` on the
+        WebSocket handshake. Alternative: pass the key as `?token=` in the URL.
+
+  messages:
+    inputAudioAppend:
+      name: InputAudioAppend
+      title: Append audio chunk
+      summary: Client sends a chunk of microphone audio.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+          - audio
+        properties:
+          type:
+            type: string
+            const: input_audio_buffer.append
+          audio:
+            type: string
+            description: |
+              Base64-encoded raw audio chunk. Format negotiated via the
+              `sample_rate` query param at connection time and returned in
+              `session.created`. Send chunks continuously while the user
+              speaks — the server handles VAD and turn boundaries.
+        examples:
+          - summary: 40ms of PCM16 audio at 16kHz
+            value:
+              type: input_audio_buffer.append
+              audio: "UklGRi..."
+
+    inputAudioCommit:
+      name: InputAudioCommit
+      title: Commit audio buffer
+      summary: Force a turn boundary — flushes whatever audio has been buffered.
+      description: |
+        Useful when the client knows the user's turn is over (e.g., push-to-talk
+        released) and wants the agent to respond immediately without waiting for
+        server-side silence detection. Optional — server-side VAD handles this
+        automatically in normal conversation flow.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+        properties:
+          type:
+            type: string
+            const: input_audio_buffer.commit
+
+    inputTextSend:
+      name: InputTextSend
+      title: Send text input
+      summary: Client sends text to the agent (chat mode).
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+          - text
+        properties:
+          type:
+            type: string
+            const: input_text.send
+          text:
+            type: string
+            minLength: 1
+            description: User message text.
+        examples:
+          - value:
+              type: input_text.send
+              text: "What's my account balance?"
+
+    sessionUpdate:
+      name: SessionUpdate
+      title: Session config update (reserved)
+      summary: Reserved for future session-config changes — currently a no-op.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+        properties:
+          type:
+            type: string
+            const: session.update
+
+    sessionClose:
+      name: SessionClose
+      title: Close session
+      summary: Client requests the session end.
+      description: |
+        Cleanly ends the session. The server responds with `session.closed`
+        (reason=`client_requested`) before closing the WebSocket. If the
+        client just closes the socket without sending this, the server
+        treats it the same way (reason=`websocket_closed`).
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+        properties:
+          type:
+            type: string
+            const: session.close
+
+    sessionCreated:
+      name: SessionCreated
+      title: Session created
+      summary: Server confirms session is live — streaming can begin.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+          - session_id
+          - call_id
+          - sample_rate
+          - channels
+        properties:
+          type:
+            type: string
+            const: session.created
+          session_id:
+            type: string
+            description: Unique identifier for this session.
+          call_id:
+            type: string
+            description: Call-log identifier; matches the `call_id` in conversation logs.
+          sample_rate:
+            type: integer
+            description: Negotiated audio sample rate in Hz for both input and output audio.
+          channels:
+            type: integer
+            description: Number of audio channels (typically 1).
+        examples:
+          - value:
+              type: session.created
+              session_id: "b3f1c9a2-4d5e-4f6a-b7c8-d9e0f1a2b3c4"
+              call_id: "69e5a3c3e99d6d14bf9f6730"
+              sample_rate: 16000
+              channels: 1
+
+    sessionClosed:
+      name: SessionClosed
+      title: Session closed
+      summary: Server-side confirmation that the session has ended.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+          - reason
+        properties:
+          type:
+            type: string
+            const: session.closed
+          reason:
+            type: string
+            description: |
+              Why the session ended. Common values: `client_requested` (client
+              sent `session.close`), `websocket_closed` (socket dropped),
+              `server_error`, `timeout`, or a specific error tag.
+        examples:
+          - value:
+              type: session.closed
+              reason: "client_requested"
+
+    outputAudioDelta:
+      name: OutputAudioDelta
+      title: Agent audio chunk
+      summary: Base64-encoded audio chunk produced by the agent's TTS.
+      description: |
+        Stream of audio chunks in the negotiated sample rate. Client decodes
+        base64 and plays each chunk as it arrives for lowest latency. Only
+        sent in `webcall` mode.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+          - audio
+        properties:
+          type:
+            type: string
+            const: output_audio.delta
+          audio:
+            type: string
+            description: Base64-encoded raw audio chunk.
+
+    transcript:
+      name: Transcript
+      title: Transcript
+      summary: Transcription of user speech or text of agent response.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+          - role
+          - text
+        properties:
+          type:
+            type: string
+            const: transcript
+          role:
+            type: string
+            enum:
+              - user
+              - agent
+            description: Whose utterance this transcript is for.
+          text:
+            type: string
+            description: The transcribed (or agent-generated) text.
+        examples:
+          - value:
+              type: transcript
+              role: user
+              text: "Tell me about your pricing."
+          - value:
+              type: transcript
+              role: agent
+              text: "We offer three plans: Starter, Pro, and Enterprise."
+
+    agentStartTalking:
+      name: AgentStartTalking
+      title: Agent started talking
+      summary: Signals the client that the agent has started producing TTS audio.
+      description: |
+        Useful for UI cues (e.g., showing a "speaking" indicator) and for
+        suppressing the user's mic echo cancellation while the agent speaks.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+        properties:
+          type:
+            type: string
+            const: agent.start_talking
+
+    agentStopTalking:
+      name: AgentStopTalking
+      title: Agent stopped talking
+      summary: Signals the client that the agent has finished its current turn.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+        properties:
+          type:
+            type: string
+            const: agent.stop_talking
+
+    error:
+      name: Error
+      title: Error
+      summary: Session-level error.
+      description: |
+        Non-fatal session errors arrive here. For fatal errors, the server
+        also emits `session.closed` and drops the connection.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+          - code
+          - message
+        properties:
+          type:
+            type: string
+            const: error
+          code:
+            type: string
+            description: |
+              Machine-readable error code. Common values: `invalid_event`,
+              `no_session`, `internal_error`, `voice_clone_timeout`,
+              HTTP status codes like `401`, `503`.
+          message:
+            type: string
+            description: Human-readable error message.
+        examples:
+          - value:
+              type: error
+              code: "invalid_event"
+              message: "audio is required"
