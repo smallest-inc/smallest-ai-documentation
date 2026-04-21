@@ -1,7 +1,7 @@
 ---
 title: "Migrate from ElevenLabs"
 sidebarTitle: "From ElevenLabs"
-description: "Map ElevenLabs Conversational AI auth, agent creation, and WebSocket protocol to Smallest Atoms equivalents."
+description: "Map ElevenLabs Conversational AI auth, WebSocket protocol, events, and agent creation to Smallest Atoms equivalents."
 ---
 
 ## Concept mapping
@@ -10,91 +10,14 @@ description: "Map ElevenLabs Conversational AI auth, agent creation, and WebSock
 |---|---|
 | Agent (Conversational AI) | Agent (`single_prompt` workflow) |
 | Conversation (WebSocket session) | Call (Agent WebSocket session) |
-| Voice (`voice_id`) | Voice (`voiceId`, from the Waves catalog or a clone) |
+| Voice (`voice_id`) | TTS voice ID from the Lightning v3.1 catalog, or a cloned voice (prefix `voice_`) |
 | `conversation_config.tts` + `conversation_config.agent` | Agent draft config: `PATCH /agent/{id}/drafts/{draftId}/config` |
-| `@elevenlabs/elevenlabs-js`, `@elevenlabs/client` | `@smallest-ai/agent-sdk` (browser) or raw WebSocket |
+| `@elevenlabs/client`, `@elevenlabs/react` | `@smallest-ai/agent-sdk` (browser) or raw WebSocket |
 | `xi-api-key` header + signed URL | `Authorization: Bearer sk_…` or `?token=sk_…` |
 
-## 1. Authentication
+## 1. WebSocket URL
 
-**ElevenLabs**
-
-| Surface | Credential |
-|---|---|
-| REST | `xi-api-key: <your-api-key>` header |
-| WebSocket, public agent | `?agent_id=<id>` (no token) |
-| WebSocket, private agent | `?agent_id=<id>&token=<signed_token>`. Get the signed token from `GET /v1/convai/conversation/get-signed-url?agent_id=<id>`. |
-
-**Smallest Atoms**
-
-| Surface | Credential |
-|---|---|
-| REST | `Authorization: Bearer sk_<your-key>` header |
-| WebSocket | `Authorization: Bearer sk_<your-key>` header, or `?token=sk_<your-key>` query param. Same flow for every agent. |
-
-Create a Smallest API key in the [API Keys](https://app.smallest.ai/dashboard/api-keys) tab.
-
-## 2. Creating an agent
-
-### ElevenLabs
-
-```typescript
-import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
-
-const elevenlabs = new ElevenLabsClient();
-const agent = await elevenlabs.conversationalAi.agents.create({
-  name: "Support Agent",
-  conversationConfig: {
-    tts: { voiceId: "aMSt68OGf4xUZAnLpTU8", modelId: "eleven_flash_v2" },
-    agent: { firstMessage: "Hello.", prompt: { prompt: "You are helpful." } },
-  },
-});
-```
-
-### Smallest Atoms
-
-Agent creation uses three REST calls. The first call auto-publishes `V1` with default config. Subsequent config changes go through the draft + publish flow.
-
-```bash
-export SMALLEST_API_KEY="sk_..."
-BASE="https://api.smallest.ai/atoms/v1"
-
-# 1. Create the agent
-AGENT_ID=$(curl -s -X POST "$BASE/agent" \
-  -H "Authorization: Bearer $SMALLEST_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Support Agent", "workflowType": "single_prompt"}' \
-  | jq -r .data)
-
-# 2. Create a draft off the active version
-ACTIVE_VER=$(curl -s "$BASE/agent/$AGENT_ID" \
-  -H "Authorization: Bearer $SMALLEST_API_KEY" | jq -r .data.activeVersionId)
-
-DRAFT_ID=$(curl -s -X POST "$BASE/agent/$AGENT_ID/drafts" \
-  -H "Authorization: Bearer $SMALLEST_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{\"sourceVersionId\": \"$ACTIVE_VER\"}" | jq -r .data.draftId)
-
-# 3. Patch the draft with prompt, voice, and LLM
-curl -X PATCH "$BASE/agent/$AGENT_ID/drafts/$DRAFT_ID/config" \
-  -H "Authorization: Bearer $SMALLEST_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "singlePromptConfig": {"prompt": "You are helpful."},
-    "synthesizer": {"voiceConfig": {"model": "waves_lightning_large", "voiceId": "nyah"}},
-    "slmModel": "gpt-4o"
-  }'
-
-# 4. Publish and activate
-curl -X POST "$BASE/agent/$AGENT_ID/drafts/$DRAFT_ID/publish" \
-  -H "Authorization: Bearer $SMALLEST_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"label": "initial", "activate": true}'
-```
-
-Each published draft becomes an immutable version. See [Agent Versioning](/atoms/atoms-platform/features/versioning) for rollback and version comparison.
-
-## 3. WebSocket connection
+The primary interface you are porting.
 
 | | ElevenLabs | Smallest Atoms |
 |---|---|---|
@@ -103,7 +26,40 @@ Each published draft becomes an immutable version. See [Agent Versioning](/atoms
 | Optional query params | `token` (signed, for private agents) | `token`, `mode` (`webcall` or `chat`), `sample_rate` |
 | Header auth | not supported | `Authorization: Bearer sk_…` |
 
-## 4. Client to server messages
+## 2. Authentication
+
+### WebSocket handshake
+
+Pass the API key as a header or as the `token` query param. For Smallest, both options work for every agent. ElevenLabs requires a signed URL for private agents.
+
+**ElevenLabs (private agent, signed URL)**
+
+```bash
+curl "https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=$AGENT_ID" \
+  -H "xi-api-key: $ELEVENLABS_API_KEY"
+# Response: { "signed_url": "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=...&token=..." }
+```
+
+**Smallest Atoms**
+
+```bash
+# No separate signed-URL endpoint. The API key works directly on the WebSocket.
+# Either of these is valid:
+#
+# Header:  Authorization: Bearer $SMALLEST_API_KEY
+# Query:   wss://api.smallest.ai/atoms/v1/agent/connect?token=$SMALLEST_API_KEY&agent_id=$AGENT_ID
+```
+
+Create a Smallest API key at [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys).
+
+### REST calls
+
+| Provider | Header |
+|---|---|
+| ElevenLabs | `xi-api-key: <your-api-key>` |
+| Smallest Atoms | `Authorization: Bearer sk_<your-key>` |
+
+## 3. Client to server messages
 
 | ElevenLabs | Smallest Atoms |
 |---|---|
@@ -112,17 +68,17 @@ Each published draft becomes an immutable version. See [Agent Versioning](/atoms
 | `contextual_update` with `{ type, text }` | Not supported mid-session. Inject values before the session with [pre-call API variables](/atoms/atoms-platform/single-prompt-agents/configuration-panel/variables). |
 | `pong` | Not required. Smallest does not use ping/pong. |
 
-## 5. Server to client events
+## 4. Server to client events
 
 | ElevenLabs | Smallest Atoms |
 |---|---|
 | `ping` | Not emitted. |
 | `user_transcript` (`user_transcription_event.user_transcript`) | `transcript` with `role: "user"`. |
 | `agent_response` (`agent_response_event.agent_response`) | `transcript` with `role: "agent"`. |
-| `agent_response_correction` | Not emitted. Smallest does not publish mid-turn corrections. |
+| `agent_response_correction` | Not emitted. |
 | `audio` (`audio_event.audio_base_64` with alignment) | `output_audio.delta` with `{ type, audio: "<base64>" }`. Alignment timings not included. |
 | `interruption` (`interruption_event.reason`) | `interruption` (no `reason` field). |
-| `agent_chat_response_part` (text deltas) | Not emitted. Smallest streams audio, not text deltas. |
+| `agent_chat_response_part` (text deltas) | Not emitted. Audio streams; full text is available post-call. |
 
 Smallest adds two events not present in the ElevenLabs protocol:
 
@@ -131,30 +87,86 @@ Smallest adds two events not present in the ElevenLabs protocol:
 
 Full protocol: [Realtime Agent API reference](/atoms/api-reference/api-reference/realtime-agent/realtime-agent).
 
-## 6. Python example (raw WebSocket)
+## 5. Browser SDK (JavaScript / TypeScript)
+
+Most ElevenLabs Conversational AI integrations use the official browser client. Port directly to the Smallest browser SDK.
 
 ### ElevenLabs
 
-```python
-import asyncio, base64, json
-import websockets
+```typescript
+import { Conversation } from "@elevenlabs/client";
 
-API_KEY = "xi_..."
-AGENT_ID = "..."
-
-async def main():
-    url = f"wss://api.elevenlabs.io/v1/convai/conversation?agent_id={AGENT_ID}"
-    async with websockets.connect(url, extra_headers={"xi-api-key": API_KEY}) as ws:
-        async for msg in ws:
-            event = json.loads(msg)
-            if event["type"] == "audio":
-                audio_bytes = base64.b64decode(event["audio_event"]["audio_base_64"])
-                # play audio_bytes
-
-asyncio.run(main())
+const conversation = await Conversation.startSession({ agentId: "..." });
+conversation.addEventListener("agent_response", (e) => {
+  console.log("agent said:", e.detail);
+});
 ```
 
 ### Smallest Atoms
+
+```typescript
+import { AtomsAgent } from "@smallest-ai/agent-sdk";
+
+const agent = new AtomsAgent({
+  apiKey:  "sk_...",
+  agentId: "...",
+});
+
+agent.on("agent_start_talking", () => console.log("agent speaking"));
+agent.on("agent_stop_talking",  () => console.log("agent done"));
+
+await agent.connect();
+// Microphone capture starts automatically; the agent replies through the default audio output.
+```
+
+See the WebSocket SDK reference for the full API.
+
+## 6. Node.js (raw WebSocket)
+
+For server-side or non-browser JS runtimes.
+
+### ElevenLabs
+
+```javascript
+const WebSocket = require("ws");
+
+const ws = new WebSocket(
+  `wss://api.elevenlabs.io/v1/convai/conversation?agent_id=${process.env.EL_AGENT_ID}`,
+  { headers: { "xi-api-key": process.env.EL_API_KEY } }
+);
+
+ws.on("message", (data) => {
+  const event = JSON.parse(data.toString());
+  if (event.type === "audio") {
+    const audioBytes = Buffer.from(event.audio_event.audio_base_64, "base64");
+    // play audioBytes
+  }
+});
+```
+
+### Smallest Atoms
+
+```javascript
+const WebSocket = require("ws");
+
+const url = new URL("wss://api.smallest.ai/atoms/v1/agent/connect");
+url.searchParams.set("token",       process.env.SMALLEST_API_KEY);
+url.searchParams.set("agent_id",    process.env.SMALLEST_AGENT_ID);
+url.searchParams.set("mode",        "webcall");
+url.searchParams.set("sample_rate", "24000");
+
+const ws = new WebSocket(url.toString());
+
+ws.on("message", (data) => {
+  const event = JSON.parse(data.toString());
+  if (event.type === "output_audio.delta") {
+    const audioBytes = Buffer.from(event.audio, "base64");
+    // play audioBytes (24kHz PCM16 mono)
+  }
+});
+```
+
+## 7. Python (raw WebSocket)
 
 ```python
 import asyncio, base64, json, wave
@@ -178,7 +190,7 @@ async def main(wav_path: str):
 
         for chunk in chunks:
             await ws.send(json.dumps({
-                "type": "input_audio_buffer.append",
+                "type":  "input_audio_buffer.append",
                 "audio": base64.b64encode(chunk).decode(),
             }))
             await asyncio.sleep(0.040)
@@ -199,42 +211,89 @@ async def main(wav_path: str):
 asyncio.run(main("input.wav"))
 ```
 
-Replace `API_KEY` and `AGENT_ID` with your own values. The script writes the agent's reply audio to `reply.wav`.
+Replace `API_KEY` and `AGENT_ID` with your own values.
 
-## 7. Browser SDK example
+## 8. Creating an agent (one-time setup)
+
+ElevenLabs creates an agent with a single REST call. Smallest splits creation and configuration into four calls because config is versioned. See [Agent Versioning](/atoms/atoms-platform/features/versioning) for the full model.
 
 ### ElevenLabs
 
-```typescript
-import { Conversation } from "@elevenlabs/client";
-
-const conversation = await Conversation.startSession({ agentId: "..." });
-conversation.addEventListener("audio", (e) => {
-  // play audio
-});
+```bash
+curl -X POST "https://api.elevenlabs.io/v1/convai/agents/create" \
+  -H "xi-api-key: $ELEVENLABS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Support Agent",
+    "conversation_config": {
+      "tts":   {"voice_id": "aMSt68OGf4xUZAnLpTU8", "model_id": "eleven_flash_v2"},
+      "agent": {"first_message": "Hello.", "prompt": {"prompt": "You are helpful."}}
+    }
+  }'
 ```
 
 ### Smallest Atoms
 
-```typescript
-import { AtomsAgent } from "@smallest-ai/agent-sdk";
+```bash
+export SMALLEST_API_KEY="sk_..."
+BASE="https://api.smallest.ai/atoms/v1"
 
-const agent = new AtomsAgent({
-  apiKey: "sk_...",
-  agentId: "...",
-});
+# 1. Create the agent.
+AGENT_ID=$(curl -s -X POST "$BASE/agent" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Support Agent", "workflowType": "single_prompt"}' \
+  | jq -r .data)
 
-agent.on("agent_start_talking", () => console.log("Agent speaking"));
-agent.on("agent_stop_talking", () => console.log("Agent stopped"));
+# 2. Create a draft off the current active version.
+ACTIVE_VER=$(curl -s "$BASE/agent/$AGENT_ID" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" | jq -r .data.activeVersionId)
 
-await agent.connect();
+DRAFT_ID=$(curl -s -X POST "$BASE/agent/$AGENT_ID/drafts" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"sourceVersionId\": \"$ACTIVE_VER\"}" | jq -r .data.draftId)
+
+# 3. Patch the draft with prompt and LLM.
+curl -X PATCH "$BASE/agent/$AGENT_ID/drafts/$DRAFT_ID/config" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "singlePromptConfig": {"prompt": "You are helpful."},
+    "slmModel": "gpt-4o"
+  }'
+
+# 4. Publish and activate the draft.
+curl -X POST "$BASE/agent/$AGENT_ID/drafts/$DRAFT_ID/publish" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"label": "initial", "activate": true}'
 ```
 
-The SDK runs in browser environments only. It calls `navigator.mediaDevices.getUserMedia` and the Web Audio API, which are not available in React Native, Node, or mobile runtimes. For non-browser runtimes, use the raw WebSocket protocol from section 6.
+The first call auto-publishes V1 with defaults. Future config changes flow through drafts and publish a new immutable version each time.
 
-Full API surface: [Browser SDK](/atoms/developer-guide/integrate/browser-sdk).
+## 9. Voices
 
-## 8. Unsupported in Smallest Atoms
+ElevenLabs voice IDs (for example `aMSt68OGf4xUZAnLpTU8`) do not port. Pick a TTS voice ID from the Lightning v3.1 catalog:
+
+```bash
+curl "https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY"
+```
+
+Full reference: [GET voices](/waves/api-reference/api-reference/voices/get-waves-voices). The [Voice Cloning dashboard](https://app.smallest.ai/dashboard/voice-cloning) also lists available voice IDs in a UI.
+
+For a custom voice, [clone one](/waves/documentation/voice-cloning/instant-clone-ui) from a short audio sample. Cloned voice IDs are prefixed with `voice_`.
+
+To set the voice on an agent, include it in the draft config payload:
+
+```json
+{
+  "synthesizer": {"voiceConfig": {"voiceId": "<your-voice-id>"}}
+}
+```
+
+## 10. Unsupported in Smallest Atoms
 
 | ElevenLabs feature | Status in Smallest |
 |---|---|
@@ -243,17 +302,13 @@ Full API surface: [Browser SDK](/atoms/developer-guide/integrate/browser-sdk).
 | `contextual_update` mid-session | Not supported. Inject values before the session via pre-call API variables. |
 | `agent_chat_response_part` (text deltas) | Not emitted. Audio streams; full text is available post-call. |
 
-## 9. Unsupported in ElevenLabs
+## 11. Unsupported in ElevenLabs
 
 | Smallest Atoms feature | Reference |
 |---|---|
 | Prompt versioning (drafts, publish, activate, rollback, per-version test calls, metric comparison) | [Agent Versioning](/atoms/atoms-platform/features/versioning) |
 | Post-call disposition metrics extracted from the transcript, surfaced in the call log | [Post-Call Metrics](/atoms/atoms-platform/features/post-call-metrics), [developer guide](/atoms/developer-guide/operate/analytics/post-call-analytics) |
 | Outbound campaigns with audiences, scheduling, and retry control | [Running Campaigns](/atoms/developer-guide/build/campaigns/creating-campaigns) |
-
-## 10. Voices and cloning
-
-ElevenLabs voice IDs (for example `aMSt68OGf4xUZAnLpTU8`) do not port. Smallest uses the [Waves voice catalog](/waves/documentation/getting-started/models), which has separate pools for `waves_lightning_v2`, `waves_lightning_v3_1`, and `waves_lightning_large`. To use a custom voice, [clone one](/waves/documentation/voice-cloning/instant-clone-ui) from a short audio sample and reference the resulting `voice_…` ID.
 
 ## Next steps
 
@@ -263,9 +318,6 @@ ElevenLabs voice IDs (for example `aMSt68OGf4xUZAnLpTU8`) do not port. Smallest 
   </Card>
   <Card title="Agent Versioning" icon="code-branch" href="/atoms/atoms-platform/features/versioning">
     Drafts, publish, activate, rollback.
-  </Card>
-  <Card title="Post-Call Metrics" icon="chart-bar" href="/atoms/atoms-platform/features/post-call-metrics">
-    Disposition metrics extracted from call transcripts.
   </Card>
   <Card title="Running Campaigns" icon="bullhorn" href="/atoms/developer-guide/build/campaigns/creating-campaigns">
     Outbound calling with retries and scheduling.
