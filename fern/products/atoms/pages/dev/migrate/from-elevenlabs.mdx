@@ -13,7 +13,7 @@ description: "Map ElevenLabs Conversational AI auth, WebSocket protocol, events,
 | Voice (`voice_id`) | TTS voice ID from the Lightning v3.1 catalog, or a cloned voice (prefix `voice_`) |
 | `conversation_config.tts` + `conversation_config.agent` | Agent draft config: `PATCH /agent/{id}/drafts/{draftId}/config` |
 | `@elevenlabs/client`, `@elevenlabs/react` | `@smallest-ai/agent-sdk` (browser) or raw WebSocket |
-| `xi-api-key` header + signed URL | `Authorization: Bearer sk_…` or `?token=sk_…` |
+| `xi-api-key` header + signed URL | `Authorization: Bearer sk_...` or `?token=sk_...` |
 
 ## 1. WebSocket URL
 
@@ -24,7 +24,7 @@ The primary interface you are porting.
 | URL | `wss://api.elevenlabs.io/v1/convai/conversation` | `wss://api.smallest.ai/atoms/v1/agent/connect` |
 | Required query params | `agent_id` | `agent_id` |
 | Optional query params | `token` (signed, for private agents) | `token`, `mode` (`webcall` or `chat`), `sample_rate` |
-| Header auth | not supported | `Authorization: Bearer sk_…` |
+| Header auth on WebSocket handshake | not documented | `Authorization: Bearer sk_...` |
 
 ## 2. Authentication
 
@@ -122,10 +122,16 @@ For server-side or non-browser JS runtimes.
 ```javascript
 const WebSocket = require("ws");
 
-const ws = new WebSocket(
-  `wss://api.elevenlabs.io/v1/convai/conversation?agent_id=${process.env.EL_AGENT_ID}`,
+// 1. Get a signed URL (private agents). Public agents can skip this step
+//    and connect directly with ?agent_id=<id>.
+const res = await fetch(
+  `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${process.env.EL_AGENT_ID}`,
   { headers: { "xi-api-key": process.env.EL_API_KEY } }
 );
+const { signed_url } = await res.json();
+
+// 2. Connect to the signed URL. No headers needed.
+const ws = new WebSocket(signed_url);
 
 ws.on("message", (data) => {
   const event = JSON.parse(data.toString());
@@ -304,7 +310,7 @@ To set the voice on an agent, include it in the draft config payload:
 
 ## Next steps
 
-<CardGroup cols={2}>
+<CardGroup cols={3}>
   <Card title="Realtime Agent WebSocket reference" icon="plug" href="/atoms/api-reference/api-reference/realtime-agent/realtime-agent">
     Full wire protocol with message types, payloads, and error codes.
   </Card>
