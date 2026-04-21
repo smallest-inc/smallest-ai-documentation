@@ -84,6 +84,12 @@ page for anyone who wants the detail.
 - Internal refactors, CI changes, nav reorganization.
 - Migration guides and how-to content (already ship through the normal docs tree).
 
+### CI enforcement
+
+Any PR that modifies a file under `fern/apis/**/*.yaml` (OpenAPI or AsyncAPI spec) must add a file under a `changelog-entries/` directory. The "Changelog entry for spec change" GitHub Action blocks the PR otherwise.
+
+If the spec change is not customer-visible (description-only edit, internal refactor, comment fix), add the `skip-changelog` label to the PR and re-run the check.
+
 ## Before you push
 
 1. Run `python3 scripts/check_nav.py` (catches orphan pages and dangling nav entries).

@@ -1,0 +1,65 @@
+name: Changelog required for spec changes
+
+# Fails the PR when it modifies an API spec under fern/apis/ without adding
+# a new changelog entry. Lets authors skip with the `skip-changelog` label
+# for spec edits that aren't customer-visible (description-only edits,
+# internal refactors, comment fixes).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'fern/apis/**/*.yaml'
+      - 'fern/apis/**/*.yml'
+
+jobs:
+  require-changelog-entry:
+    name: Changelog entry for spec change
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changelog entry
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          # Skip if the author labeled the PR as not requiring a changelog.
+          if echo "$PR_LABELS" | grep -q '"skip-changelog"'; then
+            echo "PR has 'skip-changelog' label. Skipping."
+            exit 0
+          fi
+
+          # Confirm the PR actually touches a spec (paths filter above is a
+          # coarse trigger; re-check with the exact diff).
+          spec_changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- \
+            'fern/apis/**/*.yaml' 'fern/apis/**/*.yml' | wc -l | tr -d ' ')
+          if [ "$spec_changed" -eq 0 ]; then
+            echo "No API spec changes in diff. Skipping."
+            exit 0
+          fi
+
+          # Did this PR add any file under a changelog-entries/ directory?
+          new_entries=$(git diff --name-only --diff-filter=A "$BASE_SHA" "$HEAD_SHA" \
+            | grep -c 'changelog-entries/' || true)
+
+          if [ "$new_entries" -eq 0 ]; then
+            echo "::error::This PR modifies an API spec under fern/apis/ but does not add a changelog entry."
+            echo ""
+            echo "Add a new file to one of:"
+            echo "  fern/products/atoms/pages/intro/reference/changelog-entries/"
+            echo "  fern/products/waves/pages/v4.0.0/changelog-entries/"
+            echo ""
+            echo "File naming: YYYY-MM-DD-short-slug.mdx"
+            echo "See CONTRIBUTING.md for the entry format and when an entry is required."
+            echo ""
+            echo "If this spec change is not customer-visible (description-only edit,"
+            echo "internal refactor, comment fix), add the 'skip-changelog' label to"
+            echo "this PR and re-run the check."
+            exit 1
+          fi
+
+          echo "PR adds $new_entries changelog entry file(s). OK."
