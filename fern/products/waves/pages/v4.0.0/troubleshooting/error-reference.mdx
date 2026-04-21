@@ -1,10 +1,10 @@
 ---
 title: "Error reference"
 sidebarTitle: "Error reference"
-description: "HTTP status codes returned by the Atoms API and how to recover from each."
+description: "HTTP status codes returned by Waves TTS and Pulse STT endpoints, with fixes for each."
 ---
 
-Every Atoms REST and WebSocket endpoint returns standard HTTP status codes. Use this page to map a status code to its likely cause and fix.
+Every Waves REST and WebSocket endpoint returns standard HTTP status codes. Use this page to map a status code to its likely cause and fix. Covers both TTS (Lightning) and STT (Pulse).
 
 ## Common API errors
 
@@ -14,6 +14,7 @@ Missing or invalid `Authorization` header.
 
 **Fix.**
 - Confirm the header is `Authorization: Bearer <KEY>` with a single space and no quotes.
+- On WebSocket handshakes in browsers, custom headers aren't allowed. Use the `?token=<KEY>` query parameter instead where the endpoint supports it.
 - Check the key has not been rotated in the [API Keys dashboard](https://app.smallest.ai/dashboard/api-keys). Rotated keys stop working immediately.
 - Verify the key string starts with `sk_` and has no trailing whitespace.
 
@@ -23,10 +24,10 @@ The key is valid but lacks permission for this resource.
 
 **Common causes.**
 - Using a key from a different workspace. Each workspace has its own set of keys.
-- Key scoped to a different product (for example, a Waves TTS key on an Atoms endpoint).
+- Key scoped to a different product (for example, an Atoms key on a Waves TTS endpoint).
 - Trial or workspace usage limit reached.
 
-**Fix.** Confirm you are in the intended workspace at [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys) and that the key was generated there. If limits are the issue, upgrade the workspace or contact support.
+**Fix.** Confirm the key was generated in the intended workspace at [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys). If limits are the issue, upgrade the workspace or contact support.
 
 ### 429 Too Many Requests
 
@@ -44,7 +45,7 @@ A server-side issue. Not caused by the request payload in most cases.
 
 ### `NoSuchKey` (from pre-recorded uploads)
 
-The audio object referenced in the request does not exist in storage.
+The audio object referenced in the request does not exist in storage. Most common on Pulse STT pre-recorded uploads.
 
 **Common causes.**
 - Upload has not finished. The object key becomes available only after the PUT completes; polling immediately after starting an upload can return `NoSuchKey`.
@@ -62,4 +63,7 @@ Include these details whenever you open a ticket:
 - The response status and body.
 - The workspace ID and the approximate timestamp (UTC).
 
-Open a ticket from [Getting help](/atoms/atoms-platform/troubleshooting/getting-help).
+For product-specific troubleshooting (audio quality, WebSocket drops, transcript accuracy), see the feature-level pages:
+
+- [Pulse STT pre-recorded troubleshooting](/waves/documentation/speech-to-text-pulse/pre-recorded/troubleshooting)
+- [Pulse STT realtime troubleshooting](/waves/documentation/speech-to-text-pulse/realtime-web-socket/troubleshooting)
