@@ -74,15 +74,29 @@ const audioChunk = new Uint8Array(4096);
 ws.send(audioChunk);
 ```
 
-### End Signal (JSON)
+### Finalize Signal (JSON)
 
-Signal the end of audio stream. This is used to flush the transcription and receive the final response with `is_last=true`:
+Flush the current audio buffer and force an immediate `is_final=true` transcript for any pending speech. The session remains open — you can continue sending audio after this. Useful in agentic pipelines where you need the transcript at a specific point without ending the session:
 
 ```json
 {
   "type": "finalize"
 }
 ```
+
+### Close Stream Signal (JSON)
+
+Signal the end of the audio stream. The server will flush any remaining audio, deliver final transcripts, and respond with `is_last=true` before closing the connection. Always use this when you are done sending audio:
+
+```json
+{
+  "type": "close_stream"
+}
+```
+
+<Warning>
+Do not close the WebSocket immediately after sending `close_stream`. Wait for the `is_last=true` response to ensure all audio has been processed and final transcripts are received.
+</Warning>
 
 ## Response Format
 
@@ -226,7 +240,7 @@ async def stream_audio(audio_file, api_key, language="en", encoding="linear16", 
                 await ws.send((chunk * 32768.0).astype(np.int16).tobytes())
                 await asyncio.sleep(len(chunk) / sample_rate)
             
-            await ws.send(json.dumps({"type": "finalize"}))
+            await ws.send(json.dumps({"type": "close_stream"}))
         
         sender = asyncio.create_task(send())
         
