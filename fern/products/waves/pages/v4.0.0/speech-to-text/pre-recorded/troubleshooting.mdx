@@ -36,49 +36,9 @@ Go through this guide to learn about common bugs and issues that might occur whe
 - Make sure the file extension matches the actual codec/container.
 - Validate codec compatibility—Linear PCM is the safest fallback.
 
-## Common API errors
+## HTTP errors
 
-### 401 Unauthorized
-
-Missing or invalid `Authorization` header.
-
-**Fix.** Send `Authorization: Bearer <KEY>` with a single space and no quotes. Check the key has not been rotated at [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys).
-
-### 403 Forbidden
-
-The key is valid but lacks permission for this resource.
-
-**Common causes.**
-- Key from a different workspace than the one owning the audio object.
-- Key scoped to a different product (for example, an Atoms key on a Waves STT endpoint).
-- Workspace trial or usage limit reached.
-
-**Fix.** Confirm the key was generated in the intended workspace at [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys).
-
-### 429 Too Many Requests
-
-The request exceeded the current rate limit.
-
-**Fix.** Retry with exponential backoff starting at 500 ms, doubling up to 30 s. Respect the `Retry-After` header if present.
-
-### 500 Internal Server Error
-
-A server-side issue. Not caused by the request payload in most cases.
-
-**Fix.** Retry once after a short delay. If it persists, file a support ticket and include the `x-request-id` response header.
-
-## Storage and file errors
-
-### `NoSuchKey`
-
-The audio object referenced in the request does not exist in storage.
-
-**Common causes.**
-- Upload has not finished. The object key becomes available only after the PUT completes; polling immediately after starting an upload can return `NoSuchKey`.
-- The key in the request does not match the uploaded object exactly. Keys are case-sensitive.
-- The file was deleted or never uploaded.
-
-**Fix.** Wait for the upload request to return a 2xx before referencing the key. Re-check the exact spelling, case, and extension.
+For 401, 403, 429, 500, and the `NoSuchKey` storage error (common on pre-recorded uploads), see the [Error reference](/waves/documentation/troubleshooting/error-reference).
 
 ## Still stuck?
 

@@ -1,0 +1,69 @@
+---
+title: "Error reference"
+sidebarTitle: "Error reference"
+description: "HTTP status codes returned by Waves TTS and Pulse STT endpoints, with fixes for each."
+---
+
+Every Waves REST and WebSocket endpoint returns standard HTTP status codes. Use this page to map a status code to its likely cause and fix. Covers both TTS (Lightning) and STT (Pulse).
+
+## Common API errors
+
+### 401 Unauthorized
+
+Missing or invalid `Authorization` header.
+
+**Fix.**
+- Confirm the header is `Authorization: Bearer <KEY>` with a single space and no quotes.
+- On WebSocket handshakes in browsers, custom headers aren't allowed. Use the `?token=<KEY>` query parameter instead where the endpoint supports it.
+- Check the key has not been rotated in the [API Keys dashboard](https://app.smallest.ai/dashboard/api-keys). Rotated keys stop working immediately.
+- Verify the key string starts with `sk_` and has no trailing whitespace.
+
+### 403 Forbidden
+
+The key is valid but lacks permission for this resource.
+
+**Common causes.**
+- Using a key from a different workspace. Each workspace has its own set of keys.
+- Key scoped to a different product (for example, an Atoms key on a Waves TTS endpoint).
+- Trial or workspace usage limit reached.
+
+**Fix.** Confirm the key was generated in the intended workspace at [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys). If limits are the issue, upgrade the workspace or contact support.
+
+### 429 Too Many Requests
+
+The request exceeded the current rate limit.
+
+**Fix.** Retry with exponential backoff starting at 500 ms, doubling up to 30 s. Respect the `Retry-After` header if present. For sustained higher throughput, contact support to raise the workspace limit.
+
+### 500 Internal Server Error
+
+A server-side issue. Not caused by the request payload in most cases.
+
+**Fix.** Retry once after a short delay. If it persists, file a support ticket and include the `x-request-id` value from the response headers so the server-side trace can be located.
+
+## Storage and file errors
+
+### `NoSuchKey` (from pre-recorded uploads)
+
+The audio object referenced in the request does not exist in storage. Most common on Pulse STT pre-recorded uploads.
+
+**Common causes.**
+- Upload has not finished. The object key becomes available only after the PUT completes; polling immediately after starting an upload can return `NoSuchKey`.
+- The key in the request does not match the uploaded object exactly. Keys are case-sensitive.
+- The file was deleted or never uploaded.
+
+**Fix.** Wait for the upload request to return a 2xx before referencing the key. Re-check the exact spelling, case, and extension.
+
+## When to open a support ticket
+
+Include these details whenever you open a ticket:
+
+- The `x-request-id` header from the failing response.
+- The exact HTTP method, URL, and a redacted copy of the request body.
+- The response status and body.
+- The workspace ID and the approximate timestamp (UTC).
+
+For product-specific troubleshooting (audio quality, WebSocket drops, transcript accuracy), see the feature-level pages:
+
+- [Pulse STT pre-recorded troubleshooting](/waves/documentation/speech-to-text-pulse/pre-recorded/troubleshooting)
+- [Pulse STT realtime troubleshooting](/waves/documentation/speech-to-text-pulse/realtime-web-socket/troubleshooting)
