@@ -162,14 +162,14 @@ class _VoiceAgentScreenState extends State<VoiceAgentScreen> {
 
 ```dart
 Future<void> _startMicStream() async {
-  final micStream = await MicStream.microphone(
-    audioSource:     AudioSource.VOICE_COMMUNICATION,  // Android AEC + NS
-    sampleRate:      sampleRate,
-    channelConfig:   ChannelConfig.CHANNEL_IN_MONO,
-    audioFormat:     AudioFormat.ENCODING_PCM_16BIT,
+  final micStream = MicStream.microphone(
+    audioSource:   AudioSource.VOICE_COMMUNICATION,  // Android AEC + NS
+    sampleRate:    sampleRate,
+    channelConfig: ChannelConfig.CHANNEL_IN_MONO,
+    audioFormat:   AudioFormat.ENCODING_PCM_16BIT,
   );
 
-  _micSub = micStream!.listen((Uint8List bytes) {
+  _micSub = micStream.listen((Uint8List bytes) {
     if (_channel == null) return;
     _channel!.sink.add(jsonEncode({
       'type':  'input_audio_buffer.append',
@@ -178,6 +178,8 @@ Future<void> _startMicStream() async {
   });
 }
 ```
+
+`MicStream.microphone` returns a `Stream<Uint8List>` synchronously (not a `Future`); don't `await` it.
 
 `AudioSource.VOICE_COMMUNICATION` selects the platform's echo-cancelled audio path on Android. On iOS, `mic_stream` uses the `AVAudioSessionModeVoiceChat` audio mode, which enables the equivalent pipeline.
 
@@ -192,7 +194,8 @@ void _handleServerEvent(dynamic raw) {
       break;
     case 'output_audio.delta':
       final bytes = base64Decode(ev['audio'] as String);
-      FlutterPcmSound.feed(PcmArrayInt16.fromUint8List(bytes));
+      final byteData = bytes.buffer.asByteData(bytes.offsetInBytes, bytes.lengthInBytes);
+      FlutterPcmSound.feed(PcmArrayInt16(bytes: byteData));
       break;
     case 'agent_start_talking':
       // UI: show "speaking" indicator
@@ -201,7 +204,9 @@ void _handleServerEvent(dynamic raw) {
       // UI: hide "speaking" indicator
       break;
     case 'interruption':
-      FlutterPcmSound.clear();  // drop buffered agent audio
+      // No public flush API in flutter_pcm_sound. The residual buffer
+      // (~100 ms at 24 kHz) will play out. Stop feeding and wait for
+      // the next agent_start_talking.
       break;
     case 'session.closed':
       _stop();
