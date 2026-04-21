@@ -98,6 +98,29 @@ The response includes all campaign details:
 | `max_retries` | int | Retry attempts for failed calls (0–10, default: 3) |
 | `retry_delay` | int | Minutes between retries (1–1440, default: 15) |
 
+### Scheduling a campaign (REST)
+
+`POST /campaign` also accepts an optional `scheduledAt` (ISO-8601, must be in
+the future) to defer the first dial-out. If provided, the campaign is created
+in `scheduled` status and begins automatically at the specified time.
+
+```bash
+curl -X POST "https://api.smallest.ai/atoms/v1/campaign" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "January Outreach",
+    "agentId": "696ddd281ea16a73cb8aafbe",
+    "audienceId": "696ddd287f45bf7b27344e7c",
+    "phoneNumberIds": ["6963d3a8862e1cb702da7244"],
+    "scheduledAt": "2026-04-24T10:00:00.000Z",
+    "maxRetries": 3,
+    "retryDelay": 15
+  }'
+```
+
+Full request/response shape: see [`POST /campaign`](/atoms/api-reference/campaigns/create-a-campaign) in the API reference.
+
 ---
 
 ## Starting a Campaign
