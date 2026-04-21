@@ -186,23 +186,23 @@ requests.patch(
                 {
                     "identifier": "call_resolved",
                     "dispositionMetricPrompt": "Was the customer issue resolved by the end of the call?",
-                    "dispositionValues": {"type": "BOOLEAN"},
+                    "dispositionMetricType": "BOOLEAN",
                 },
                 {
                     "identifier": "satisfaction_score",
                     "dispositionMetricPrompt": "Rate the customer satisfaction from 1 to 5",
-                    "dispositionValues": {"type": "INTEGER"},
+                    "dispositionMetricType": "INTEGER",
                 },
                 {
                     "identifier": "call_outcome",
                     "dispositionMetricPrompt": "What was the outcome of the call?",
-                    "dispositionValues": {"type": "ENUM"},
+                    "dispositionMetricType": "ENUM",
                     "choices": ["resolved", "escalated", "callback_scheduled", "no_action"],
                 },
                 {
                     "identifier": "summary",
                     "dispositionMetricPrompt": "Provide a brief summary of the call",
-                    "dispositionValues": {"type": "STRING"},
+                    "dispositionMetricType": "STRING",
                 },
             ],
             "useInternalAnalyticsModel": True,
@@ -227,7 +227,7 @@ Each entry in `dispositionMetrics` takes four fields:
 |-------|----------|-------------|
 | `identifier` | Yes | Machine name. Lowercase letters, digits, and underscores only. |
 | `dispositionMetricPrompt` | Yes | The question evaluated against the transcript. |
-| `dispositionValues.type` | Yes | One of `STRING`, `BOOLEAN`, `INTEGER`, `ENUM`, `DATETIME`. |
+| `dispositionMetricType` | Yes | One of `STRING`, `BOOLEAN`, `INTEGER`, `ENUM`, `DATETIME`. |
 | `choices` | Only when type is `ENUM` | Allowed values. |
 
 Two analytics flags apply globally:
@@ -245,7 +245,7 @@ curl -H "Authorization: Bearer $SMALLEST_API_KEY" \
   | jq '.data._resolvedConfig.postCallAnalyticsConfig'
 ```
 
-The active version's metrics are surfaced under `_resolvedConfig.postCallAnalyticsConfig`. After publishing, the backend stores `dispositionMetricType` (flat) in place of the `dispositionValues.type` shape sent in the request.
+The active version's metrics are surfaced under `_resolvedConfig.postCallAnalyticsConfig`. Each entry round-trips exactly as sent: `identifier`, `dispositionMetricPrompt`, `dispositionMetricType`, and `choices` (when the type is `ENUM`).
 
 ---
 
