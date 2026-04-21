@@ -72,8 +72,8 @@ async def stream_audio():
                 offset += chunk_size
                 await asyncio.sleep(0.05)  # 50ms delay between chunks
 
-            print("Finished sending audio, sending end signal...")
-            await ws.send(json.dumps({"type": "finalize"}))
+            print("Finished sending audio, closing stream...")
+            await ws.send(json.dumps({"type": "close_stream"}))
 
         sender = asyncio.create_task(send_chunks())
 
@@ -140,8 +140,8 @@ ws.on("open", () => {
 
   const sendChunk = () => {
     if (offset >= audioBuffer.length) {
-      console.log("Finished sending audio, sending end signal...");
-      ws.send(JSON.stringify({ type: "finalize" }));
+      console.log("Finished sending audio, closing stream...");
+      ws.send(JSON.stringify({ type: "close_stream" }));
       return;
     }
 
@@ -215,8 +215,8 @@ async function transcribeAudio(audioFile) {
 
     const sendChunk = () => {
       if (offset >= arrayBuffer.byteLength) {
-        console.log("Finished sending audio");
-        ws.send(JSON.stringify({ type: "finalize" }));
+        console.log("Finished sending audio, closing stream...");
+        ws.send(JSON.stringify({ type: "close_stream" }));
         return;
       }
 
@@ -327,8 +327,7 @@ async function streamMicrophone() {
     processor.disconnect();
     source.disconnect();
     stream.getTracks().forEach(track => track.stop());
-    ws.send(JSON.stringify({ type: "finalize" }));
-    ws.close();
+    ws.send(JSON.stringify({ type: "close_stream" }));
   }, 30000);
 }
 
