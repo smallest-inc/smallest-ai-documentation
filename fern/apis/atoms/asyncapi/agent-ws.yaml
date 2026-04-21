@@ -54,13 +54,18 @@ servers:
                 - chat
               default: webcall
               description: |
-                Session mode.
+                Session mode. The gateway accepts both values; which ones
+                are end-to-end supported depends on the agent's configuration.
+
                 - `webcall` — full voice pipeline (STT → LLM → TTS). The
                   client sends audio via `input_audio_buffer.append` and
-                  receives audio via `output_audio.delta`.
-                - `chat` — text-only pipeline. The client sends text via
-                  `input_text.send` and receives transcripts. No TTS audio
-                  is produced.
+                  receives audio via `output_audio.delta`. Text input via
+                  `input_text.send` is also accepted and is routed through
+                  the LLM + TTS just like transcribed speech.
+                - `chat` — text-only pipeline for agents configured with a
+                  chat widget. The client sends text via `input_text.send`.
+                  Not all agents support chat mode — verify on your agent's
+                  config before relying on it.
             sample_rate:
               type: integer
               description: |
@@ -77,6 +82,10 @@ channels:
       your API key and an `agent_id`; the server creates a session, bridges
       audio and transcripts to the STT/LLM/TTS pipeline, and streams events
       back until the client closes or the server ends the session.
+
+      Post-call, the full conversation (transcript + recording) is available
+      at `GET /atoms/v1/conversation/{callId}` using the `call_id` from
+      `session.created`.
     messages:
       inputAudioAppend:
         $ref: "#/components/messages/inputAudioAppend"
@@ -100,6 +109,8 @@ channels:
         $ref: "#/components/messages/agentStartTalking"
       agentStopTalking:
         $ref: "#/components/messages/agentStopTalking"
+      interruption:
+        $ref: "#/components/messages/interruption"
       error:
         $ref: "#/components/messages/error"
 
@@ -181,6 +192,13 @@ operations:
     summary: Agent has finished its current turn
     messages:
       - $ref: "#/channels/agentSession/messages/agentStopTalking"
+  receiveInterruption:
+    action: receive
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: User interrupted the agent mid-turn
+    messages:
+      - $ref: "#/channels/agentSession/messages/interruption"
   receiveError:
     action: receive
     channel:
@@ -390,6 +408,13 @@ components:
       name: Transcript
       title: Transcript
       summary: Transcription of user speech or text of agent response.
+      description: |
+        Emitted on turn boundaries when the server produces a text
+        representation of the utterance — user speech after STT, or
+        agent response text alongside TTS. Emission timing depends on
+        the agent pipeline configuration; not every audio chunk is
+        accompanied by a transcript, and clients should treat transcripts
+        as informational.
       contentType: application/json
       payload:
         type: object
@@ -427,6 +452,8 @@ components:
       description: |
         Useful for UI cues (e.g., showing a "speaking" indicator) and for
         suppressing the user's mic echo cancellation while the agent speaks.
+        Fires once per agent turn, before the first `output_audio.delta` of
+        that turn.
       contentType: application/json
       payload:
         type: object
@@ -435,7 +462,11 @@ components:
         properties:
           type:
             type: string
-            const: agent.start_talking
+            const: agent_start_talking
+          timestamp:
+            type: string
+            format: date-time
+            description: Server-side timestamp of when the agent turn started.
 
     agentStopTalking:
       name: AgentStopTalking
@@ -449,7 +480,34 @@ components:
         properties:
           type:
             type: string
-            const: agent.stop_talking
+            const: agent_stop_talking
+          timestamp:
+            type: string
+            format: date-time
+            description: Server-side timestamp of when the agent turn ended.
+
+    interruption:
+      name: Interruption
+      title: User interrupted the agent
+      summary: Server detected that the user started speaking while the agent was talking.
+      description: |
+        Emitted when the server's VAD detects user speech during an active
+        agent turn. The agent's current TTS output is truncated and the
+        pipeline is re-primed with the user's new utterance. Clients should
+        stop playing any buffered `output_audio.delta` chunks from the
+        interrupted turn.
+
+        Typically followed by a new `agent_start_talking` once the agent
+        produces its next response.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+        properties:
+          type:
+            type: string
+            const: interruption
 
     error:
       name: Error
