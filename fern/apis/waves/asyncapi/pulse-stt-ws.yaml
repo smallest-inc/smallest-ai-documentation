@@ -238,8 +238,8 @@ channels:
           description: Raw audio data chunk, transmitted in binary format using the selected encoding
           examples:
             - Binary audio data chunk (4096 bytes recommended)
-      pulseFinalizeSignal.message:
-        name: PulseFinalizeSignal
+      pulseControlSignal.message:
+        name: PulseControlSignal
         contentType: application/json
         payload:
           type: object
@@ -250,23 +250,13 @@ channels:
               type: string
               enum:
                 - finalize
-              description: Flush current audio buffer and force an immediate is_final transcript. The session remains open for more audio.
+                - close_stream
+              description: >
+                Control signal type.
+                `finalize` — flush current audio buffer and force an immediate is_final transcript. The session remains open for more audio.
+                `close_stream` — signal the end of the audio stream. The server flushes remaining audio, delivers final transcripts, and responds with is_last=true.
           examples:
             - type: finalize
-      pulseCloseStreamSignal.message:
-        name: PulseCloseStreamSignal
-        contentType: application/json
-        payload:
-          type: object
-          required:
-            - type
-          properties:
-            type:
-              type: string
-              enum:
-                - close_stream
-              description: Signal the end of the audio stream. The server flushes remaining audio, delivers final transcripts, and responds with is_last=true.
-          examples:
             - type: close_stream
       pulseTranscriptionResponse.message:
         name: PulseTranscriptionResponse
@@ -444,22 +434,17 @@ operations:
     description: Stream audio data in chunks for real-time transcription
     messages:
       - $ref: "#/channels/pulseStream/messages/pulseAudioData.message"
-  sendFinalizeSignal:
+  sendControlSignal:
     action: send
     channel:
       $ref: "#/channels/pulseStream"
-    summary: Flush current audio buffer
-    description: Force an immediate is_final transcript for pending speech without ending the session. Useful in agentic pipelines.
+    summary: Send a control signal (finalize or close_stream)
+    description: >
+      Send a JSON control signal.
+      `finalize` flushes the current audio buffer and returns an is_final transcript without ending the session.
+      `close_stream` ends the audio stream — the server flushes remaining audio, delivers final transcripts, and responds with is_last=true.
     messages:
-      - $ref: "#/channels/pulseStream/messages/pulseFinalizeSignal.message"
-  sendCloseStreamSignal:
-    action: send
-    channel:
-      $ref: "#/channels/pulseStream"
-    summary: End the audio stream
-    description: Signal that audio streaming is complete. The server flushes remaining audio, delivers final transcripts, and responds with is_last=true.
-    messages:
-      - $ref: "#/channels/pulseStream/messages/pulseCloseStreamSignal.message"
+      - $ref: "#/channels/pulseStream/messages/pulseControlSignal.message"
   receiveTranscription:
     action: receive
     channel:
