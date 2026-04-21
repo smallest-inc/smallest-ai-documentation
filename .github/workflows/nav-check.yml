@@ -1,0 +1,77 @@
+name: Nav & Link Check
+
+# Catches two classes of bug that existing CI misses:
+#   1. Orphan MDX pages — exist in pages/ but not registered in any nav YAML.
+#      Fern silently skips these, so any link pointing at them 404s.
+#   2. Broken internal links — `[text](/path)` or `href="/path"` pointing at
+#      a page that 404s on docs.smallest.ai.
+#
+# Both run on every PR against main and on pushes to main.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'fern/**'
+      - 'scripts/check_nav.py'
+      - 'scripts/check_links.py'
+      - 'scripts/.nav-ignore'
+      - '.github/workflows/nav-check.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'fern/**'
+
+jobs:
+  nav-check:
+    name: Orphan pages & dangling nav entries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pyyaml
+        run: pip install pyyaml
+
+      - name: Run nav check
+        run: python3 scripts/check_nav.py
+
+  link-check:
+    name: Broken internal links on docs.smallest.ai
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need history to diff against main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Determine changed MDX files
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+            head_sha="${{ github.event.pull_request.head.sha }}"
+            files=$(git diff --name-only "$base_sha" "$head_sha" -- 'fern/**/*.mdx' | tr '\n' ' ')
+          else
+            # push to main — check everything that changed in the push
+            files=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- 'fern/**/*.mdx' | tr '\n' ' ')
+          fi
+          if [ -z "$files" ]; then
+            echo "No MDX files changed."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Changed MDX files: $files"
+            echo "files=$files" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run link check on changed files
+        if: steps.changed.outputs.skip != 'true'
+        run: python3 scripts/check_links.py ${{ steps.changed.outputs.files }}

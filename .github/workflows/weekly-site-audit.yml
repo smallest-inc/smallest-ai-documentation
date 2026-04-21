@@ -1,0 +1,79 @@
+name: Weekly Site Audit
+
+# Full-site audit against docs.smallest.ai. The PR-level nav-check only sees
+# changed files; this job catches rot — links that break because the TARGET
+# page was renamed/removed in a different PR, not the one that introduced
+# the link.
+#
+# Runs every Monday at 04:00 UTC (09:30 IST). Opens a GitHub Issue on
+# failure so nothing gets silently lost.
+
+on:
+  schedule:
+    - cron: '0 4 * * 1'  # Monday 04:00 UTC
+  workflow_dispatch:      # also allow manual trigger from the Actions UI
+
+jobs:
+  full-link-check:
+    name: All internal links resolve
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pyyaml
+        # check_links.py imports yaml for the registered-only filter the
+        # weekly audit relies on. Without this, yaml imports fail, the
+        # filter silently returns empty, and the audit becomes a no-op.
+        run: pip install pyyaml
+
+      - name: Run full-site link check
+        id: check
+        continue-on-error: true
+        run: |
+          python3 scripts/check_links.py 2>&1 | tee /tmp/link-check-report.txt
+          # Preserve exit code separately for the report step
+          exit_code=${PIPESTATUS[0]}
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+
+      - name: Open issue on broken links
+        if: steps.check.outputs.exit_code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('/tmp/link-check-report.txt', 'utf8');
+            const title = `Weekly link audit: broken internal links on docs.smallest.ai (${new Date().toISOString().slice(0, 10)})`;
+            const body = [
+              `The scheduled weekly link audit found broken internal links on \`docs.smallest.ai\`.`,
+              ``,
+              `These are links inside published MDX files that return a non-2xx/3xx status when HEAD-tested against production docs. They were not caught by PR-level checks (either merged before the check existed, or the TARGET of a link was renamed in a different PR).`,
+              ``,
+              `<details><summary>Full audit output</summary>`,
+              ``,
+              '```',
+              report.slice(0, 60000),
+              '```',
+              ``,
+              `</details>`,
+              ``,
+              `Workflow run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            ].join('\n');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['docs', 'link-rot'],
+            });
+
+      # Weekly audit is informational. The issue is the signal — we don't
+      # fail the workflow because that just creates a "ignored red check"
+      # on main. PR-level nav-check.yml remains strict and blocks new rot.
