@@ -149,17 +149,18 @@ function connect() {
 1. **Establish connection**: Create WebSocket with proper authentication
 2. **Stream audio**: Send chunks at regular intervals
 3. **Handle responses**: Process partial and final transcripts
-4. **End session**: Send `{"type": "finalize"}` when done
-5. **Close connection**: Gracefully close the WebSocket
+4. **Flush buffer (optional)**: Send `{"type": "finalize"}` to force an immediate final transcript without ending the session
+5. **End session**: Send `{"type": "close_stream"}` when done streaming audio
+6. **Close connection**: Wait for `is_last=true`, then close the WebSocket
 
 ### Graceful Shutdown
 
-To properly close a session, send the finalize token and wait for the server to respond with `is_last=true` before closing the WebSocket connection:
+To properly close a session, send `close_stream` and wait for the server to respond with `is_last=true` before closing the WebSocket connection:
 
 ```javascript
 function endTranscription(ws) {
-  // Send end signal
-  ws.send(JSON.stringify({ type: "finalize" }));
+  // Signal end of audio stream
+  ws.send(JSON.stringify({ type: "close_stream" }));
   
   // Wait for is_last=true response before closing
   ws.onmessage = (event) => {
@@ -172,8 +173,16 @@ function endTranscription(ws) {
 ```
 
 <Warning>
-Do not close the WebSocket immediately after sending the finalize token. Always wait for the `is_last=true` response to ensure all audio has been processed and final transcripts are received.
+Do not close the WebSocket immediately after sending `close_stream`. Always wait for the `is_last=true` response to ensure all audio has been processed and final transcripts are received.
 </Warning>
+
+<Note>
+`finalize` and `close_stream` serve different purposes:
+- **`finalize`** flushes the current buffer and returns an `is_final=true` transcript, but keeps the session open for more audio.
+- **`close_stream`** ends the session — the server flushes remaining audio, delivers final transcripts, and sends `is_last=true`.
+
+Use `finalize` mid-session when you need an immediate transcript (e.g., in agentic pipelines). Use `close_stream` when you are done sending audio.
+</Note>
 
 ## Latency Optimization
 
