@@ -1,0 +1,197 @@
+#!/usr/bin/env python3
+"""
+Verify every internal doc link inside an MDX file resolves on docs.smallest.ai.
+
+Replaces pattern-matching heuristics (which give false positives — some
+leading-slash paths are Fern CDN assets, others are Mintlify-era page links).
+Actual HTTP-test is the only reliable signal.
+
+USAGE
+    python3 scripts/check_links.py                       # scan every MDX under fern/products/
+    python3 scripts/check_links.py path/to/one.mdx ...   # scan specific files (used by CI on changed files)
+    python3 scripts/check_links.py --base https://smallest-ai.docs.buildwithfern.com  # override target (for preview URLs)
+
+WHAT IT DOES
+    1. Grep internal links — Markdown `[text](/path)` and HTML `href="/path"`.
+    2. De-duplicate URLs to minimise HTTP requests.
+    3. HEAD each URL against docs.smallest.ai (or --base). Follow redirects.
+    4. Flag anything that isn't 2xx or 3xx→2xx as a broken link.
+
+WHAT IT IGNORES
+    - External links (http(s)://, mailto:, discord://, etc.)
+    - Anchors within the current page (#section)
+    - Image CDN paths that Fern rewrites at build time (detected because
+      they return 404 at docs.smallest.ai but the image still renders —
+      we ignore those by looking at the element: if the URL appears inside
+      an `<img src>` or Markdown `![]()`, skip it — Fern handles assets)
+"""
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+try:
+    import yaml  # used for --registered-only mode
+except ImportError:
+    yaml = None
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+DEFAULT_BASE = "https://docs.smallest.ai"
+TIMEOUT = 10
+MAX_WORKERS = 16
+
+# Nav YAMLs whose `path:` entries define "files that render to customers".
+# Anything NOT referenced from one of these is either an orphan or belongs
+# to a frozen older version — its broken links don't hurt live users.
+NAV_CONFIGS = [
+    REPO_ROOT / "fern" / "products" / "atoms.yml",
+    REPO_ROOT / "fern" / "products" / "waves" / "versions" / "v4.0.0.yml",
+    REPO_ROOT / "fern" / "products" / "waves" / "versions" / "v3.0.1.yml",
+    REPO_ROOT / "fern" / "products" / "waves" / "versions" / "v2.2.0.yml",
+]
+
+MD_LINK_RE = re.compile(r'(?<!!)\[[^\]]*\]\((/[^)]+)\)')         # [text](/path) — NOT image
+IMG_MD_RE = re.compile(r'!\[[^\]]*\]\((/[^)]+)\)')               # ![](/path) — skip (asset)
+HREF_RE = re.compile(r'href\s*=\s*["\'](/[^"\']+)["\']')         # href="/path"
+IMG_SRC_RE = re.compile(r'<img[^>]*src\s*=\s*["\'](/[^"\']+)["\']')  # <img src="/path"> — skip
+
+
+def nav_registered_files() -> set[Path]:
+    """Return the set of MDX files registered in any nav YAML."""
+    if yaml is None:
+        return set()
+    found: set[Path] = set()
+    for cfg in NAV_CONFIGS:
+        if not cfg.exists():
+            continue
+        base = cfg.parent
+        data = yaml.safe_load(cfg.read_text())
+
+        def walk(node):
+            if isinstance(node, dict):
+                if "path" in node and isinstance(node["path"], str) and node["path"].endswith(".mdx"):
+                    found.add((base / node["path"]).resolve())
+                for v in node.values():
+                    walk(v)
+            elif isinstance(node, list):
+                for item in node:
+                    walk(item)
+
+        walk(data)
+    return found
+
+
+def extract_internal_links(content: str) -> set[str]:
+    """Return set of internal URL paths from an MDX file, excluding image refs."""
+    # Collect asset-like URLs first (anything inside an image ref — we skip these)
+    asset_urls: set[str] = set()
+    for m in IMG_MD_RE.finditer(content):
+        asset_urls.add(m.group(1))
+    for m in IMG_SRC_RE.finditer(content):
+        asset_urls.add(m.group(1))
+
+    urls: set[str] = set()
+    for m in MD_LINK_RE.finditer(content):
+        url = m.group(1).split('#')[0]
+        if url and url not in asset_urls:
+            urls.add(url)
+    for m in HREF_RE.finditer(content):
+        url = m.group(1).split('#')[0]
+        if url and url not in asset_urls:
+            urls.add(url)
+    return urls
+
+
+def probe(url: str, base: str) -> tuple[str, int, str]:
+    """HEAD-check a single URL. Return (url, status_code, note)."""
+    full = base.rstrip('/') + url
+    req = Request(full, method='HEAD', headers={'User-Agent': 'fern-link-check/1.0'})
+    try:
+        with urlopen(req, timeout=TIMEOUT) as resp:
+            return url, resp.status, ''
+    except HTTPError as e:
+        return url, e.code, ''
+    except URLError as e:
+        return url, -1, f'URL error: {e.reason}'
+    except Exception as e:
+        return url, -1, f'{type(e).__name__}: {e}'
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('files', nargs='*', help='MDX files to scan (default: all under fern/products/)')
+    ap.add_argument('--base', default=DEFAULT_BASE, help=f'Base URL to test against (default: {DEFAULT_BASE})')
+    ap.add_argument(
+        '--all-files', action='store_true',
+        help='Check every MDX file including orphans and frozen versions. Default behaviour is to only check files registered in a nav YAML (i.e. pages that actually render on docs.smallest.ai).',
+    )
+    args = ap.parse_args()
+
+    if args.files:
+        # Explicit list — honour exactly what was passed (used by PR CI on changed files)
+        targets = [Path(f) for f in args.files if f.endswith('.mdx')]
+    else:
+        all_mdx = list((REPO_ROOT / 'fern' / 'products').rglob('*.mdx'))
+        if args.all_files:
+            targets = all_mdx
+        else:
+            registered = nav_registered_files()
+            targets = [f for f in all_mdx if f.resolve() in registered]
+            skipped = len(all_mdx) - len(targets)
+            if skipped:
+                print(f'Skipping {skipped} MDX file(s) not registered in any nav YAML (orphan/frozen). Use --all-files to include them.')
+
+    if not targets:
+        print('No MDX files to check.')
+        return 0
+
+    # url -> [files referencing it]
+    url_sources: dict[str, list[str]] = {}
+    for f in targets:
+        if not f.exists():
+            continue
+        try:
+            content = f.read_text()
+        except UnicodeDecodeError:
+            continue
+        for url in extract_internal_links(content):
+            url_sources.setdefault(url, []).append(str(f.relative_to(REPO_ROOT) if f.is_absolute() else f))
+
+    if not url_sources:
+        print(f'✅ No internal links found across {len(targets)} file(s).')
+        return 0
+
+    print(f'Checking {len(url_sources)} unique internal URL(s) across {len(targets)} file(s) against {args.base} ...')
+
+    broken: list[tuple[str, int, list[str]]] = []
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        futures = {pool.submit(probe, url, args.base): url for url in url_sources}
+        for fut in as_completed(futures):
+            url, code, note = fut.result()
+            # 2xx and 3xx are acceptable (Fern commonly returns 307 for redirect-to-first-endpoint)
+            if code < 200 or code >= 400:
+                broken.append((url, code, url_sources[url]))
+
+    if not broken:
+        print(f'✅ All {len(url_sources)} internal link(s) resolve.')
+        return 0
+
+    print()
+    print(f'❌ {len(broken)} broken link(s):')
+    for url, code, sources in sorted(broken):
+        print(f'\n  {code}  {url}')
+        for src in sources[:3]:
+            print(f'        in: {src}')
+        if len(sources) > 3:
+            print(f'        ...and {len(sources) - 3} more')
+    return 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
