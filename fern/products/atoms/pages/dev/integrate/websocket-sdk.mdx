@@ -91,7 +91,7 @@ interface AtomsAgentConfig {
   agentId:         string;    // Required. Agent to connect to.
   baseUrl?:        string;    // Default: wss://api.smallest.ai. Override for local dev.
   sampleRate?:     number;    // Default: 24000. Audio sample rate in Hz.
-  autoCaptureMic?: boolean;   // Default: true. Set false to start muted.
+  autoCaptureMic?: boolean;   // Default: true. If false, no microphone is captured and mute()/unmute() are no-ops. See the Push-to-talk pattern below for the correct way to start muted.
 }
 ```
 
@@ -114,7 +114,7 @@ Subscribe with `agent.on(eventName, handler)`.
 | Event | Payload | Fires when |
 |---|---|---|
 | `session_started` | `{ session_id: string, call_id: string }` | The server accepts the connection and creates a session. Use `call_id` to look up the call log or subscribe to [live transcripts via SSE](/atoms/developer-guide/operate/analytics/sse-for-live-transcripts). |
-| `session_ended` | `{ reason: string }` | The session has ended. Common `reason` values: `client_requested`, `websocket_closed`, a server-side error tag. |
+| `session_ended` | `{ reason: string }` | The session has ended. `reason` is either a string sent by the server (`client_requested`, `websocket_closed`, or an error tag) or, when the WebSocket closes without a server-side `session.closed` frame, the numeric close code as a string (`"1005"`, `"1006"`, `"1000"`, etc.). |
 | `agent_start_talking` | None | The server begins streaming agent TTS for a turn. Useful for "agent speaking" UI state. |
 | `agent_stop_talking` | None | The server has finished the current turn. |
 | `error` | `{ code: string, message: string }` | A non-fatal session error occurred. Fatal errors also trigger `session_ended`. |
@@ -124,20 +124,24 @@ Subscribe with `agent.on(eventName, handler)`.
 
 ### Push-to-talk
 
-Start connected but muted. Toggle on a button press.
+Connect normally, mute immediately, then toggle on button events.
 
 ```typescript
 const agent = new AtomsAgent({
-  apiKey:         "sk_...",
-  agentId:        "...",
-  autoCaptureMic: false,
+  apiKey:  "sk_...",
+  agentId: "...",
 });
 
 await agent.connect();
+agent.mute();  // silence the mic right after connect
 
 talkButton.addEventListener("pointerdown", () => agent.unmute());
 talkButton.addEventListener("pointerup",   () => agent.mute());
 ```
+
+<Warning>
+  Do not pass `autoCaptureMic: false` for push-to-talk. That mode skips microphone setup entirely and there is no public method to start the mic after `connect()`, so `mute()` and `unmute()` silently do nothing and `isMuted` always returns `false`. Use the default (`autoCaptureMic: true`) and call `mute()` right after `connect()` instead.
+</Warning>
 
 ### Agent-speaking indicator
 
@@ -169,27 +173,35 @@ sendButton.addEventListener("click", () => {
 
 ## Error handling
 
-```typescript
-agent.on("error", (e) => {
-  switch (e.code) {
-    case "401":
-    case "403":
-      console.error("Authentication failed. Check the API key.");
-      break;
-    case "invalid_event":
-      console.error("Malformed event sent by the SDK:", e.message);
-      break;
-    default:
-      console.error(`[${e.code}] ${e.message}`);
-  }
-});
+Errors arrive through three different paths. Handle each.
 
+**Handshake failure** (bad API key, wrong agent ID, network issue, denied microphone permission) rejects the `connect()` promise with a generic `Error("WebSocket connection failed")`. The `error` event does not fire for these.
+
+```typescript
 try {
   await agent.connect();
 } catch (err) {
-  // connect() rejects on WebSocket handshake failure, denied mic permission, etc.
   console.error("connect failed:", err.message);
+  // Likely causes: invalid API key, unknown agent ID, microphone denied, network blocked.
 }
+```
+
+**Mid-session server error** arrives as an `error` event with `{ code, message }`. These are sent by the server during an active session, not during the handshake.
+
+```typescript
+agent.on("error", (e) => {
+  console.error(`[${e.code}] ${e.message}`);
+});
+```
+
+**Session termination** fires `session_ended` with a `reason` string. Handle this to detect both graceful ends and abnormal closes.
+
+```typescript
+agent.on("session_ended", (e) => {
+  // e.reason is a server string (e.g. "client_requested") or a numeric
+  // WebSocket close code as a string (e.g. "1006" for abnormal closure).
+  console.log("session ended:", e.reason);
+});
 ```
 
 ## Smoke-test the integration
