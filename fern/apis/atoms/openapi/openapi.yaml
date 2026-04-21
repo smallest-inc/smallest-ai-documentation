@@ -1281,6 +1281,41 @@ paths:
                   type: string
                   description: The ID of the agent
                   example: "60d0fe4f5311236168a109ca"
+                phoneNumberIds:
+                  type: array
+                  description: |
+                    Optional list of caller-ID phone number IDs to rotate across
+                    when placing outbound calls for this campaign. If omitted,
+                    the agent's default phone number is used.
+                  items:
+                    type: string
+                  example: ["60d0fe4f5311236168a109cb"]
+                scheduledAt:
+                  type: string
+                  format: date-time
+                  description: |
+                    Optional ISO-8601 timestamp for when the campaign should
+                    start dialing. Must be in the future. If provided, the
+                    campaign is created in `scheduled` status; otherwise it
+                    starts in `draft` status and must be started manually.
+                  example: "2026-04-24T10:00:00.000Z"
+                maxRetries:
+                  type: integer
+                  minimum: 0
+                  maximum: 10
+                  default: 3
+                  description: |
+                    Maximum number of times a failed call is retried before the
+                    participant is marked as failed. `0` disables retries.
+                  example: 3
+                retryDelay:
+                  type: integer
+                  minimum: 1
+                  maximum: 1440
+                  default: 15
+                  description: |
+                    Delay in minutes between retry attempts for a failed call.
+                  example: 15
               required:
                 - name
                 - audienceId
@@ -1323,6 +1358,23 @@ paths:
                       participantsCount:
                         type: integer
                         description: The number of participants in the campaign
+                      scheduledAt:
+                        type: string
+                        format: date-time
+                        description: The scheduled start time, if provided at creation.
+                      maxRetries:
+                        type: integer
+                        description: Maximum retries per failed call (echoes request).
+                      retryDelay:
+                        type: integer
+                        description: Delay in minutes between retry attempts (echoes request).
+                      retryAttempts:
+                        type: integer
+                        description: Number of retries attempted so far across the campaign.
+                      status:
+                        type: string
+                        enum: [draft, scheduled, running, paused, completed, failed]
+                        description: Current campaign status.
                       createdAt:
                         type: string
                         format: date-time
@@ -5049,9 +5101,10 @@ components:
     DispositionMetric:
       type: object
       description: |
-        A single disposition metric captured after each call. Set the type via
-        `dispositionValues.type`; the backend persists it as `dispositionMetricType`.
-      required: [identifier, dispositionMetricPrompt, dispositionValues]
+        A single disposition metric captured after each call. The metric prompt
+        is evaluated against the call transcript post-call, and the result is
+        returned in the call log under `postCallAnalytics.dispositionMetrics`.
+      required: [identifier, dispositionMetricPrompt, dispositionMetricType]
       properties:
         identifier:
           type: string
@@ -5062,17 +5115,14 @@ components:
           type: string
           description: Natural-language question evaluated against the transcript after the call ends.
           example: "Was the customer issue resolved by the end of the call?"
-        dispositionValues:
-          type: object
-          required: [type]
-          properties:
-            type:
-              type: string
-              enum: [STRING, BOOLEAN, INTEGER, ENUM, DATETIME]
-              description: Data type returned by the metric.
+        dispositionMetricType:
+          type: string
+          enum: [STRING, BOOLEAN, INTEGER, ENUM, DATETIME]
+          description: Data type returned by the metric.
+          example: "STRING"
         choices:
           type: array
-          description: "Required when `dispositionValues.type = ENUM`. Allowed values."
+          description: "Required when `dispositionMetricType = ENUM`. Allowed values."
           items:
             type: string
           example: ["resolved", "escalated", "callback_scheduled", "no_action"]
@@ -5081,7 +5131,7 @@ components:
       type: object
       description: |
         Per-agent post-call analytics configuration. Evaluated after each call ends
-        and surfaced in call logs under the `analytics` field.
+        and surfaced in call logs under the `postCallAnalytics` field.
       properties:
         dispositionMetrics:
           type: array
@@ -5089,6 +5139,34 @@ components:
           items:
             $ref: "#/components/schemas/DispositionMetric"
           default: []
+        successMetrics:
+          type: array
+          deprecated: true
+          description: |
+            **Deprecated** — will be removed in a future version. Use
+            `dispositionMetrics` instead. Kept here because the backend still
+            accepts it on writes and returns it on reads.
+          items:
+            type: object
+            required: [identifier, successMetricPrompt, successMetricType]
+            properties:
+              identifier:
+                type: string
+                pattern: "^[a-z0-9_]+$"
+              successMetricPrompt:
+                type: string
+              successMetricType:
+                type: string
+                enum: [NUMERIC_SCALE, PERCENTAGE_SCALE, PASS_FAIL, DESCRIPTIVE_SCALE]
+          default: []
+        summaryPrompt:
+          type: string
+          deprecated: true
+          description: |
+            **Deprecated** — no longer used in post-call analysis and will be
+            removed in a future version. Kept here because the backend still
+            accepts it on writes and returns it on reads.
+          default: ""
         useInternalAnalyticsModel:
           type: boolean
           default: true
