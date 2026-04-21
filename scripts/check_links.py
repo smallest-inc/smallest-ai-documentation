@@ -56,10 +56,19 @@ NAV_CONFIGS = [
     REPO_ROOT / "fern" / "products" / "waves" / "versions" / "v2.2.0.yml",
 ]
 
+# Root-relative internal paths — [text](/path), href="/path", etc.
 MD_LINK_RE = re.compile(r'(?<!!)\[[^\]]*\]\((/[^)]+)\)')         # [text](/path) — NOT image
 IMG_MD_RE = re.compile(r'!\[[^\]]*\]\((/[^)]+)\)')               # ![](/path) — skip (asset)
 HREF_RE = re.compile(r'href\s*=\s*["\'](/[^"\']+)["\']')         # href="/path"
 IMG_SRC_RE = re.compile(r'<img[^>]*src\s*=\s*["\'](/[^"\']+)["\']')  # <img src="/path"> — skip
+
+# Same-host fully-qualified URLs — catches pages that write out the full
+# docs domain (e.g. `https://docs.smallest.ai/waves/foo`) instead of a
+# root-relative `/waves/foo`. Fern's own checker catches the live site's
+# external links but renderer-agnostic link rot caught locally is faster.
+# Matches whatever domain DEFAULT_BASE points at, so overriding --base
+# also targets the same host in this regex.
+FQ_SAME_HOST_RE_TEMPLATE = r'https?://{host}(/[^\s\'"\)<>]*)'
 
 
 def nav_registered_files() -> set[Path]:
@@ -87,8 +96,13 @@ def nav_registered_files() -> set[Path]:
     return found
 
 
-def extract_internal_links(content: str) -> set[str]:
-    """Return set of internal URL paths from an MDX file, excluding image refs."""
+def extract_internal_links(content: str, base: str = DEFAULT_BASE) -> set[str]:
+    """Return set of internal URL paths from an MDX file, excluding image refs.
+
+    "Internal" means root-relative (`/path`) OR same-host fully-qualified
+    (`https://{base_host}/path`). Cross-domain links are skipped here; Fern's
+    built-in checker on the deployed site covers those.
+    """
     # Collect asset-like URLs first (anything inside an image ref — we skip these)
     asset_urls: set[str] = set()
     for m in IMG_MD_RE.finditer(content):
@@ -103,6 +117,14 @@ def extract_internal_links(content: str) -> set[str]:
             urls.add(url)
     for m in HREF_RE.finditer(content):
         url = m.group(1).split('#')[0]
+        if url and url not in asset_urls:
+            urls.add(url)
+
+    # Also pick up fully-qualified same-host links — these used to slip
+    # through because the regexes above only matched a leading slash.
+    host = re.escape(base.split('://', 1)[-1].rstrip('/'))
+    for m in re.finditer(FQ_SAME_HOST_RE_TEMPLATE.format(host=host), content):
+        url = m.group(1).split('#')[0].rstrip('.,);:\'"')
         if url and url not in asset_urls:
             urls.add(url)
     return urls
@@ -160,7 +182,7 @@ def main() -> int:
             content = f.read_text()
         except UnicodeDecodeError:
             continue
-        for url in extract_internal_links(content):
+        for url in extract_internal_links(content, args.base):
             url_sources.setdefault(url, []).append(str(f.relative_to(REPO_ROOT) if f.is_absolute() else f))
 
     if not url_sources:
