@@ -133,21 +133,27 @@ def extract_internal_links(content: str, base: str = DEFAULT_BASE) -> set[str]:
 
 
 def newly_registered_mdx_stems(base_ref: str) -> set[str]:
-    """Return the stems of MDX files newly registered in nav on this branch
-    vs base_ref. Catches both (a) files added and registered in this PR and
-    (b) pre-existing orphan files that this PR registers for the first time.
+    """Return the stems of MDX files whose URLs may legitimately 404 against
+    the production docs site during an in-flight deploy.
 
-    Used to mark 404s as "pending deploy" rather than "broken" when a
-    cross-link points at a page made visible in the same PR.
+    Two cases are classified as pending-deploy (not broken):
+
+    (a) Pages registered in the current branch's nav but not in base_ref's.
+        Cross-links between pages added in the same PR fall here.
+    (b) Pages registered in base_ref's nav (already merged to main) whose
+        production deploy has not yet caught up. Without this, every open
+        PR fails link-check in the window between merge-to-main and CDN
+        propagation for any page added by a prior PR.
 
     Heuristic: matches when the URL's last path segment equals the MDX
     file's stem. Handles the common case where Fern's slug == file stem.
-    Falls through (treated as broken) when display-name-derived slug
-    differs from stem (e.g. websocket-sdk.mdx rendered as /web-socket-sdk).
+    Falls through (treated as broken) when a display-name-derived slug
+    differs from the stem (e.g. websocket-sdk.mdx rendered as /web-socket-sdk).
     """
-    # Current-branch registered set
+    # Union of current-branch nav + base_ref nav. Either is a valid
+    # pending-deploy candidate; genuinely orphaned links (pointing at
+    # MDX files that no nav registers) still fall through to "broken".
     current = {p.name for p in nav_registered_files()}
-    # Base-ref registered set — read each nav YAML as it existed at base_ref
     base_registered: set[str] = set()
     for cfg in NAV_CONFIGS:
         if not cfg.exists():
@@ -183,8 +189,7 @@ def newly_registered_mdx_stems(base_ref: str) -> set[str]:
 
         walk(data)
 
-    newly = current - base_registered
-    return {Path(n).stem for n in newly}
+    return {Path(n).stem for n in (current | base_registered)}
 
 
 def probe(url: str, base: str) -> tuple[str, int, str]:
