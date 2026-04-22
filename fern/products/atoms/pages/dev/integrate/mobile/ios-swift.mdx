@@ -4,10 +4,14 @@ sidebarTitle: "iOS (Swift)"
 description: "Connect an iOS Swift app to the Smallest Atoms agent using URLSessionWebSocketTask and AVAudioEngine. Zero third-party dependencies."
 ---
 
-Native iOS apps connect to the Atoms agent using Apple's built-in WebSocket and audio APIs. No third-party packages required. The integration uses `URLSessionWebSocketTask` (available since iOS 13) for the wire protocol and `AVAudioEngine` for microphone capture and PCM playback.
+Native iOS applications integrate with the Atoms agent over the [raw WebSocket protocol](/atoms/api-reference/api-reference/realtime-agent/realtime-agent) with zero third-party dependencies.
+
+`URLSessionWebSocketTask` handles transport and has been available since iOS 13. `AVAudioEngine` captures microphone PCM16 through an input tap, and `AVAudioPlayerNode` plays agent audio with sample-accurate scheduling.
+
+Configure `AVAudioSession` with the `.playAndRecord` category and `.voiceChat` mode to enable the system echo cancellation pipeline.
 
 <Note>
-  The code on this page is compile-correct against the iOS 15+ SDK but has not been validated on a physical device. Verify microphone capture routing, interruption handling, and background behavior on your target devices before shipping.
+  Validated end-to-end on the iOS simulator (iPhone 16 Pro, iOS 26.4): `URLSessionWebSocketTask` connects, `AVAudioEngine` input tap captures, `AVAudioPlayerNode` plays back. On the simulator, speaker output loops back into the Mac microphone, so the server's VAD fires `interruption` events continuously; test on a real device (earphones or an HFP Bluetooth headset) to confirm clean barge-in behavior.
 </Note>
 
 ## When to use native iOS
@@ -384,11 +388,11 @@ The `error` event from the server carries actionable codes. Surface auth failure
   <Card title="Realtime Agent WebSocket API" icon="plug" href="/atoms/api-reference/api-reference/realtime-agent/realtime-agent">
     The full wire protocol with every message type, payload, and error code.
   </Card>
-  <Card title="Android (Kotlin)" icon="android" href="/atoms/developer-guide/integrate/mobile/android-kotlin">
-    Native Android integration with OkHttp WebSocket and AudioRecord/AudioTrack.
-  </Card>
   <Card title="React Native" icon="react" href="/atoms/developer-guide/integrate/mobile/react-native">
     Cross-platform mobile integration in TypeScript.
+  </Card>
+  <Card title="Flutter" icon="feather" href="/atoms/developer-guide/integrate/mobile/flutter">
+    Cross-platform mobile integration in Dart.
   </Card>
   <Card title="Error reference" icon="triangle-exclamation" href="/atoms/atoms-platform/troubleshooting/error-reference">
     HTTP status codes returned by every Atoms endpoint.

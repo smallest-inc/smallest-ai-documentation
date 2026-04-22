@@ -4,7 +4,11 @@ sidebarTitle: "React Native"
 description: "Connect a React Native app to the Smallest Atoms agent over raw WebSocket. Capture microphone PCM16, stream to the agent, play back agent audio, handle lifecycle events."
 ---
 
-React Native apps talk to the Atoms agent through the same raw WebSocket protocol documented in the [Realtime Agent API reference](/atoms/api-reference/api-reference/realtime-agent/realtime-agent). The browser [WebSocket SDK](/atoms/developer-guide/integrate/web-socket-sdk) does not run in React Native because it depends on `navigator.mediaDevices.getUserMedia` and the Web Audio API, neither of which exist in the RN JavaScript runtime. The raw protocol is identical, so you reproduce the same connect + audio flow using platform-native capture and playback.
+React Native integrates with the Atoms agent over the [raw WebSocket protocol](/atoms/api-reference/api-reference/realtime-agent/realtime-agent). The runtime's built-in `WebSocket` global handles transport, and a single audio library handles PCM16 capture and scheduled playback.
+
+The browser [WebSocket SDK](/atoms/developer-guide/integrate/web-socket-sdk) cannot be used here. It calls `navigator.mediaDevices.getUserMedia` and the Web Audio API, both of which are DOM APIs and unavailable in the React Native JavaScript runtime.
+
+The wire protocol is identical across runtimes. Client state machine, event types, and PCM16 payload encoding all match what the browser SDK does internally.
 
 <Note>
   The quickstart is validated end-to-end on the iOS simulator with an Expo dev build: WebSocket connects, mic captures PCM, agent audio plays back. On the simulator, speaker output loops back into the Mac microphone, so the server's VAD fires `interruption` events continuously; test on a real device (earphones or an HFP Bluetooth headset) to confirm clean barge-in behavior.
@@ -44,10 +48,10 @@ setup_permissions(['Microphone'])
 
 Then run `pod install` in `ios/`. Without this, the library crashes at runtime with "No permission handler detected."
 
-### Alternatives worth knowing
+### Alternatives considered
 
-- **`expo-av`**. High-level recording and playback. Does not give you raw PCM frames at a fixed sample rate, so not a fit for realtime voice streaming.
-- **A thin native module you write yourself**. If you want the absolute minimum dependency footprint on iOS, wrap `AVAudioEngine` directly via a small Expo module. Worth it only for apps with strict binary-size budgets.
+- **`expo-av`**. High-level recording and playback. Does not expose raw PCM frames at a fixed sample rate, so it is not suitable for realtime voice streaming.
+- **Custom Expo native module**. Wrap `AVAudioEngine` (iOS) and `AudioRecord`/`AudioTrack` (Android) in a minimal Expo module. Recommended only when binary-size or dependency-count constraints rule out `react-native-audio-api`.
 
 ## Permissions
 
@@ -284,9 +288,9 @@ When the server emits `interruption`, the user has spoken while the agent was ta
 
 ## Platform gotchas
 
-### iOS: AVAudioSession is not your concern in RN
+### iOS: AVAudioSession configuration
 
-React Native's JS runtime does not interact with `AVAudioSession` directly. The audio capture library configures it. If you have other audio-producing libraries in your app (music player, video), coordinate via their public APIs. Mis-configuration across libraries can cause one to silence the other.
+React Native's JavaScript runtime does not interact with `AVAudioSession` directly; the audio library manages it through native code. In this stack, `AudioManager.setAudioSessionOptions({ iosCategory: 'playAndRecord', iosMode: 'voiceChat', ... })` configures the session before the recorder starts. If the application also uses other audio libraries (media players, video), coordinate their session categories; two libraries fighting over the same session will cause one to silence the other.
 
 ### iOS: background voice calls
 
