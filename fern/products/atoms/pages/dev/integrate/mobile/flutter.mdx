@@ -1,0 +1,348 @@
+---
+title: "Flutter"
+sidebarTitle: "Flutter"
+description: "Connect a Flutter app to the Smallest Atoms agent over raw WebSocket. Capture microphone PCM16, stream to the agent, play back agent audio."
+---
+
+Flutter apps connect to the Atoms agent through the raw WebSocket protocol. Use the Dart `web_socket_channel` package for the wire, `mic_stream` for microphone PCM16 capture, and `flutter_pcm_sound` for low-latency PCM playback. The combination stays lightweight: no WebRTC, no LiveKit, no platform-specific WebRTC plugins.
+
+<Note>
+  Validated end-to-end on the iOS simulator: WebSocket connects, mic captures, agent audio plays back. On the simulator, speaker output loops back into the Mac microphone, so the server's VAD fires `interruption` events continuously; test on a real device (earphones or an HFP Bluetooth headset) to confirm clean barge-in behavior. `mic_stream` on iOS does not configure the audio session for voice chat, so you get no echo cancellation out of the box — see the [iOS audio session](#ios-audio-session) section.
+</Note>
+
+## When to use Flutter
+
+- Cross-platform mobile or desktop app with a shared Dart codebase.
+- You want a single audio pipeline that works across iOS, Android, and desktop targets.
+- You do not need character-level TTS alignment timings.
+
+For single-platform native apps, the [iOS (Swift)](/atoms/developer-guide/integrate/mobile/ios-swift) and [Android (Kotlin)](/atoms/developer-guide/integrate/mobile/android-kotlin) guides give you full platform control with fewer intermediaries.
+
+## Dependencies
+
+```yaml
+# pubspec.yaml
+dependencies:
+  web_socket_channel: ^3.0.2
+  mic_stream:         ^0.7.1
+  flutter_pcm_sound:  ^2.1.0
+  permission_handler: ^11.3.1
+```
+
+| Package | Role | Why this one |
+|---|---|---|
+| `web_socket_channel` | Dart WebSocket client | Official Dart team package, supports both IO and HTML platforms, streams-based API. |
+| `mic_stream` | Microphone PCM16 capture | Exposes a raw Int16 stream at a configurable sample rate. Works on iOS and Android. |
+| `flutter_pcm_sound` | PCM16 playback | Purpose-built for realtime PCM playback. No buffering layer, no format conversion overhead. |
+| `permission_handler` | Cross-platform runtime permissions | Single API for iOS `NSMicrophoneUsageDescription` prompts and Android `RECORD_AUDIO` flow. |
+
+## Platform configuration
+
+### iOS
+
+Add to `ios/Runner/Info.plist`:
+
+```xml
+<key>NSMicrophoneUsageDescription</key>
+<string>We need the microphone to let you talk to the voice agent.</string>
+```
+
+### Android
+
+Add to `android/app/src/main/AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+```
+
+Minimum Android SDK should be 24 (Android 7) for `mic_stream` compatibility. Set in `android/app/build.gradle`:
+
+```gradle
+defaultConfig {
+    minSdkVersion 24
+}
+```
+
+### Request at runtime
+
+```dart
+import 'package:permission_handler/permission_handler.dart';
+
+Future<bool> ensureMicPermission() async {
+  final status = await Permission.microphone.request();
+  return status.isGranted;
+}
+```
+
+## Quickstart
+
+A full agent session: check permission, open the WebSocket, stream mic audio, play agent audio, clean up.
+
+```dart
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
+import 'package:mic_stream/mic_stream.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+
+class VoiceAgentScreen extends StatefulWidget {
+  const VoiceAgentScreen({super.key});
+  @override
+  State<VoiceAgentScreen> createState() => _VoiceAgentScreenState();
+}
+
+class _VoiceAgentScreenState extends State<VoiceAgentScreen> {
+  static const apiKey     = 'sk_...';
+  static const agentId    = '...';
+  static const sampleRate = 24000;
+
+  WebSocketChannel? _channel;
+  StreamSubscription<Uint8List>? _micSub;
+  bool _connected = false;
+
+  Future<void> _start() async {
+    if (!await ensureMicPermission()) return;
+
+    final uri = Uri.parse(
+      'wss://api.smallest.ai/atoms/v1/agent/connect'
+      '?token=${Uri.encodeComponent(apiKey)}'
+      '&agent_id=${Uri.encodeComponent(agentId)}'
+      '&mode=webcall'
+      '&sample_rate=$sampleRate',
+    );
+
+    _channel = WebSocketChannel.connect(uri);
+    _channel!.stream.listen(
+      _handleServerEvent,
+      onDone: _stop,
+      onError: (_) => _stop(),
+    );
+
+    await FlutterPcmSound.setup(sampleRate: sampleRate, channelCount: 1);
+    FlutterPcmSound.start();
+
+    await _startMicStream();
+
+    setState(() => _connected = true);
+  }
+
+  Future<void> _stop() async {
+    await _micSub?.cancel();
+    await FlutterPcmSound.release();
+    await _channel?.sink.close();
+    _channel = null;
+    if (mounted) setState(() => _connected = false);
+  }
+
+  @override
+  void dispose() {
+    _stop();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: _connected
+            ? ElevatedButton(onPressed: _stop, child: const Text('End call'))
+            : ElevatedButton(onPressed: _start, child: const Text('Start call')),
+      ),
+    );
+  }
+}
+```
+
+### Microphone capture
+
+```dart
+Future<void> _startMicStream() async {
+  final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
+  final micStream = MicStream.microphone(
+    // mic_stream's iOS plugin only supports AudioSource.DEFAULT. Passing
+    // VOICE_COMMUNICATION on iOS crashes with a nil force-unwrap.
+    audioSource:   isIOS ? AudioSource.DEFAULT : AudioSource.VOICE_COMMUNICATION,
+    sampleRate:    sampleRate,
+    channelConfig: ChannelConfig.CHANNEL_IN_MONO,
+    audioFormat:   AudioFormat.ENCODING_PCM_16BIT,
+  );
+
+  _micSub = micStream.listen((Uint8List bytes) {
+    if (_channel == null) return;
+    _channel!.sink.add(jsonEncode({
+      'type':  'input_audio_buffer.append',
+      'audio': base64Encode(bytes),
+    }));
+  });
+}
+```
+
+`MicStream.microphone` returns a `Stream<Uint8List>` synchronously (not a `Future`); don't `await` it.
+
+On Android, `AudioSource.VOICE_COMMUNICATION` selects the platform's echo-cancelled audio path. On iOS, `mic_stream` uses `AVCaptureSession` with a default capture device and does not configure `AVAudioSession` for voice chat. For iOS echo cancellation on a real device, configure the audio session yourself via the `audio_session` package (category `.playAndRecord`, mode `.voiceChat`) before starting the stream, or mute the mic while the agent speaks (see [Mic mute while agent speaks](#mic-mute-while-agent-speaks)).
+
+### Server events
+
+```dart
+void _handleServerEvent(dynamic raw) {
+  final ev = jsonDecode(raw as String) as Map<String, dynamic>;
+  switch (ev['type']) {
+    case 'session.created':
+      // update UI
+      break;
+    case 'output_audio.delta':
+      final bytes = base64Decode(ev['audio'] as String);
+      final byteData = bytes.buffer.asByteData(bytes.offsetInBytes, bytes.lengthInBytes);
+      FlutterPcmSound.feed(PcmArrayInt16(bytes: byteData));
+      break;
+    case 'agent_start_talking':
+      // UI: show "speaking" indicator
+      break;
+    case 'agent_stop_talking':
+      // UI: hide "speaking" indicator
+      break;
+    case 'interruption':
+      // No public flush API in flutter_pcm_sound. The residual buffer
+      // (~100 ms at 24 kHz) will play out. Stop feeding and wait for
+      // the next agent_start_talking.
+      break;
+    case 'session.closed':
+      _stop();
+      break;
+    case 'error':
+      debugPrint('agent error [${ev['code']}]: ${ev['message']}');
+      break;
+  }
+}
+```
+
+`FlutterPcmSound.feed` queues the chunk for playback. Internally the plugin manages a ring buffer on the platform side and drains it at the hardware sample rate, so you can push chunks as fast as they arrive.
+
+## Platform differences
+
+### iOS audio session
+
+`mic_stream` does not configure `AVAudioSession`. It uses `AVCaptureSession` directly, so you get whatever the system default category is (usually `.soloAmbient`), and no echo cancellation. Configure the session yourself with `audio_session` before starting the stream:
+
+```dart
+import 'package:audio_session/audio_session.dart';
+
+final session = await AudioSession.instance;
+await session.configure(const AudioSessionConfiguration(
+  avAudioSessionCategory:     AVAudioSessionCategory.playAndRecord,
+  avAudioSessionMode:         AVAudioSessionMode.voiceChat,
+  avAudioSessionCategoryOptions:
+      AVAudioSessionCategoryOptions.defaultToSpeaker |
+      AVAudioSessionCategoryOptions.allowBluetooth,
+));
+await session.setActive(true);
+```
+
+`.playAndRecord` + `.voiceChat` enables the iOS system AEC pipeline and the voice-chat audio mode. Without it, the agent hears its own audio through the mic and the server's VAD fires continuous `interruption` events. If your app uses other audio plugins (for example, `just_audio` for media playback), coordinate their session categories through the same `audio_session` package; two plugins fighting over the session will cause one to silence the other.
+
+### Android foreground service
+
+If the call continues when the app is backgrounded, start a foreground service on the native Android side. `mic_stream` will continue capturing briefly when backgrounded but Android 12+ will revoke mic access within seconds without a foreground service declaring the `phoneCall` type. See the [Android guide](/atoms/developer-guide/integrate/mobile/android-kotlin) for the service implementation.
+
+Flutter-side, trigger the service from your `MainActivity` or via a plugin like `flutter_background_service`.
+
+### Desktop support
+
+`mic_stream` and `flutter_pcm_sound` currently target mobile. Desktop targets (macOS, Windows, Linux) need `flutter_webrtc` or platform-channel bridges. If you need desktop today, use `web_socket_channel` for the WS and write platform-channel code for capture and playback.
+
+## Threading and isolates
+
+- `WebSocketChannel` events arrive on the main isolate.
+- `MicStream.microphone` delivers its Uint8List frames on the main isolate as well.
+- `FlutterPcmSound.feed` is fast (enqueues to a native buffer) but avoid calling it from a blocking UI build method.
+
+For CPU-intensive preprocessing (resampling, denoising beyond what the platform provides), use `compute()` or a dedicated isolate. The baseline pipeline shown here does not need one.
+
+## Interruption handling
+
+Incoming phone calls and other audio-focus events interrupt the stream. On Android, subscribe to audio focus via a platform channel or the `audio_session` plugin. On iOS, the operating system pauses `mic_stream` automatically and resumes after the interruption ends.
+
+```dart
+import 'package:audio_session/audio_session.dart';
+
+Future<void> _installInterruptionHandler() async {
+  final session = await AudioSession.instance;
+  await session.configure(const AudioSessionConfiguration.speech());
+  session.interruptionEventStream.listen((event) {
+    if (event.begin) {
+      _stop();
+    }
+  });
+}
+```
+
+Call `_installInterruptionHandler` once during app startup.
+
+## Production hardening
+
+### Reconnect on transient failure
+
+The `onError`/`onDone` callbacks on the WebSocket stream fire when the connection drops. Retry with exponential backoff up to 30 s for transient network errors. Do not retry on close codes 1000, 4401, 4403.
+
+```dart
+int _retryMs = 500;
+
+void _onWebSocketClosed(int? code) {
+  if (code == 1000 || code == 4401 || code == 4403) return;
+  Future.delayed(Duration(milliseconds: _retryMs), _start);
+  _retryMs = (_retryMs * 2).clamp(500, 30000);
+}
+```
+
+### Mic mute while agent speaks
+
+If your target devices have weaker echo cancellation, cancel the mic subscription on `agent_start_talking` and restart it on `agent_stop_talking`. The user's speech during the agent turn goes undetected; it is the safer trade-off than audible feedback.
+
+### App lifecycle
+
+Use `WidgetsBindingObserver` to tear down on background transitions:
+
+```dart
+class _VoiceAgentScreenState extends State<VoiceAgentScreen> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) _stop();
+  }
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+}
+```
+
+### Battery
+
+The pipeline draws 3–5 % battery per minute on mobile, comparable to the native platforms. Do not ship features that keep the session open idle.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Realtime Agent WebSocket API" icon="plug" href="/atoms/api-reference/api-reference/realtime-agent/realtime-agent">
+    The full wire protocol with every message type, payload, and error code.
+  </Card>
+  <Card title="iOS (Swift)" icon="apple" href="/atoms/developer-guide/integrate/mobile/ios-swift">
+    Native iOS integration with URLSessionWebSocketTask and AVAudioEngine.
+  </Card>
+  <Card title="Android (Kotlin)" icon="android" href="/atoms/developer-guide/integrate/mobile/android-kotlin">
+    Native Android integration with OkHttp and AudioRecord/AudioTrack.
+  </Card>
+  <Card title="Error reference" icon="triangle-exclamation" href="/atoms/atoms-platform/troubleshooting/error-reference">
+    HTTP status codes returned by every Atoms endpoint.
+  </Card>
+</CardGroup>
