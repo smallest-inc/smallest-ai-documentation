@@ -31,6 +31,7 @@ import argparse
 import re
 import subprocess
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -187,18 +188,29 @@ def newly_registered_mdx_stems(base_ref: str) -> set[str]:
 
 
 def probe(url: str, base: str) -> tuple[str, int, str]:
-    """HEAD-check a single URL. Return (url, status_code, note)."""
+    """HEAD-check a single URL. Return (url, status_code, note).
+
+    Retries transient network errors up to 3 times with exponential backoff.
+    HTTP-level errors (4xx/5xx) are returned immediately without retry.
+    """
     full = base.rstrip('/') + url
     req = Request(full, method='HEAD', headers={'User-Agent': 'fern-link-check/1.0'})
-    try:
-        with urlopen(req, timeout=TIMEOUT) as resp:
-            return url, resp.status, ''
-    except HTTPError as e:
-        return url, e.code, ''
-    except URLError as e:
-        return url, -1, f'URL error: {e.reason}'
-    except Exception as e:
-        return url, -1, f'{type(e).__name__}: {e}'
+    last_err: Exception | None = None
+    for attempt in range(3):
+        try:
+            with urlopen(req, timeout=TIMEOUT) as resp:
+                return url, resp.status, ''
+        except HTTPError as e:
+            return url, e.code, ''
+        except (URLError, Exception) as e:
+            last_err = e
+            if attempt < 2:
+                time.sleep(1 + attempt)
+                continue
+            if isinstance(e, URLError):
+                return url, -1, f'URL error: {e.reason} (after 3 attempts)'
+            return url, -1, f'{type(e).__name__}: {e} (after 3 attempts)'
+    return url, -1, f'unreachable: {last_err}'
 
 
 def main() -> int:
