@@ -1,0 +1,396 @@
+---
+title: "iOS (Swift)"
+sidebarTitle: "iOS (Swift)"
+description: "Connect an iOS Swift app to the Smallest Atoms agent using URLSessionWebSocketTask and AVAudioEngine. Zero third-party dependencies."
+---
+
+Native iOS apps connect to the Atoms agent using Apple's built-in WebSocket and audio APIs. No third-party packages required. The integration uses `URLSessionWebSocketTask` (available since iOS 13) for the wire protocol and `AVAudioEngine` for microphone capture and PCM playback.
+
+<Note>
+  The code on this page is compile-correct against the iOS 15+ SDK but has not been validated on a physical device. Verify microphone capture routing, interruption handling, and background behavior on your target devices before shipping.
+</Note>
+
+## When to use native iOS
+
+- iOS-only app, or a cross-platform app where iOS is the priority platform.
+- You want zero external dependencies for audio and networking.
+- You need fine control over audio session routing (Bluetooth, CarPlay, external mics).
+
+If your app is primarily React Native, the [React Native](/atoms/developer-guide/integrate/mobile/react-native) guide is simpler. For Flutter, see [Flutter](/atoms/developer-guide/integrate/mobile/flutter).
+
+## Dependencies
+
+None. `URLSessionWebSocketTask` and `AVAudioEngine` are part of the iOS SDK. Minimum deployment target: iOS 13.
+
+## Permissions
+
+Add to `Info.plist`:
+
+```xml
+<key>NSMicrophoneUsageDescription</key>
+<string>We need the microphone to let you talk to the voice agent.</string>
+```
+
+Request at runtime before starting a session:
+
+```swift
+import AVFoundation
+
+func requestMicrophonePermission() async -> Bool {
+    await withCheckedContinuation { continuation in
+        AVAudioApplication.requestRecordPermission { granted in
+            continuation.resume(returning: granted)
+        }
+    }
+}
+```
+
+`AVAudioApplication.requestRecordPermission` replaces the deprecated `AVAudioSession.sharedInstance().requestRecordPermission` in iOS 17. For earlier versions, use the older API.
+
+## Audio session setup
+
+The audio session governs capture and playback routing. For a bidirectional voice call, configure it as `.playAndRecord` with the `.voiceChat` mode. `.voiceChat` enables the system's echo cancellation and noise suppression pipeline.
+
+```swift
+import AVFoundation
+
+func configureAudioSession() throws {
+    let session = AVAudioSession.sharedInstance()
+    try session.setCategory(
+        .playAndRecord,
+        mode: .voiceChat,
+        options: [.allowBluetooth, .defaultToSpeaker]
+    )
+    try session.setPreferredSampleRate(24_000)
+    try session.setPreferredIOBufferDuration(0.02)  // 20 ms buffer, low latency
+    try session.setActive(true)
+}
+```
+
+`setPreferredSampleRate(24000)` asks the hardware to match the rate the server negotiates. The system may not honor it exactly on all devices. If the active sample rate differs, resample before sending or when receiving.
+
+## Quickstart
+
+A full working session: configure the audio session, open the WebSocket, stream mic PCM16, play agent PCM16, close cleanly.
+
+```swift
+import AVFoundation
+import Foundation
+
+final class AtomsAgent: NSObject {
+    private let apiKey:  String
+    private let agentId: String
+    private let sampleRate: Double = 24_000
+    private var webSocketTask: URLSessionWebSocketTask?
+    private let audioEngine = AVAudioEngine()
+    private var playerNode: AVAudioPlayerNode?
+    private var playerFormat: AVAudioFormat?
+
+    init(apiKey: String, agentId: String) {
+        self.apiKey  = apiKey
+        self.agentId = agentId
+    }
+
+    func start() async throws {
+        try configureAudioSession()
+        connectWebSocket()
+        try setupPlayback()
+        try startMicrophoneTap()
+    }
+
+    func stop() {
+        audioEngine.stop()
+        webSocketTask?.cancel(with: .goingAway, reason: nil)
+    }
+}
+```
+
+### Open the WebSocket
+
+```swift
+private func connectWebSocket() {
+    var components = URLComponents(string: "wss://api.smallest.ai/atoms/v1/agent/connect")!
+    components.queryItems = [
+        URLQueryItem(name: "token",       value: apiKey),
+        URLQueryItem(name: "agent_id",    value: agentId),
+        URLQueryItem(name: "mode",        value: "webcall"),
+        URLQueryItem(name: "sample_rate", value: "24000"),
+    ]
+
+    let session = URLSession(configuration: .default)
+    webSocketTask = session.webSocketTask(with: components.url!)
+    webSocketTask?.resume()
+    listenForServerMessages()
+}
+
+private func listenForServerMessages() {
+    webSocketTask?.receive { [weak self] result in
+        switch result {
+        case .success(.string(let text)):
+            self?.handleServerEvent(text: text)
+            self?.listenForServerMessages()          // rearm
+        case .success(.data(let data)):
+            if let text = String(data: data, encoding: .utf8) {
+                self?.handleServerEvent(text: text)
+            }
+            self?.listenForServerMessages()
+        case .failure(let error):
+            print("ws receive failed: \(error)")
+            // handle reconnect or shutdown here
+        @unknown default:
+            self?.listenForServerMessages()
+        }
+    }
+}
+```
+
+`URLSessionWebSocketTask.receive` is one-shot. Re-call it after every message to keep the stream flowing.
+
+### Microphone capture
+
+Install an audio tap on the input node. The tap runs on a high-priority audio thread and hands you an `AVAudioPCMBuffer` every few milliseconds. Convert it to Int16 PCM and send as base64.
+
+```swift
+private func startMicrophoneTap() throws {
+    let input = audioEngine.inputNode
+    let hwFormat = input.inputFormat(forBus: 0)
+
+    // Tap at the hardware format, resample to 24kHz mono PCM16 before sending.
+    let targetFormat = AVAudioFormat(
+        commonFormat: .pcmFormatInt16,
+        sampleRate:   sampleRate,
+        channels:     1,
+        interleaved:  true
+    )!
+    let converter = AVAudioConverter(from: hwFormat, to: targetFormat)!
+
+    input.installTap(onBus: 0, bufferSize: 1024, format: hwFormat) { [weak self] buffer, _ in
+        guard let self, let task = self.webSocketTask else { return }
+
+        let frameCapacity = AVAudioFrameCount(targetFormat.sampleRate) / 10  // 100 ms
+        guard let converted = AVAudioPCMBuffer(
+            pcmFormat:     targetFormat,
+            frameCapacity: frameCapacity
+        ) else { return }
+
+        var error: NSError?
+        converter.convert(to: converted, error: &error) { _, outStatus in
+            outStatus.pointee = .haveData
+            return buffer
+        }
+        if error != nil { return }
+
+        // Grab the Int16 bytes and base64-encode.
+        guard let channelData = converted.int16ChannelData?[0] else { return }
+        let byteCount = Int(converted.frameLength) * MemoryLayout<Int16>.size
+        let data = Data(bytes: channelData, count: byteCount)
+        let payload: [String: Any] = [
+            "type":  "input_audio_buffer.append",
+            "audio": data.base64EncodedString(),
+        ]
+        guard let json = try? JSONSerialization.data(withJSONObject: payload) else { return }
+        task.send(.data(json)) { _ in }
+    }
+
+    audioEngine.prepare()
+    try audioEngine.start()
+}
+```
+
+The tap's closure runs on the audio thread. Keep it short. Do not block on UI updates or synchronous I/O. `URLSessionWebSocketTask.send` is asynchronous and non-blocking.
+
+### Playback
+
+Schedule incoming PCM16 chunks on an `AVAudioPlayerNode`. The player node manages its own queue, so you can schedule many buffers in sequence and they play gaplessly.
+
+```swift
+private func setupPlayback() throws {
+    let player = AVAudioPlayerNode()
+    playerNode = player
+
+    // Player node feeds the main mixer, which feeds the output.
+    let format = AVAudioFormat(
+        commonFormat: .pcmFormatInt16,
+        sampleRate:   sampleRate,
+        channels:     1,
+        interleaved:  true
+    )!
+    playerFormat = format
+
+    audioEngine.attach(player)
+    audioEngine.connect(player, to: audioEngine.mainMixerNode, format: format)
+    player.play()
+}
+
+private func playPCM16(_ data: Data) {
+    guard let player = playerNode, let format = playerFormat else { return }
+
+    let frames = AVAudioFrameCount(data.count / MemoryLayout<Int16>.size)
+    guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames) else { return }
+    buffer.frameLength = frames
+
+    data.withUnsafeBytes { raw in
+        guard let src = raw.bindMemory(to: Int16.self).baseAddress else { return }
+        buffer.int16ChannelData?[0].update(from: src, count: Int(frames))
+    }
+
+    player.scheduleBuffer(buffer, completionHandler: nil)
+}
+
+private func flushPlayback() {
+    playerNode?.stop()
+    playerNode?.play()
+}
+```
+
+### Handle server events
+
+```swift
+private func handleServerEvent(text: String) {
+    guard
+        let data = text.data(using: .utf8),
+        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let type = json["type"] as? String
+    else { return }
+
+    switch type {
+    case "session.created":
+        // update UI on main queue
+        break
+    case "output_audio.delta":
+        if let b64 = json["audio"] as? String,
+           let audio = Data(base64Encoded: b64) {
+            playPCM16(audio)
+        }
+    case "agent_start_talking", "agent_stop_talking":
+        // update UI state
+        break
+    case "interruption":
+        flushPlayback()
+    case "session.closed":
+        stop()
+    case "error":
+        let code    = (json["code"] as? String) ?? ""
+        let message = (json["message"] as? String) ?? ""
+        print("agent error [\(code)]: \(message)")
+    default:
+        break
+    }
+}
+```
+
+## Threading model
+
+- **Audio callbacks** (mic tap, player completion) run on a high-priority audio thread. Touch no UI state from there. Dispatch to `MainActor` for anything the user sees.
+- **WebSocket callbacks** run on `URLSession`'s delegate queue. Same rule: no UI on that queue; hop to main for anything visual.
+- **`handleServerEvent`** above dispatches implicitly through Foundation serialization; it is safe to call from the WS delegate queue.
+
+A clean pattern:
+
+```swift
+@MainActor
+final class AgentViewModel: ObservableObject {
+    @Published var status: String = "idle"
+    let agent: AtomsAgent
+
+    init(agent: AtomsAgent) { self.agent = agent }
+
+    func handleStateChange(_ newStatus: String) {
+        status = newStatus        // UI update, main actor
+    }
+}
+```
+
+From the audio or WS thread, call `await MainActor.run { viewModel.handleStateChange("connected") }`.
+
+## Interruption handling
+
+When a phone call comes in or the user triggers Siri, the audio session posts an interruption notification. Pause capture and playback, resume on the "ended" notification.
+
+```swift
+import AVFoundation
+
+NotificationCenter.default.addObserver(
+    forName: AVAudioSession.interruptionNotification,
+    object: nil,
+    queue: .main
+) { [weak self] notification in
+    guard
+        let info = notification.userInfo,
+        let raw  = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+        let type = AVAudioSession.InterruptionType(rawValue: raw)
+    else { return }
+
+    switch type {
+    case .began:
+        self?.audioEngine.pause()
+    case .ended:
+        if let rawOptions = info[AVAudioSessionInterruptionOptionKey] as? UInt,
+           AVAudioSession.InterruptionOptions(rawValue: rawOptions).contains(.shouldResume) {
+            try? self?.audioEngine.start()
+        }
+    @unknown default:
+        break
+    }
+}
+```
+
+## Route changes
+
+Bluetooth connect/disconnect, headphone unplug, and CarPlay activation trigger `AVAudioSession.routeChangeNotification`. The audio engine handles most transitions transparently. Subscribe if you want to update UI (show "using Bluetooth" indicator, etc.).
+
+## Background modes
+
+For calls that continue when the user locks the screen, add to `Info.plist`:
+
+```xml
+<key>UIBackgroundModes</key>
+<array>
+  <string>audio</string>
+</array>
+```
+
+Apple's review expects this to be used for VoIP-style apps. Combine with PushKit and CallKit for a compliant VoIP experience. For short in-app calls that end when backgrounded, skip this and tear down on `UIApplication.didEnterBackgroundNotification`.
+
+## Production hardening
+
+### Reconnect on transient failure
+
+`URLSessionWebSocketTask` closes with a `URLError` code. Retry only on network-transient codes (`.notConnectedToInternet`, `.timedOut`, `.networkConnectionLost`), never on auth errors (4401, 4403) or a clean client close.
+
+```swift
+private func onWebSocketClosed(code: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+    switch code {
+    case .normalClosure, .goingAway:
+        return
+    default:
+        // exponential backoff 500 ms → 30 s
+        retry()
+    }
+}
+```
+
+### Mic mute while agent speaks
+
+To reduce echo when headset AEC underperforms, stop the mic tap on `agent_start_talking` and reinstall it on `agent_stop_talking`. The user's speech during that window goes undetected, which is usually preferable to the agent hearing itself.
+
+### Error event from server
+
+The `error` event from the server carries actionable codes. Surface auth failures (`401`, `403`) to the user immediately and stop retrying.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Realtime Agent WebSocket API" icon="plug" href="/atoms/api-reference/api-reference/realtime-agent/realtime-agent">
+    The full wire protocol with every message type, payload, and error code.
+  </Card>
+  <Card title="Android (Kotlin)" icon="android" href="/atoms/developer-guide/integrate/mobile/android-kotlin">
+    Native Android integration with OkHttp WebSocket and AudioRecord/AudioTrack.
+  </Card>
+  <Card title="React Native" icon="react" href="/atoms/developer-guide/integrate/mobile/react-native">
+    Cross-platform mobile integration in TypeScript.
+  </Card>
+  <Card title="Error reference" icon="triangle-exclamation" href="/atoms/atoms-platform/troubleshooting/error-reference">
+    HTTP status codes returned by every Atoms endpoint.
+  </Card>
+</CardGroup>
