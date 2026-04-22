@@ -1,0 +1,107 @@
+---
+title: OpenWhispr
+description: >-
+  Use Smallest AI's Pulse model as the speech-to-text engine inside OpenWhispr,
+  the open-source desktop dictation app.
+icon: microphone
+---
+
+[OpenWhispr](https://github.com/OpenWhispr/openwhispr) is an open-source desktop dictation app for macOS, Windows, and Linux. Press a hotkey, speak, and the transcript is pasted directly into whatever window is in focus. Out of the box it supports local transcription via whisper.cpp and several cloud providers — including Smallest AI's Pulse model.
+
+## Prerequisites
+
+- OpenWhispr installed ([download a release](https://github.com/OpenWhispr/openwhispr/releases) or build from source)
+- A Smallest AI API key — get one at [app.smallest.ai](https://app.smallest.ai)
+
+## Setup
+
+<Steps>
+  <Step title="Get your API key">
+    Sign in to [app.smallest.ai](https://app.smallest.ai) and click **Get API Keys** in the dashboard.
+
+    Click **Create API Key**, give it a name, and copy it immediately — it is only shown once.
+  </Step>
+  <Step title="Open OpenWhispr Settings">
+    Launch OpenWhispr and click the gear icon to open **Settings**, or press the settings hotkey.
+  </Step>
+  <Step title="Navigate to Speech to Text">
+    In the Settings sidebar, select **Speech to Text**. Under the **Cloud** tab, find the **Smallest AI** provider option and click it.
+  </Step>
+  <Step title="Enter your API key">
+    Paste your Smallest AI API key into the key field. OpenWhispr saves it to your local `.env` file so it persists across restarts.
+  </Step>
+  <Step title="Start dictating">
+    Press your configured hotkey (default: backtick on Windows/Linux, Globe/Fn key on macOS), speak, then press it again. The transcript from Pulse is pasted into your active window.
+  </Step>
+</Steps>
+
+## How it works
+
+When you finish recording, OpenWhispr sends the captured audio to the Pulse API as raw binary:
+
+```
+POST https://api.smallest.ai/waves/v1/pulse/get_text?language=en
+Authorization: Bearer <your-api-key>
+Content-Type: application/octet-stream
+
+<raw audio bytes>
+```
+
+Pulse returns:
+
+```json
+{
+  "transcription": "your transcribed text here"
+}
+```
+
+OpenWhispr then copies the transcript to the clipboard and pastes it at the cursor position in the active window.
+
+## Language support
+
+Pass a language code via the **Language** setting in OpenWhispr to target a specific language, or select **Auto-detect** to let Pulse identify the language automatically.
+
+Pulse supports 39 languages including English, Hindi, Spanish, French, German, Arabic, Bengali, Tamil, Telugu, Kannada, Malayalam, Marathi, and more. See the [Pulse overview](/waves/documentation/speech-to-text-pulse/overview) for the full list.
+
+## Activation modes
+
+OpenWhispr supports two recording modes that work with Pulse:
+
+| Mode | How it works |
+| --- | --- |
+| **Tap-to-talk** | Press hotkey once to start, press again to stop and transcribe |
+| **Push-to-talk** | Hold hotkey while speaking, release to transcribe (Windows only) |
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Transcription fails or returns an error">
+    Verify your API key is correct. Open **Settings → Speech to Text → Smallest AI** and re-enter the key. Check that you have an active internet connection — Pulse requires a network request for each transcription.
+  </Accordion>
+  <Accordion title="API key is not persisting after restart">
+    OpenWhispr writes the key to a `.env` file in your app data directory. If it disappears, check that the app has write permissions to its data folder. Re-entering and saving the key should resolve it.
+  </Accordion>
+  <Accordion title="Audio is recorded but no text appears">
+    Make sure your microphone is selected as the active input device in **Settings → Audio** and that OpenWhispr has microphone permission in your OS privacy settings.
+  </Accordion>
+</AccordionGroup>
+
+## Links
+
+<CardGroup cols={2}>
+  <Card title="OpenWhispr on GitHub" icon="github" href="https://github.com/OpenWhispr/openwhispr">
+    Source code and releases
+  </Card>
+
+  <Card title="Pulse STT Overview" icon="microphone" href="/waves/documentation/speech-to-text-pulse/overview">
+    Supported languages, features, and limits
+  </Card>
+
+  <Card title="Pulse API Reference" icon="code" href="/waves/api-reference/api-reference/speech-to-text/pulse">
+    Full API specification
+  </Card>
+
+  <Card title="Get an API Key" icon="key" href="https://app.smallest.ai">
+    app.smallest.ai
+  </Card>
+</CardGroup>
