@@ -7,7 +7,7 @@ description: "Connect a Flutter app to the Smallest Atoms agent over raw WebSock
 Flutter apps connect to the Atoms agent through the raw WebSocket protocol. Use the Dart `web_socket_channel` package for the wire, `mic_stream` for microphone PCM16 capture, and `flutter_pcm_sound` for low-latency PCM playback. The combination stays lightweight: no WebRTC, no LiveKit, no platform-specific WebRTC plugins.
 
 <Note>
-  The code on this page is compile-correct against the referenced packages but has not been validated on a physical device. Verify microphone permission flow, platform channel setup, and audio latency on your target devices before shipping.
+  Validated end-to-end on the iOS simulator: WebSocket connects, mic captures, agent audio plays back. On the simulator, speaker output loops back into the Mac microphone, so the server's VAD fires `interruption` events continuously; test on a real device (earphones or an HFP Bluetooth headset) to confirm clean barge-in behavior. `mic_stream` on iOS does not configure the audio session for voice chat, so you get no echo cancellation out of the box — see the [iOS audio session](#ios-audio-session) section.
 </Note>
 
 ## When to use Flutter
@@ -162,8 +162,11 @@ class _VoiceAgentScreenState extends State<VoiceAgentScreen> {
 
 ```dart
 Future<void> _startMicStream() async {
+  final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
   final micStream = MicStream.microphone(
-    audioSource:   AudioSource.VOICE_COMMUNICATION,  // Android AEC + NS
+    // mic_stream's iOS plugin only supports AudioSource.DEFAULT. Passing
+    // VOICE_COMMUNICATION on iOS crashes with a nil force-unwrap.
+    audioSource:   isIOS ? AudioSource.DEFAULT : AudioSource.VOICE_COMMUNICATION,
     sampleRate:    sampleRate,
     channelConfig: ChannelConfig.CHANNEL_IN_MONO,
     audioFormat:   AudioFormat.ENCODING_PCM_16BIT,
@@ -181,7 +184,7 @@ Future<void> _startMicStream() async {
 
 `MicStream.microphone` returns a `Stream<Uint8List>` synchronously (not a `Future`); don't `await` it.
 
-`AudioSource.VOICE_COMMUNICATION` selects the platform's echo-cancelled audio path on Android. On iOS, `mic_stream` uses the `AVAudioSessionModeVoiceChat` audio mode, which enables the equivalent pipeline.
+On Android, `AudioSource.VOICE_COMMUNICATION` selects the platform's echo-cancelled audio path. On iOS, `mic_stream` uses `AVCaptureSession` with a default capture device and does not configure `AVAudioSession` for voice chat. For iOS echo cancellation on a real device, configure the audio session yourself via the `audio_session` package (category `.playAndRecord`, mode `.voiceChat`) before starting the stream, or mute the mic while the agent speaks (see [Mic mute while agent speaks](#mic-mute-while-agent-speaks)).
 
 ### Server events
 
@@ -224,7 +227,23 @@ void _handleServerEvent(dynamic raw) {
 
 ### iOS audio session
 
-`mic_stream` configures `AVAudioSession` with the `.playAndRecord` category and `.voiceChat` mode. If your app uses other audio plugins (for example, `just_audio` for media playback), coordinate their session categories. Two plugins fighting over the session will cause one to silence the other.
+`mic_stream` does not configure `AVAudioSession`. It uses `AVCaptureSession` directly, so you get whatever the system default category is (usually `.soloAmbient`), and no echo cancellation. Configure the session yourself with `audio_session` before starting the stream:
+
+```dart
+import 'package:audio_session/audio_session.dart';
+
+final session = await AudioSession.instance;
+await session.configure(const AudioSessionConfiguration(
+  avAudioSessionCategory:     AVAudioSessionCategory.playAndRecord,
+  avAudioSessionMode:         AVAudioSessionMode.voiceChat,
+  avAudioSessionCategoryOptions:
+      AVAudioSessionCategoryOptions.defaultToSpeaker |
+      AVAudioSessionCategoryOptions.allowBluetooth,
+));
+await session.setActive(true);
+```
+
+`.playAndRecord` + `.voiceChat` enables the iOS system AEC pipeline and the voice-chat audio mode. Without it, the agent hears its own audio through the mic and the server's VAD fires continuous `interruption` events. If your app uses other audio plugins (for example, `just_audio` for media playback), coordinate their session categories through the same `audio_session` package; two plugins fighting over the session will cause one to silence the other.
 
 ### Android foreground service
 
