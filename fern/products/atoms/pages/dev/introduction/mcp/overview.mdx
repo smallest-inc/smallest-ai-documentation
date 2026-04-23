@@ -1,9 +1,65 @@
 ---
 title: Quick Start
-subtitle: Talk to your Atoms voice agents, debug calls, and view analytics — all without leaving your editor.
+subtitle: Talk to your voice agents, debug calls, transcribe audio, and view analytics — all without leaving your editor.
 ---
 
-The Atoms MCP Server connects your AI editor to the Atoms platform. No console tab-switching — just type what you want in natural language.
+The Smallest MCP Server connects your AI editor to the Smallest AI platform. No console tab-switching — just type what you want in natural language.
+
+---
+
+## Prerequisites
+
+The MCP server runs via **npx**, which requires **Node.js 18+** installed on your machine.
+
+<Tabs>
+  <Tab title="Mac">
+    **Option A: Homebrew (recommended)**
+    ```bash
+    brew install node
+    ```
+
+    **Option B: Official installer**
+
+    Download from [nodejs.org](https://nodejs.org/) and run the `.pkg` installer.
+
+    Verify installation:
+    ```bash
+    node --version   # should show v18 or higher
+    npx --version    # should show 10 or higher
+    ```
+  </Tab>
+  <Tab title="Windows">
+    **Option A: winget**
+    ```powershell
+    winget install OpenJS.NodeJS.LTS
+    ```
+
+    **Option B: Official installer**
+
+    Download the **LTS** installer from [nodejs.org](https://nodejs.org/) and run it. Make sure **"Add to PATH"** is checked during installation.
+
+    Open a **new** terminal and verify:
+    ```powershell
+    node --version   # should show v18 or higher
+    npx --version    # should show 10 or higher
+    ```
+
+    <Callout intent="warn">
+      If `npx` is not found after installing, close and reopen your terminal — or restart your machine.
+    </Callout>
+  </Tab>
+  <Tab title="Linux">
+    ```bash
+    # Ubuntu / Debian
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+
+    # Verify
+    node --version
+    npx --version
+    ```
+  </Tab>
+</Tabs>
 
 ---
 
@@ -30,42 +86,70 @@ The Atoms MCP Server connects your AI editor to the Atoms platform. No console t
     </Frame>
   </Step>
 
-  <Step title="Paste this in your editor's chat">
-    Open a chat in **Cursor** or **Claude Desktop** and paste one of these:
+  <Step title="Configure your editor">
+    Open the MCP config file for your editor and paste the config below.
 
     <Tabs>
-      <Tab title="curl (recommended)">
-        Zero dependencies — no Node.js needed.
+      <Tab title="Cursor">
+        Open (or create) `~/.cursor/mcp.json` on Mac/Linux, or `%USERPROFILE%\.cursor\mcp.json` on Windows.
 
-        <Tabs>
-          <Tab title="Mac / Linux">
-            ```
-            Set up the Atoms MCP server for me using the curl installer.
-            Run: curl -fsSL https://raw.githubusercontent.com/smallest-inc/mcp-server/main/install.sh | bash
-            My API key is: sk_paste_your_key_here
-            ```
-          </Tab>
-          <Tab title="Windows">
-            ```
-            Set up the Atoms MCP server for me using the PowerShell installer.
-            Run: irm https://raw.githubusercontent.com/smallest-inc/mcp-server/main/install.ps1 | iex
-            My API key is: sk_paste_your_key_here
-            ```
-          </Tab>
-        </Tabs>
-      </Tab>
-      <Tab title="npm">
-        Requires **Node.js 18+**.
-
+        ```json
+        {
+          "mcpServers": {
+            "smallest": {
+              "command": "npx",
+              "args": ["-y", "@developer-smallestai/smallest-mcp-server"],
+              "env": {
+                "ATOMS_API_KEY": "sk_paste_your_key_here"
+              }
+            }
+          }
+        }
         ```
-        Set up the Atoms MCP server for me.
-        The npm package is @developer-smallestai/atoms-mcp-server.
-        My API key is: sk_paste_your_key_here
+      </Tab>
+      <Tab title="Claude Desktop">
+        Open **Claude Desktop** → **Settings** (gear icon) → **Developer** → **Edit Config**
+
+        Or open the file manually:
+        - **Mac:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+        - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+        ```json
+        {
+          "mcpServers": {
+            "smallest": {
+              "command": "npx",
+              "args": ["-y", "@developer-smallestai/smallest-mcp-server"],
+              "env": {
+                "ATOMS_API_KEY": "sk_paste_your_key_here"
+              }
+            }
+          }
+        }
+        ```
+      </Tab>
+      <Tab title="Claude Code">
+        Run this in your terminal:
+
+        ```bash
+        claude mcp add smallest -- npx -y @developer-smallestai/smallest-mcp-server
+        ```
+
+        Then set your API key:
+
+        ```bash
+        claude mcp update smallest --env ATOMS_API_KEY=sk_paste_your_key_here
         ```
       </Tab>
     </Tabs>
 
-    Your assistant configures everything for you.
+    **Replace** `sk_paste_your_key_here` with your actual API key.
+
+    <Callout intent="warn">
+      Don't share your API key or commit it to git.
+    </Callout>
+
+    If you already have other MCP servers configured, just add the `"smallest"` entry inside the existing `"mcpServers"` object.
   </Step>
 
   <Step title="Restart your editor">
@@ -75,6 +159,9 @@ The Atoms MCP Server connects your AI editor to the Atoms platform. No console t
       </Tab>
       <Tab title="Claude Desktop">
         Fully quit and reopen the app.
+      </Tab>
+      <Tab title="Claude Code">
+        Start a new session — the MCP is loaded automatically.
       </Tab>
     </Tabs>
   </Step>
@@ -89,8 +176,6 @@ The Atoms MCP Server connects your AI editor to the Atoms platform. No console t
     You should see your agents listed back. You're set up.
   </Step>
 </Steps>
-
-Prefer to set things up yourself? See the **[Manual Setup](manual-setup)** guide.
 
 ---
 
@@ -129,6 +214,25 @@ Just type in your editor's chat — the AI picks the right tool:
     Call +14155551234 using the "Sales" agent
     ```
     Triggers a real outbound call — the agent follows its configured prompt.
+  </Tab>
+  <Tab title="TTS & STT">
+    ```
+    Convert this text to speech using the yuvika voice: "Hello, welcome to Smallest AI"
+    ```
+    ```
+    Transcribe this audio file: ~/Desktop/recording.wav
+    ```
+  </Tab>
+  <Tab title="Analytics">
+    ```
+    Show me the dashboard for the last 30 days
+    ```
+    ```
+    Compare agent performance this week
+    ```
+    ```
+    What's the hourly call distribution today?
+    ```
   </Tab>
 </Tabs>
 

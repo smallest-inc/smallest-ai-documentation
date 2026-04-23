@@ -1,10 +1,10 @@
 ---
 title: Manual Setup
-subtitle: Step-by-step config for Cursor and Claude Desktop.
+subtitle: Step-by-step config for Cursor, Claude Desktop, and Claude Code.
 ---
 
 <Callout intent="info">
-  Need an API key first? Follow the steps below to create one from the Atoms platform.
+  Requires **Node.js 18+** — see [Prerequisites](/atoms/mcp/getting-started/quick-start#prerequisites) if you need to install it.
 </Callout>
 
 ## Get Your API Key
@@ -27,7 +27,7 @@ subtitle: Step-by-step config for Cursor and Claude Desktop.
   </Step>
 
   <Step title="Name and Create">
-    Give your key a descriptive name (e.g., `atoms-mcp-server`) and click **Create API Key**. Copy and save it — you won't see it again.
+    Give your key a descriptive name (e.g., `smallest-mcp`) and click **Create API Key**. Copy and save it — you won't see it again.
 
     <Frame caption="Enter a name for your API key and click Create">
       <img src="../../../images/create-api-key-dialog.png" alt="Create New API Key dialog with a name input field and Create API Key button" />
@@ -40,62 +40,22 @@ subtitle: Step-by-step config for Cursor and Claude Desktop.
 ## Install
 
 <Tabs>
-  <Tab title="curl">
-    Zero dependencies — no Node.js, no npm.
+  <Tab title="Cursor">
+    Open (or create) your Cursor MCP config file:
 
-    <Tabs>
-      <Tab title="Mac / Linux">
-        ```bash
-        curl -fsSL https://raw.githubusercontent.com/smallest-inc/mcp-server/main/install.sh | bash
-        ```
-      </Tab>
-      <Tab title="Windows (PowerShell)">
-        ```powershell
-        irm https://raw.githubusercontent.com/smallest-inc/mcp-server/main/install.ps1 | iex
-        ```
-      </Tab>
-    </Tabs>
+    | OS | Path |
+    |---|---|
+    | **Mac / Linux** | `~/.cursor/mcp.json` |
+    | **Windows** | `%USERPROFILE%\.cursor\mcp.json` |
 
-    It prompts for your API key and writes the config for both Cursor and Claude Desktop automatically.
-
-    Skip to [Restart your editor](#restart-your-editor) below.
-  </Tab>
-  <Tab title="npm">
-    <Callout intent="warn">
-      Requires **Node.js 18+** installed on your machine.
-    </Callout>
-
-    Open the MCP config file for your editor:
-
-    <Tabs>
-      <Tab title="Cursor">
-        | OS | Path |
-        |---|---|
-        | **Mac / Linux** | `~/.cursor/mcp.json` |
-        | **Windows** | `%USERPROFILE%\.cursor\mcp.json` |
-
-        If the file doesn't exist, create it.
-      </Tab>
-      <Tab title="Claude Desktop">
-        Open **Claude Desktop** → **Settings** (gear icon) → **Developer** → **Edit Config**
-
-        Or open the file manually:
-
-        | OS | Path |
-        |---|---|
-        | **Mac** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-        | **Windows** | `%APPDATA%\Claude\claude_desktop_config.json` |
-      </Tab>
-    </Tabs>
-
-    Paste this config. If you already have other MCP servers, just add the `"atoms"` entry inside `"mcpServers"`.
+    Paste this config. If you already have other MCP servers, just add the `"smallest"` entry inside `"mcpServers"`.
 
     ```json
     {
       "mcpServers": {
-        "atoms": {
+        "smallest": {
           "command": "npx",
-          "args": ["-y", "@developer-smallestai/atoms-mcp-server"],
+          "args": ["-y", "@developer-smallestai/smallest-mcp-server"],
           "env": {
             "ATOMS_API_KEY": "sk_your_api_key_here"
           }
@@ -105,12 +65,50 @@ subtitle: Step-by-step config for Cursor and Claude Desktop.
     ```
 
     **Replace** `sk_your_api_key_here` with your actual API key.
+  </Tab>
+  <Tab title="Claude Desktop">
+    Open **Claude Desktop** → **Settings** (gear icon) → **Developer** → **Edit Config**
 
-    <Callout intent="warn">
-      Don't share your API key or commit it to git.
-    </Callout>
+    Or open the file manually:
+
+    | OS | Path |
+    |---|---|
+    | **Mac** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+    | **Windows** | `%APPDATA%\Claude\claude_desktop_config.json` |
+
+    Paste this config. If you already have other MCP servers, just add the `"smallest"` entry inside `"mcpServers"`.
+
+    ```json
+    {
+      "mcpServers": {
+        "smallest": {
+          "command": "npx",
+          "args": ["-y", "@developer-smallestai/smallest-mcp-server"],
+          "env": {
+            "ATOMS_API_KEY": "sk_your_api_key_here"
+          }
+        }
+      }
+    }
+    ```
+
+    **Replace** `sk_your_api_key_here` with your actual API key.
+  </Tab>
+  <Tab title="Claude Code">
+    Run these commands in your terminal:
+
+    ```bash
+    claude mcp add smallest -- npx -y @developer-smallestai/smallest-mcp-server
+    claude mcp update smallest --env ATOMS_API_KEY=sk_your_api_key_here
+    ```
+
+    **Replace** `sk_your_api_key_here` with your actual API key.
   </Tab>
 </Tabs>
+
+<Callout intent="warn">
+  Don't share your API key or commit it to git.
+</Callout>
 
 ---
 
@@ -123,6 +121,9 @@ subtitle: Step-by-step config for Cursor and Claude Desktop.
   <Tab title="Claude Desktop">
     Fully quit and reopen the app.
   </Tab>
+  <Tab title="Claude Code">
+    Start a new session — the MCP is loaded automatically.
+  </Tab>
 </Tabs>
 
 ---
@@ -131,7 +132,7 @@ subtitle: Step-by-step config for Cursor and Claude Desktop.
 
 <Tabs>
   <Tab title="Cursor">
-    Go to **Cursor Settings** → **MCP**. You should see `atoms` listed with a **green dot**.
+    Go to **Cursor Settings** → **MCP**. You should see `smallest` listed with a **green dot**.
 
     Open a new chat (**make sure you're in Agent mode**, not Ask mode) and type:
 
@@ -146,9 +147,33 @@ subtitle: Step-by-step config for Cursor and Claude Desktop.
     List all my agents
     ```
   </Tab>
+  <Tab title="Claude Code">
+    In a new session, type:
+
+    ```
+    List all my agents
+    ```
+  </Tab>
 </Tabs>
 
-You should see your Atoms agents listed back. If you do — you're done!
+You should see your agents listed back. If you do — you're done!
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="npx: command not found">
+    Node.js isn't installed or isn't in your PATH. See [Prerequisites](/atoms/mcp/getting-started/quick-start#prerequisites) for installation instructions.
+  </Accordion>
+  <Accordion title="MCP server doesn't show up in Cursor">
+    - Make sure the `mcp.json` file is valid JSON (no trailing commas)
+    - Verify the file is at `~/.cursor/mcp.json` (not inside a project folder)
+    - Reload the window: `Cmd+Shift+P` → **Developer: Reload Window**
+  </Accordion>
+  <Accordion title="'Invalid or revoked API key' error">
+    - Check that you copied the full key starting with `sk_`
+    - Generate a new key from [app.smallest.ai](https://app.smallest.ai) → Settings → API Keys
+  </Accordion>
+</AccordionGroup>
 
 ## Next steps
 

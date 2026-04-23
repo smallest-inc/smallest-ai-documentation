@@ -1,43 +1,104 @@
 ---
 title: Available Tools
-subtitle: Everything the MCP server can do, under the hood.
+subtitle: All 33 tools the Smallest MCP server provides.
 ---
 
 You never call these directly — just describe what you want and the AI picks the right tool. This page is a reference.
 
 ---
 
-## Read
+## Agents
 
 | Tool | What it does |
 |---|---|
-| `get_call_logs` | Query call logs with filters for status, type, date range, agent name, or phone number |
-| `debug_call` | Deep-dive into a single call — full transcript, errors, timing, cost breakdown, post-call analytics |
-| `get_agents` | List agents with their configuration, voice, LLM model, and call stats |
-| `get_usage_stats` | Usage statistics — total calls, duration, costs, status breakdown |
-| `get_campaigns` | List outbound calling campaigns with status and progress |
-| `get_phone_numbers` | List phone numbers owned by your organization |
+| `get_agents` | List all agents in your org with voice, model, language, and call stats. Supports filtering by name, workflow type, and sorting. |
+| `get_agent` | Get full details for a single agent — voice config, model, prompt, language, call behavior, timeouts, and version info. |
+| `get_agent_prompt` | Read an agent's current system prompt and configured tools. Works for both single-prompt and conversation flow agents. |
+| `create_agent` | Create a new voice agent with model, voice, language, and behavior settings. Defaults to gpt-4.1 with daniel voice. |
+| `update_agent_config` | Update agent settings — name, voice, model, language, first message, timeouts, and more. For versioned agents, creates a draft automatically. |
+| `update_agent_prompt` | Update an agent's system prompt. For versioned agents, creates a draft automatically. |
+| `delete_agent` | Archive or unarchive an agent. Archived agents are inactive but recoverable. |
+| `publish_draft` | Publish a draft to make changes live on a versioned agent, or discard it. Optionally add a version label and changelog. |
 
-## Write
-
-| Tool | What it does |
-|---|---|
-| `create_agent` | Create a new AI voice agent |
-| `update_agent_prompt` | Update an agent's system prompt / instructions |
-| `update_agent_config` | Update agent settings — name, language, voice, first message, etc. |
-| `delete_agent` | Archive (soft-delete) an agent |
-
-## Act
+## Calls
 
 | Tool | What it does |
 |---|---|
-| `make_call` | Initiate an outbound phone call using a specific agent — triggers a real call |
+| `make_call` | Initiate an outbound phone call using a specific agent. Triggers a real call — the agent follows its configured prompt. |
+| `list_calls` | Search and list calls across your org. Filter by status, type, date range, agent, phone number, or campaign. |
+| `debug_call` | Get detailed info about a single call — status, transcript, errors, post-call analytics, latency metrics, cost, and event timeline. Works for calls in any state. |
+
+## Voices
+
+| Tool | What it does |
+|---|---|
+| `get_voices` | List available voices with gender, language, and accent info. Use this to find voice IDs for agent configuration. |
+
+## Text-to-Speech
+
+| Tool | What it does |
+|---|---|
+| `text_to_speech` | Convert text to speech audio. Supports multiple voices, languages, speeds, and output formats (wav, mp3). Saves the file and returns it inline. |
+
+## Speech-to-Text
+
+| Tool | What it does |
+|---|---|
+| `transcribe_audio` | Transcribe an audio file to text. Supports 32+ languages with auto-detection, word timestamps, speaker diarization, and emotion detection. |
+
+## Campaigns & Phone Numbers
+
+| Tool | What it does |
+|---|---|
+| `get_campaigns` | List outbound calling campaigns with status, progress, audience, retry config, and execution details. |
+| `get_phone_numbers` | List phone numbers owned by your org. Returns the product ID needed for outbound calls with a specific caller ID. |
+
+## Analytics — Summary
+
+| Tool | What it does |
+|---|---|
+| `get_usage_stats` | Total calls, pickup rate, average duration, cost, and unique users — each with period-over-period comparison. |
+| `get_dashboard` | Full analytics dashboard in a single call — summary KPIs, call volume, outcomes, pickup rates, hourly performance, and duration stats. |
+| `get_credit_usage` | Daily credit consumption over time. Useful for billing and budget tracking. |
+
+## Analytics — Trends & Timeseries
+
+| Tool | What it does |
+|---|---|
+| `get_call_volume` | Daily call volume over time. Shows how many calls were made each day. |
+| `get_call_outcomes` | Call outcome distribution — daily breakdown of completed, failed, and no-answer calls. |
+| `get_weekly_trends` | Week-over-week metrics — calls, average duration, and cost per week. |
+| `get_call_counts_by_day` | Simple daily call count histogram. |
+
+## Analytics — Performance
+
+| Tool | What it does |
+|---|---|
+| `get_agent_performance` | Compare agents by total calls, average duration, completion rate, and cost. Find top and bottom performers. |
+| `get_hourly_performance` | Metrics by hour of day (0-23) — call count, average duration, and cost. Identify peak hours. |
+| `get_duration_stats` | Call duration percentiles — average, median, min, max, and p95. |
+| `get_attempt_cohorts` | Success rate by attempt number (1st, 2nd, 3rd attempt). Useful for optimizing retry strategies. |
+
+## Analytics — Phone Numbers
+
+| Tool | What it does |
+|---|---|
+| `get_pickup_rates` | Pickup rate per outbound phone number — total calls, answered calls, and rate. Useful for optimizing caller IDs. |
+| `get_phone_number_trends` | Per-phone-number daily trends — calls, pickup rate, and average duration over time. |
+
+## Analytics — Real-Time
+
+| Tool | What it does |
+|---|---|
+| `get_concurrency` | Concurrent call counts for a specific date — minute-by-minute data plus per-agent max concurrency. |
+| `get_call_start_distribution` | How many calls started in each hour (0-23) for a specific date. Useful for capacity planning. |
+| `get_daily_summary` | Summary for a specific date — total, completed, failed, no-answer, in-progress, in-queue, average duration, and cost. |
 
 ---
 
 ## Resources
 
-The MCP server also exposes a **Platform Overview** resource that gives the AI context about Atoms terminology, call types, statuses, and cost breakdowns. This helps the AI give more accurate answers without you having to explain the domain.
+The MCP server also exposes a **Platform Overview** resource that gives the AI context about terminology, call types, statuses, and cost breakdowns.
 
 | Resource | URI |
 |---|---|

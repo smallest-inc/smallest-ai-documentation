@@ -10,12 +10,18 @@ No commands to memorize. Just ask in plain English — the AI picks the right to
 ## Agents
 
 <AccordionGroup>
-  <Accordion title="List agents">
+  <Accordion title="List and inspect agents">
     ```
     List all my agents
     ```
     ```
     Show me agents with "support" in the name
+    ```
+    ```
+    Get full details for agent "Sales Outreach" — voice, model, prompt, and all settings
+    ```
+    ```
+    What prompt is "Support Bot" using?
     ```
   </Accordion>
 
@@ -24,37 +30,143 @@ No commands to memorize. Just ask in plain English — the AI picks the right to
     Create a new agent called "Customer Support"
     ```
     ```
-    Create an agent called "Survey Bot" with Hindi as the default language
+    Create an agent called "Survey Bot" with Hindi as the default language and yuvika voice
+    ```
+    ```
+    Create an agent called "Appointment Scheduler" with gpt-4.1 model,
+    set its prompt to "You schedule appointments for a dental clinic...",
+    and set the first message to "Hello! I'm calling from SmileCare Dental."
     ```
   </Accordion>
 
   <Accordion title="Update an agent's prompt">
     ```
-    Update the prompt for agent "Support Bot" to:
+    Update the prompt for "Support Bot" to:
     "You are a helpful customer support agent for Acme Corp.
     Be polite, concise, and always confirm before taking action."
+    ```
+    ```
+    Add this to the beginning of "Sales Bot" prompt:
+    "Always introduce yourself by name before anything else."
     ```
   </Accordion>
 
   <Accordion title="Update agent settings">
     ```
+    Change the voice of "Support Bot" to yuvika
+    ```
+    ```
     Change the first message of "Support Bot" to "Hi, thanks for calling Acme support! How can I help?"
     ```
     ```
-    Update "Support Bot" to support English and Hindi
+    Update "Support Bot" to support English and Hindi with language switching enabled
+    ```
+    ```
+    Switch "Sales Bot" to electron model
     ```
   </Accordion>
 
-  <Accordion title="Delete an agent">
+  <Accordion title="Archive and restore agents">
     ```
     Archive the agent called "Old Test Bot"
+    ```
+    ```
+    Unarchive "Old Test Bot"
+    ```
+  </Accordion>
+
+  <Accordion title="Versioned agents (drafts)">
+    When an agent has versioning enabled, config changes create a draft that you publish explicitly:
+
+    ```
+    Change the voice of "Production Agent" to rachel
+    ```
+    _AI responds: "Config saved as draft. Want me to publish it?"_
+
+    ```
+    Yes, publish it with the label "Switched to rachel voice"
+    ```
+    ```
+    Discard the draft — I changed my mind
     ```
   </Accordion>
 </AccordionGroup>
 
 ---
 
-## Call logs
+## Making Calls
+
+<Callout intent="warn">
+  These trigger **real phone calls**. The agent will call the number and follow its configured prompt.
+</Callout>
+
+<AccordionGroup>
+  <Accordion title="Basic outbound call">
+    ```
+    Call +14155551234 using the "Sales Outreach" agent
+    ```
+    ```
+    Call +916366821717 using agent "Support Bot"
+    ```
+  </Accordion>
+
+  <Accordion title="Call with variables">
+    ```
+    Call +14155551234 using "Sales Outreach" with variables:
+    prospect_name = "John", company = "Acme Corp"
+    ```
+  </Accordion>
+
+  <Accordion title="Call with a specific caller ID">
+    ```
+    What phone numbers do I have?
+    ```
+    _Then:_
+    ```
+    Call +14155551234 using "Sales Outreach" from the +18005551234 number
+    ```
+  </Accordion>
+
+  <Accordion title="Check call status">
+    ```
+    What's the status of call CALL-1234567890-abc123?
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Debugging Calls
+
+<Callout intent="info">
+  Call IDs look like `CALL-1234567890-abc123`. You can find them in call list responses or in the console.
+</Callout>
+
+<AccordionGroup>
+  <Accordion title="Full call debug">
+    ```
+    Debug call CALL-1234567890-abc123
+    ```
+
+    Returns everything: transcript, errors, latency metrics, cost breakdown, post-call analytics, variables, and agent config at time of call.
+  </Accordion>
+
+  <Accordion title="Specific questions about a call">
+    ```
+    What was the transcript for CALL-1234567890-abc123?
+    ```
+    ```
+    Why did CALL-1234567890-abc123 fail?
+    ```
+    ```
+    What was the cost breakdown for that last call?
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Browsing Call History
 
 <AccordionGroup>
   <Accordion title="Recent calls">
@@ -75,12 +187,6 @@ No commands to memorize. Just ask in plain English — the AI picks the right to
     ```
   </Accordion>
 
-  <Accordion title="Filter by phone number">
-    ```
-    Find all calls to +14155551234
-    ```
-  </Accordion>
-
   <Accordion title="Filter by type">
     ```
     Show me all inbound calls this month
@@ -88,80 +194,198 @@ No commands to memorize. Just ask in plain English — the AI picks the right to
     ```
     List outbound calls from the last 7 days
     ```
+    ```
+    Show webcalls from today
+    ```
+  </Accordion>
+
+  <Accordion title="Filter by phone number or campaign">
+    ```
+    Find all calls to +14155551234
+    ```
+    ```
+    Show calls from campaign 682abc123def456
+    ```
   </Accordion>
 </AccordionGroup>
 
 ---
 
-## Debugging
+## Text-to-Speech
 
-<Callout intent="info">
-  Call IDs look like `CALL-1234567890-abc123`. You can find them in call log responses or in the Atoms Console.
-</Callout>
+<AccordionGroup>
+  <Accordion title="Generate speech">
+    ```
+    Convert this to speech with yuvika voice:
+    "Welcome to Smallest AI. We build the fastest voice agents on the planet."
+    ```
+    ```
+    Generate an MP3 with the daniel voice at 1.5x speed:
+    "Your order has been confirmed and will arrive tomorrow."
+    ```
+  </Accordion>
 
-```
-Debug call CALL-1234567890-abc123
-```
-
-This returns everything about a single call:
-
-- **Full transcript** — complete conversation between agent and caller
-- **Errors** — any errors that occurred during the call
-- **Cost breakdown** — LLM, TTS, STT, telephony, and platform costs
-- **Post-call analytics** — disposition metrics extracted from the conversation
-
----
-
-## Usage & costs
-
-```
-What's our total call spend this week?
-```
-```
-Show usage stats for the "Sales Outreach" agent this month
-```
-```
-How many calls did we make in January?
-```
+  <Accordion title="Choose a voice first">
+    ```
+    Show me available female voices
+    ```
+    ```
+    List voices that support Hindi
+    ```
+    _Then:_
+    ```
+    Generate speech with that voice: "Namaste, aapka order confirm ho gaya hai"
+    ```
+  </Accordion>
+</AccordionGroup>
 
 ---
 
-## Making calls
+## Speech-to-Text
 
-<Callout intent="warn">
-  These trigger **real phone calls**. The agent will call the number and follow its configured prompt.
-</Callout>
+<AccordionGroup>
+  <Accordion title="Transcribe a file">
+    ```
+    Transcribe this audio file: ~/Desktop/recording.wav
+    ```
 
-```
-Call +14155551234 using the "Sales Outreach" agent
-```
-```
-Call +916366821717 using agent "Support Bot"
-```
+    The AI will ask what language the audio is in before transcribing.
+  </Accordion>
+
+  <Accordion title="Transcribe from a URL">
+    ```
+    Transcribe the audio at https://example.com/meeting.mp3
+    The language is English.
+    ```
+  </Accordion>
+
+  <Accordion title="With extra features">
+    ```
+    Transcribe ~/Desktop/meeting.wav in English with speaker diarization and word timestamps
+    ```
+    ```
+    Transcribe this call recording with emotion detection: ~/Desktop/call.wav
+    ```
+    ```
+    Transcribe with PII redaction: ~/Desktop/support-call.mp3
+    ```
+  </Accordion>
+</AccordionGroup>
 
 ---
 
-## Campaigns & phone numbers
+## Analytics
 
-<Tabs>
-  <Tab title="Campaigns">
+<AccordionGroup>
+  <Accordion title="Dashboard overview">
+    ```
+    Show me the full dashboard for the last 30 days
+    ```
+    ```
+    Give me a dashboard for agent "Sales Bot" this month
+    ```
+  </Accordion>
+
+  <Accordion title="Usage and costs">
+    ```
+    What's our total call spend this week?
+    ```
+    ```
+    Show credit usage for the last 30 days
+    ```
+    ```
+    How many calls did we make in January?
+    ```
+  </Accordion>
+
+  <Accordion title="Call volume and trends">
+    ```
+    Show call volume over the last 2 weeks
+    ```
+    ```
+    What are the weekly trends for this month?
+    ```
+    ```
+    Show call outcomes (completed vs failed) this week
+    ```
+  </Accordion>
+
+  <Accordion title="Agent performance">
+    ```
+    Compare agent performance this month — who has the most calls?
+    ```
+    ```
+    Which agent has the highest completion rate?
+    ```
+  </Accordion>
+
+  <Accordion title="Timing and capacity">
+    ```
+    What are the peak hours for calls this week?
+    ```
+    ```
+    Show concurrent call counts for today
+    ```
+    ```
+    What does the call start distribution look like for yesterday?
+    ```
+  </Accordion>
+
+  <Accordion title="Phone number analytics">
+    ```
+    Show pickup rates by phone number this month
+    ```
+    ```
+    Which outbound number has the best pickup rate?
+    ```
+    ```
+    Show phone number trends for the last 2 weeks
+    ```
+  </Accordion>
+
+  <Accordion title="Duration and retries">
+    ```
+    What are the call duration stats this month? (avg, median, p95)
+    ```
+    ```
+    Show attempt cohort analysis — how does success rate change with retries?
+    ```
+    ```
+    Give me today's daily summary
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Campaigns & Phone Numbers
+
+<AccordionGroup>
+  <Accordion title="Campaigns">
     ```
     Show me all running campaigns
     ```
     ```
-    List completed campaigns for the "Survey" agent
+    List completed campaigns
     ```
-  </Tab>
-  <Tab title="Phone numbers">
+    ```
+    Show campaigns sorted by most recent
+    ```
+  </Accordion>
+
+  <Accordion title="Phone numbers">
     ```
     List all phone numbers in my organization
     ```
-  </Tab>
-</Tabs>
+    ```
+    Which agents are assigned to which phone numbers?
+    ```
+  </Accordion>
+</AccordionGroup>
 
 ---
 
-## Chaining actions
+## Chaining Actions
 
 You can combine multiple steps in a single prompt — the AI executes them in sequence:
 
@@ -169,12 +393,53 @@ You can combine multiple steps in a single prompt — the AI executes them in se
 Create a new agent called "Demo Bot",
 set its prompt to "You are a friendly demo agent that introduces
 our product in under 30 seconds",
+set the voice to yuvika,
 then call +14155551234 with it
 ```
 
 This will:
 1. Create the agent
 2. Update its prompt
-3. Make the call
+3. Change the voice
+4. Make the call
 
 All in one go.
+
+---
+
+## Power User Tips
+
+<AccordionGroup>
+  <Accordion title="Ask about your setup">
+    ```
+    What model and voice is "Sales Bot" using?
+    ```
+    ```
+    What languages does "Support Bot" support?
+    ```
+    ```
+    Is voicemail detection enabled on "Outreach Agent"?
+    ```
+  </Accordion>
+
+  <Accordion title="Bulk operations">
+    ```
+    List all agents that have 0 calls and archive them
+    ```
+    ```
+    Show me all agents using the electron model
+    ```
+  </Accordion>
+
+  <Accordion title="Cross-reference data">
+    ```
+    Show me failed calls this week, then debug the most recent one
+    ```
+    ```
+    Which agent had the most failed calls this month? Show me one of the failure transcripts.
+    ```
+    ```
+    Compare call volume this week vs last week
+    ```
+  </Accordion>
+</AccordionGroup>
