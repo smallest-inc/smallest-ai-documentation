@@ -9,94 +9,119 @@ The Smallest MCP Server connects your AI editor to the Smallest AI platform. No 
 
 ## Prerequisites
 
-The MCP server runs via **npx**, which requires **Node.js** installed on your machine. This is a one-time setup that takes about 2 minutes.
-
-<Callout intent="info">
-  Already have Node.js? Check by opening Terminal (Mac) or PowerShell (Windows) and typing `node --version`. If it shows `v18` or higher, skip to [Setup](#setup).
-</Callout>
+The MCP server runs via **npx**, which requires **Node.js** installed on your machine. Pick your experience level:
 
 <Tabs>
-  <Tab title="Mac">
-    <Steps>
-      <Step title="Install Homebrew (if you don't have it)">
-        Homebrew is a package manager for Mac — think of it as an app store for developer tools. Open **Terminal** (search for "Terminal" in Spotlight or find it in Applications → Utilities) and paste this:
+  <Tab title="I'm non-technical">
+    This is a one-time setup that takes about 5 minutes. Pick your computer type:
 
-        ```bash
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        ```
+    <Tabs>
+      <Tab title="Mac">
+        <Steps>
+          <Step title="Open Terminal">
+            Press **Cmd + Space** to open Spotlight, type **Terminal**, and press Enter. A window with a blinking cursor will appear — this is where you'll paste commands.
+          </Step>
 
-        It will ask for your Mac password (the one you use to log in). Type it and press Enter — you won't see characters appear, that's normal.
+          <Step title="Install Homebrew">
+            Homebrew is a free tool that helps install software on Mac. Copy this entire line and paste it into Terminal, then press Enter:
 
-        <Callout intent="info">
-          If you already have Homebrew, this command will tell you. That's fine — move to the next step.
+            ```bash
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            ```
+
+            It will ask for your **Mac password** (the one you use to log in). Type it and press Enter — **you won't see any characters appear while typing, that's normal**.
+
+            Wait for it to finish (1-2 minutes).
+
+            <Callout intent="info">
+              If it says "Homebrew is already installed" — great, skip to the next step.
+            </Callout>
+
+            **Important for newer Macs (M1/M2/M3/M4):** After Homebrew finishes, it will show a "Next steps" section with two commands. Copy and paste them one at a time:
+            ```bash
+            echo >> ~/.zprofile
+            echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+            ```
+          </Step>
+
+          <Step title="Install Node.js">
+            Paste this into Terminal and press Enter:
+            ```bash
+            brew install node
+            ```
+            Wait for it to finish (1-2 minutes).
+          </Step>
+
+          <Step title="Check it worked">
+            Paste this and press Enter:
+            ```bash
+            node --version
+            ```
+            If you see a number like `v22.x.x` — you're done with prerequisites!
+          </Step>
+        </Steps>
+
+        <Callout intent="warn">
+          **Stuck?** If anything fails, the simplest alternative is to go to [nodejs.org](https://nodejs.org/), click the big green **LTS** button, download the `.pkg` file, and double-click it to install.
         </Callout>
+      </Tab>
+      <Tab title="Windows">
+        <Steps>
+          <Step title="Download Node.js">
+            Go to [nodejs.org](https://nodejs.org/) and click the big green **LTS** button. This downloads an installer file.
+          </Step>
 
-        **Apple Silicon Macs (M1/M2/M3/M4):** After Homebrew installs, it will show two commands to run. Copy and paste them — they look like:
-        ```bash
-        echo >> ~/.zprofile
-        echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
-        eval "$(/opt/homebrew/bin/brew shellenv)"
-        ```
-      </Step>
+          <Step title="Run the installer">
+            Find the downloaded file (usually in your Downloads folder — it's called something like `node-v22.x.x-x64.msi`). Double-click it.
 
-      <Step title="Install Node.js">
-        ```bash
-        brew install node
-        ```
-      </Step>
+            Click **Next** through each screen. **Don't change any settings** — the defaults are correct.
 
-      <Step title="Verify it worked">
-        ```bash
-        node --version
-        ```
-        You should see something like `v22.x.x`. If you do, you're ready.
-      </Step>
-    </Steps>
+            Click **Install** when prompted, then **Finish**.
+          </Step>
 
-    **Alternative: Download the installer**
+          <Step title="Restart your computer">
+            This makes sure Windows recognizes the new software. Save your work and restart.
+          </Step>
 
-    If you prefer not to use Terminal, download the Mac installer from [nodejs.org](https://nodejs.org/) (click the big green **LTS** button), open the `.pkg` file, and follow the steps.
+          <Step title="Check it worked">
+            After restarting, press **Windows key**, type **PowerShell**, and open it. Paste this and press Enter:
+            ```powershell
+            node --version
+            ```
+            If you see a number like `v22.x.x` — you're done with prerequisites!
+          </Step>
+        </Steps>
+
+        <Callout intent="warn">
+          **If it says "node is not recognized":** Make sure you restarted your computer after installing. If it still doesn't work, run the installer again and make sure **"Add to PATH"** is checked.
+        </Callout>
+      </Tab>
+    </Tabs>
   </Tab>
-  <Tab title="Windows">
-    <Steps>
-      <Step title="Download Node.js">
-        Go to [nodejs.org](https://nodejs.org/) and click the big green **LTS** button. This downloads the installer.
-      </Step>
+  <Tab title="I'm a developer">
+    Requires **Node.js 18+**.
 
-      <Step title="Run the installer">
-        Open the downloaded `.msi` file and click through the steps. **Make sure "Add to PATH" is checked** (it is by default).
-      </Step>
-
-      <Step title="Restart your terminal">
-        Close any open PowerShell or Command Prompt windows and open a **new** one.
-      </Step>
-
-      <Step title="Verify it worked">
+    <Tabs>
+      <Tab title="Mac">
+        ```bash
+        brew install node    # or: nvm install 22
+        ```
+      </Tab>
+      <Tab title="Windows">
         ```powershell
-        node --version
+        winget install OpenJS.NodeJS.LTS
         ```
-        You should see something like `v22.x.x`. If you do, you're ready.
-      </Step>
-    </Steps>
+      </Tab>
+      <Tab title="Linux">
+        ```bash
+        curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+        sudo apt-get install -y nodejs
+        ```
+      </Tab>
+    </Tabs>
 
-    <Callout intent="warn">
-      If `node` or `npx` is not found after installing, **restart your computer** and try again. Windows sometimes needs a reboot to update the PATH.
-    </Callout>
-
-    **Alternative: Use winget (if you know what it is)**
-    ```powershell
-    winget install OpenJS.NodeJS.LTS
-    ```
-  </Tab>
-  <Tab title="Linux">
-    ```bash
-    # Ubuntu / Debian
-    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-    sudo apt-get install -y nodejs
-
-    # Verify
-    node --version
-    ```
+    Verify: `node --version` should show v18+.
   </Tab>
 </Tabs>
 
@@ -126,32 +151,42 @@ The MCP server runs via **npx**, which requires **Node.js** installed on your ma
   </Step>
 
   <Step title="Configure your editor">
-    Open the MCP config file for your editor and paste the config below.
-
     <Tabs>
-      <Tab title="Cursor">
-        Open (or create) `~/.cursor/mcp.json` on Mac/Linux, or `%USERPROFILE%\.cursor\mcp.json` on Windows.
-
-        ```json
-        {
-          "mcpServers": {
-            "smallest": {
-              "command": "npx",
-              "args": ["-y", "@developer-smallestai/smallest-mcp-server"],
-              "env": {
-                "ATOMS_API_KEY": "sk_paste_your_key_here"
-              }
-            }
-          }
-        }
-        ```
-      </Tab>
       <Tab title="Claude Desktop">
-        Open **Claude Desktop** → **Settings** (gear icon) → **Developer** → **Edit Config**
+        <Steps>
+          <Step title="Open the config">
+            Open **Claude Desktop** → click the **Settings** gear icon (bottom-left) → **Developer** → **Edit Config**
 
-        Or open the file manually:
-        - **Mac:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-        - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+            This opens a file in your text editor.
+          </Step>
+          <Step title="Paste the config">
+            Replace everything in the file with this (or add the `"smallest"` section if you already have other servers):
+
+            ```json
+            {
+              "mcpServers": {
+                "smallest": {
+                  "command": "npx",
+                  "args": ["-y", "@developer-smallestai/smallest-mcp-server"],
+                  "env": {
+                    "ATOMS_API_KEY": "sk_paste_your_key_here"
+                  }
+                }
+              }
+            }
+            ```
+
+            **Replace** `sk_paste_your_key_here` with the API key you copied in Step 1.
+          </Step>
+          <Step title="Save the file">
+            Press **Cmd+S** (Mac) or **Ctrl+S** (Windows) to save.
+          </Step>
+        </Steps>
+      </Tab>
+      <Tab title="Cursor">
+        Open (or create) the config file:
+        - **Mac / Linux:** `~/.cursor/mcp.json`
+        - **Windows:** `%USERPROFILE%\.cursor\mcp.json`
 
         ```json
         {
@@ -166,6 +201,8 @@ The MCP server runs via **npx**, which requires **Node.js** installed on your ma
           }
         }
         ```
+
+        **Replace** `sk_paste_your_key_here` with your actual API key.
       </Tab>
       <Tab title="Claude Code">
         Run this in your terminal:
@@ -182,22 +219,18 @@ The MCP server runs via **npx**, which requires **Node.js** installed on your ma
       </Tab>
     </Tabs>
 
-    **Replace** `sk_paste_your_key_here` with your actual API key.
-
     <Callout intent="warn">
       Don't share your API key or commit it to git.
     </Callout>
-
-    If you already have other MCP servers configured, just add the `"smallest"` entry inside the existing `"mcpServers"` object.
   </Step>
 
   <Step title="Restart your editor">
     <Tabs>
-      <Tab title="Cursor">
-        `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows) → **Developer: Reload Window**
-      </Tab>
       <Tab title="Claude Desktop">
-        Fully quit and reopen the app.
+        Fully quit the app (**Cmd+Q** on Mac, or right-click the taskbar icon → Quit on Windows) and reopen it.
+      </Tab>
+      <Tab title="Cursor">
+        `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows) → type **Developer: Reload Window** → press Enter
       </Tab>
       <Tab title="Claude Code">
         Start a new session — the MCP is loaded automatically.
@@ -212,7 +245,7 @@ The MCP server runs via **npx**, which requires **Node.js** installed on your ma
     List all my agents
     ```
 
-    You should see your agents listed back. You're set up.
+    You should see your agents listed back. You're set up!
   </Step>
 </Steps>
 
