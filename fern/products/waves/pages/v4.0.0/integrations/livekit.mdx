@@ -1,113 +1,229 @@
 ---
 title: "LiveKit"
-description: "Build LiveKit voice agents using Smallest AI TTS plugin."
-icon: "voicemail"
+description: "Build real-time voice agents with LiveKit Agents using Smallest AI TTS and STT."
+icon: "tower-broadcast"
 ---
 
-This example provides scripts and tools to perform standalone audio generation and build Livekit voice assistants using the Smallest AI TTS plugin. Follow the steps below to set up and run the experiments.
+This guide walks you through integrating [Smallest AI](https://smallest.ai) TTS and STT into a [LiveKit Agents](https://docs.livekit.io/agents/) voice pipeline. LiveKit Agents is an open-source Python framework for building production-grade, real-time voice AI agents over WebRTC.
 
-## Code Examples Repository
+The `livekit-plugins-smallestai` package provides two services:
 
-You can find the code examples for this setup in the following GitHub repository:
+- **`smallestai.STT`** — real-time speech-to-text using the Pulse API, with streaming over WebSocket (~64ms TTFT) and batch transcription over HTTP
+- **`smallestai.TTS`** — ultra-low-latency text-to-speech using the Lightning API
 
-[Livekit Example Code Repository](https://github.com/smallest-inc/waves-examples/tree/main/lightning/livekit_example)
+## Code Example
 
-## Common Steps
+The full runnable example is in the Smallest AI waves-examples repository:
+
+[LiveKit Example — Smallest AI TTS + STT](https://github.com/smallest-inc/waves-examples/tree/main/lightning/livekit_example)
+
+## Setup
 
 ### 1. Create a Virtual Environment
-
-To ensure your Python environment is isolated, create a virtual environment:
 
 ```bash
 python3 -m venv venv
 ```
 
-Activate the virtual environment:
+Activate it:
 
 - On Linux/Mac:
   ```bash
   source venv/bin/activate
   ```
-
 - On Windows:
   ```bash
   venv\Scripts\activate
   ```
 
-### 2. Install Requirements
-
-Once the virtual environment is activated, install the required dependencies:
+### 2. Install Dependencies
 
 ```bash
-pip install -r requirements.txt
+pip install livekit-plugins-smallestai livekit-plugins-openai livekit-plugins-silero python-dotenv
 ```
 
-### 3. Sign in and Create a New Project on Livekit
+`livekit-plugins-smallestai` is published on PyPI and includes both the STT and TTS services. `livekit-plugins-silero` provides the VAD used for turn detection, and `livekit-plugins-openai` provides the LLM.
 
-Sign in here: [Livekit Cloud](https://cloud.livekit.io)
+### 3. Create a LiveKit Project
 
-After signing in, create a new project and copy the following tokens:
-
-```bash
-LIVEKIT_API_KEY
-LIVEKIT_API_SECRET
-LIVEKIT_URL
-```
+Sign in to [LiveKit Cloud](https://cloud.livekit.io), create a new project, and copy your project credentials.
 
 ### 4. Create a `.env` File
-
-Create a `.env` file in the project root directory. This file should contain the following keys with appropriate values:
 
 ```bash
 LIVEKIT_API_KEY=...
 LIVEKIT_API_SECRET=...
 LIVEKIT_URL=...
 OPENAI_API_KEY=...
-DEEPGRAM_API_KEY=...
 SMALLEST_API_KEY=...
-```
-
-### 5. Install the Plugin
-
-To set up the Livekit plugin for [smallest.ai](https://smallest.ai), run the following commands:
-
-```bash
-chmod +x install_plugin.sh
-./install_plugin.sh
 ```
 
 ---
 
-## Usage
+## Services
 
-### 1. Running `generate_audio.py`
+### `smallestai.STT`
 
-To generate audio using the Smallest AI plugin as a WAV file, run the following command:
+Real-time transcription using the Smallest AI Pulse API. Connects over WebSocket for streaming and supports batch transcription over HTTP.
+
+```python
+from livekit.plugins import smallestai
+
+# Streaming transcription — English
+stt = smallestai.STT(language="en")
+
+# Automatic language detection across 39 languages
+stt = smallestai.STT(language="multi")
+
+# With speaker diarization
+stt = smallestai.STT(language="en", diarize=True)
+```
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `api_key` | `str` | `$SMALLEST_API_KEY` | Your Smallest AI API key |
+| `model` | `str` | `"pulse"` | STT model — currently only `"pulse"` is available |
+| `language` | `str` | `"en"` | BCP-47 language code (e.g. `"en"`, `"hi"`, `"fr"`). Use `"multi"` for automatic detection across 39 languages |
+| `sample_rate` | `int` | `16000` | Audio sample rate in Hz. Supported: `8000`, `16000`, `22050`, `24000`, `44100`, `48000` |
+| `encoding` | `str` | `"linear16"` | PCM encoding: `"linear16"`, `"linear32"`, `"alaw"`, `"mulaw"`, `"opus"`, `"ogg_opus"` |
+| `word_timestamps` | `bool` | `True` | Include per-word `start`/`end` timestamps and confidence scores |
+| `diarize` | `bool` | `False` | Enable speaker diarization — each word includes a speaker ID |
+| `eou_timeout_ms` | `int` | `0` | Milliseconds of silence before the server emits a final transcript. `0` disables server-side end-of-utterance detection (recommended — lets LiveKit's built-in turn detection control timing) |
+
+The STT service connects to `wss://api.smallest.ai/waves/v1/pulse/get_text` for streaming and `https://api.smallest.ai/waves/v1/pulse/get_text` for batch. Interim and final transcripts are both supported. `START_OF_SPEECH` is inferred from the first non-empty transcript.
+
+---
+
+### `smallestai.TTS`
+
+Text-to-speech using the Smallest AI Lightning API. Because the plugin synthesizes audio per request rather than streaming tokens, wrap it in `tts.StreamAdapter` with a `SentenceTokenizer`. The adapter splits LLM output at sentence boundaries and fires synthesis for each chunk, keeping first-audio latency low.
+
+```python
+from livekit.agents import tts, tokenize
+from livekit.plugins import smallestai
+
+smallest_tts = tts.StreamAdapter(
+    tts=smallestai.TTS(
+        model="lightning-v3.1",
+        voice_id="sophia",
+        language="en",
+        speed=1.0,
+    ),
+    sentence_tokenizer=tokenize.basic.SentenceTokenizer(),
+)
+```
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `api_key` | `str` | `$SMALLEST_API_KEY` | Your Smallest AI API key |
+| `model` | `str` | `"lightning-v3.1"` | TTS model: `"lightning-v3.1"` (recommended, 80+ voices, ~100ms latency) or `"lightning-v2"` |
+| `voice_id` | `str` | `"sophia"` | Voice ID for synthesis |
+| `language` | `str` | `"en"` | Language code (`"en"` or `"hi"`) |
+| `speed` | `float` | `1.0` | Playback speed multiplier |
+| `sample_rate` | `int` | `24000` | Output audio sample rate in Hz |
+| `output_format` | `str` | `"pcm"` | Output encoding: `"pcm"`, `"mp3"`, `"wav"`, `"mulaw"`, `"alaw"` |
+| `consistency` | `float` | `0.5` | Voice consistency — `lightning-v2` only |
+| `similarity` | `float` | `0.0` | Voice similarity — `lightning-v2` only |
+| `enhancement` | `float` | `1.0` | Audio enhancement level — `lightning-v2` only |
+
+`consistency`, `similarity`, and `enhancement` apply only to `"lightning-v2"` and are ignored for `"lightning-v3.1"`.
+
+---
+
+## Complete Agent Example
+
+A minimal but production-ready voice agent using Smallest AI for both STT and TTS:
+
+```python
+import logging
+from dotenv import load_dotenv
+from livekit.agents import (
+    Agent,
+    AgentSession,
+    JobContext,
+    JobProcess,
+    RoomInputOptions,
+    RoomOutputOptions,
+    WorkerOptions,
+    cli,
+    tts,
+    tokenize,
+)
+from livekit.plugins import openai, silero, smallestai
+
+logger = logging.getLogger("voice-agent")
+load_dotenv()
+
+
+class MyAgent(Agent):
+    def __init__(self) -> None:
+        super().__init__(
+            instructions="You are a helpful voice assistant built by Smallest AI.",
+        )
+
+    async def on_enter(self):
+        self.session.generate_reply()
+
+
+def prewarm(proc: JobProcess):
+    proc.userdata["vad"] = silero.VAD.load()
+
+
+async def entrypoint(ctx: JobContext):
+    session = AgentSession(
+        vad=ctx.proc.userdata["vad"],
+        stt=smallestai.STT(language="en"),
+        llm=openai.LLM(model="gpt-4o-mini"),
+        tts=tts.StreamAdapter(
+            tts=smallestai.TTS(),
+            sentence_tokenizer=tokenize.basic.SentenceTokenizer(),
+        ),
+    )
+
+    await session.start(
+        agent=MyAgent(),
+        room=ctx.room,
+        room_input_options=RoomInputOptions(),
+        room_output_options=RoomOutputOptions(transcription_enabled=True),
+    )
+
+
+if __name__ == "__main__":
+    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, prewarm_fnc=prewarm))
+```
+
+---
+
+## Running the Agent
 
 ```bash
+python3 agent.py dev
+```
+
+The `dev` flag starts the agent worker in development mode. To interact with it, open the [LiveKit Agents Playground](https://agents-playground.livekit.io) and enter your `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET`. The agent will greet the user automatically on session start.
+
+The pipeline is fully interruptible — if the user speaks while the bot is talking, audio stops immediately and the bot re-engages without any custom logic.
+
+---
+
+## Testing TTS in Isolation
+
+To verify your `SMALLEST_API_KEY` and TTS setup without running a full agent, use `generate_audio.py` from the waves-examples repository to synthesize a sentence and save it as a WAV file:
+
+```bash
+git clone https://github.com/smallest-inc/waves-examples.git
+cd waves-examples/lightning/livekit_example
+pip install -r requirements.txt
 python3 generate_audio.py
 ```
 
-You can change the parameters in the script and try out different voices, languages, and texts.
-
-### 2. Running `minimal_assistant.py`
-
-To build a minimal Livekit voice assistant using the Smallest model, run the following command:
-
-```bash
-python3 minimal_assistant.py dev
-```
-
-### 3. Connect to the Agent Here
-
-You can connect to the agent by visiting the following link:
-
-[Livekit Agent Playground](https://agents-playground.livekit.io)
+Edit `voice_id`, `text`, or other parameters in the script to try different voices and languages. The output is saved as `output.wav`.
 
 ---
 
 ## Notes
 
-- Ensure that you have added the correct API keys and other credentials in the `.env` file before running the scripts.
-- For any issues or questions, feel free to open an issue in the repository or contact us on [Discord](https://discord.gg/9WtSXv26WE).
-
+- The `StreamAdapter` + `SentenceTokenizer` wrapper is required for TTS — the Smallest AI plugin synthesizes audio per request. Without it, the agent waits for the entire LLM response before starting synthesis.
+- Set `eou_timeout_ms=0` (the default) when using LiveKit's built-in turn detection. Setting it to a non-zero value adds server-side silence detection on top of LiveKit's own logic, which increases end-of-turn latency.
+- `"lightning-v3.1"` is the recommended TTS model — it delivers ~100ms latency with 80+ voices. Switch to `"lightning-v2"` only if you need the `consistency`/`similarity`/`enhancement` quality parameters.
+- For issues or questions, open an issue in the [waves-examples repository](https://github.com/smallest-inc/waves-examples) or reach out on [Discord](https://discord.gg/9WtSXv26WE).
