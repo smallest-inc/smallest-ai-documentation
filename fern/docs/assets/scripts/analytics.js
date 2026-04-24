@@ -135,6 +135,62 @@
     };
   }
 
+  // PostHog direct-capture config (Fern's React-bundled posthog-js does not
+  // reliably expose window.posthog when this script runs, so we POST to the
+  // /capture/ endpoint ourselves. Same project key Fern uses, so events land
+  // in the existing project alongside Fern's native $pageview/$autocapture.)
+  var POSTHOG = {
+    key: "phc_sPVVNGLTV6b6CDMbmxkUjwNB6NvmEJKMcgT6EsN8m96j",
+    host: "https://us.i.posthog.com",
+  };
+
+  function getDistinctId() {
+    try {
+      if (window.posthog && typeof window.posthog.get_distinct_id === "function") {
+        var ferns = window.posthog.get_distinct_id();
+        if (ferns) return ferns;
+      }
+    } catch (e) {}
+    var key = "docs_analytics_distinct_id";
+    try {
+      var stored = localStorage.getItem(key);
+      if (stored) return stored;
+      var fresh = "dc_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem(key, fresh);
+      return fresh;
+    } catch (e) {
+      return "dc_anon_" + Math.random().toString(36).slice(2, 10);
+    }
+  }
+
+  function sendPostHogDirect(eventName, properties) {
+    var payload = {
+      api_key: POSTHOG.key,
+      event: eventName,
+      distinct_id: getDistinctId(),
+      properties: Object.assign(
+        {
+          $current_url: window.location.href,
+          $pathname: window.location.pathname,
+          $host: window.location.host,
+          $referrer: document.referrer || "$direct",
+          $lib: "smallest-docs-analytics",
+          $insert_id: eventName + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10),
+        },
+        properties
+      ),
+      timestamp: new Date().toISOString(),
+    };
+    try {
+      fetch(POSTHOG.host + "/capture/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
   // Dual-send to both platforms
   function track(eventName, properties) {
     var enriched = Object.assign({}, properties, {
@@ -144,15 +200,13 @@
       timestamp: new Date().toISOString(),
     });
 
-    // Mixpanel
+    // Mixpanel (SDK attaches to window.mixpanel synchronously via loadMixpanel)
     if (window.mixpanel) {
       mixpanel.track(eventName, enriched);
     }
 
-    // PostHog (loaded by Fern)
-    if (window.posthog) {
-      posthog.capture(eventName, enriched);
-    }
+    // PostHog (direct HTTP capture; see POSTHOG block above for why)
+    sendPostHogDirect(eventName, enriched);
   }
 
   // ============================================================
