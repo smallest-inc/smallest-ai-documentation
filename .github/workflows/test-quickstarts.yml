@@ -77,50 +77,87 @@ jobs:
           echo "Downloaded $size bytes"
           [ "$size" -gt 1000 ] || exit 1
 
+      # Pulse STT occasionally returns a transient "Service temporarily
+      # unavailable" on the first request (upstream model warm-up). Retry
+      # up to 3x with exponential backoff before failing the workflow.
+
       - name: "STT: Pre-recorded (file upload)"
         run: |
-          result=$(curl -s -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
-            -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
-            -H "Content-Type: audio/wav" \
-            --data-binary "@/tmp/audio.wav")
-          echo "$result"
+          for attempt in 1 2 3; do
+            result=$(curl -s -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
+              -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
+              -H "Content-Type: audio/wav" \
+              --data-binary "@/tmp/audio.wav")
+            if echo "$result" | grep -q '"status":"success"' && echo "$result" | grep -q '"transcription"'; then
+              echo "ok on attempt $attempt"
+              break
+            fi
+            echo "attempt $attempt failed: $result"
+            [ $attempt -lt 3 ] && sleep $((attempt * 5))
+          done
           echo "$result" | grep -q '"status":"success"' || exit 1
           echo "$result" | grep -q '"transcription"' || exit 1
 
       - name: "STT: Pre-recorded (URL)"
         run: |
-          result=$(curl -s -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
-            -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d '{"url":"https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"}')
-          echo "$result"
+          for attempt in 1 2 3; do
+            result=$(curl -s -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
+              -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
+              -H "Content-Type: application/json" \
+              -d '{"url":"https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"}')
+            if echo "$result" | grep -q '"status":"success"'; then
+              echo "ok on attempt $attempt"
+              break
+            fi
+            echo "attempt $attempt failed: $result"
+            [ $attempt -lt 3 ] && sleep $((attempt * 5))
+          done
           echo "$result" | grep -q '"status":"success"' || exit 1
 
       - name: "STT: Pre-recorded with features (timestamps + diarize)"
         run: |
-          result=$(curl -s -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en&word_timestamps=true&diarize=true" \
-            -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
-            -H "Content-Type: audio/wav" \
-            --data-binary "@/tmp/audio.wav")
-          echo "$result" | head -c 500
+          for attempt in 1 2 3; do
+            result=$(curl -s -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en&word_timestamps=true&diarize=true" \
+              -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
+              -H "Content-Type: audio/wav" \
+              --data-binary "@/tmp/audio.wav")
+            if echo "$result" | grep -q '"status":"success"' && echo "$result" | grep -q '"words"'; then
+              echo "ok on attempt $attempt"
+              break
+            fi
+            echo "attempt $attempt failed (first 500 chars): $(echo "$result" | head -c 500)"
+            [ $attempt -lt 3 ] && sleep $((attempt * 5))
+          done
           echo "$result" | grep -q '"status":"success"' || exit 1
           echo "$result" | grep -q '"words"' || exit 1
 
       - name: "STT: Python URL-based call (as documented in quickstart)"
         run: |
           python3 -c "
-          import requests
-          r = requests.post(
-              'https://api.smallest.ai/waves/v1/pulse/get_text',
-              params={'language': 'en'},
-              headers={'Authorization': 'Bearer ${{ secrets.SMALLEST_API_KEY }}', 'Content-Type': 'application/json'},
-              json={'url': 'https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav'},
-              timeout=120,
-          )
-          r.raise_for_status()
-          result = r.json()
-          assert result['status'] == 'success', f'Expected success, got {result}'
-          print(f'OK: {result[\"transcription\"][:80]}...')
+          import requests, time
+          last_err = None
+          for attempt in (1, 2, 3):
+              try:
+                  r = requests.post(
+                      'https://api.smallest.ai/waves/v1/pulse/get_text',
+                      params={'language': 'en'},
+                      headers={'Authorization': 'Bearer ${{ secrets.SMALLEST_API_KEY }}', 'Content-Type': 'application/json'},
+                      json={'url': 'https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav'},
+                      timeout=120,
+                  )
+                  r.raise_for_status()
+                  result = r.json()
+                  if result.get('status') == 'success':
+                      print(f'OK on attempt {attempt}: {result[\"transcription\"][:80]}...')
+                      break
+                  last_err = result
+              except Exception as e:
+                  last_err = e
+              print(f'attempt {attempt} failed: {last_err}')
+              if attempt < 3:
+                  time.sleep(attempt * 5)
+          else:
+              raise SystemExit(f'STT still failing after 3 attempts: {last_err}')
           "
 
       # ─── Other Endpoints ───
