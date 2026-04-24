@@ -31,40 +31,65 @@ jobs:
         run: pip install requests
 
       # ─── TTS Tests ───
+      # Waves lightning-v3.1 occasionally returns a transient 503 under load.
+      # Each TTS step retries up to 3x with 5s / 10s backoff before failing.
 
       - name: "TTS: Sync synthesis"
         run: |
-          response=$(curl -s -o /tmp/tts-sync.wav -w "%{http_code}" \
-            -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech" \
-            -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d '{"text":"Hello from Smallest AI.","voice_id":"magnus","sample_rate":24000,"output_format":"wav"}')
-          echo "HTTP $response, $(stat -c%s /tmp/tts-sync.wav) bytes"
+          for attempt in 1 2 3; do
+            response=$(curl -s -o /tmp/tts-sync.wav -w "%{http_code}" \
+              -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech" \
+              -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
+              -H "Content-Type: application/json" \
+              -d '{"text":"Hello from Smallest AI.","voice_id":"magnus","sample_rate":24000,"output_format":"wav"}')
+            size=$(stat -c%s /tmp/tts-sync.wav)
+            echo "attempt $attempt: HTTP $response, $size bytes"
+            if [ "$response" = "200" ] && [ "$size" -gt 1000 ]; then
+              echo "ok on attempt $attempt"
+              break
+            fi
+            [ $attempt -lt 3 ] && sleep $((attempt * 5))
+          done
           [ "$response" = "200" ] || exit 1
           [ $(stat -c%s /tmp/tts-sync.wav) -gt 1000 ] || exit 1
 
       - name: "TTS: SSE streaming"
         run: |
-          response=$(curl -s -o /tmp/tts-sse.raw -w "%{http_code}" \
-            -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/stream" \
-            -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d '{"text":"Hello from streaming.","voice_id":"magnus","sample_rate":24000}')
-          echo "HTTP $response, $(stat -c%s /tmp/tts-sse.raw) bytes"
+          for attempt in 1 2 3; do
+            response=$(curl -s -o /tmp/tts-sse.raw -w "%{http_code}" \
+              -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/stream" \
+              -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
+              -H "Content-Type: application/json" \
+              -d '{"text":"Hello from streaming.","voice_id":"magnus","sample_rate":24000}')
+            echo "attempt $attempt: HTTP $response, $(stat -c%s /tmp/tts-sse.raw) bytes"
+            if [ "$response" = "200" ]; then
+              echo "ok on attempt $attempt"
+              break
+            fi
+            [ $attempt -lt 3 ] && sleep $((attempt * 5))
+          done
           [ "$response" = "200" ] || exit 1
 
       - name: "TTS: Python SDK-style call"
         run: |
           python3 -c "
-          import requests, os
-          r = requests.post(
-              'https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech',
-              headers={'Authorization': 'Bearer ${{ secrets.SMALLEST_API_KEY }}', 'Content-Type': 'application/json'},
-              json={'text': 'Modern problems require modern solutions.', 'voice_id': 'magnus', 'sample_rate': 24000, 'output_format': 'wav'},
-          )
-          assert r.status_code == 200, f'Expected 200, got {r.status_code}: {r.text}'
-          assert len(r.content) > 1000, f'Audio too small: {len(r.content)} bytes'
-          print(f'OK: {len(r.content)} bytes')
+          import os, time, requests
+          url = 'https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech'
+          headers = {'Authorization': 'Bearer ${{ secrets.SMALLEST_API_KEY }}', 'Content-Type': 'application/json'}
+          body = {'text': 'Modern problems require modern solutions.', 'voice_id': 'magnus', 'sample_rate': 24000, 'output_format': 'wav'}
+          last = None
+          for attempt in (1, 2, 3):
+              r = requests.post(url, headers=headers, json=body)
+              print(f'attempt {attempt}: HTTP {r.status_code}, {len(r.content)} bytes')
+              if r.status_code == 200 and len(r.content) > 1000:
+                  print(f'OK on attempt {attempt}')
+                  last = r
+                  break
+              last = r
+              if attempt < 3:
+                  time.sleep(attempt * 5)
+          assert last.status_code == 200, f'Expected 200, got {last.status_code}: {last.text}'
+          assert len(last.content) > 1000, f'Audio too small: {len(last.content)} bytes'
           "
 
       # ─── STT Tests ───
