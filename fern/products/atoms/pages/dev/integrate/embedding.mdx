@@ -1,27 +1,29 @@
 ---
 title: "Embedding a voice agent"
 sidebarTitle: "Embed a voice agent"
-description: "Drop a Smallest Atoms voice agent into a web page, mobile app, or custom client. Integration guides per platform, plus the ready-to-fork cookbook apps."
+description: "Drop a Smallest Atoms voice agent into a web page, mobile app, or custom client. Integration guides per platform, plus ready-to-fork cookbooks."
 ---
 
-Two paths to put a voice agent inside your own product:
+There are two paths to put a voice agent inside your product:
 
-1. **Integrate** — wire the Atoms WebSocket protocol into your app yourself, using the platform's native APIs. More code to own, more control.
-2. **Embed** — drop in a pre-built component or fork a finished reference app. Fastest to ship.
+1. **Embed** a pre-built component. Drop a widget into the app you already ship and get a voice session behind a single call.
+2. **Integrate** the Atoms WebSocket yourself. More code to own, full control over the UI and the audio session.
 
-Which one you pick depends on how much of the UX you want to control and whether a first-party SDK exists for your stack. The table below maps each platform to both paths.
+The table below maps each platform to both paths.
 
 ## At a glance
 
-| Platform | Embed (pre-built) | Integrate (build your own) |
+| Platform | Embed (widget) | Integrate (WebSocket) |
 |---|---|---|
-| **Web**         | [`<atoms-widget>` script tag](#web) (today) | [WebSocket SDK](/atoms/developer-guide/integrate/websocket-sdk) |
-| **React Native**| [Hearthside cookbook](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/react_native_voice_agent) — fork + customize | [React Native guide](/atoms/developer-guide/integrate/mobile/react-native) |
-| **iOS (Swift)** | [iOS Swift cookbook](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/ios_swift_voice_agent) | [iOS Swift guide](/atoms/developer-guide/integrate/mobile/ios-swift) |
-| **Android (Kotlin)** | [Android Kotlin cookbook](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/android_kotlin_voice_agent) | [Android Kotlin guide](/atoms/developer-guide/integrate/mobile/android-kotlin) |
-| **Flutter**     | [Flutter cookbook](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/flutter_voice_agent) | [Flutter guide](/atoms/developer-guide/integrate/mobile/flutter) |
+| **Web**              | [`<atoms-widget>` script tag](#web) | [WebSocket SDK](/atoms/developer-guide/integrate/websocket-sdk) |
+| **React Native**     | [`react_native_voice_widget`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/react_native_voice_widget) | [React Native guide](/atoms/developer-guide/integrate/mobile/react-native) |
+| **iOS (Swift)**      | [`ios_swift_voice_widget`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/ios_swift_voice_widget) | [iOS Swift guide](/atoms/developer-guide/integrate/mobile/ios-swift) |
+| **Android (Kotlin)** | [`android_kotlin_voice_widget`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/android_kotlin_voice_widget) | [Android Kotlin guide](/atoms/developer-guide/integrate/mobile/android-kotlin) |
+| **Flutter**          | [`flutter_voice_widget`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/flutter_voice_widget) | [Flutter guide](/atoms/developer-guide/integrate/mobile/flutter) |
 
-Drop-in SDK packages for iOS / Android / RN / Flutter are on the roadmap. Until then, the cookbooks are the "embed" path for mobile — fork, swap credentials, ship.
+Every mobile widget follows the same pattern: a floating pill in the host app, a bottom sheet with a live voice session on tap, and a single public API that accepts an API key and an agent ID. The implementations are independent per platform, with no shared runtime, so each widget looks and behaves native.
+
+If you need full control of the screen instead of a drop-in component, the [reference apps](#reference-apps) show the same transport and audio code in a full-screen voice UI.
 
 ## Web
 
@@ -32,75 +34,103 @@ Paste two lines into any HTML page:
 <script src="https://unpkg.com/atoms-widget-core@latest/dist/embed/widget.umd.js"></script>
 ```
 
-That renders a floating call bubble on the page. Clicking it opens a voice session with your agent. The component is a web-standard Custom Element; works in any framework (React, Vue, Svelte, plain HTML). Configuration — theme, position, agent id — goes through HTML attributes.
+That renders a floating call bubble on the page. Clicking it opens a voice session with your agent. The component is a web-standard Custom Element and works in any framework (React, Vue, Svelte, plain HTML). Configure theme, position, and agent ID through HTML attributes.
 
 To customize the widget's appearance or placement, see the [Widget features reference](/atoms/atoms-platform/features/widget).
 
 ## React Native
 
-No npm package yet. For a full working app you can fork today, use the [Hearthside](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/react_native_voice_agent) cookbook. It's a ~600-line Expo app covering:
+```tsx
+import { AtomsWidget } from './widget/AtomsWidget';
 
-- Realtime WebSocket client with reconnect
-- Mic capture + gapless PCM playback using `react-native-audio-api`
-- In-app settings sheet that drives the full agent-update REST flow (voice, speed, language)
-- Mute toggle, transport diagnostics, correct iOS audio session for full-speaker playback
+<AtomsWidget apiKey={API_KEY} agentId={AGENT_ID} label="Ask AI" />
+```
 
-Fork it, replace the narrator prompt with your own agent, and ship.
+The [React Native widget cookbook](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/react_native_voice_widget) ships an Expo app with the widget wired into a MyClinic receptionist host. It uses `react-native-audio-api` for mic capture and gapless playback, owns the WebSocket session, and exposes a mute button plus a live transcript.
 
-If you want to wire the WebSocket into an existing RN app rather than fork a new one, follow the [React Native integration guide](/atoms/developer-guide/integrate/mobile/react-native) for a drop-in protocol reference.
+| Host with pill | Sheet open |
+|---|---|
+| ![React Native host with Ask AI pill](./images/widgets/rn-host.png) | ![React Native widget sheet listening](./images/widgets/rn-sheet.png) |
+
+For integrating the transport into an existing RN app without the widget wrapper, follow the [React Native integration guide](/atoms/developer-guide/integrate/mobile/react-native).
 
 ## iOS (Swift)
 
-Same pattern, native Swift. The [iOS Swift cookbook](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/ios_swift_voice_agent) ships a SwiftUI app built on `URLSessionWebSocketTask` + `AVAudioEngine`, with no external dependencies. Xcode project is generated by `xcodegen` from a single `project.yml`, so you can audit the full build config at a glance.
+```swift
+import SwiftUI
 
-For integrating into an existing app see the [iOS Swift guide](/atoms/developer-guide/integrate/mobile/ios-swift).
+struct RootView: View {
+    var body: some View {
+        ZStack {
+            YourHostScreen()
+            AtomsWidget(apiKey: API_KEY, agentId: AGENT_ID, label: "Ask AI")
+        }
+    }
+}
+```
+
+The [iOS Swift widget cookbook](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/ios_swift_voice_widget) is a SwiftUI component built on `URLSessionWebSocketTask` and `AVAudioEngine`, with no external dependencies. Xcode project is generated by `xcodegen` from `project.yml`, so you can audit the full build config at a glance.
+
+| Host with pill | Sheet open |
+|---|---|
+| ![iOS host with Ask AI pill](./images/widgets/ios-host.png) | ![iOS widget sheet speaking](./images/widgets/ios-sheet.png) |
+
+For integrating into an existing app without the widget wrapper, see the [iOS Swift guide](/atoms/developer-guide/integrate/mobile/ios-swift).
 
 ## Android (Kotlin)
 
-[Android Kotlin cookbook](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/android_kotlin_voice_agent) — Jetpack Compose app using OkHttp's WebSocket and platform `AudioRecord` / `AudioTrack`. Gradle build with `BuildConfig` injection for credentials, `minSdk 24`.
+```kotlin
+import ai.smallest.atomswidget.AtomsWidget
 
-For integrating into an existing app see the [Android Kotlin guide](/atoms/developer-guide/integrate/mobile/android-kotlin).
+setContent {
+    Box(Modifier.fillMaxSize()) {
+        YourHostScreen()
+        AtomsWidget(apiKey = API_KEY, agentId = AGENT_ID, label = "Ask AI")
+    }
+}
+```
+
+The [Android Kotlin widget cookbook](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/android_kotlin_voice_widget) is a Jetpack Compose composable that uses OkHttp's WebSocket client and platform `AudioRecord` / `AudioTrack`. Material 3 `ModalBottomSheet` manages the sheet. Gradle injects credentials via `BuildConfig`.
+
+| Host with pill | Sheet open |
+|---|---|
+| ![Android host with Ask AI pill](./images/widgets/android-host.png) | ![Android widget sheet joined](./images/widgets/android-sheet.png) |
+
+For integrating into an existing app without the widget wrapper, see the [Android Kotlin guide](/atoms/developer-guide/integrate/mobile/android-kotlin).
 
 ## Flutter
 
-[Flutter cookbook](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/flutter_voice_agent) — Material 3 app on top of `web_socket_channel`, `mic_stream`, and `flutter_pcm_sound`. Credentials injected via `--dart-define` at build time.
+```dart
+AtomsWidget(apiKey: API_KEY, agentId: AGENT_ID, label: 'Ask AI')
+```
 
-For integrating into an existing app see the [Flutter guide](/atoms/developer-guide/integrate/mobile/flutter).
+The [Flutter widget cookbook](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/flutter_voice_widget) is a Material widget on top of `web_socket_channel`, the `record` package for PCM capture, and `flutter_pcm_sound` for playback. Credentials are injected via `--dart-define` at build time.
 
-## Cross-platform testing guide
+| Host with pill | Sheet open |
+|---|---|
+| ![Flutter host with Ask AI pill](./images/widgets/flutter-host.png) | ![Flutter widget sheet speaking](./images/widgets/flutter-sheet.png) |
 
-Each cookbook has a README with platform-specific setup. The repo also ships a [`MOBILE_COOKBOOKS.md`](https://github.com/smallest-inc/cookbook/blob/main/voice-agents/MOBILE_COOKBOOKS.md) cross-reference — validation checklists, shared debug patterns (transport counter, mute-for-loop-debugging, Android emulator mic toggle, iOS simulator audio caveat), and a "when to use which cookbook" matrix.
+For integrating into an existing app without the widget wrapper, see the [Flutter guide](/atoms/developer-guide/integrate/mobile/flutter).
+
+## Reference apps
+
+If the widget pattern is too constrained (for example, you want voice to own the whole screen, or you want to study the transport plumbing in isolation), the cookbook also ships full-screen reference apps per platform:
+
+- [React Native (Hearthside)](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/react_native_voice_agent)
+- [iOS Swift](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/ios_swift_voice_agent)
+- [Android Kotlin](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/android_kotlin_voice_agent)
+- [Flutter](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/flutter_voice_agent)
+
+Each is a runnable app with the same transport and audio code as the matching widget. Fork it, swap the agent ID, ship.
+
+The [`MOBILE_COOKBOOKS.md`](https://github.com/smallest-inc/cookbook/blob/main/voice-agents/MOBILE_COOKBOOKS.md) cross-reference in the cookbook repo covers validation checklists, shared debug patterns (transport counter, mute-for-loop-debugging, Android emulator mic toggle, iOS simulator audio caveat), and a "when to use which cookbook" matrix.
 
 ## Roadmap
 
-First-party mobile SDKs wrapping the cookbook patterns as one-line components:
-
-```tsx
-// React Native (forthcoming)
-import { AtomsWidget } from '@smallest-ai/atoms-react-native';
-<AtomsWidget apiKey={K} agentId={ID} mode="floating" theme={{ primary: '#DB984A' }} />
-```
-
-```swift
-// iOS (forthcoming)
-import SmallestAtoms
-SmallestAtomsView(apiKey: K, agentId: ID)
-```
-
-```kotlin
-// Android (forthcoming)
-AtomsWidget(apiKey = K, agentId = ID)
-```
-
-```dart
-// Flutter (forthcoming)
-AtomsWidget(apiKey: K, agentId: ID)
-```
-
-Each will wrap the corresponding cookbook — the transport, audio, and UI code you see in the cookbooks today becomes the SDK tomorrow.
+First-party SDK packages on npm, Swift Package Manager, Maven, and pub.dev are the next step. The transport, audio, and UI code in the widget cookbooks today becomes the SDK tomorrow. Until then, the cookbooks are the supported embed path.
 
 ## Reference
 
-- [Realtime Agent WebSocket API](/atoms/api-reference/api-reference/realtime-agent/realtime-agent) — the protocol all four clients speak.
-- [WebSocket SDK (web)](/atoms/developer-guide/integrate/websocket-sdk) — the browser-side JS SDK.
-- [Widget features](/atoms/atoms-platform/features/widget) — web widget configuration options.
+- [Realtime Agent WebSocket API](/atoms/api-reference/api-reference/realtime-agent/realtime-agent). The protocol every client speaks.
+- [WebSocket SDK (web)](/atoms/developer-guide/integrate/websocket-sdk). The browser-side JS SDK.
+- [Widget features](/atoms/atoms-platform/features/widget). Web widget configuration options.
