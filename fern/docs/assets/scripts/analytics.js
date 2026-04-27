@@ -477,15 +477,24 @@
     );
   }
 
-  // 10. API Playground interaction
+  // 10. API Playground interaction — Fern's "Try it" button on API ref
+  // pages. Enriched with api_type / api_name so reports can split by
+  // TTS vs STT vs Atoms etc.
   function setupAPIPlaygroundTracking() {
     document.addEventListener("click", function (e) {
-      var playgroundBtn = e.target.closest(
+      var btn = e.target.closest("button");
+      if (!btn) return;
+      var text = (btn.textContent || "").trim().toLowerCase();
+      var legacyMatch = e.target.closest(
         '[data-playground], .api-playground button[type="submit"], .playground-run, button.try-it'
       );
-      if (playgroundBtn) {
+      if (text === "try it" || text === "send" || text === "run" || legacyMatch) {
+        var ctx = getApiContext() || {};
         track("docs_api_playground_used", {
           endpoint: window.location.pathname,
+          api_type: ctx.api_type || "unknown",
+          api_name: ctx.api_name || "",
+          button_text: text,
         });
       }
     });
@@ -576,6 +585,123 @@
     );
   }
 
+  // 13. Code language switch — clicks on .fern-code-group-tab (Python /
+  // JavaScript / cURL / Python SDK). Tells us which language users prefer
+  // for each product/section.
+  function setupCodeLanguageSwitchTracking() {
+    var lastActiveByGroup = new WeakMap();
+    document.addEventListener("click", function (e) {
+      var tab = e.target.closest(".fern-code-group-tab, [class*='code-group-tab']");
+      if (!tab) return;
+      var toLanguage = (tab.textContent || "").trim();
+      var group = tab.closest("[role='tablist'], .fern-code-block, .fern-code-group") || tab.parentElement;
+      var fromLanguage = lastActiveByGroup.get(group) || "";
+      if (toLanguage && toLanguage !== fromLanguage) {
+        track("docs_code_language_switched", {
+          from_language: fromLanguage || "(initial)",
+          to_language: toLanguage,
+        });
+        lastActiveByGroup.set(group, toLanguage);
+      }
+    });
+  }
+
+  // 14. AI search ("Ask AI" button) — Fern's AI chat. High-value adoption
+  // signal; users opening this typically have a specific question.
+  function setupAISearchTracking() {
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest("button");
+      if (!btn) return;
+      var label = (btn.getAttribute("aria-label") || "").toLowerCase();
+      var text = (btn.textContent || "").trim().toLowerCase();
+      if (label === "ask ai" || text === "ask ai" || text.includes("ask ai")) {
+        track("docs_ai_search_used", {});
+      }
+    });
+  }
+
+  // 15. Copy page (Fern feature that exports the entire page as Markdown,
+  // typically used to paste into ChatGPT/Claude). Strong signal that the
+  // user is about to ask an AI for help with our product.
+  function setupCopyPageTracking() {
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest("button");
+      if (!btn) return;
+      var text = (btn.textContent || "").trim().toLowerCase();
+      if (text === "copy page" || text.includes("copy page")) {
+        track("docs_copy_page_used", {});
+      }
+    });
+  }
+
+  // 16. Version switch — clicks inside .fern-version-selector. Tells us
+  // which old Waves versions still get traffic.
+  function setupVersionSwitchTracking() {
+    document.addEventListener("click", function (e) {
+      var versionTrigger = e.target.closest(".fern-version-selector");
+      if (versionTrigger) {
+        // The dropdown opens; capture the trigger click as opening intent
+        track("docs_version_selector_opened", {
+          current_version: (versionTrigger.textContent || "").trim().slice(0, 20),
+        });
+        return;
+      }
+      // When a user picks a version option (link inside the dropdown)
+      var versionLink = e.target.closest("a[href*='/v']");
+      if (versionLink) {
+        var match = (versionLink.href || "").match(/\/v(\d+\.\d+\.\d+)\//);
+        if (match) {
+          track("docs_version_switched", {
+            to_version: match[1],
+            from_path: window.location.pathname,
+          });
+        }
+      }
+    });
+  }
+
+  // 17. External link clicks — clicks on links going outside docs.smallest.ai
+  // (github, discord, app.smallest.ai, blog, twitter). Useful for referral
+  // attribution and community-channel signal.
+  function setupExternalLinkTracking() {
+    document.addEventListener("click", function (e) {
+      var link = e.target.closest("a[href]");
+      if (!link) return;
+      var href = link.href || "";
+      if (!/^https?:\/\//.test(href)) return;
+      try {
+        var u = new URL(href);
+        if (
+          u.hostname === window.location.hostname ||
+          u.hostname.endsWith(".buildwithfern.com") ||
+          u.hostname === "buildwithfern.com"
+        ) return;
+        // Already covered by docs_signup_clicked / docs_console_link_clicked
+        if (u.hostname === "console.smallest.ai" || u.hostname === "app.smallest.ai") return;
+        track("docs_external_link_clicked", {
+          destination_domain: u.hostname,
+          destination_url: href.slice(0, 200),
+          link_text: (link.textContent || "").trim().slice(0, 60),
+        });
+      } catch (e) {}
+    });
+  }
+
+  // Helper: derive api_type + api_name from URL when on an API reference
+  // page. Used to enrich docs_api_playground_used.
+  function getApiContext() {
+    var path = window.location.pathname.toLowerCase();
+    if (path.indexOf("api-reference") === -1) return null;
+    var apiType = null;
+    if (/text-to-speech|lightning|tts/.test(path)) apiType = "tts";
+    else if (/speech-to-text|pulse|stt/.test(path)) apiType = "stt";
+    else if (/voice-cloning|voice-clone/.test(path)) apiType = "voice-cloning";
+    else if (/pronunciation/.test(path)) apiType = "pronunciation";
+    else if (path.indexOf("/atoms/") !== -1) apiType = "atoms";
+    var lastSeg = path.split("/").filter(Boolean).pop() || "";
+    return { api_type: apiType, api_name: lastSeg };
+  }
+
   // ============================================================
   // SPA NAVIGATION HANDLER
   // ============================================================
@@ -632,6 +758,11 @@
       setupAPIPlaygroundTracking();
       setupAPIKeyCopyTracking();
       setupQuickstartCompletionTracking();
+      setupCodeLanguageSwitchTracking();
+      setupAISearchTracking();
+      setupCopyPageTracking();
+      setupVersionSwitchTracking();
+      setupExternalLinkTracking();
     }, 500);
   }
 
