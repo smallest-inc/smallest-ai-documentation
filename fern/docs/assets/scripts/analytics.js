@@ -229,7 +229,7 @@
   function setupCodeCopyTracking() {
     document.addEventListener("click", function (e) {
       var copyBtn = e.target.closest(
-        '[data-copy], .copy-button, button[aria-label*="copy"], button[aria-label*="Copy"]'
+        'button.fern-copy-button, [data-copy], .copy-button, button[aria-label*="copy"], button[aria-label*="Copy"]'
       );
       if (copyBtn) {
         var codeBlock = copyBtn.closest("pre, .code-block, [data-language]");
@@ -370,7 +370,7 @@
   function setupSDKInstallTracking() {
     document.addEventListener("click", function (e) {
       var copyBtn = e.target.closest(
-        '[data-copy], .copy-button, button[aria-label*="copy"], button[aria-label*="Copy"]'
+        'button.fern-copy-button, [data-copy], .copy-button, button[aria-label*="copy"], button[aria-label*="Copy"]'
       );
       if (!copyBtn) return;
 
@@ -397,21 +397,58 @@
     });
   }
 
-  // 8. Feedback
+  // 8. Feedback — covers Fern's "Was this helpful?" Yes/No widget at the
+  // bottom of every page (no specific class on the buttons; identified by
+  // text + an ancestor whose text mentions "helpful") AND the page-level
+  // ".fern-feedback-button" (the "Report incorrect code" pencil icon
+  // inside code blocks).
   function setupFeedbackTracking() {
     document.addEventListener("click", function (e) {
-      var feedbackBtn = e.target.closest(
+      // Pattern A: Fern's "Report incorrect code" button (negative signal
+      // about a specific code block, distinct from page-level helpful)
+      var reportBtn = e.target.closest("button.fern-feedback-button");
+      if (reportBtn) {
+        track("docs_feedback_submitted", {
+          rating: "negative",
+          source: "report_code",
+        });
+        return;
+      }
+
+      // Pattern B: legacy / data-attr-based widgets
+      var legacy = e.target.closest(
         '[data-feedback], .feedback-button, .thumbs-up, .thumbs-down, [aria-label*="helpful"]'
       );
-      if (feedbackBtn) {
+      if (legacy) {
         var isPositive =
-          feedbackBtn.classList.contains("thumbs-up") ||
-          feedbackBtn.getAttribute("data-feedback") === "positive" ||
-          (feedbackBtn.getAttribute("aria-label") || "").includes("yes");
-
+          legacy.classList.contains("thumbs-up") ||
+          legacy.getAttribute("data-feedback") === "positive" ||
+          (legacy.getAttribute("aria-label") || "").includes("yes");
         track("docs_feedback_submitted", {
           rating: isPositive ? "positive" : "negative",
+          source: "widget",
         });
+        return;
+      }
+
+      // Pattern C: Fern's page-level Yes/No buttons under "Was this helpful?"
+      var btn = e.target.closest("button");
+      if (!btn) return;
+      var btnText = (btn.textContent || "").trim().toLowerCase();
+      if (btnText !== "yes" && btnText !== "no") return;
+      // confirm by checking for a "helpful" / "useful" prompt within ~3
+      // ancestors (avoids false positives on unrelated Yes/No buttons)
+      var node = btn;
+      for (var i = 0; i < 4 && node; i++) {
+        var around = (node.textContent || "").toLowerCase();
+        if (around.includes("helpful") || around.includes("useful") || around.includes("did this")) {
+          track("docs_feedback_submitted", {
+            rating: btnText === "yes" ? "positive" : "negative",
+            source: "yes_no",
+          });
+          return;
+        }
+        node = node.parentElement;
       }
     });
   }
@@ -463,7 +500,7 @@
     var API_KEY_PATTERN = /(sk_[A-Za-z0-9]{16,}|phc_[A-Za-z0-9]{16,}|ak_[A-Za-z0-9]{16,}|Bearer\s+[A-Za-z0-9_-]{16,}|YOUR[_-]?API[_-]?KEY|SMALLEST[_-]?API[_-]?KEY|<YOUR[_-]API[_-]KEY>|your[_-]?api[_-]?key)/;
     document.addEventListener("click", function (e) {
       var copyBtn = e.target.closest(
-        '[data-copy], .copy-button, button[aria-label*="copy"], button[aria-label*="Copy"]'
+        'button.fern-copy-button, [data-copy], .copy-button, button[aria-label*="copy"], button[aria-label*="Copy"]'
       );
       if (!copyBtn) return;
       var codeBlock = copyBtn.closest("pre, .code-block, [data-language]");
@@ -516,7 +553,7 @@
 
     document.addEventListener("click", function (e) {
       var copyBtn = e.target.closest(
-        '[data-copy], .copy-button, button[aria-label*="copy"], button[aria-label*="Copy"]'
+        'button.fern-copy-button, [data-copy], .copy-button, button[aria-label*="copy"], button[aria-label*="Copy"]'
       );
       if (copyBtn) {
         state.codeCopied = true;
