@@ -1,0 +1,128 @@
+---
+title: "JellyPod Speech SDK"
+description: "Use Smallest AI TTS in any JavaScript or TypeScript app with the JellyPod Speech SDK."
+icon: "podcast"
+---
+
+Use Smallest AI as a TTS provider in the [JellyPod Speech SDK](https://github.com/Jellypod-Inc/speech-sdk) — a universal, cross-platform TypeScript SDK that works in Node.js, edge runtimes, and the browser. Switch between providers without changing your application code.
+
+## Installation
+
+```bash
+npm install @speech-sdk/core
+```
+
+## Setup
+
+Get your API key from [waves.smallest.ai](https://waves.smallest.ai) and set it as an environment variable:
+
+```bash
+export SMALLEST_API_KEY="your_key_here"
+```
+
+## Generate Speech
+
+```typescript
+import { generateSpeech } from "@speech-sdk/core";
+import { createSmallestAI } from "@speech-sdk/core/providers";
+
+const smallestAI = createSmallestAI({ apiKey: process.env.SMALLEST_API_KEY });
+
+const result = await generateSpeech({
+  model: smallestAI(),
+  text: "Hello from Smallest AI!",
+  voice: "magnus",
+});
+
+// result.audio.uint8Array  — raw bytes (write to a file or stream to a player)
+// result.audio.base64      — base64 encoded audio
+// result.audio.mediaType   — e.g. "audio/wav"
+// result.metadata.audioDurationMs
+// result.metadata.latencyMs
+```
+
+The `createSmallestAI()` factory reads `SMALLEST_API_KEY` from the environment automatically if no `apiKey` is passed.
+
+## Provider Options
+
+All parameters are optional. Pass them via `providerOptions` to override defaults:
+
+```typescript
+const result = await generateSpeech({
+  model: smallestAI(),
+  text: "Hello!",
+  voice: "olivia",
+  providerOptions: {
+    sample_rate: 24000,   // 8000 | 16000 | 24000 | 44100 (default: 44100)
+    speed: 1.2,           // 0.5 – 2.0 (default: 1.0)
+    language: "en",       // en | hi | es | ta | auto (default: auto)
+    output_format: "mp3", // pcm | wav | mp3 | mulaw (default: wav)
+  },
+});
+```
+
+## Save to File (Node.js)
+
+```typescript
+import { writeFileSync } from "fs";
+
+const result = await generateSpeech({
+  model: smallestAI(),
+  text: "This will be saved to a WAV file.",
+  voice: "magnus",
+});
+
+writeFileSync("output.wav", result.audio.uint8Array);
+```
+
+## Available Voices
+
+80+ voices across English, Hindi, Spanish, and Tamil. A few popular ones:
+
+| Voice | Gender | Best For |
+|-------|--------|----------|
+| `magnus` | Male | General use (default) |
+| `olivia` | Female | General use |
+| `advika` | Female | Hindi, code-switching |
+| `vivaan` | Male | Bilingual English/Hindi |
+| `camilla` | Female | Spanish |
+
+Fetch the full list:
+
+```bash
+curl "https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY"
+```
+
+## Switching Providers
+
+One of the main benefits of the Speech SDK is swapping providers without changing application logic. To switch away from Smallest AI, replace the factory import:
+
+```typescript
+// Smallest AI
+import { createSmallestAI } from "@speech-sdk/core/providers";
+const model = createSmallestAI()();
+
+// OpenAI (same interface, different provider)
+import { createOpenAI } from "@speech-sdk/core/providers";
+const model = createOpenAI()();
+```
+
+Everything else — `generateSpeech`, result shape, metadata — stays identical.
+
+## Links
+
+<CardGroup cols={2}>
+  <Card title="GitHub" icon="github" href="https://github.com/Jellypod-Inc/speech-sdk">
+    Speech SDK source code
+  </Card>
+  <Card title="npm" icon="npm" href="https://www.npmjs.com/package/@speech-sdk/core">
+    Install from npm
+  </Card>
+  <Card title="API Key" icon="key" href="https://waves.smallest.ai">
+    Get your Smallest AI API key
+  </Card>
+  <Card title="Voices" icon="microphone" href="https://waves.smallest.ai/voices">
+    Browse all available voices
+  </Card>
+</CardGroup>
