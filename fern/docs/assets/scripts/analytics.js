@@ -478,8 +478,9 @@
   }
 
   // 10. API Playground interaction — Fern's "Try it" button on API ref
-  // pages. Enriched with api_type / api_name so reports can split by
-  // TTS vs STT vs Atoms etc.
+  // pages. Enriched with full API context (type / variant / protocol /
+  // method) so reports can split TTS Lightning v3.1 (REST) vs Pulse
+  // Realtime (WebSocket) vs Atoms Agents Create (REST), etc.
   function setupAPIPlaygroundTracking() {
     document.addEventListener("click", function (e) {
       var btn = e.target.closest("button");
@@ -494,6 +495,9 @@
           endpoint: window.location.pathname,
           api_type: ctx.api_type || "unknown",
           api_name: ctx.api_name || "",
+          api_variant: ctx.api_variant || null,
+          api_protocol: ctx.api_protocol || "unknown",
+          api_method: ctx.api_method || null,
           button_text: text,
         });
       }
@@ -687,19 +691,130 @@
     });
   }
 
-  // Helper: derive api_type + api_name from URL when on an API reference
-  // page. Used to enrich docs_api_playground_used.
+  // Helper: derive rich API context from URL when on an API reference page.
+  // Returns null if not on /api-reference/. Output:
+  //   api_type:     tts | stt | voice-cloning | pronunciation | atoms | unknown
+  //   api_name:     last URL segment (e.g. synthesize-lightning-v-31-speech)
+  //   api_variant:  lightning-v3.1 | lightning-v2 | lightning-large | pulse | null
+  //   api_protocol: rest | websocket | streaming
+  //   api_method:   POST | GET | DELETE | WSS | null (parsed from page H1/title)
   function getApiContext() {
     var path = window.location.pathname.toLowerCase();
     if (path.indexOf("api-reference") === -1) return null;
-    var apiType = null;
+
+    var apiType = "unknown";
     if (/text-to-speech|lightning|tts/.test(path)) apiType = "tts";
     else if (/speech-to-text|pulse|stt/.test(path)) apiType = "stt";
     else if (/voice-cloning|voice-clone/.test(path)) apiType = "voice-cloning";
     else if (/pronunciation/.test(path)) apiType = "pronunciation";
     else if (path.indexOf("/atoms/") !== -1) apiType = "atoms";
+
+    var apiVariant = null;
+    if (/lightning[-_]?v[-_]?3[-_.]1|lightning-v-?31|lightning-v-3-1/.test(path)) apiVariant = "lightning-v3.1";
+    else if (/lightning[-_]?v[-_]?2|lightning-v-?2/.test(path)) apiVariant = "lightning-v2";
+    else if (/lightning[-_]?large/.test(path)) apiVariant = "lightning-large";
+    else if (/pulse/.test(path)) apiVariant = "pulse";
+
+    var apiProtocol = "rest";
+    if (/realtime|websocket|wss|stream(?!ing)/.test(path)) apiProtocol = "websocket";
+    else if (/streaming|sse|server-sent/.test(path)) apiProtocol = "streaming";
+
+    var apiMethod = null;
+    var titleEl = document.querySelector("h1, [class*='endpoint-title' i], [class*='method' i]");
+    var titleText = (titleEl && (titleEl.textContent || "")) || document.title || "";
+    var methodMatch = titleText.match(/\b(POST|GET|DELETE|PUT|PATCH|WSS|WS)\b/i);
+    if (methodMatch) apiMethod = methodMatch[1].toUpperCase();
+    if (apiMethod === "WS") apiMethod = "WSS";
+    if (apiMethod === "WSS") apiProtocol = "websocket";
+
     var lastSeg = path.split("/").filter(Boolean).pop() || "";
-    return { api_type: apiType, api_name: lastSeg };
+    return {
+      api_type: apiType,
+      api_name: lastSeg,
+      api_variant: apiVariant,
+      api_protocol: apiProtocol,
+      api_method: apiMethod,
+    };
+  }
+
+  // 18. API endpoint viewed — auto-fires on every pageview of an
+  // /api-reference/ page. Tells us which endpoints get eyeballs vs
+  // which get tried (compare with docs_api_playground_used to find
+  // gap pages where docs are read but not tried).
+  function setupAPIEndpointViewTracking() {
+    function maybeFire() {
+      var ctx = getApiContext();
+      if (!ctx) return;
+      track("docs_api_endpoint_viewed", {
+        endpoint: window.location.pathname,
+        api_type: ctx.api_type,
+        api_name: ctx.api_name,
+        api_variant: ctx.api_variant,
+        api_protocol: ctx.api_protocol,
+        api_method: ctx.api_method,
+      });
+    }
+    maybeFire();
+    window.addEventListener("popstate", maybeFire);
+    var origPush = history.pushState;
+    history.pushState = function () { origPush.apply(this, arguments); setTimeout(maybeFire, 100); };
+    var origReplace = history.replaceState;
+    history.replaceState = function () { origReplace.apply(this, arguments); setTimeout(maybeFire, 100); };
+  }
+
+  // 19. Search no-results — fires when the user typed ≥3 chars and the
+  // dropdown shows zero matches. Critical content-gap signal — every
+  // recurring no-result query is a page that should exist.
+  function setupSearchNoResultsTracking() {
+    var lastQuery = "";
+    var lastFireAt = 0;
+    var observer = new MutationObserver(function () {
+      var input = document.querySelector('input[type="search"], input[placeholder*="Search" i], input[placeholder*="Find" i]');
+      if (!input) return;
+      var q = (input.value || "").trim();
+      if (q.length < 3) return;
+      var noResults =
+        document.querySelector('[class*="no-result" i], [data-no-results]') ||
+        Array.from(document.querySelectorAll('[role="option"], [class*="empty" i]')).some(function (el) {
+          return /no results|no matches|nothing found/i.test(el.textContent || "");
+        });
+      if (noResults && q !== lastQuery && Date.now() - lastFireAt > 2000) {
+        lastQuery = q;
+        lastFireAt = Date.now();
+        track("docs_search_no_results", { query: q });
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  // 20. Page dwell time — fires on page unload AND SPA navigation away.
+  // Captures seconds spent on the page. Complements scroll_depth: a user
+  // can scroll to 100% in 3s (skim) or 90s (deep read); dwell separates.
+  function setupDwellTimeTracking() {
+    var startedAt = Date.now();
+    var currentPath = window.location.pathname;
+    function fire(reason) {
+      var seconds = Math.round((Date.now() - startedAt) / 1000);
+      if (seconds < 2) return; // skip navigation glitches
+      track("docs_page_dwell_time", {
+        seconds: seconds,
+        page_path: currentPath,
+        reason: reason, // 'unload' | 'spa_nav'
+      });
+    }
+    function reset() {
+      fire("spa_nav");
+      startedAt = Date.now();
+      currentPath = window.location.pathname;
+    }
+    window.addEventListener("popstate", reset);
+    var origPush2 = history.pushState;
+    history.pushState = function () {
+      if (window.location.pathname !== currentPath) { reset(); }
+      origPush2.apply(this, arguments);
+    };
+    window.addEventListener("beforeunload", function () { fire("unload"); });
+    window.addEventListener("pagehide", function () { fire("unload"); });
   }
 
   // ============================================================
@@ -763,6 +878,9 @@
       setupCopyPageTracking();
       setupVersionSwitchTracking();
       setupExternalLinkTracking();
+      setupAPIEndpointViewTracking();
+      setupSearchNoResultsTracking();
+      setupDwellTimeTracking();
     }, 500);
   }
 
