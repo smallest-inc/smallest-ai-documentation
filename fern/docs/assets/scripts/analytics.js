@@ -163,6 +163,42 @@
     }
   }
 
+  // Session ID with 30-min idle-timeout sessionization, mirroring how
+  // PostHog's posthog-js handles sessions. Without this every event was
+  // landing with $session_id = NULL, which broke every session-based
+  // metric in PostHog (count(DISTINCT $session_id), helpfulness numerator,
+  // funnel session-window joins, etc.). 30 min matches PostHog default.
+  function getSessionId() {
+    // 1. Reuse Fern's PostHog SDK session id when it's there — keeps our
+    // events in the same session as $pageview / $autocapture
+    try {
+      if (window.posthog && typeof window.posthog.get_session_id === "function") {
+        var phSid = window.posthog.get_session_id();
+        if (phSid) return phSid;
+      }
+    } catch (e) {}
+
+    var IDLE_MS = 30 * 60 * 1000; // 30-minute idle = new session
+    var KEY = "docs_analytics_session";
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (raw) {
+        var s = JSON.parse(raw);
+        if (s && s.id && s.lastActive && Date.now() - s.lastActive < IDLE_MS) {
+          s.lastActive = Date.now();
+          localStorage.setItem(KEY, JSON.stringify(s));
+          return s.id;
+        }
+      }
+    } catch (e) {}
+
+    var fresh = "ds_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ id: fresh, lastActive: Date.now() }));
+    } catch (e) {}
+    return fresh;
+  }
+
   function sendPostHogDirect(eventName, properties) {
     var payload = {
       api_key: POSTHOG.key,
@@ -174,6 +210,7 @@
           $pathname: window.location.pathname,
           $host: window.location.host,
           $referrer: document.referrer || "$direct",
+          $session_id: getSessionId(),
           $lib: "smallest-docs-analytics",
           $insert_id: eventName + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10),
         },
