@@ -454,6 +454,91 @@
     });
   }
 
+  // 11. API key copy detection — fires when a user copies a snippet that
+  // contains an API-key-shaped string. Uses the copy-button click handler
+  // rather than the clipboard API so it works even if the clipboard is
+  // gated. Captures either a real key pattern or a placeholder the user
+  // will replace (both indicate intent to authenticate).
+  function setupAPIKeyCopyTracking() {
+    var API_KEY_PATTERN = /(sk_[A-Za-z0-9]{16,}|phc_[A-Za-z0-9]{16,}|ak_[A-Za-z0-9]{16,}|Bearer\s+[A-Za-z0-9_-]{16,}|YOUR[_-]?API[_-]?KEY|SMALLEST[_-]?API[_-]?KEY|<YOUR[_-]API[_-]KEY>|your[_-]?api[_-]?key)/;
+    document.addEventListener("click", function (e) {
+      var copyBtn = e.target.closest(
+        '[data-copy], .copy-button, button[aria-label*="copy"], button[aria-label*="Copy"]'
+      );
+      if (!copyBtn) return;
+      var codeBlock = copyBtn.closest("pre, .code-block, [data-language]");
+      if (!codeBlock) return;
+      var text = codeBlock.textContent || "";
+      if (API_KEY_PATTERN.test(text)) {
+        track("docs_api_key_copied", {
+          snippet_type: /Bearer|Authorization/i.test(text) ? "auth_header" : "env_var",
+        });
+      }
+    });
+  }
+
+  // 12. Quickstart completion — fires once per session per quickstart page
+  // when the user both (a) reaches ≥90% scroll and (b) has copied at least
+  // one code block on that page. This is the strongest high-intent signal
+  // of "user actually followed the quickstart through," short of a signup.
+  function setupQuickstartCompletionTracking() {
+    var isQuickstart = function () {
+      var p = window.location.pathname.toLowerCase();
+      return (
+        p.indexOf("quickstart") !== -1 ||
+        p.indexOf("quick-start") !== -1 ||
+        p.indexOf("get-started") !== -1 ||
+        p.indexOf("getting-started") !== -1
+      );
+    };
+    var state = { codeCopied: false, scrollHit: false, fired: false, path: "" };
+    function reset() {
+      state = { codeCopied: false, scrollHit: false, fired: false, path: window.location.pathname };
+    }
+    reset();
+    // Reset state on SPA navigation so each quickstart page is tracked independently
+    window.addEventListener("popstate", reset);
+    var origPush = history.pushState;
+    history.pushState = function () { origPush.apply(this, arguments); reset(); };
+    var origReplace = history.replaceState;
+    history.replaceState = function () { origReplace.apply(this, arguments); reset(); };
+
+    function maybeFire() {
+      if (!isQuickstart()) return;
+      if (state.fired) return;
+      if (state.codeCopied && state.scrollHit) {
+        state.fired = true;
+        track("docs_quickstart_completed", {
+          page_path: window.location.pathname,
+        });
+      }
+    }
+
+    document.addEventListener("click", function (e) {
+      var copyBtn = e.target.closest(
+        '[data-copy], .copy-button, button[aria-label*="copy"], button[aria-label*="Copy"]'
+      );
+      if (copyBtn) {
+        state.codeCopied = true;
+        maybeFire();
+      }
+    });
+
+    window.addEventListener(
+      "scroll",
+      function () {
+        var docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        if (docHeight <= 0) return;
+        var scrollPct = Math.round((window.scrollY / docHeight) * 100);
+        if (scrollPct >= 90) {
+          state.scrollHit = true;
+          maybeFire();
+        }
+      },
+      { passive: true }
+    );
+  }
+
   // ============================================================
   // SPA NAVIGATION HANDLER
   // ============================================================
@@ -508,6 +593,8 @@
       setupFeedbackTracking();
       setupScrollTracking();
       setupAPIPlaygroundTracking();
+      setupAPIKeyCopyTracking();
+      setupQuickstartCompletionTracking();
     }, 500);
   }
 
