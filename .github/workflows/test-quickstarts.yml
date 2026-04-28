@@ -32,11 +32,11 @@ jobs:
 
       # ─── TTS Tests ───
       # Waves lightning-v3.1 occasionally returns a transient 503 under load.
-      # Each TTS step retries up to 3x with 5s / 10s backoff before failing.
+      # Each TTS step retries up to 5x with 10s / 20s / 30s / 40s backoff before failing.
 
       - name: "TTS: Sync synthesis"
         run: |
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             response=$(curl -s -o /tmp/tts-sync.wav -w "%{http_code}" \
               -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech" \
               -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
@@ -48,14 +48,14 @@ jobs:
               echo "ok on attempt $attempt"
               break
             fi
-            [ $attempt -lt 3 ] && sleep $((attempt * 5))
+            [ $attempt -lt 5 ] && sleep $((attempt * 10))
           done
           [ "$response" = "200" ] || exit 1
           [ $(stat -c%s /tmp/tts-sync.wav) -gt 1000 ] || exit 1
 
       - name: "TTS: SSE streaming"
         run: |
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             response=$(curl -s -o /tmp/tts-sse.raw -w "%{http_code}" \
               -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/stream" \
               -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
@@ -66,7 +66,7 @@ jobs:
               echo "ok on attempt $attempt"
               break
             fi
-            [ $attempt -lt 3 ] && sleep $((attempt * 5))
+            [ $attempt -lt 5 ] && sleep $((attempt * 10))
           done
           [ "$response" = "200" ] || exit 1
 
@@ -78,7 +78,7 @@ jobs:
           headers = {'Authorization': 'Bearer ${{ secrets.SMALLEST_API_KEY }}', 'Content-Type': 'application/json'}
           body = {'text': 'Modern problems require modern solutions.', 'voice_id': 'magnus', 'sample_rate': 24000, 'output_format': 'wav'}
           last = None
-          for attempt in (1, 2, 3):
+          for attempt in (1, 2, 3, 4, 5):
               r = requests.post(url, headers=headers, json=body)
               print(f'attempt {attempt}: HTTP {r.status_code}, {len(r.content)} bytes')
               if r.status_code == 200 and len(r.content) > 1000:
@@ -86,8 +86,8 @@ jobs:
                   last = r
                   break
               last = r
-              if attempt < 3:
-                  time.sleep(attempt * 5)
+              if attempt < 5:
+                  time.sleep(attempt * 10)
           assert last.status_code == 200, f'Expected 200, got {last.status_code}: {last.text}'
           assert len(last.content) > 1000, f'Audio too small: {len(last.content)} bytes'
           "
@@ -104,11 +104,11 @@ jobs:
 
       # Pulse STT occasionally returns a transient "Service temporarily
       # unavailable" on the first request (upstream model warm-up). Retry
-      # up to 3x with exponential backoff before failing the workflow.
+      # up to 5x with exponential backoff before failing the workflow.
 
       - name: "STT: Pre-recorded (file upload)"
         run: |
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             result=$(curl -s -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
               -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
               -H "Content-Type: audio/wav" \
@@ -118,14 +118,14 @@ jobs:
               break
             fi
             echo "attempt $attempt failed: $result"
-            [ $attempt -lt 3 ] && sleep $((attempt * 5))
+            [ $attempt -lt 5 ] && sleep $((attempt * 10))
           done
           echo "$result" | grep -q '"status":"success"' || exit 1
           echo "$result" | grep -q '"transcription"' || exit 1
 
       - name: "STT: Pre-recorded (URL)"
         run: |
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             result=$(curl -s -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
               -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
               -H "Content-Type: application/json" \
@@ -135,13 +135,13 @@ jobs:
               break
             fi
             echo "attempt $attempt failed: $result"
-            [ $attempt -lt 3 ] && sleep $((attempt * 5))
+            [ $attempt -lt 5 ] && sleep $((attempt * 10))
           done
           echo "$result" | grep -q '"status":"success"' || exit 1
 
       - name: "STT: Pre-recorded with features (timestamps + diarize)"
         run: |
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             result=$(curl -s -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en&word_timestamps=true&diarize=true" \
               -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
               -H "Content-Type: audio/wav" \
@@ -151,7 +151,7 @@ jobs:
               break
             fi
             echo "attempt $attempt failed (first 500 chars): $(echo "$result" | head -c 500)"
-            [ $attempt -lt 3 ] && sleep $((attempt * 5))
+            [ $attempt -lt 5 ] && sleep $((attempt * 10))
           done
           echo "$result" | grep -q '"status":"success"' || exit 1
           echo "$result" | grep -q '"words"' || exit 1
@@ -161,7 +161,7 @@ jobs:
           python3 -c "
           import requests, time
           last_err = None
-          for attempt in (1, 2, 3):
+          for attempt in (1, 2, 3, 4, 5):
               try:
                   r = requests.post(
                       'https://api.smallest.ai/waves/v1/pulse/get_text',
@@ -179,10 +179,10 @@ jobs:
               except Exception as e:
                   last_err = e
               print(f'attempt {attempt} failed: {last_err}')
-              if attempt < 3:
-                  time.sleep(attempt * 5)
+              if attempt < 5:
+                  time.sleep(attempt * 10)
           else:
-              raise SystemExit(f'STT still failing after 3 attempts: {last_err}')
+              raise SystemExit(f'STT still failing after 5 attempts: {last_err}')
           "
 
       # ─── Other Endpoints ───
