@@ -20,7 +20,17 @@ channels:
       - $ref: "#/servers/production"
     parameters:
       language:
-        description: "Language code for transcription. Use 'multi' for automatic language detection"
+        description: |
+          Language code for transcription. Set explicitly to the known
+          language for best accuracy.
+
+          Use `multi-eu` for unknown European-language audio (auto-detects
+          across the European set). Use `multi` for full multilingual
+          auto-detection.
+
+          Omitting `language` routes to `multi-eu`, which can mis-detect on
+          non-European audio (e.g., returning Russian for English input).
+          Always pass `language` explicitly when the source language is known.
         enum:
           - it
           - es
@@ -55,7 +65,8 @@ channels:
           - lt
           - mt
           - multi
-        default: en
+          - multi-eu
+        default: multi-eu
         required: false
         location: $message.header#/language
       encoding:
@@ -89,14 +100,6 @@ channels:
         default: "true"
         required: false
         location: $message.header#/word_timestamps
-      full_transcript:
-        description: "Include cumulative transcript received till now in responses where is_final is true"
-        enum:
-          - "true"
-          - "false"
-        default: "false"
-        required: false
-        location: $message.header#/full_transcript
       sentence_timestamps:
         description: "Include sentence-level timestamps (utterances) in transcription"
         enum:
@@ -148,9 +151,9 @@ channels:
       punctuate:
         description: |
           When `false`, strips end-of-sentence punctuation (`.`, `,`, `?`, `!`)
-          from the transcript, `full_transcript`, `words[].word`, and
-          `utterances[].transcript`. Does not affect casing — use `capitalize`
-          for that. Overridden to `false` when `format=false`.
+          from the transcript, `words[].word`, and `utterances[].transcript`.
+          Does not affect casing — use `capitalize` for that. Overridden to
+          `false` when `format=false`.
         enum:
           - "true"
           - "false"
@@ -160,9 +163,9 @@ channels:
       capitalize:
         description: |
           When `false`, lowercases the entire transcript output (final
-          transcript, `full_transcript`, `words[].word`, and
-          `utterances[].transcript`). Does not affect punctuation — use
-          `punctuate` for that. Overridden to `false` when `format=false`.
+          transcript, `words[].word`, and `utterances[].transcript`). Does
+          not affect punctuation — use `punctuate` for that. Overridden to
+          `false` when `format=false`.
         enum:
           - "true"
           - "false"
@@ -195,7 +198,7 @@ channels:
           `:INTENSIFIER` — a numeric boost multiplier. Defaults to `1.0`
           when omitted.
 
-          **Example:** `NVIDIA:6,Jensen Huang,small language model:3.5,Waves`
+          **Example:** `I:20,smiling:26`
 
           - Phrases can include spaces (`small language model:3.5`).
           - Intensifier accepts integers or decimals (`2`, `2.5`, `0.5`).
@@ -208,7 +211,7 @@ channels:
           repetition** in the transcript. Values of `10` or above are
           not recommended — the model may insert the keyword even when
           it was not spoken. Start around `3–6` and tune from there.
-        example: "NVIDIA:6,Jensen Huang,small language model:3.5,Waves"
+        example: "I:20,smiling:26"
         required: false
         location: $message.header#/keywords
       itn_normalize:

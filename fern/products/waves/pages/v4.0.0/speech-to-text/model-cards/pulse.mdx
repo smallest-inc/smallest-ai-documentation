@@ -301,19 +301,25 @@ Word Error Rate (WER) by language evaluated on the [FLEURS](https://huggingface.
 
 When the language of the audio is known in advance, always set it explicitly rather than relying on automatic detection. This yields better transcription accuracy because the model can optimize directly for that language without needing to first identify it.
 
-For example, setting the language parameter to `es` (Spanish) tells the model to expect Spanish audio, which also handles English+Spanish code-switching scenarios. This produces more accurate outputs compared to using the `multi` parameter.
+For example, setting the language parameter to `es` (Spanish) tells the model to expect Spanish audio, which also handles English+Spanish code-switching scenarios. This produces more accurate outputs compared to using `multi-eu` or `multi`.
 
 | Parameter | Use case |
 |---|---|
 | `en` | English |
 | `es` | Spanish (handles English+Spanish) |
 | `hi` | Hindi (handles English+Hindi) |
-| `multi` | Unknown or mixed-language audio only |
+| `multi-eu` | Unknown European-language audio (auto-detects across the European set) |
+| `multi` | Truly unknown or mixed-language audio (full multilingual auto-detection) |
+
+<Warning>
+Omitting `language` routes to `multi-eu` and can mis-detect on non-European audio (for example, returning Russian for English input). Always pass `language` explicitly when the source language is known.
+</Warning>
 
 <Note>
-**When to use `multi`:**
+**When to use `multi-eu` or `multi`:**
 - When the language is truly unknown beforehand
 - When processing audio from varied or unpredictable sources
+- Prefer `multi-eu` for European-language input; use `multi` only for truly mixed multilingual audio
 </Note>
 
 ### Use features only when needed

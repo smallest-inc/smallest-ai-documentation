@@ -72,8 +72,8 @@ async def stream_audio():
                 offset += chunk_size
                 await asyncio.sleep(0.05)  # 50ms delay between chunks
 
-            print("Finished sending audio, sending end signal...")
-            await ws.send(json.dumps({"type": "finalize"}))
+            print("Finished sending audio, closing stream...")
+            await ws.send(json.dumps({"type": "close_stream"}))
 
         sender = asyncio.create_task(send_chunks())
 
@@ -88,8 +88,7 @@ async def stream_audio():
                         print(f"Partial: {data.get('transcript')}")
                     else:
                         print(f"Final: {data.get('transcript')}")
-                        print(f"Full transcript: {data.get('full_transcript')}")
-                        
+
                         if data.get("is_last"):
                             print("Transcription complete!")
                             break
@@ -140,8 +139,8 @@ ws.on("open", () => {
 
   const sendChunk = () => {
     if (offset >= audioBuffer.length) {
-      console.log("Finished sending audio, sending end signal...");
-      ws.send(JSON.stringify({ type: "finalize" }));
+      console.log("Finished sending audio, closing stream...");
+      ws.send(JSON.stringify({ type: "close_stream" }));
       return;
     }
 
@@ -165,8 +164,7 @@ ws.on("message", (data) => {
       console.log(`Partial: ${message.transcript}`);
     } else {
       console.log(`Final: ${message.transcript}`);
-      console.log(`Full transcript: ${message.full_transcript}`);
-      
+
       if (message.is_last) {
         console.log("Transcription complete!");
         ws.close();
@@ -215,8 +213,8 @@ async function transcribeAudio(audioFile) {
 
     const sendChunk = () => {
       if (offset >= arrayBuffer.byteLength) {
-        console.log("Finished sending audio");
-        ws.send(JSON.stringify({ type: "finalize" }));
+        console.log("Finished sending audio, closing stream...");
+        ws.send(JSON.stringify({ type: "close_stream" }));
         return;
       }
 
@@ -237,7 +235,7 @@ async function transcribeAudio(audioFile) {
       
       // Update UI with transcript
       if (message.is_final) {
-        updateTranscript(message.full_transcript);
+        updateTranscript(message.transcript);
       } else {
         updatePartialTranscript(message.transcript);
       }
@@ -318,7 +316,7 @@ async function streamMicrophone() {
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
     if (message.is_final) {
-      console.log("Transcript:", message.full_transcript);
+      console.log("Transcript:", message.transcript);
     }
   };
   
@@ -327,8 +325,7 @@ async function streamMicrophone() {
     processor.disconnect();
     source.disconnect();
     stream.getTracks().forEach(track => track.stop());
-    ws.send(JSON.stringify({ type: "finalize" }));
-    ws.close();
+    ws.send(JSON.stringify({ type: "close_stream" }));
   }, 30000);
 }
 
@@ -346,7 +343,6 @@ The WebSocket API sends JSON messages with the following structure:
 {
   "session_id": "sess_12345abcde",
   "transcript": "Hello, how are you?",
-  "full_transcript": "Hello, how are you?",
   "is_final": true,
   "is_last": false,
   "language": "en",
@@ -364,8 +360,7 @@ The WebSocket API sends JSON messages with the following structure:
 
 - **`is_final`**: `false` indicates a partial/interim transcript; `true` indicates a final transcript
 - **`is_last`**: `true` when the session is complete
-- **`transcript`**: Current segment text
-- **`full_transcript`**: Accumulated text from the entire session
+- **`transcript`**: Current segment text. Concatenate each `is_final=true` value to build a session-level transcript on the client.
 - **`word_timestamps`**: Only included when `word_timestamps=true` in query params
 
 ### Browser
