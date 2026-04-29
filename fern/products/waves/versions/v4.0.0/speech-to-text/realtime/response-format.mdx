@@ -31,7 +31,6 @@ For every chunk sent on the WebSocket, the server responds with a JSON message. 
 
 The following fields may be included in responses under certain conditions:
 
-- **`full_transcript`**: Complete transcription text accumulated so far. Only included when `full_transcript=true` query parameter is set AND `is_final=true`.
 - **`language`**: Detected primary language code. Only returned when `is_final=true`.
 - **`languages`**: Array of language codes detected in the audio. Only returned when `is_final=true`.
 - **`words`**: Array of word-level timestamps (only included when `word_timestamps=true` in query parameters). Each word object contains `word`, `start`, `end`, and `confidence` fields. When `diarize=true`, also includes `speaker` (integer ID) and `speaker_confidence` (0.0 to 1.0) fields.
@@ -54,14 +53,12 @@ We recommend processing responses of this kind for optimal transcription accurac
   "transcript": "Should I do it? ",
   "is_final": true,
   "is_last": false,
-  "full_transcript": "Hello. Should I do it?",
   "language": "en",
   "languages": ["en"]
 }
 ```
 
-- Additionally, the `language` field is set to the specified language, or the detected language if the language parameter is set to `multi`. Other responses will not include the `language` field.
-- The `full_transcript` is non-empty if the user sends the finalize token `{"type":"finalize"}` to signal end of session.
+- The `language` field is set to the specified language, or the detected language if the language parameter is set to `multi` or `multi-eu`. Other responses will not include the `language` field.
 
 ### `is_final = false`
 
@@ -80,13 +77,9 @@ These are interim transcript responses sent for each chunk. They provide quick f
 
 - These responses may provide inaccurate results for the most recent words. This occurs when the audio for these words is not fully sent to the server in the respective chunk.
 
-<Note>
-The `full_transcript` field is a feature that requires the `full_transcript` query parameter to be set to `true`. Learn more about the [Full Transcript feature](/waves/documentation/speech-to-text/features/full-transcript).
-</Note>
-
 ### `is_last = true`
 
-This response is similar to an `is_final=true` response, but it is the final response received after the user sends the finalize token `{"type":"finalize"}`. When `is_last=true`, the server has finished processing all audio and the session is complete.
+This response is the final response received after the user sends the close-stream token `{"type":"close_stream"}`. When `is_last=true`, the server has finished processing all audio and the session is complete.
 
 ```json
 {
@@ -96,14 +89,14 @@ This response is similar to an `is_final=true` response, but it is the final res
   "transcript": "Goodbye!",
   "is_final": true,
   "is_last": true,
-  "full_transcript": "Hello. Should I do it? Goodbye!",
   "language": "en",
   "languages": ["en"]
 }
 ```
 
-- This is the last response of the live transcription session and contains all the fields of the `is_final=true` response.
+- This is the last response of the live transcription session and contains all the fields of an `is_final=true` response.
+- `{"type":"finalize"}` does **not** trigger `is_last=true`. It only forces an immediate `is_final=true` transcript while keeping the session open. Use it for per-turn finalization in agentic pipelines.
 
 <Warning>
-Do not close the WebSocket connection immediately after sending the finalize token. Wait for this `is_last=true` response to ensure all audio has been processed and you receive the complete transcript.
+Do not close the WebSocket connection immediately after sending `{"type":"close_stream"}`. Wait for this `is_last=true` response to ensure all audio has been processed and you receive the complete transcript.
 </Warning>
