@@ -202,7 +202,11 @@ The server responds with JSON messages containing transcription results:
 
 ## Code Example
 
-This Python example connects to the WebSocket, streams a feature-rich demo WAV (contact details, a card number, a date and time, and a brand name), and prints partial and final transcripts. Set `SMALLEST_API_KEY` and run end-to-end with `pip install websockets requests`.
+The same WebSocket flow handles two audio sources: a pre-recorded file and a live microphone. Both reuse the identical query params and `close_stream` finalization. Pick the tab that matches the integration.
+
+### Stream a file
+
+Connects to the WebSocket, streams the feature-rich demo WAV below (contact details, card number, date, time, brand name), and prints partial and final transcripts. Set `SMALLEST_API_KEY` and run end-to-end with `pip install websockets requests`.
 
 <audio controls style={{ width: '100%', maxWidth: '500px', marginBottom: '16px' }}>
   <source src="../../audio/pulse-feature-demo.wav" type="audio/wav" />
@@ -295,6 +299,161 @@ if __name__ == "__main__":
 ```
 </CodeGroup>
 
+### Stream from microphone
+
+Same flow — only the audio source changes. Capture mic frames as 16-bit PCM and send each frame as a binary WebSocket message. Stop on `Ctrl+C`, send `close_stream`, and wait for `is_last=true`.
+
+<CodeGroup>
+```python Python (PyAudio)
+import asyncio
+import json
+import os
+from urllib.parse import urlencode
+
+import pyaudio
+import websockets
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+SAMPLE_RATE = 16000
+CHUNK_SIZE = 4096
+
+params = {
+    "language": "en",
+    "encoding": "linear16",
+    "sample_rate": str(SAMPLE_RATE),  # mic capture rate; both must match
+    "redact_pii": "true",
+    "redact_pci": "true",
+    "itn_normalize": "true",
+}
+WS_URL = f"wss://api.smallest.ai/waves/v1/pulse/get_text?{urlencode(params)}"
+
+
+async def stream_mic():
+    audio = pyaudio.PyAudio()
+    stream = audio.open(
+        format=pyaudio.paInt16,
+        channels=1,
+        rate=SAMPLE_RATE,
+        input=True,
+        frames_per_buffer=CHUNK_SIZE,
+    )
+
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+
+    async with websockets.connect(WS_URL, additional_headers=headers) as ws:
+        print("Listening... Ctrl+C to stop.")
+
+        async def send_audio():
+            try:
+                while True:
+                    data = stream.read(CHUNK_SIZE, exception_on_overflow=False)
+                    await ws.send(data)
+                    await asyncio.sleep(0.01)
+            except asyncio.CancelledError:
+                try:
+                    await ws.send(json.dumps({"type": "close_stream"}))
+                except websockets.ConnectionClosed:
+                    pass
+
+        async def receive_transcripts():
+            async for message in ws:
+                data = json.loads(message)
+                tag = "Final  " if data.get("is_final") else "Partial"
+                print(f"{tag}: {data.get('transcript', '')}")
+                if data.get("is_last"):
+                    return
+
+        sender = asyncio.create_task(send_audio())
+        try:
+            await receive_transcripts()
+        finally:
+            sender.cancel()
+            stream.stop_stream()
+            stream.close()
+            audio.terminate()
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(stream_mic())
+    except KeyboardInterrupt:
+        pass
+```
+
+```javascript Browser (Web Audio API)
+// Pulse STT — stream the user's microphone over a WebSocket
+// 1. Replace API_KEY with a short-lived token obtained from your backend.
+// 2. Serve this file from HTTPS or localhost (mic access requires a secure context).
+
+const API_KEY = "YOUR_API_KEY_FROM_BACKEND";
+const SAMPLE_RATE = 16000;
+
+const params = new URLSearchParams({
+  language: "en",
+  encoding: "linear16",
+  sample_rate: String(SAMPLE_RATE),
+  redact_pii: "true",
+  redact_pci: "true",
+  itn_normalize: "true",
+});
+
+async function streamMic() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
+  const source = audioContext.createMediaStreamSource(stream);
+  const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+  // Browser WebSockets cannot set custom headers, so backends typically
+  // accept the API key as a query param. See "Authentication" docs.
+  const ws = new WebSocket(
+    `wss://api.smallest.ai/waves/v1/pulse/get_text?${params}&token=${API_KEY}`
+  );
+
+  ws.onopen = () => {
+    console.log("Connected — start speaking");
+    processor.onaudioprocess = (e) => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      const float32 = e.inputBuffer.getChannelData(0);
+      const int16 = new Int16Array(float32.length);
+      for (let i = 0; i < float32.length; i++) {
+        int16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768));
+      }
+      ws.send(int16.buffer);
+    };
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+  };
+
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    const tag = data.is_final ? "Final  " : "Partial";
+    console.log(`${tag}: ${data.transcript ?? ""}`);
+    if (data.is_last) ws.close(1000);
+  };
+
+  // Stop after 30 seconds of capture (or wire this to a UI button)
+  setTimeout(() => {
+    processor.disconnect();
+    source.disconnect();
+    stream.getTracks().forEach((t) => t.stop());
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "close_stream" }));
+    }
+  }, 30000);
+}
+
+streamMic().catch(console.error);
+```
+</CodeGroup>
+
+<Note>
+Mic example uses `sample_rate=16000` (the natural rate for most laptop mics and Web Audio); the file example uses `24000` to match the demo WAV. The `encoding`, `sample_rate`, and audio-source rate must always agree.
+</Note>
+
 <Note>
 Set `language` explicitly to match the audio (`en`, `hi`, `es`, etc.) for the best accuracy. Use `multi-eu` for unknown European-language input. Reconstruct a session-level transcript on the client by concatenating each `is_final=true` `transcript` value, as shown above.
 </Note>
+
+<Tip>
+Browsers cannot set custom headers on WebSocket handshakes, so production browser clients should fetch a short-lived token from a backend and pass it via the `?token=` query parameter rather than embedding `SMALLEST_API_KEY` in the page.
+</Tip>
