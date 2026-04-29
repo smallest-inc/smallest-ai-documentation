@@ -355,11 +355,16 @@ async def stream_mic():
                 except websockets.ConnectionClosed:
                     pass
 
+        full_transcript = ""
+
         async def receive_transcripts():
+            nonlocal full_transcript
             async for message in ws:
                 data = json.loads(message)
                 tag = "Final  " if data.get("is_final") else "Partial"
                 print(f"{tag}: {data.get('transcript', '')}")
+                if data.get("is_final"):
+                    full_transcript += data.get("transcript", "") or ""
                 if data.get("is_last"):
                     return
 
@@ -371,6 +376,7 @@ async def stream_mic():
             stream.stop_stream()
             stream.close()
             audio.terminate()
+            print(f"\nFull Transcript: {full_transcript}")
 
 
 if __name__ == "__main__":
@@ -424,11 +430,16 @@ async function streamMic() {
     processor.connect(audioContext.destination);
   };
 
+  let fullTranscript = "";
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
     const tag = data.is_final ? "Final  " : "Partial";
     console.log(`${tag}: ${data.transcript ?? ""}`);
-    if (data.is_last) ws.close(1000);
+    if (data.is_final) fullTranscript += data.transcript ?? "";
+    if (data.is_last) {
+      console.log("\nFull Transcript:", fullTranscript);
+      ws.close(1000);
+    }
   };
 
   // Stop after 30 seconds of capture (or wire this to a UI button)

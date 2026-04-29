@@ -77,20 +77,23 @@ async def stream_audio():
 
         sender = asyncio.create_task(send_chunks())
 
+        full_transcript = ""
         try:
             async for message in ws:
                 try:
                     data = json.loads(message)
                     print("Received:", json.dumps(data, indent=2))
-                    
+
                     # Handle partial transcripts
                     if not data.get("is_final"):
                         print(f"Partial: {data.get('transcript')}")
                     else:
                         print(f"Final: {data.get('transcript')}")
+                        full_transcript += data.get("transcript", "") or ""
 
                         if data.get("is_last"):
                             print("Transcription complete!")
+                            print(f"Full Transcript: {full_transcript}")
                             break
                 except json.JSONDecodeError:
                     print("Received raw:", message)
@@ -154,19 +157,23 @@ ws.on("open", () => {
   sendChunk();
 });
 
+let fullTranscript = "";
+
 ws.on("message", (data) => {
   try {
     const message = JSON.parse(data.toString());
     console.log("Received:", JSON.stringify(message, null, 2));
-    
+
     // Handle partial transcripts
     if (!message.is_final) {
       console.log(`Partial: ${message.transcript}`);
     } else {
       console.log(`Final: ${message.transcript}`);
+      fullTranscript += message.transcript ?? "";
 
       if (message.is_last) {
         console.log("Transcription complete!");
+        console.log(`Full Transcript: ${fullTranscript}`);
         ws.close();
       }
     }
@@ -228,20 +235,24 @@ async function transcribeAudio(audioFile) {
     sendChunk();
   };
 
+  let fullTranscript = "";
+
   ws.onmessage = (event) => {
     try {
       const message = JSON.parse(event.data);
       console.log("Received:", message);
-      
+
       // Update UI with transcript
       if (message.is_final) {
         updateTranscript(message.transcript);
+        fullTranscript += message.transcript ?? "";
       } else {
         updatePartialTranscript(message.transcript);
       }
-      
+
       if (message.is_last) {
         console.log("Transcription complete!");
+        console.log("Full Transcript:", fullTranscript);
         ws.close();
       }
     } catch (error) {
@@ -313,13 +324,20 @@ async function streamMicrophone() {
     processor.connect(audioContext.destination);
   };
   
+  let fullTranscript = "";
+
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
     if (message.is_final) {
       console.log("Transcript:", message.transcript);
+      fullTranscript += message.transcript ?? "";
+    }
+    if (message.is_last) {
+      console.log("Full Transcript:", fullTranscript);
+      ws.close();
     }
   };
-  
+
   // Stop streaming after 30 seconds (example)
   setTimeout(() => {
     processor.disconnect();
