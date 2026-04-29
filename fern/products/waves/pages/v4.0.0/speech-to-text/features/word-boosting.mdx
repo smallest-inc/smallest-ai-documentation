@@ -9,7 +9,7 @@ Keyword boosting lets you bias the Pulse speech-to-text model toward specific wo
 
 ## Format
 
-Keywords are passed as a **comma-separated string** in the `keywords` query parameter. Each keyword follows the format:
+Keywords are passed as a **single comma-separated string** in the `keywords` query parameter. Each entry follows the format:
 
 ```
 KEYWORD:INTENSIFIER
@@ -19,6 +19,23 @@ KEYWORD:INTENSIFIER
 |---|---|---|
 | `KEYWORD` | Yes | The word or phrase to boost |
 | `INTENSIFIER` | No | A number controlling boost strength. Defaults to `1.0` if omitted |
+
+<Warning>
+The value is a plain string, **not** a JSON array. Both of these shapes are wrong and produce garbled transcripts (the API parses the brackets and quotes as keyword characters):
+
+```
+❌ keywords=["I:20,smiling:26"]
+❌ keywords=['I:20,smiling:26']
+```
+
+Pass it as one string instead:
+
+```
+✅ keywords=I:20,smiling:26
+```
+
+In JavaScript: `url.searchParams.append("keywords", "I:20,smiling:26")` — `URLSearchParams` URL-encodes the colons and comma for you. In Python: `params = {"keywords": "I:20,smiling:26"}` then `urlencode(params)` does the same. Verified against the live API.
+</Warning>
 
 ## Intensifier Scale
 
