@@ -57,8 +57,10 @@ servers:
                 - lt
                 - mt
                 - multi
-              default: en
-              description: Language code for transcription. Use 'multi' for automatic language detection
+                - multi-eu
+              default: multi-eu
+              description: |
+                Language code for transcription. Set explicitly to the known language for best accuracy. Use `multi-eu` for unknown European-language audio (auto-detects across the European set). Use `multi` for full multilingual auto-detection. Omitting `language` routes to `multi-eu`, which can mis-detect on non-European audio (e.g., returning Russian for English input).
             encoding:
               type: string
               enum:
@@ -87,13 +89,6 @@ servers:
                 - "false"
               default: "true"
               description: Include word-level timestamps in transcription
-            full_transcript:
-              type: string
-              enum:
-                - "true"
-                - "false"
-              default: "false"
-              description: Include cumulative transcript received till now in responses where is_final is true
             sentence_timestamps:
               type: string
               enum:
@@ -145,7 +140,7 @@ servers:
               default: "true"
               description: |
                 When `false`, strips end-of-sentence punctuation (`.`, `,`, `?`, `!`)
-                from the final transcript, `full_transcript`, `words[].word`, and
+                from the final transcript, `words[].word`, and
                 `utterances[].transcript`. Does not affect casing — use `capitalize`
                 for that.
 
@@ -158,9 +153,8 @@ servers:
               default: "true"
               description: |
                 When `false`, lowercases the entire transcript output (final
-                transcript, `full_transcript`, `words[].word`, and
-                `utterances[].transcript`). Does not affect punctuation — use
-                `punctuate` for that.
+                transcript, `words[].word`, and `utterances[].transcript`).
+                Does not affect punctuation — use `punctuate` for that.
 
                 Overridden to `false` when `format=false`.
             eou_timeout_ms:
@@ -190,7 +184,7 @@ servers:
                 `:INTENSIFIER` — a numeric boost multiplier. Defaults to `1.0`
                 when omitted.
 
-                **Example:** `NVIDIA:5,Jensen Huang,small language model:3.5,Waves`
+                **Example:** `I:20,smiling:26`
 
                 - Phrases can include spaces (`small language model:3.5`).
                 - Intensifier accepts integers or decimals (`2`, `2.5`, `0.5`).
@@ -203,7 +197,7 @@ servers:
                 repetition** in the transcript. Values of `10` or above are
                 not recommended — the model may insert the keyword even when
                 it was not spoken. Start around `3–6` and tune from there.
-              example: "NVIDIA:6,Jensen Huang,small language model:3.5,Waves"
+              example: "I:20,smiling:26"
             itn_normalize:
               type: string
               enum:
@@ -282,9 +276,6 @@ channels:
             transcript:
               type: string
               description: Partial or complete transcription text for the current segment
-            full_transcript:
-              type: string
-              description: Complete transcription text accumulated so far. Only included when `full_transcript` query parameter is set to true AND is_final=true
             is_final:
               type: boolean
               default: false
@@ -362,7 +353,6 @@ channels:
               transcript: I paid using my card [CREDITCARDCVV_1] with expiry [TIME_2].
               is_final: true
               is_last: true
-              full_transcript: Hello, my name is [FIRSTNAME_1] [FIRSTNAME_2]. I paid using my card [CREDITCARDCVV_1] with expiry [TIME_2].
               language: en
               languages:
                 - en
@@ -485,9 +475,6 @@ components:
         transcript:
           type: string
           description: Transcribed text
-        full_transcript:
-          type: string
-          description: Complete transcription accumulated
         is_final:
           type: boolean
           description: Final transcription flag

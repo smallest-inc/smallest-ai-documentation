@@ -58,7 +58,6 @@ ws.onopen = () => {
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
   console.log("Transcript:", data.transcript);
-  console.log("Full transcript:", data.full_transcript);
   console.log("Is final:", data.is_final);
 };
 ```
@@ -67,6 +66,8 @@ ws.onmessage = (event) => {
 import asyncio
 import websockets
 import json
+import os
+import requests
 from urllib.parse import urlencode
 
 BASE_WS_URL = "wss://api.smallest.ai/waves/v1/pulse/get_text"
@@ -78,27 +79,42 @@ params = {
 }
 WS_URL = f"{BASE_WS_URL}?{urlencode(params)}"
 
-API_KEY = "SMALLEST_API_KEY"
+API_KEY = os.environ["SMALLEST_API_KEY"]
+SAMPLE_URL = "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
+CHUNK_SIZE = 4096
 
-async def connect():
-    headers = {
-        "Authorization": f"Bearer {API_KEY}"
-    }
-    
+async def transcribe():
+    # Download sample audio
+    audio_data = requests.get(SAMPLE_URL).content
+    # Skip WAV header (44 bytes) to get raw PCM
+    pcm_data = audio_data[44:]
+
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+
     async with websockets.connect(WS_URL, additional_headers=headers) as ws:
-        print("Connected to STT WebSocket")
-        
-        # Send audio chunks
-        # audio_chunk = b"..."
-        # await ws.send(audio_chunk)
-        
-        # Listen for transcriptions
+        print("Connected to Pulse STT WebSocket")
+
+        # Send audio in chunks
+        for i in range(0, len(pcm_data), CHUNK_SIZE):
+            await ws.send(pcm_data[i:i + CHUNK_SIZE])
+
+        # Signal end of audio (close_stream triggers is_last=true)
+        await ws.send(json.dumps({"type": "close_stream"}))
+
+        # Receive transcription results, concatenating finals into a session transcript
+        full_transcript = ""
         async for message in ws:
             data = json.loads(message)
-            print(f"Transcript: {data.get('transcript')}")
-            print(f"Is final: {data.get('is_final')}")
+            if data.get("is_final"):
+                print(f"Final: {data.get('transcript')}")
+                full_transcript += data.get("transcript", "") or ""
+                if data.get("is_last"):
+                    print(f"\nFull Transcript: {full_transcript}")
+                    break
+            else:
+                print(f"Partial: {data.get('transcript')}")
 
-asyncio.run(connect())
+asyncio.run(transcribe())
 ```
 </CodeGroup>
 
@@ -116,7 +132,7 @@ The server responds with JSON messages containing transcription results:
 }
 ```
 
-For detailed information about response fields, see the [response format documentation](/waves/documentation/speech-to-text/realtime/response-format).
+For detailed information about response fields, see the [response format documentation](/waves/documentation/speech-to-text-pulse/realtime-web-socket/response-format).
 
 ## Streaming Audio
 
@@ -127,18 +143,152 @@ const audioChunk = new Uint8Array(4096);
 ws.send(audioChunk);
 ```
 
-When you're done streaming, send an end signal:
+When you're done streaming, send a `close_stream` signal to end the session and receive the final transcript with `is_last=true`:
 
 ```json
 {
-  "type": "finalize"
+  "type": "close_stream"
 }
 ```
 
+## Live Microphone Input
+
+Stream audio from your microphone for real-time transcription:
+
+<CodeGroup>
+
+```python Python (PyAudio)
+import asyncio
+import websockets
+import json
+import os
+import pyaudio
+from urllib.parse import urlencode
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+SAMPLE_RATE = 16000
+CHUNK_SIZE = 4096
+
+params = {
+    "language": "en",
+    "encoding": "linear16",
+    "sample_rate": str(SAMPLE_RATE),
+}
+WS_URL = f"wss://api.smallest.ai/waves/v1/pulse/get_text?{urlencode(params)}"
+
+async def transcribe_mic():
+    audio = pyaudio.PyAudio()
+    stream = audio.open(
+        format=pyaudio.paInt16,
+        channels=1,
+        rate=SAMPLE_RATE,
+        input=True,
+        frames_per_buffer=CHUNK_SIZE,
+    )
+
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+
+    async with websockets.connect(WS_URL, additional_headers=headers) as ws:
+        print("Listening... (Ctrl+C to stop)")
+
+        async def send_audio():
+            try:
+                while True:
+                    data = stream.read(CHUNK_SIZE, exception_on_overflow=False)
+                    await ws.send(data)
+                    await asyncio.sleep(0.01)
+            except asyncio.CancelledError:
+                try:
+                    await ws.send(json.dumps({"type": "close_stream"}))
+                except websockets.exceptions.ConnectionClosed:
+                    pass
+
+        full_transcript = ""
+
+        async def receive_transcripts():
+            nonlocal full_transcript
+            async for message in ws:
+                result = json.loads(message)
+                prefix = ">> " if result.get("is_final") else ".. "
+                print(f"{prefix}{result.get('transcript', '')}", end="\r" if not result.get("is_final") else "\n")
+                if result.get("is_final"):
+                    full_transcript += result.get("transcript", "") or ""
+                if result.get("is_last"):
+                    return
+
+        send_task = asyncio.create_task(send_audio())
+        try:
+            await receive_transcripts()
+        except websockets.exceptions.ConnectionClosed:
+            pass
+        finally:
+            send_task.cancel()
+            stream.stop_stream()
+            stream.close()
+            audio.terminate()
+            print(f"\nFull Transcript: {full_transcript}")
+
+asyncio.run(transcribe_mic())
+```
+
+```javascript Browser (Web Audio API)
+const API_KEY = "your-api-key"; // In production, get this from your backend
+
+const params = new URLSearchParams({
+  language: "en",
+  encoding: "linear16",
+  sample_rate: "16000",
+});
+
+const ws = new WebSocket(
+  `wss://api.smallest.ai/waves/v1/pulse/get_text?${params}`,
+  ["Authorization", `Bearer ${API_KEY}`]
+);
+
+// Get microphone access
+const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+const audioContext = new AudioContext({ sampleRate: 16000 });
+const source = audioContext.createMediaStreamSource(stream);
+const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+source.connect(processor);
+processor.connect(audioContext.destination);
+
+processor.onaudioprocess = (e) => {
+  if (ws.readyState === WebSocket.OPEN) {
+    const float32 = e.inputBuffer.getChannelData(0);
+    const int16 = new Int16Array(float32.length);
+    for (let i = 0; i < float32.length; i++) {
+      int16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768));
+    }
+    ws.send(int16.buffer);
+  }
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  if (data.is_final) {
+    console.log("Final:", data.transcript);
+  } else {
+    console.log("Partial:", data.transcript);
+  }
+};
+```
+
+</CodeGroup>
+
+<Note>
+**Python**: Install PyAudio with `pip install pyaudio websockets`. On macOS, you may need `brew install portaudio` first.
+</Note>
+
+<Tip>
+**Full runnable source files:** [WebSocket](https://github.com/smallest-inc/cookbook/blob/main/speech-to-text/websocket-python.py) | [Microphone](https://github.com/smallest-inc/cookbook/blob/main/speech-to-text/mic-input-python.py)
+</Tip>
+
 ## Next Steps
 
-- Learn about [supported audio formats](/waves/documentation/speech-to-text/realtime/audio-formats) for WebSocket streaming.
-- Review complete [code examples](/waves/documentation/speech-to-text/realtime/code-examples) for Python, Node.js, and Browser JavaScript.
-- Follow [best practices](/waves/documentation/speech-to-text/realtime/best-practices) for optimal streaming performance.
-- Troubleshoot common issues in the [troubleshooting guide](/waves/documentation/speech-to-text/realtime/troubleshooting).
+- Learn about [supported audio formats](/waves/documentation/speech-to-text-pulse/realtime-web-socket/audio-formats) for WebSocket streaming.
+- Review complete [code examples](/waves/documentation/speech-to-text-pulse/realtime-web-socket/code-examples) for Python, Node.js, and Browser JavaScript.
+- Follow [best practices](/waves/documentation/speech-to-text-pulse/realtime-web-socket/best-practices) for optimal streaming performance.
+- Troubleshoot common issues in the [troubleshooting guide](/waves/documentation/speech-to-text-pulse/realtime-web-socket/troubleshooting).
 

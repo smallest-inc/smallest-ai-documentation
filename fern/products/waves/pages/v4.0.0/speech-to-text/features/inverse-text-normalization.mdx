@@ -94,8 +94,7 @@ The server responds with a final transcript that has `from_finalize: true`:
   "is_final": true,
   "is_last": false,
   "from_finalize": true,
-  "words": [...],
-  "full_transcript": "the total is $25."
+  "words": [...]
 }
 ```
 
@@ -106,10 +105,10 @@ If there are no pending tokens when you send finalize, you still get a response 
 To close the stream and flush remaining audio, send:
 
 ```json
-{ "type": "finalize" }
+{ "type": "close_stream" }
 ```
 
-This flushes any remaining audio, returns the final transcript with `is_last: true`, and closes the connection.
+This flushes any remaining audio, returns the final transcript with `is_last: true`, and closes the connection. `{ "type": "finalize" }` does **not** close the stream — it only forces an immediate `is_final=true` transcript while keeping the session open.
 
 ## Examples
 
@@ -268,8 +267,7 @@ When ITN is enabled, final responses contain the normalized transcript:
     { "word": "total", "start": 0.56, "end": 0.80, "confidence": 0.97 },
     { "word": "is", "start": 0.80, "end": 0.96, "confidence": 0.99 },
     { "word": "$25.", "start": 0.96, "end": 1.44, "confidence": 0.95 }
-  ],
-  "full_transcript": "the total is $25."
+  ]
 }
 ```
 

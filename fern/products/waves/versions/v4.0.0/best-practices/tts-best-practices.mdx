@@ -1,333 +1,542 @@
 ---
-title: "Text to Speech (TTS) - Best Practices"
-description: "Learn best practices for text formatting for optimal Audio Generation."
+title: "TTS Best Practices"
+description: "Voice-agent prompting patterns and text formatting rules that make AI agents sound natural through a text-to-speech engine."
 icon: "comment-dots"
 ---
 
-This comprehensive guide outlines the recommended practices for formatting text to ensure optimal processing, accuracy, and consistent output across different use cases. Following these guidelines will help improve the quality of generated audio and reduce potential errors.
+How input text is written controls how a voice agent sounds out loud. The first half of this guide covers prompting patterns (pauses, fillers, mid-thought corrections, energy matching). The second half ([Prompt Best Practices](#prompt-best-practices)) covers low-level text formatting for numbers, dates, mixed-language input, units, and symbols.
 
-## Language and Script Guidelines
+<Note>
+Write for the ear, not the eye. If text would look great in a document but sounds weird out loud, rewrite it.
+</Note>
 
-### Mixed Language Formatting
+## Pauses and pacing
 
-When working with mixed language content, particularly English and Hindi, proper script selection is crucial for accurate processing:
+Use punctuation deliberately to control rhythm. Each mark creates a different pause in TTS.
 
-- English text must be written in Latin script
-- Hindi text must be written in Devanagari script
-- Avoid transliteration of Hindi words into Latin script
+| Mark | When to use | Example |
+|---|---|---|
+| `...` | Thinking pause or beat before reacting. Place where you would trail off or hold a thought. | `"Hmm... okay yeah, I actually love that."` |
+| `—` | Mid-sentence redirect, course-correction, or interjection. | `"I was gonna say option A but — actually, hear me out on B."` |
+| `,` + conjunction | Micro-pause that sounds natural before *and*, *but*, *or*, *so*. | `"That's a solid choice, and honestly not many people think of it."` |
+| Short sentences | Hit harder in TTS. Break long thoughts into 2-3 punchy lines. | `"Okay so here's the thing. You have two real options. Neither is wrong."` |
 
-**Examples:**
+## What to avoid
+
+These patterns break the illusion of natural speech in a TTS engine.
+
+- **No parentheses.** TTS reads them awkwardly. Rewrite as a separate clause or sentence.
+- **No bullet points, numbered lists, or markdown.** A voice agent is speaking, not writing. Structure responses through sentence flow only.
+- **No back-to-back exclamation marks.** One per response max. Overuse sounds manic.
+- **No ALL CAPS for emphasis.** Use word choice and sentence structure to convey emphasis. Reserve caps for abbreviations.
+- **No consecutive sentences starting with the same word.** Sounds repetitive and mechanical out loud.
+
+## Speech fillers and conversational cues
+
+Fillers make a voice agent sound human. Place them where a real person would naturally pause, react, or think. Never scatter them randomly.
+
+### React fillers
+
+Use at the start of a response, before saying anything substantive.
+
+`"Oh wow..."`, `"Wait, really?"`, `"Oh nice nice..."`, `"Ahh okay okay..."`, `"Ooh..."`, `"Ha, love that."`, `"Oh man..."`, `"Yesss..."`, `"Oh that's fun..."`
+
+### Thinking fillers
+
+Use before a recommendation or when shifting gears.
+
+`"Umm..."`, `"Hmm..."`, `"So like..."`, `"Let me think..."`, `"Okay so..."`, `"I mean..."`, `"Right right..."`, `"Yeah so..."`
+
+### Transition fillers
+
+Use when pivoting to a question or moving the conversation forward.
+
+`"But yeah..."`, `"Anyway though..."`, `"So okay..."`, `"But honestly..."`, `"Point being..."`
+
+### Placement rules
+
+- Start most responses with a react filler. This is the single biggest thing that makes a voice agent feel alive.
+- Use one thinking filler per response, usually before the main point.
+- Use one transition filler when moving from a reaction to a follow-up question.
+- Aim for 2-4 fillers per response, spread naturally. Never cluster them together.
+
+## Mid-thought corrections
+
+This pattern makes a voice agent sound like a real person thinking out loud. Use it at least once every few responses. Start saying one thing, catch yourself, redirect.
+
+```text
+"I was gonna say [X] but — actually, [Y] makes way more sense for you."
+"Okay so maybe — wait no, let me think about this differently."
+"You could do [X], but honestly — I'd skip that and go straight to [Y]."
+"I mean it's fine, don't get me wrong, but — it's not like, the move, you know?"
+"At first I'd say [X] but — hmm, based on what you just said, [Y] though."
 ```
-✅ Correct: I want to eat खाना
-❌ Incorrect: I want to eat khana
 
-✅ Correct: मैं school जाता हूं
-❌ Incorrect: main school jata hun
+## Energy matching
+
+Read the user's energy from their first message and calibrate.
+
+| Energy | Approach | Example phrasing |
+|---|---|---|
+| Excited or hyped | Match it. Be enthusiastic. Lean into confident recommendations. No hedging. | `"yesss"`, `"okay now we're talking"`, `"oh you're gonna love this"` |
+| Unsure or exploring | Be gently confident. Guide without pressure. Reassure before listing options. | `"honestly you can't go wrong with..."`, `"I'd personally lean towards..."` |
+| Stressed or overwhelmed | Slow down. Shorter sentences. Calmer fillers. Give exactly one next step, not three options. | `"okay..."`, `"so here's the thing..."` |
+| Chatty or storytelling | Let them talk. React with enthusiasm. Ask follow-ups about their stories before pivoting. | Mirror their style. Don't rush to the point. |
+
+## Example responses
+
+### Good: natural, TTS-optimized
+
+```text
+"Ooh okay... so you're looking for something fast and easy. Say less.
+Umm — are you thinking like, totally hands-off where we handle everything?
+Or do you want to stay in the loop on the details?"
 ```
 
-### Proper Nouns Handling
-
-For Indian proper nouns, maintain cultural and linguistic accuracy by following these rules:
-
-1. **City Names:**
-   - Use Devanagari script for Indian city names
-   - Maintain Latin script for non-Indian city names
-
-2. **Personal Names:**
-   - Use Devanagari script for Indian personal names
-   - Maintain original script for non-Indian names
-
-**Examples:**
-```
-✅ Correct: I live in मुंबई near अंधेरी station
-❌ Incorrect: I live in Mumbai near Andheri station
-
-✅ Correct: Hello! अमित and रोहित are my friends from New York
-❌ Incorrect: Hello! Amit and Rohit are my friends from New York
-
-✅ Correct: Hello! मैं दिल्ली में रहता हूं। My name is John and my friend's name is श्याम।
-❌ Incorrect: Hello! Mai Delhi me rehta hun. My name is John and my friend's name is Shyam.
+```text
+"Oh nice nice... I actually love that direction. Hmm — I was gonna suggest the
+standard option but honestly, for what you're describing? The premium one.
+Like, it's built exactly for this kind of use case."
 ```
 
-## Text Chunking
+```text
+"Ahh yeah, I hear you. This stuff can feel like a lot sometimes.
+So okay — let's not overthink it. Tell me one thing... what's the main outcome
+you're trying to get here?"
+```
 
-### Character Limit Guidelines
+```text
+"Wait, really? You haven't tried that yet? Oh man... okay we need to fix that.
+But first — do you want something you can set up yourself, or would you rather
+we walk through it together?"
+```
 
-To optimize real-time processing and reduce latency, implement these chunking practices:
+### Bad: robotic, formal, unspeakable
 
-1. **Size Constraints:**
-   - Maximum chunk size: 250 characters
-   - Break at natural punctuation points
-   - Maintain sentence coherence when possible
+```text
+"That sounds wonderful! I'd recommend considering our premium option for your
+needs. It offers advanced features, excellent value, and a streamlined setup
+process. Would you like me to provide more details?"
+```
 
-2. **Breaking Points Priority:**
-   - First priority: Sentence-ending punctuation (., !, ?)
-   - Second priority: Other punctuation (;, :)
-   - Third priority: Natural word breaks
+```text
+"I understand you're looking for a solution. There are several options that
+might suit your preferences. Could you tell me more about what you're looking
+for?"
+```
 
-### Chunking Implementation
+## Hindi templates
 
-Use the following Python code for implementing text chunking:
-- For `lightning-large` model, set `max_chunk_size=140`.
-- For `lightning` model, set `max_chunk_size=250`. 
+Hindi TTS follows the same rules: react first, think out loud, keep sentences short. The fillers and correction patterns mirror the English set but use natural Hinglish phrasing that sounds real, not translated.
+
+<Note>
+Hinglish is the natural mix of Hindi and English used in everyday speech.
+</Note>
+
+### React fillers
+
+`"Ooh achha..."`, `"Arre waah..."`, `"Haan haan..."`, `"Sach mein?"`, `"Oh nice..."`, `"Arre yaar..."`, `"Woh toh sahi hai..."`, `"Bhai waah..."`
+
+### Thinking fillers
+
+`"Hmm..."`, `"Dekho..."`, `"Matlab..."`, `"Suno..."`, `"Thoda sochte hain..."`, `"Toh basically..."`, `"Acha toh..."`
+
+### Transition fillers
+
+`"Par haan..."`, `"Toh basically..."`, `"Baat yeh hai..."`, `"Waise..."`, `"Anyway..."`
+
+### Mid-thought correction templates
+
+```text
+"Main toh kehne wala tha [X] — par actually, [Y] zyada better rahega tumhare liye."
+"Suno, pehle laga ki [X] sahi hai — par ruko, thoda alag sochte hain."
+"[X] bhi kar sakte ho, but honestly — seedha [Y] pe jaana chahiye."
+"Bura nahi hai, bilkul — par yeh move nahi hai, samjhe?"
+"Pehle lagta tha [X] — but hmm, jo tumne abhi bataya, usse toh [Y] hi sahi hai."
+```
+
+### Good Hindi example responses
+
+```text
+"Arre waah... yeh toh ekdum solid idea hai. Hmm — main toh kehne wala tha pehla
+option, par actually tumhare liye? Doosra wala kaafi better hai. Matlab, exactly
+isi cheez ke liye bana hai."
+```
+
+```text
+"Haan haan... samajh aa gaya. Yeh sab thoda overwhelming lagta hai kabhi kabhi.
+Toh dekho — zyada complicated mat karo. Ek cheez batao... sabse pehle kya chahiye
+tumhe?"
+```
+
+```text
+"Sach mein? Abhi tak try nahi kiya? Arre yaar... okay yeh toh fix karna padega.
+Par pehle — khud set up karna chahoge, ya hum saath mein dekh lete hain?"
+```
+
+## Copy the full prompt
+
+Paste this into a voice agent's system prompt to apply every rule above.
+
+```markdown
+# TTS Formatting Rules
+
+These rules control how you sound when read aloud by a text-to-speech engine. Follow them exactly.
+
+**Pauses and pacing:**
+- Use `...` (ellipsis) for a thinking pause or a beat before reacting. Place it where you would naturally trail off or hold a thought. Example: "Hmm... okay yeah, I actually love that idea."
+- Use `—` (em-dash) for a mid-sentence redirect, a course-correction, or an interjection. Example: "I was gonna say option A but — actually, hear me out on B."
+- Use a comma before conjunctions to create a micro-pause that sounds natural. Example: "That's super cool, and honestly not a lot of people think to go there."
+- Short sentences hit harder in TTS. Break long thoughts into two or three punchy lines instead of one flowing sentence.
+
+**What to avoid:**
+- No parentheses. TTS reads them weird. Rewrite as a separate clause or sentence.
+- No bullet points, numbered lists, or markdown formatting in your responses. Ever. You are speaking, not writing.
+- No exclamation marks back-to-back. One per response max. Overuse sounds manic in TTS.
+- No ALL CAPS for emphasis. Use word choice and sentence structure to convey emphasis instead.
+- Avoid starting consecutive sentences with the same word.
+
+# Speech Fillers and Conversational Cues
+
+Fillers make you sound human. Use them deliberately at the right moments, not randomly scattered, but placed where a real person would naturally pause, react, or think.
+
+**Filler types and when to use them:**
+
+*React fillers* — Use at the start of a response to show you actually heard them before you say anything substantive:
+"Oh wow...", "Wait, really?", "Oh nice nice...", "Ahh okay okay...", "Ooh...", "Ha, love that.", "Oh man...", "Yesss...", "Oh that's fun..."
+
+*Thinking fillers* — Use before a recommendation or when shifting gears mid-thought:
+"Umm...", "Hmm...", "So like...", "Let me think...", "Okay so...", "I mean...", "Right right...", "Yeah so..."
+
+*Transition fillers* — Use when pivoting to your question or moving the conversation forward:
+"But yeah...", "Anyway though...", "So okay...", "But honestly...", "Point being..."
+
+**Placement rules:**
+- Start most responses with a react filler. This is the single biggest thing that makes a voice agent feel alive — reacting before responding.
+- Use one thinking filler per response, usually before your main point or recommendation.
+- Use one transition filler when moving from your reaction to your follow-up question.
+- Total: aim for 2-4 fillers per response, spread naturally. Never cluster them together.
+
+# Mid-Thought Corrections
+
+This is a key pattern that makes you sound like a real person thinking out loud. Use it at least once every few responses.
+
+**How it works:** Start saying one thing, then catch yourself and redirect.
+
+**Templates:**
+- "I was gonna say [X] but — actually, [Y] makes way more sense for you."
+- "Okay so maybe — wait no, let me think about this differently."
+- "You could do [X], but honestly — I'd skip that and go straight to [Y]."
+- "I mean it's nice, don't get me wrong, but — it is not like, the move, you know?"
+- "At first I'd say [X] but — hmm, based on what you just said, [Y] though."
+
+# Energy Matching
+
+Read their energy from their first message and calibrate yours accordingly.
+
+**They are excited or hyped:**
+- Match their energy. Be enthusiastic. Use words like "yesss", "oh you're gonna love this", "okay now we're talking".
+- Lean into confident recommendations. No hedging.
+
+**They are unsure or exploring:**
+- Be gently confident. Guide them without pressure.
+- Use reassuring phrases: "honestly you can't go wrong with...", "there's no bad choice here but...", "I'd personally lean towards..."
+
+**They are stressed or overwhelmed:**
+- Slow down. Shorter sentences. Calmer fillers like "okay..." and "so here's the thing..."
+- Give them exactly one next step. Not three options. One.
+
+**They are chatty or storytelling:**
+- Let them talk. React with enthusiasm. Ask follow-ups about their stories before pivoting to recommendations.
+- Mirror their conversational style.
+```
+
+---
+
+## Prompt best practices
+
+The rules above shape *how* a voice agent talks. The rules below shape *what* it pronounces correctly. They apply to any text sent to TTS, including LLM-generated responses, prompts you ship hard-coded, and dynamic data injected into responses.
+
+### Language and script
+
+Use the correct script per language. Avoid transliteration.
+
+- English in Latin script
+- Hindi in Devanagari script
+
+```text
+Correct:   I want to eat खाना
+Incorrect: I want to eat khana
+
+Correct:   मैं school जाता हूं
+Incorrect: main school jata hun
+```
+
+#### Proper nouns
+
+Use Devanagari for Indian city and personal names. Keep non-Indian names in their original script.
+
+```text
+Correct:   I live in मुंबई near अंधेरी station
+Incorrect: I live in Mumbai near Andheri station
+
+Correct:   Hello! अमित and रोहित are my friends from New York
+Incorrect: Hello! Amit and Rohit are my friends from New York
+
+Correct:   Hello! मैं दिल्ली में रहता हूं। My name is John and my friend's name is श्याम।
+Incorrect: Hello! Mai Delhi me rehta hun. My name is John and my friend's name is Shyam.
+```
+
+### Text chunking
+
+Break long input into chunks for low-latency, accurate output.
+
+- Maximum chunk size: 250 characters for `lightning`, 140 for `lightning-large`.
+- Break at sentence-ending punctuation first (`.`, `!`, `?`).
+- Then other punctuation (`;`, `:`).
+- Then natural word breaks.
 
 <CodeGroup>
 ```python python
 def chunk_text(text, max_chunk_size=250):
-    """
-    Chunks text with a maximum size of 250 characters, preferring to break at punctuation marks.
+    """Chunk text, preferring punctuation breaks.
 
-    - For `lightning-large` model, set `max_chunk_size=140`.
-    - For `lightning` model, set `max_chunk_size=250`. 
-    
-    Args:
-        text (str): Input text to be chunked
-        max_chunk_size (int): Maximum size of each chunk (default: 250)
-        
-    Returns:
-        list: List of text chunks
+    Use max_chunk_size=250 for the lightning model.
+    Use max_chunk_size=140 for the lightning-large model.
     """
     chunks = []
     while text:
         if len(text) <= max_chunk_size:
             chunks.append(text)
             break
-            
-        # Look for punctuation within the last 50 characters of the max chunk size
+
         chunk_end = max_chunk_size
-        punctuation_marks = '.,:;।!?'
-        
-        # Search backward from max_chunk_size for punctuation
+        punctuation_marks = ".,:;।!?"
+
         found_punct = False
         for i in range(chunk_end, max(chunk_end - 50, 0), -1):
             if i < len(text) and text[i] in punctuation_marks:
-                chunk_end = i + 1  # Include the punctuation mark
+                chunk_end = i + 1
                 found_punct = True
                 break
-        
-        # If no punctuation found, look for space
+
         if not found_punct:
             for i in range(chunk_end, max(chunk_end - 50, 0), -1):
                 if i < len(text) and text[i].isspace():
                     chunk_end = i
                     break
-            # If no space found, force break at max_chunk_size
-            if not found_punct and chunk_end == max_chunk_size:
-                chunk_end = max_chunk_size
-        
-        # Add chunk and remove it from original text
+
         chunks.append(text[:chunk_end].strip())
         text = text[chunk_end:].strip()
-    
+
     return chunks
+
+
+if __name__ == "__main__":
+    sample = (
+        "Your order, number 123456789012345, is confirmed for delivery on "
+        "12/02/2025 at 14:30. Please call 9988877766 if you need to reschedule."
+    )
+    for i, chunk in enumerate(chunk_text(sample), 1):
+        print(f"[{i}] {chunk}")
 ```
 </CodeGroup>
 
-## Handling numbers
+### Numbers
 
+#### Order IDs and large numbers
 
-### Order IDs and Large Numbers
+Send long digit strings as a separate request. Split the surrounding text around the number.
 
-When handling order IDs or large numbers:
-- Send them as separate requests
-- Split the text around the number
-
-**Example:**
-```
+```text
 Original: "Your order id is 123456789012345"
+
 Split into:
 1. "Your order id is"
 2. "123456789012345"
 ```
 
-### Phone Numbers
+#### Phone numbers
 
-#### Default Grouping
-- Numbers are automatically grouped in 3-4-3 format
-- Example: "9876543210" is read as "987-6543-210"
+Numbers default to a 3-4-3 grouping. `9876543210` reads as `987-6543-210`.
 
-#### Custom Formatting
-For specific reading patterns:
-- Format numbers explicitly in text
-- Write out the exact pronunciation desired
+For a specific reading pattern, write out the exact pronunciation.
 
-**Example:**
-```
-✅ Correct: "double nine triple eight double seven double six" (for 9988877766)
-❌ Incorrect: "9988877766" (if you want it read as "double nine...")
+```text
+Correct:   "double nine triple eight double seven double six" (for 9988877766)
+Incorrect: "9988877766" (if the agent should say "double nine...")
 ```
 
-## Date and Time Formatting Guidelines
+### Dates and time
 
-### Date Formats
-You may use any of the following formats when writing dates:
+#### Date formats
 
-1. DD/MM/YYYY → `12/02/2025` → "twelve, two, twenty twenty-five"
-2. DD-MM-YYYY → `12-02-2025` → "twelve, two, twenty twenty-five"
-3. DD Month YYYY → `12 February 2025` → "twelve February twenty twenty five"
-4. Month DD YYYY → `February 12th 2025` → "February, twelfth, twenty twenty-five"
-5. DD-MM-YY → `12-02-25` → "twelve, two, twenty-five"
-6. DD/MM/YY → `12/02/25` → "twelve, two, twenty-five"
+| Format | Example | Reads as |
+|---|---|---|
+| DD/MM/YYYY | `12/02/2025` | "twelve, two, twenty twenty-five" |
+| DD-MM-YYYY | `12-02-2025` | "twelve, two, twenty twenty-five" |
+| DD Month YYYY | `12 February 2025` | "twelve February twenty twenty-five" |
+| Month DD YYYY | `February 12th 2025` | "February, twelfth, twenty twenty-five" |
+| DD-MM-YY | `12-02-25` | "twelve, two, twenty-five" |
+| DD/MM/YY | `12/02/25` | "twelve, two, twenty-five" |
 
-> Note: Ordinal suffixes (st, nd, rd, th) could be used in dates.
+Ordinal suffixes (st, nd, rd, th) work in dates.
 
-```
-✅ My birthday is on 31/12/2002.  
-✅ The event is scheduled for 05th March 2024.  
-✅ We will launch the project on June 15 2023.  
-✅ The deadline is 30-06-24.  
+```text
+Correct:   My birthday is on 31/12/2002.
+Correct:   The event is scheduled for 05th March 2024.
+Correct:   We will launch the project on June 15 2023.
+Correct:   The deadline is 30-06-24.
 
-❌ 21st of June, 2003. (Will be read as twenty-first of June, two thousand and three)  
-❌ 12.02.2025. (Will be read as twelve two two thousand and twenty-five)  
-```
-
-### Time Formats
-You may use the following formats when specifying time:
-
-1. HH:MM:SS → `14:30:15` → "fourteen thirty fifteen"
-2. HH:MM → `14:30` → "fourteen thirty"
-
-```
-✅ Let's meet at 12:32 PM on 12/02/2025.  
-✅ The meeting starts at 09:45 AM.  
-✅ The match will begin at 18:00.  
-✅ The alarm is set for 07:15:30.  
-
-❌ 14.30 (Will be read as fourteen [long pause] thirty)  
-❌ 7'5 AM (Will be read as seven five) 
+Incorrect: 21st of June, 2003.   (Reads as "twenty-first of June, two thousand and three")
+Incorrect: 12.02.2025.           (Reads as "twelve two two thousand and twenty-five")
 ```
 
-## Mathematical Expressions
+#### Time formats
 
-Express mathematical operations in words for clarity. For complex mathematical expressions, break down into simpler components:
+| Format | Example | Reads as |
+|---|---|---|
+| HH:MM:SS | `14:30:15` | "fourteen thirty fifteen" |
+| HH:MM | `14:30` | "fourteen thirty" |
 
-```
-✅ Correct: two plus three equals five
-✅ Correct: 2 plus 3 equals 5
-❌ Incorrect: 2+3=5
+```text
+Correct:   Let's meet at 12:32 PM on 12/02/2025.
+Correct:   The meeting starts at 09:45 AM.
+Correct:   The match will begin at 18:00.
+Correct:   The alarm is set for 07:15:30.
 
-✅ Correct: ten minus three equals seven
-✅ Correct: 10 minus 3 equals 7
-❌ Incorrect: 10-3=7
-
-✅ Correct: five multiplied by three equals fifteen
-✅ Correct: 5 multiplied by 3 equals 15
-❌ Incorrect: 5x3=15, 5*3=15
-
-✅ Correct: ten divided by two equals five
-✅ Correct: 10 divided by 2 equals 5
-❌ Incorrect: 10/2=5, 10÷5=2
-
-✅ Correct: open parentheses five plus three close parentheses multiplied by two equals sixteen
-✅ Correct: open parentheses 5 plus 3 close parentheses multiplied by 2 equals 16
-❌ Incorrect: (5+3)*2=16
-
-✅ Correct: square root of sixteen equals four
-✅ Correct: square root of 16 equals 4
-❌ Incorrect: √16=4
+Incorrect: 14.30   (Reads as "fourteen [long pause] thirty")
+Incorrect: 7'5 AM  (Reads as "seven five")
 ```
 
-## Approximate Values
+### Mathematical expressions
 
-When expressing approximate values:
-- Write out the full words
-- Avoid using symbols for approximation
-- Be explicit about the approximation
+Spell out operations. For complex expressions, break into simpler parts.
 
-**Examples:**
-```
-✅ Correct: Your delivery will arrive in approximately twenty minutes
-✅ Correct: Your delivery will arrive in approximately 20 minutes
-❌ Incorrect: Your delivery will arrive in ~20 mins
+```text
+Correct:   two plus three equals five
+Correct:   2 plus 3 equals 5
+Incorrect: 2+3=5
 
-✅ Correct: around five hundred people attended
-✅ Correct: around 500 people attended
-❌ Incorrect: ~500 people attended
-```
+Correct:   ten minus three equals seven
+Correct:   10 minus 3 equals 7
+Incorrect: 10-3=7
 
-## Units and Measurements
+Correct:   five multiplied by three equals fifteen
+Correct:   5 multiplied by 3 equals 15
+Incorrect: 5x3=15, 5*3=15
 
+Correct:   ten divided by two equals five
+Correct:   10 divided by 2 equals 5
+Incorrect: 10/2=5, 10÷5=2
 
-When expressing measurements, write out the units in full words to ensure clear understanding:
+Correct:   open parentheses five plus three close parentheses multiplied by two equals sixteen
+Correct:   open parentheses 5 plus 3 close parentheses multiplied by 2 equals 16
+Incorrect: (5+3)*2=16
 
-```
-✅ Correct: five kilometers, 5 kilometers
-❌ Incorrect: 5km, 5 kms
-
-✅ Correct: twenty kilograms of rice, 20 kilograms of rice
-❌ Incorrect: 20kg rice, 20kgs rice
-
-✅ Correct: thirty degrees Celsius, 30 degrees Celsius
-❌ Incorrect: 30°C, 30 C
-
-✅ Correct: two liters of water, 2 liters of water
-❌ Incorrect: 2L water, 2l water
-
-✅ Correct: five feet six inches tall, 5 feet 6 inches tall
-❌ Incorrect: 5'6" tall, 5ft 6in tall
+Correct:   square root of sixteen equals four
+Correct:   square root of 16 equals 4
+Incorrect: √16=4
 ```
 
-## Symbols and Special Characters
+### Approximate values
 
-### Basic Symbols
-Spell out special characters and symbols in all contexts:
-```
-. → "dot"
-@ → "at"
-_ → "underscore"
-- → "dash"
-/ → "forward slash"
-# → "hashtag"
-& → "and"
-```
+Write out the full word. Avoid approximation symbols.
 
-### Digital Content Formatting
+```text
+Correct:   Your delivery will arrive in approximately twenty minutes
+Correct:   Your delivery will arrive in approximately 20 minutes
+Incorrect: Your delivery will arrive in ~20 mins
 
-**1. URLs:**
-```
-✅ Correct: visit docs dot example dot com forward slash guide
-❌ Incorrect: visit docs.example.com/guide
-
-✅ Correct: my dash website dot com forward slash about
-❌ Incorrect: my-website.com/about
+Correct:   around five hundred people attended
+Correct:   around 500 people attended
+Incorrect: ~500 people attended
 ```
 
-**2. Email Addresses:**
-```
-✅ Correct: support dot company at gmail dot com
-❌ Incorrect: support.company@gmail.com
+### Units and measurements
 
-✅ Correct: info underscore help at company dot com
-❌ Incorrect: info_help@company.com
-```
+Write out units in full.
 
-**3. Social Media:**
-```
-✅ Correct: at company underscore name
-❌ Incorrect: @company_name
+```text
+Correct:   five kilometers, 5 kilometers
+Incorrect: 5km, 5 kms
 
-✅ Correct: hashtag trending now
-❌ Incorrect: #TrendingNow
+Correct:   twenty kilograms of rice, 20 kilograms of rice
+Incorrect: 20kg rice, 20kgs rice
 
-✅ Correct: follow us at tech underscore company hashtag latest news
-❌ Incorrect: follow us @tech_company #LatestNews
-```
+Correct:   thirty degrees Celsius, 30 degrees Celsius
+Incorrect: 30°C, 30 C
 
-### Range and Interval Notation
-Always write out ranges and relationships explicitly to avoid ambiguity:
-```
-✅ Correct: five to eight days
-❌ Incorrect: 5-8 days
+Correct:   two liters of water, 2 liters of water
+Incorrect: 2L water, 2l water
 
-✅ Correct: between ten and fifteen minutes
-❌ Incorrect: 10-15 minutes
-
-✅ Correct: temperatures from twenty to thirty degrees
-❌ Incorrect: temperatures 20-30°
+Correct:   five feet six inches tall, 5 feet 6 inches tall
+Incorrect: 5'6" tall, 5ft 6in tall
 ```
 
-Note:
-- Consistency is key - use the same format throughout your content
-- When in doubt, write out the full words
-- For complex URLs or handles, break them into smaller, manageable chunks
-- Avoid using symbols that could have multiple interpretations
+### Symbols and special characters
+
+Spell out special characters in any context.
+
+| Symbol | Spoken |
+|---|---|
+| `.` | dot |
+| `@` | at |
+| `_` | underscore |
+| `-` | dash |
+| `/` | forward slash |
+| `#` | hashtag |
+| `&` | and |
+
+#### URLs
+
+```text
+Correct:   visit docs dot example dot com forward slash guide
+Incorrect: visit docs.example.com/guide
+
+Correct:   my dash website dot com forward slash about
+Incorrect: my-website.com/about
+```
+
+#### Email addresses
+
+```text
+Correct:   support dot company at gmail dot com
+Incorrect: support.company@gmail.com
+
+Correct:   info underscore help at company dot com
+Incorrect: info_help@company.com
+```
+
+#### Social media handles and tags
+
+```text
+Correct:   at company underscore name
+Incorrect: @company_name
+
+Correct:   hashtag trending now
+Incorrect: #TrendingNow
+
+Correct:   follow us at tech underscore company hashtag latest news
+Incorrect: follow us @tech_company #LatestNews
+```
+
+#### Ranges and intervals
+
+```text
+Correct:   five to eight days
+Incorrect: 5-8 days
+
+Correct:   between ten and fifteen minutes
+Incorrect: 10-15 minutes
+
+Correct:   temperatures from twenty to thirty degrees
+Incorrect: temperatures 20-30°
+```
+
+### Quick reference
+
+- Stay consistent. Use the same format throughout the prompt.
+- Spell things out when in doubt.
+- Break long URLs and handles into smaller chunks.
+- Avoid symbols that have multiple interpretations.
