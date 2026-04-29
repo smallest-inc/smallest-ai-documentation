@@ -202,7 +202,12 @@ The server responds with JSON messages containing transcription results:
 
 ## Code Example
 
-This Python example connects to the WebSocket, streams a sample WAV file, and prints partial and final transcripts. Set `SMALLEST_API_KEY` and run end-to-end with `pip install websockets requests`.
+This Python example connects to the WebSocket, streams a feature-rich demo WAV (contact details, a card number, a date and time, and a brand name), and prints partial and final transcripts. Set `SMALLEST_API_KEY` and run end-to-end with `pip install websockets requests`.
+
+<audio controls style={{ width: '100%', maxWidth: '500px', marginBottom: '16px' }}>
+  <source src="../../audio/pulse-feature-demo.wav" type="audio/wav" />
+  Your browser does not support the audio element.
+</audio>
 
 <CodeGroup>
 ```python python
@@ -216,14 +221,18 @@ import websockets
 
 BASE_WS_URL = "wss://api.smallest.ai/waves/v1/pulse/get_text"
 SAMPLE_URL = (
-    "https://github.com/smallest-inc/cookbook/raw/main/"
-    "speech-to-text/getting-started/samples/audio.wav"
+    "https://github.com/smallest-inc/smallest-ai-documentation/raw/main/"
+    "fern/products/waves/pages/audio/pulse-feature-demo.wav"
 )
 
 params = {
     "language": "en",          # set explicitly for best accuracy; use "multi-eu" for unknown European-language audio
     "encoding": "linear16",
     "sample_rate": "24000",    # must match the source audio sample rate
+    "redact_pii": "true",      # mask names, addresses, phone numbers in the transcript
+    "redact_pci": "true",      # mask credit-card / CVV / account numbers
+    "itn_normalize": "true",   # convert spoken dates, times, currency to written form
+    "keywords": "NVIDIA:5",    # boost a brand name the model might otherwise miss
 }
 WS_URL = f"{BASE_WS_URL}?{urlencode(params)}"
 
