@@ -28,7 +28,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Python dependencies
-        run: pip install requests websockets
+        run: pip install requests websockets smallestai aiofiles
 
       # ─── TTS Tests ───
       # Waves lightning-v3.1 occasionally returns a transient 503 under load.
@@ -208,6 +208,20 @@ jobs:
             fern/products/waves/pages/v4.0.0/api-references/pulse-stt-ws.mdx \
             fern/products/waves/pages/v4.0.0/speech-to-text/realtime/quickstart.mdx \
             fern/products/waves/pages/v4.0.0/speech-to-text/realtime/code-examples.mdx
+        env:
+          SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
+
+      # Phase 2 of docs-launch/snippets-overhaul.md — same harness for the
+      # Lightning TTS pages. Runs the synchronous + SSE + WebSocket samples
+      # plus the SDK-based variants. Fragment-only blocks are tagged
+      # `# ci:skip` inside the snippet itself so they stay in the docs as
+      # documentation fragments while opting out of execution.
+      - name: "TTS: Embedded Python snippets (extract-and-run)"
+        run: |
+          python3 scripts/run_doc_python_snippets.py \
+            fern/products/waves/pages/v4.0.0/text-to-speech/quickstart.mdx \
+            fern/products/waves/pages/v4.0.0/text-to-speech/how-to-tts.mdx \
+            fern/products/waves/pages/v4.0.0/text-to-speech/stream-tts.mdx
         env:
           SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
 

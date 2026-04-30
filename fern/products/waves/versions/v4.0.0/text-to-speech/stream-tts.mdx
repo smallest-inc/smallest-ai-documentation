@@ -1,98 +1,295 @@
 ---
-title: "How to use Streaming Text to Speech (TTS) with websockets"
-description: "Learn how to convert text to speech with real-time streaming synthesis."
+title: "Streaming"
+sidebarTitle: "Streaming"
+description: "Stream TTS audio in real-time via WebSocket or SSE — first chunk in ~100ms."
 icon: "bars-staggered"
----  
+---
 
-## Real-time Text to Speech Synthesis
+Streaming TTS delivers audio chunks as they're generated — playback starts immediately instead of waiting for the full file. First chunk arrives in ~100ms.
 
-The `WavesStreamingTTS` class provides high-performance text-to-speech conversion with configurable streaming parameters. This implementation is optimized for low-latency applications where immediate audio feedback is critical, such as voice assistants, live narration, or interactive applications.
+**Streamed audio output:**
 
-### Configuration Setup
+<audio controls style={{ width: '100%', maxWidth: '500px' }}>
+  <source src="../../audio/tts-sample-hello.wav" type="audio/wav" />
+  Your browser does not support the audio element.
+</audio>
 
-The streaming TTS system uses a `TTSConfig` object to manage synthesis parameters:
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as Lightning TTS
+    Note over Client,API: Synchronous — wait for full audio
+    Client->>API: POST /get_speech
+    API-->>Client: Generating...
+    API->>Client: Complete audio file
 
-```python
+    Note over Client,API: Streaming — chunks as generated
+    Client->>API: Connect WebSocket
+    API->>Client: Chunk 1 (~100ms)
+    Note right of Client: Start playback
+    API->>Client: Chunk 2
+    API->>Client: Chunk 3
+    API->>Client: ...
+    API->>Client: Complete
+```
+
+## WebSocket Streaming
+
+Persistent connections for continuous, low-latency audio. Best for conversational AI and real-time apps.
+
+**Endpoint:** `wss://api.smallest.ai/waves/v1/lightning-v3.1/get_speech/stream`
+
+<CodeGroup>
+
+```python Python
+import asyncio
+import json
+import base64
+import wave
+import os
+import websockets
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+WS_URL = "wss://api.smallest.ai/waves/v1/lightning-v3.1/get_speech/stream"
+
+async def stream_tts(text):
+    audio_chunks = []
+
+    async with websockets.connect(
+        WS_URL,
+        additional_headers={"Authorization": f"Bearer {API_KEY}"},
+    ) as ws:
+        await ws.send(json.dumps({
+            "text": text,
+            "voice_id": "magnus",
+            "sample_rate": 24000,
+        }))
+
+        while True:
+            response = await ws.recv()
+            data = json.loads(response)
+
+            if data["status"] == "chunk":
+                audio = base64.b64decode(data["data"]["audio"])
+                audio_chunks.append(audio)
+            elif data["status"] == "complete":
+                break
+
+    # Save as WAV
+    raw = b"".join(audio_chunks)
+    with wave.open("streamed.wav", "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(24000)
+        wf.writeframes(raw)
+
+    print(f"Saved streamed.wav ({len(audio_chunks)} chunks)")
+
+asyncio.run(stream_tts("Streaming delivers audio in real-time for voice assistants and chatbots."))
+```
+
+```javascript JavaScript
+const WebSocket = require("ws");
+const fs = require("fs");
+
+const API_KEY = process.env.SMALLEST_API_KEY;
+
+const ws = new WebSocket(
+  "wss://api.smallest.ai/waves/v1/lightning-v3.1/get_speech/stream",
+  { headers: { Authorization: `Bearer ${API_KEY}` } }
+);
+
+const audioChunks = [];
+
+ws.on("open", () => {
+  ws.send(JSON.stringify({
+    text: "Streaming delivers audio in real-time for voice assistants and chatbots.",
+    voice_id: "magnus",
+    sample_rate: 24000,
+  }));
+});
+
+ws.on("message", (raw) => {
+  const data = JSON.parse(raw);
+
+  if (data.status === "chunk") {
+    audioChunks.push(Buffer.from(data.data.audio, "base64"));
+  } else if (data.status === "complete") {
+    const audio = Buffer.concat(audioChunks);
+    // Add WAV header and save
+    fs.writeFileSync("streamed.pcm", audio);
+    console.log(`Saved streamed.pcm (${audioChunks.length} chunks)`);
+    ws.close();
+  }
+});
+```
+
+```python Python SDK
+import os
+import wave
 from smallestai.waves import TTSConfig, WavesStreamingTTS
 
 config = TTSConfig(
-    voice_id="aditi",
-    api_key="YOUR_SMALLEST_API_KEY", 
+    voice_id="magnus",
+    api_key=os.environ["SMALLEST_API_KEY"],
     sample_rate=24000,
     speed=1.0,
-    max_buffer_flush_ms=100
+    max_buffer_flush_ms=100,
 )
 
 streaming_tts = WavesStreamingTTS(config)
+
+text = "Streaming delivers audio in real-time for voice assistants and chatbots."
+audio_chunks = list(streaming_tts.synthesize(text))
+
+with wave.open("streamed.wav", "wb") as wf:
+    wf.setnchannels(1)
+    wf.setsampwidth(2)
+    wf.setframerate(24000)
+    wf.writeframes(b"".join(audio_chunks))
 ```
 
-### Basic Text Synthesis
+</CodeGroup>
 
-For straightforward text-to-speech conversion, use the `synthesize` method:
+## SSE Streaming
 
-```python
-text = "Hello world, this is a test of the Smallest AI streaming TTS SDK."
+Server-Sent Events over HTTP — simpler to set up, no persistent connection needed.
+
+**Endpoint:** `POST https://api.smallest.ai/waves/v1/lightning-v3.1/stream`
+
+<CodeGroup>
+
+```python Python
+import os
+import json
+import base64
+import wave
+import requests
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+
+response = requests.post(
+    "https://api.smallest.ai/waves/v1/lightning-v3.1/stream",
+    headers={
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+    },
+    json={
+        "text": "SSE streaming is simpler to set up than WebSocket.",
+        "voice_id": "magnus",
+        "sample_rate": 24000,
+    },
+    stream=True,
+)
+
 audio_chunks = []
+for line in response.iter_lines():
+    if not line:
+        continue
+    line = line.decode()
+    if not line.startswith("data: "):
+        continue
 
-for chunk in streaming_tts.synthesize(text):
-    audio_chunks.append(chunk)
+    data = json.loads(line[6:])
+    if data["status"] == "chunk":
+        audio_chunks.append(base64.b64decode(data["data"]["audio"]))
+    elif data["status"] == "complete":
+        break
+
+raw = b"".join(audio_chunks)
+with wave.open("sse_output.wav", "wb") as wf:
+    wf.setnchannels(1)
+    wf.setsampwidth(2)
+    wf.setframerate(24000)
+    wf.writeframes(raw)
 ```
 
-### Streaming Text Input
+```bash cURL
+curl -N -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/stream" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{
+    "text": "SSE streaming is simpler to set up than WebSocket.",
+    "voice_id": "magnus",
+    "sample_rate": 24000
+  }'
+```
 
-For real-time applications where text arrives incrementally, use `synthesize_streaming`:
+</CodeGroup>
+
+## Streaming Text Input (SDK)
+
+For real-time applications where text arrives incrementally (e.g., from an LLM), the SDK supports streaming text input:
 
 ```python
+import os
+from smallestai.waves import TTSConfig, WavesStreamingTTS
+
+config = TTSConfig(voice_id="magnus", api_key=os.environ["SMALLEST_API_KEY"], sample_rate=24000)
+streaming_tts = WavesStreamingTTS(config)
+
 def text_stream():
-    text = "Streaming synthesis with chunked text input for Smallest SDK."
+    """Simulates text arriving word by word (e.g., from an LLM)."""
+    text = "Streaming synthesis with chunked text input."
     for word in text.split():
         yield word + " "
 
 audio_chunks = []
 for chunk in streaming_tts.synthesize_streaming(text_stream()):
     audio_chunks.append(chunk)
+    # In a real app, play each chunk immediately
 ```
 
-### Saving Audio to WAV File
+## WebSocket vs SSE
 
-Convert the raw PCM audio chunks to a standard WAV file:
+| | WebSocket | SSE |
+|---|---|---|
+| **Connection** | Persistent, bidirectional | New HTTP request each time |
+| **Multiple messages** | Reuse same connection | New request per message |
+| **Best for** | Voice assistants, chatbots | Simple one-off streaming |
+| **Latency** | Lowest (no reconnect overhead) | Slightly higher |
+| **Concurrency** | Up to 5 connections per unit | Per-request |
 
-```python
-import wave
-from io import BytesIO
+<Tip>
+Use **WebSocket** when sending multiple TTS requests over time (conversations, voice bots). Use **SSE** for simple one-shot streaming where you don't need a persistent connection.
+</Tip>
 
-def save_audio_chunks_to_wav(audio_chunks, filename="output.wav"):
-    with wave.open(filename, 'wb') as wf:
-        wf.setnchannels(1)        # Mono
-        wf.setsampwidth(2)        # 16-bit
-        wf.setframerate(24000)    # 24kHz
-        wf.writeframes(b''.join(audio_chunks))
+## Response Format
 
-text = "Your text to synthesize here."
-audio_chunks = list(streaming_tts.synthesize(text))
-save_audio_chunks_to_wav(audio_chunks, "speech_output.wav")
+Each WebSocket/SSE message is JSON:
+
+**Audio chunk:**
+```json
+{
+  "status": "chunk",
+  "data": { "audio": "base64_encoded_pcm_data" }
+}
 ```
 
+**Stream complete:**
+```json
+{
+  "status": "complete",
+  "message": "All chunks sent",
+  "done": true
+}
+```
 
-### Configuration Parameters
+## Configuration Parameters
 
-- **`voice_id`**: Voice identifier (e.g., "aditi", "male-1", "female-2")
-- **`api_key`**: Your Smallest AI API key
-- **`language`**: Language code for text normalization (e.g., how numbers, dates, and abbreviations are spelled out). Set to "auto" for automatic language detection, or specify a language code (default: "auto")
-- **`sample_rate`**: Audio sample rate in Hz (default: 24000)
-- **`speed`**: Speech speed multiplier (default: 1.0 - normal speed, 0.5 = half speed, 2.0 = double speed)
-- **`consistency`**: Voice consistency parameter (default: 0.5, range: 0.0-1.0)
-- **`enhancement`**: Audio enhancement level (default: 1)
-- **`similarity`**: Voice similarity parameter (default: 0, range: 0.0-1.0)  
-- **`max_buffer_flush_ms`**: Maximum buffer time in milliseconds before forcing audio output (default: 0)
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `voice_id` | *required* | Voice identifier |
+| `sample_rate` | `44100` | Audio sample rate (8000–44100 Hz) |
+| `speed` | `1.0` | Speech speed (0.5–2.0) |
+| `language` | `auto` | Language code |
+| `output_format` | `pcm` | `pcm`, `mp3`, `wav`, or `mulaw` |
 
-### Output Format
+For concurrency limits and connection management, see [Concurrency and Limits](/waves/api-reference/api-references/concurrency-and-limits).
 
-The streaming TTS returns raw PCM audio data as bytes objects. Each chunk represents a portion of the synthesized audio that can be:
 
-- Played directly through audio hardware
-- Saved to audio files (WAV, MP3, etc.)
-- Streamed over network protocols
-- Processed with additional audio effects
-
-The raw format ensures minimal latency and maximum flexibility for real-time applications where immediate audio feedback is essential.
+<Tip>
+**Full runnable source:** [streaming-python.py](https://github.com/smallest-inc/cookbook/blob/main/text-to-speech/streaming-python.py)
+</Tip>
