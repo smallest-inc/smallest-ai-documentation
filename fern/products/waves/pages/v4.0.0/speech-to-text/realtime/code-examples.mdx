@@ -35,34 +35,37 @@ import asyncio
 import websockets
 import json
 import os
-import pathlib
+import requests
 from urllib.parse import urlencode
 
 BASE_WS_URL = "wss://api.smallest.ai/waves/v1/pulse/get_text"
+SAMPLE_URL = (
+    "https://github.com/smallest-inc/cookbook/raw/main/"
+    "speech-to-text/getting-started/samples/audio.wav"
+)
 params = {
     "language": "en",
     "encoding": "linear16",
-    "sample_rate": "16000",
-    "word_timestamps": "true"
+    "sample_rate": "24000",   # must match the source audio sample rate
+    "word_timestamps": "true",
 }
 WS_URL = f"{BASE_WS_URL}?{urlencode(params)}"
 
-API_KEY = os.getenv("SMALLEST_API_KEY")
-AUDIO_FILE = "path/to/audio.wav"
+API_KEY = os.environ["SMALLEST_API_KEY"]
+
 
 async def stream_audio():
-    headers = {
-        "Authorization": f"Bearer {API_KEY}"
-    }
+    headers = {"Authorization": f"Bearer {API_KEY}"}
 
     async with websockets.connect(WS_URL, additional_headers=headers) as ws:
         print("Connected to STT WebSocket")
 
-        audio_bytes = pathlib.Path(AUDIO_FILE).read_bytes()
+        # Download sample audio (or replace with your own bytes)
+        audio_bytes = requests.get(SAMPLE_URL).content
         chunk_size = 4096
         offset = 0
 
-        print(f"Streaming {len(audio_bytes)} bytes from {os.path.basename(AUDIO_FILE)}")
+        print(f"Streaming {len(audio_bytes)} bytes")
 
         async def send_chunks():
             nonlocal offset
