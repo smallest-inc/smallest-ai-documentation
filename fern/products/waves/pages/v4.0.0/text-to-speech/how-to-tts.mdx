@@ -1,11 +1,11 @@
 ---
 title: "Sync & Async Synthesis"
 sidebarTitle: "Sync & Async"
-description: "Generate speech synchronously or concurrently — REST API and SDK examples."
+description: "Generate speech synchronously or concurrently — REST API examples."
 icon: "wave-square"
 ---
 
-Generate speech via the REST API or Python SDK — synchronously (one request, complete audio) or asynchronously (multiple requests in parallel).
+Generate speech via the REST API — synchronously (one request, complete audio) or asynchronously (multiple requests in parallel).
 
 **Sample output (sync, voice: magnus):**
 
@@ -17,7 +17,7 @@ Generate speech via the REST API or Python SDK — synchronously (one request, c
 ## Requirements
 
 - An API key from the [Smallest AI Console](https://app.smallest.ai/dashboard/api-keys?utm_source=documentation&utm_medium=text-to-speech)
-- For Python: `requests` (or `smallestai` for the SDK)
+- For Python: `requests`
 - For JavaScript: Node.js 18+ (built-in `fetch`)
 
 ```bash
@@ -90,18 +90,6 @@ const buffer = Buffer.from(await response.arrayBuffer());
 fs.writeFileSync("sync_output.wav", buffer);
 ```
 
-```python Python SDK
-import os
-from smallestai.waves import WavesClient
-
-client = WavesClient(api_key=os.environ["SMALLEST_API_KEY"])
-audio = client.synthesize(
-    "Hello, this is a test of synchronous speech synthesis.",
-)
-with open("sync_output.wav", "wb") as f:
-    f.write(audio)
-```
-
 </CodeGroup>
 
 ## Asynchronous Text to Speech
@@ -144,25 +132,11 @@ async def main():
 asyncio.run(main())
 ```
 
-```python Python SDK
-import asyncio
-import os
-import aiofiles
-from smallestai.waves import AsyncWavesClient
-
-async def main():
-    client = AsyncWavesClient(api_key=os.environ["SMALLEST_API_KEY"])
-    async with client as tts:
-        audio_bytes = await tts.synthesize(
-            "Hello, this is a test of the async synthesis function."
-        )
-        async with aiofiles.open("async_output.wav", "wb") as f:
-            await f.write(audio_bytes)
-
-asyncio.run(main())
-```
-
 </CodeGroup>
+
+<Note>
+The `smallestai` Python SDK's `WavesClient` and `AsyncWavesClient` synthesis methods are being updated. Use the `requests` / `aiohttp` examples above until the next SDK release. (Streaming synthesis via `WavesStreamingTTS` works — see [Streaming TTS](./stream-tts).)
+</Note>
 
 ## Parameters
 
