@@ -96,6 +96,35 @@ If the spec change is not customer-visible (description-only edit, internal refa
 2. Run `python3 scripts/check_links.py path/to/changed.mdx` (HEAD-verifies every internal link against docs.smallest.ai).
 3. Re-read the commit subject. If over 72 characters, trim.
 
+## Keeping the cookbook in sync
+
+The `smallest-inc/cookbook` repo holds the runnable end-to-end samples
+that this docs repo links to and embeds via URL (audio fixtures, full
+SDK demos, integration recipes). If a docs change affects API surface
+that the cookbook also demonstrates, both repos must move together —
+otherwise readers hit a broken cookbook script the moment they follow
+a "Full runnable source files:" link from a quickstart.
+
+**When to update the cookbook alongside a docs PR:**
+
+- Adding, removing, or renaming a parameter on a Pulse STT / Lightning TTS endpoint.
+- Changing default behavior (e.g., `language` default, `format=false` cascade).
+- Changing protocol shape (e.g., `finalize` vs `close_stream` for end-of-stream).
+- Renaming or moving an audio fixture under `speech-to-text/getting-started/samples/`.
+
+**Process:**
+
+1. Open the docs PR.
+2. In the same hour, open the cookbook PR — same commit subject prefix (`fix(stt):`, `feat(tts):`, etc.) so the pair is searchable.
+3. Cross-link both PRs in their bodies (`Companion: smallest-inc/cookbook#NN` / `Companion: smallest-inc/smallest-ai-documentation#NN`).
+4. Merge cookbook first. Cookbook's `test-docs-snippets.yml` runs the samples against the live API on every PR; if it can't pass, the docs PR is misaligned with reality and shouldn't merge either.
+
+**Fail-safes if the pair drifts anyway:**
+
+- The docs repo's `test-quickstarts.yml` runs `scripts/run_doc_python_snippets.py` against the live API on every PR that touches v4 STT MDX. Stale embedded snippets fail the build.
+- The cookbook's `test-docs-snippets.yml` exercises `transcribe-python.py` and `websocket-python.py` end-to-end on every PR + a weekly Monday cron. The Slack webhook in that workflow fires on failure.
+- Both safety nets can catch one-side drift, but the *paired-PR* convention above is what keeps the time-to-detection close to zero.
+
 ## When in doubt
 
 Existing MDX in the same product tab is the best style reference. Match its register and depth. When the primary product brand naming differs from internal engineering names, use the customer-facing term (for example, "TTS Lightning v3.1", not the internal "Waves" label in prose).
