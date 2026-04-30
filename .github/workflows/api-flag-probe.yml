@@ -51,7 +51,7 @@ jobs:
           set -e
           case "$DIFF_RC" in
             0) echo "diff_found=false" >> "$GITHUB_OUTPUT"; echo "✅ No behavior change vs baseline." ;;
-            1) echo "diff_found=true"  >> "$GITHUB_OUTPUT"; echo "⚠️ Diffs detected — see job summary." ;;
+            1) echo "diff_found=true"  >> "$GITHUB_OUTPUT"; echo "⚠️ Diffs detected — running classifier." ;;
             *) echo "diff_found=error" >> "$GITHUB_OUTPUT"; echo "❌ diff.py failed with code $DIFF_RC"; exit $DIFF_RC ;;
           esac
 
@@ -70,42 +70,73 @@ jobs:
           path: /tmp/live-pulse-stt.json
           retention-days: 30
 
-      - name: Build Slack payload (only when diff found)
+      # ─── AI classifier ───
+      # Reads the diff markdown and asks Claude whether it matches one of
+      # the team's NEWSWORTHY criteria (PR #116 British flags wired,
+      # format=false→ITN cascade, etc.) or it's just NOISE
+      # (test-clip variance, lang-detection wobble, ITN-token drift).
+      #
+      # Result drives the Slack step below: only NEWSWORTHY pings the
+      # team. NOISE/NONE keeps the workflow silent — the diff is still
+      # in the job summary + artifact for anyone curious.
+
+      - name: Classify diff (Claude)
         if: steps.probe.outputs.diff_found == 'true'
+        id: classify
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          # Slack expects JSON; embed the markdown report as the text body.
-          # Truncated to 2900 chars to fit Slack's 3000-char text limit
-          # with margin for the wrapper.
-          REPORT=$(head -c 2900 /tmp/diff-report.md)
+          touch /tmp/diff-tts-report.md   # placeholder until TTS probe lands
+          python3 scripts/probes/classify.py \
+            --stt-diff /tmp/diff-report.md \
+            --tts-diff /tmp/diff-tts-report.md \
+            --out-json /tmp/classification.json \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          VERDICT=$(jq -r '.verdict' /tmp/classification.json)
+          echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
+          echo "classifier verdict: $VERDICT"
+          {
+            echo ""
+            echo "---"
+            echo ""
+            echo "## Classifier verdict: \`$VERDICT\`"
+            echo ""
+            jq -r '.summary' /tmp/classification.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build Slack payload (newsworthy only)
+        if: steps.classify.outputs.verdict == 'NEWSWORTHY'
+        run: |
+          SUMMARY=$(jq -r '.summary' /tmp/classification.json)
+          SIGNALS=$(jq -r '.newsworthy_signals | map("• " + .) | join("\n")' /tmp/classification.json)
+          FILES=$(jq -r '.doc_files_to_audit | map("• `" + . + "`") | join("\n")' /tmp/classification.json)
+          # Truncate report to fit Slack's 3000-char text limit with margin.
+          REPORT=$(head -c 2200 /tmp/diff-report.md)
           jq -n \
             --arg run_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --arg body "$REPORT" \
+            --arg summary "$SUMMARY" \
+            --arg signals "$SIGNALS" \
+            --arg files "$FILES" \
+            --arg report "$REPORT" \
             '{
-              text: "Pulse STT probe — behavior change detected",
+              text: "Pulse STT probe — newsworthy behavior change",
               blocks: [
-                {
-                  type: "section",
-                  text: {
-                    type: "mrkdwn",
-                    text: $body
-                  }
-                },
-                {
-                  type: "context",
-                  elements: [
-                    {
-                      type: "mrkdwn",
-                      text: ("Run: <" + $run_url + "|view logs>")
-                    }
-                  ]
-                }
+                { type: "header", text: { type: "plain_text", text: ":rotating_light: Pulse STT — newsworthy change" } },
+                { type: "section", text: { type: "mrkdwn", text: $summary } },
+                { type: "section", text: { type: "mrkdwn", text: ("*Signals:*\n" + $signals) } },
+                { type: "section", text: { type: "mrkdwn", text: ("*Doc files to audit:*\n" + $files) } },
+                { type: "section", text: { type: "mrkdwn", text: ("*Diff (truncated):*\n```\n" + $report + "\n```") } },
+                { type: "context", elements: [ { type: "mrkdwn", text: ("Run: <" + $run_url + "|view logs>") } ] }
               ]
             }' > /tmp/slack-payload.json
 
-      - name: Notify Slack on behavior change
-        if: steps.probe.outputs.diff_found == 'true'
+      # SLACK_DM_WEBHOOK_URL preferred (binds to a personal DM channel).
+      # Falls back to SLACK_WEBHOOK_URL (channel) if the DM webhook isn't
+      # configured. Either way, the payload is the same.
+      - name: Notify Slack (newsworthy only)
+        if: steps.classify.outputs.verdict == 'NEWSWORTHY'
         uses: slackapi/slack-github-action@v2.0.0
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook: ${{ secrets.SLACK_DM_WEBHOOK_URL || secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload-file-path: /tmp/slack-payload.json
