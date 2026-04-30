@@ -232,9 +232,24 @@ def main() -> int:
     )
     args = ap.parse_args()
 
+    # v2.2.0 and v3.0.1 are deprecated, frozen, and explicitly off-limits per
+    # the project rules. The audit can't fix them and shouldn't flag them — it
+    # just fills the weekly issue with noise that will never be actioned. Skip
+    # by path regardless of nav registration. (When/if those versions are
+    # removed entirely, this filter becomes a no-op.)
+    FROZEN_VERSION_SEGMENTS = ('/v2.2.0/', '/v3.0.1/')
+
+    def in_frozen_version(p: Path) -> bool:
+        s = str(p.resolve())
+        return any(seg in s for seg in FROZEN_VERSION_SEGMENTS)
+
     if args.files:
         # Explicit list — honour exactly what was passed (used by PR CI on changed files)
         targets = [Path(f) for f in args.files if f.endswith('.mdx')]
+        frozen_skipped = [t for t in targets if in_frozen_version(t)]
+        targets = [t for t in targets if not in_frozen_version(t)]
+        if frozen_skipped:
+            print(f'Skipping {len(frozen_skipped)} MDX file(s) in frozen v2.2.0/v3.0.1 versions (off-limits per project policy).')
     else:
         all_mdx = list((REPO_ROOT / 'fern' / 'products').rglob('*.mdx'))
         if args.all_files:
@@ -245,6 +260,10 @@ def main() -> int:
             skipped = len(all_mdx) - len(targets)
             if skipped:
                 print(f'Skipping {skipped} MDX file(s) not registered in any nav YAML (orphan/frozen). Use --all-files to include them.')
+        frozen_skipped = [t for t in targets if in_frozen_version(t)]
+        targets = [t for t in targets if not in_frozen_version(t)]
+        if frozen_skipped:
+            print(f'Skipping {len(frozen_skipped)} MDX file(s) in frozen v2.2.0/v3.0.1 versions (off-limits per project policy).')
 
     if not targets:
         print('No MDX files to check.')
