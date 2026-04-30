@@ -56,6 +56,14 @@ TEST_CASES: list[tuple[str, dict]] = [
         {"language": "multi", "encoding": "linear16", "sample_rate": "24000"},
     ),
     (
+        "lang-multi-indic",
+        {"language": "multi-indic", "encoding": "linear16", "sample_rate": "24000"},
+    ),
+    (
+        "lang-multi-asian",
+        {"language": "multi-asian", "encoding": "linear16", "sample_rate": "24000"},
+    ),
+    (
         "full-transcript-true-should-be-ignored",
         {
             "language": "en",
