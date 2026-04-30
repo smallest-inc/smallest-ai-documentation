@@ -91,9 +91,10 @@ fs.writeFileSync("sync_output.wav", buffer);
 ```
 
 ```python Python SDK
+import os
 from smallestai.waves import WavesClient
 
-client = WavesClient(api_key="SMALLEST_API_KEY")
+client = WavesClient(api_key=os.environ["SMALLEST_API_KEY"])
 audio = client.synthesize(
     "Hello, this is a test of synchronous speech synthesis.",
 )
@@ -145,11 +146,12 @@ asyncio.run(main())
 
 ```python Python SDK
 import asyncio
+import os
 import aiofiles
 from smallestai.waves import AsyncWavesClient
 
 async def main():
-    client = AsyncWavesClient(api_key="SMALLEST_API_KEY")
+    client = AsyncWavesClient(api_key=os.environ["SMALLEST_API_KEY"])
     async with client as tts:
         audio_bytes = await tts.synthesize(
             "Hello, this is a test of the async synthesis function."
@@ -177,6 +179,7 @@ asyncio.run(main())
 You can override any parameter per request:
 
 ```python
+# ci:skip — fragment; assumes URL/headers/requests from the synchronous example above
 # Override speed and sample rate for a single call
 response = requests.post(URL, headers=headers, json={
     "text": "Fast and high quality.",

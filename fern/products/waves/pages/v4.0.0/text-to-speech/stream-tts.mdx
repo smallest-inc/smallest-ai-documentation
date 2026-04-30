@@ -57,7 +57,7 @@ async def stream_tts(text):
 
     async with websockets.connect(
         WS_URL,
-        extra_headers={"Authorization": f"Bearer {API_KEY}"},
+        additional_headers={"Authorization": f"Bearer {API_KEY}"},
     ) as ws:
         await ws.send(json.dumps({
             "text": text,
@@ -125,12 +125,13 @@ ws.on("message", (raw) => {
 ```
 
 ```python Python SDK
-from smallestai.waves import TTSConfig, WavesStreamingTTS
+import os
 import wave
+from smallestai.waves import TTSConfig, WavesStreamingTTS
 
 config = TTSConfig(
     voice_id="magnus",
-    api_key="YOUR_SMALLEST_API_KEY",
+    api_key=os.environ["SMALLEST_API_KEY"],
     sample_rate=24000,
     speed=1.0,
     max_buffer_flush_ms=100,
@@ -223,9 +224,10 @@ curl -N -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/stream" \
 For real-time applications where text arrives incrementally (e.g., from an LLM), the SDK supports streaming text input:
 
 ```python
+import os
 from smallestai.waves import TTSConfig, WavesStreamingTTS
 
-config = TTSConfig(voice_id="magnus", api_key="YOUR_API_KEY", sample_rate=24000)
+config = TTSConfig(voice_id="magnus", api_key=os.environ["SMALLEST_API_KEY"], sample_rate=24000)
 streaming_tts = WavesStreamingTTS(config)
 
 def text_stream():

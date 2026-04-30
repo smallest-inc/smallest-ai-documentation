@@ -52,8 +52,16 @@ SKIP_SIGNATURES: dict[str, str] = {
     # block depends on a local-only fixture.
 }
 
+# Doc authors can opt a block out of CI by adding a Python comment
+# `# ci:skip` (optionally followed by `: reason`). Use sparingly —
+# the point of this harness is that snippets stay runnable.
+CI_SKIP_RE = re.compile(r"^\s*#\s*ci:skip\b\s*[:\-—]?\s*(.*)$", re.MULTILINE)
+
 
 def block_skip_reason(code: str) -> str | None:
+    m = CI_SKIP_RE.search(code)
+    if m:
+        return f"ci:skip directive — {m.group(1) or 'no reason given'}"
     for sig, reason in SKIP_SIGNATURES.items():
         if sig in code:
             return reason

@@ -1,107 +1,206 @@
 ---
-title: "How to use Text to Speech (TTS)"
-description: "Learn how to synthesize your text using the Smallest AI API."
+title: "Sync & Async Synthesis"
+sidebarTitle: "Sync & Async"
+description: "Generate speech synchronously or concurrently — REST API and SDK examples."
 icon: "wave-square"
 ---
 
-In this tutorial, you will learn how to use the Smallest AI platform to synthesize text to speech both synchronously and asynchronously. By the end of this tutorial, you will be able to convert text into speech using our API.  
+Generate speech via the REST API or Python SDK — synchronously (one request, complete audio) or asynchronously (multiple requests in parallel).
 
-You can access the source code for the Python SDK on our [GitHub repository](https://github.com/smallest-inc/smallest-python-sdk).  
+**Sample output (sync, voice: magnus):**
+
+<audio controls style={{ width: '100%', maxWidth: '500px' }}>
+  <source src="../../audio/tts-sample-hello.wav" type="audio/wav" />
+  Your browser does not support the audio element.
+</audio>
 
 ## Requirements
 
-Before you begin, ensure you have the following:
+- An API key from the [Smallest AI Console](https://app.smallest.ai/dashboard/api-keys?utm_source=documentation&utm_medium=text-to-speech)
+- For Python: `requests` (or `smallestai` for the SDK)
+- For JavaScript: Node.js 18+ (built-in `fetch`)
 
-- Python (3.9 or higher) installed on your machine.
-- An API key from the Smallest AI [platform](https://app.smallest.ai/dashboard/api-keys?utm_source=documentation&utm_medium=text-to-speech).  
-
-## Setup  
-
-### Install our SDK
 ```bash
-pip install smallestai
-``` 
-
-### Set your API key as an environment variable
-```bash
-export SMALLEST_API_KEY=YOUR_API_KEY
-```  
+export SMALLEST_API_KEY="your-api-key-here"
+```
 
 ## Synchronous Text to Speech
 
-Here is an example of how to synthesize text to speech synchronously:
+Send text, receive complete audio in the response:
 
 <CodeGroup>
-```python python
+
+```bash cURL
+curl -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Hello, this is a test of synchronous speech synthesis.",
+    "voice_id": "magnus",
+    "sample_rate": 24000,
+    "output_format": "wav"
+  }' --output sync_output.wav
+```
+
+```python Python
+import os
+import requests
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+
+response = requests.post(
+    "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech",
+    headers={
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+    },
+    json={
+        "text": "Hello, this is a test of synchronous speech synthesis.",
+        "voice_id": "magnus",
+        "sample_rate": 24000,
+        "output_format": "wav",
+    },
+)
+
+with open("sync_output.wav", "wb") as f:
+    f.write(response.content)
+```
+
+```javascript JavaScript
+const fs = require("fs");
+
+const response = await fetch(
+  "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech",
+  {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.SMALLEST_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      text: "Hello, this is a test of synchronous speech synthesis.",
+      voice_id: "magnus",
+      sample_rate: 24000,
+      output_format: "wav",
+    }),
+  }
+);
+
+const buffer = Buffer.from(await response.arrayBuffer());
+fs.writeFileSync("sync_output.wav", buffer);
+```
+
+```python Python SDK
+import os
 from smallestai.waves import WavesClient
 
-def main():
-    client = WavesClient(api_key="SMALLEST_API_KEY")
-    audio = client.synthesize(
-        "Hello, this is a test for sync synthesis function.",
-    )
-    with open("sync_synthesize.wav", "wb") as f:
-        f.write(audio)
-
-if __name__ == "__main__":
-    main()
+client = WavesClient(api_key=os.environ["SMALLEST_API_KEY"])
+audio = client.synthesize(
+    "Hello, this is a test of synchronous speech synthesis.",
+)
+with open("sync_output.wav", "wb") as f:
+    f.write(audio)
 ```
-</CodeGroup>  
+
+</CodeGroup>
 
 ## Asynchronous Text to Speech
 
-Here is an example of how to synthesize text to speech asynchronously:
+For concurrent requests (e.g., generating multiple audio files in parallel):
 
 <CodeGroup>
-```python python
+
+```python Python (asyncio)
+import os
 import asyncio
+import aiohttp
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+URL = "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech"
+
+async def synthesize(session, text, filename):
+    async with session.post(URL, headers={
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+    }, json={
+        "text": text,
+        "voice_id": "magnus",
+        "sample_rate": 24000,
+        "output_format": "wav",
+    }) as resp:
+        audio = await resp.read()
+        with open(filename, "wb") as f:
+            f.write(audio)
+        print(f"Saved {filename}")
+
+async def main():
+    async with aiohttp.ClientSession() as session:
+        await asyncio.gather(
+            synthesize(session, "First sentence.", "async_1.wav"),
+            synthesize(session, "Second sentence.", "async_2.wav"),
+            synthesize(session, "Third sentence.", "async_3.wav"),
+        )
+
+asyncio.run(main())
+```
+
+```python Python SDK
+import asyncio
+import os
 import aiofiles
 from smallestai.waves import AsyncWavesClient
 
 async def main():
-    client = AsyncWavesClient(api_key="SMALLEST_API_KEY")
+    client = AsyncWavesClient(api_key=os.environ["SMALLEST_API_KEY"])
     async with client as tts:
-        audio_bytes = await tts.synthesize("Hello, this is a test of the async synthesis function.") 
-        async with aiofiles.open("async_synthesize.wav", "wb") as f:
-            await f.write(audio_bytes) 
+        audio_bytes = await tts.synthesize(
+            "Hello, this is a test of the async synthesis function."
+        )
+        async with aiofiles.open("async_output.wav", "wb") as f:
+            await f.write(audio_bytes)
 
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(main())
 ```
+
 </CodeGroup>
 
-## Parameters   
+## Parameters
 
-- `api_key` (str): Your API key (can be set via SMALLEST_API_KEY environment variable)
-- `model` (str): TTS model to use (default: `lightning-v3.1`, available: `lightning-v2`, `lightning-v3.1`)
-- `sample_rate` (int): Audio sample rate (default: 24000)
-- `voice_id` (str): Voice ID (default: "emily")
-- `speed` (float): Speech speed multiplier (default: 1.0)
-- `language` (str): Language code for text normalization (e.g., how numbers, dates, and abbreviations are spelled out). Set to "auto" for automatic language detection, or specify a language code. Available languages can be found [here](/waves/documentation/getting-started/models) (default: "auto")
-- `output_format` (str): The format of the output audio. Available options: `pcm`, `mp3`, `wav`, `mulaw` (default: "wav")
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `text` | string | *required* | Text to synthesize (max ~250 chars recommended) |
+| `voice_id` | string | *required* | Voice to use (e.g., `magnus`, `olivia`, `aarush`) |
+| `sample_rate` | int | `44100` | `8000`, `16000`, `24000`, or `44100` Hz |
+| `speed` | float | `1.0` | Speech rate multiplier (`0.5` to `2.0`) |
+| `language` | string | `auto` | Language code: `en`, `hi`, `es`, `ta`, or `auto` |
+| `output_format` | string | `pcm` | Audio format: `pcm`, `wav`, `mp3`, or `mulaw` |
+| `pronunciation_dicts` | array | — | List of [pronunciation dictionary](/waves/documentation/text-to-speech-lightning/pronunciation-dictionaries) IDs |
 
-These parameters are part of the `Smallest` and `AsyncSmallest` instance. They can be set when creating the instance (as shown above). However, the `synthesize` function also accepts `kwargs`, allowing you to override any of these parameters on a per-request basis.  
+You can override any parameter per request:
 
-For example, you can modify the speech speed and sample rate just for a particular synthesis request:   
-<CodeGroup> 
-```python python
-audio_bytes = client.synthesize(
-    "Modern problems don't always require modern solutions.",
-    speed=1.5,  # Overrides default speed
-    sample_rate=16000  # Overrides default sample rate
-)
-```  
-</CodeGroup>
+```python
+# ci:skip — fragment; assumes URL/headers/requests from the synchronous example above
+# Override speed and sample rate for a single call
+response = requests.post(URL, headers=headers, json={
+    "text": "Fast and high quality.",
+    "voice_id": "magnus",
+    "speed": 1.5,
+    "sample_rate": 44100,
+    "output_format": "mp3",
+})
+```
 
-## Conclusion  
+## When to Use Each Mode
 
-The Smallest AI Text-to-Speech SDK offers both synchronous and asynchronous options, catering to a variety of use cases:  
+- **Synchronous**: Real-time voice assistants, chatbot responses, single audio generation
+- **Asynchronous**: Batch processing, generating multiple audio files, audiobook chapters, concurrent API calls
 
-- **Synchronous TTS**: Ideal for applications where immediate responses are needed, such as real-time voice assistants, chatbot integrations, or interactive voice systems. It ensures that the audio is generated and available instantly for use within the same execution flow.  
+For real-time streaming where audio starts playing before generation completes, see [Streaming TTS](/waves/documentation/text-to-speech-lightning/streaming).
 
-- **Asynchronous TTS**: Designed for scenarios that involve handling multiple requests or large-scale processing. For example, if you need to convert multiple text inputs into speech concurrently, such as creating audio files for an audiobook or processing a batch of text-based announcements, asynchronous TTS allows you to execute these tasks efficiently without blocking other operations. This approach ensures scalability and optimal resource utilization, particularly in environments where time and performance are critical.  
+<Tip>
+**Full runnable source:** [quickstart-python.py](https://github.com/smallest-inc/cookbook/blob/main/text-to-speech/quickstart-python.py)
+</Tip>
 
-By understanding these modes and tailoring their usage to specific requirements, you can build highly responsive, scalable, and efficient solutions using the Smallest AI platform.
+## Need Help?
 
-
-If you have any questions or suggestions, please create an issue on the [smallest-python-sdk GitHub <Icon icon="arrow-up-right-from-square" iconType="solid" />](https://github.com/smallest-inc/smallest-python-sdk).
+Check out the [API Reference](/waves/api-reference) for the full endpoint specification, or ask on [Discord](https://discord.gg/9WtSXv26WE).
