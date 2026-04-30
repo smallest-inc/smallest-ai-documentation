@@ -28,7 +28,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Python dependencies
-        run: pip install requests
+        run: pip install requests websockets
 
       # ─── TTS Tests ───
       # Waves lightning-v3.1 occasionally returns a transient 503 under load.
@@ -196,6 +196,20 @@ jobs:
           [ "$response" = "200" ] || exit 1
 
       # ─── External URLs ───
+
+      # ─── Pulse STT — embedded Python snippets ───
+      # Extract every ```python block from the WS reference, the realtime
+      # quickstart, and the realtime code-examples page. Run each against
+      # the live API. Microphone-dependent blocks (`import pyaudio`) are
+      # skipped automatically — those cannot be exercised on CI runners.
+      - name: "STT: Embedded Python WS snippets (extract-and-run)"
+        run: |
+          python3 scripts/run_doc_python_snippets.py \
+            fern/products/waves/pages/v4.0.0/api-references/pulse-stt-ws.mdx \
+            fern/products/waves/pages/v4.0.0/speech-to-text/realtime/quickstart.mdx \
+            fern/products/waves/pages/v4.0.0/speech-to-text/realtime/code-examples.mdx
+        env:
+          SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
 
       - name: "External: Cookbook audio sample accessible"
         run: |
