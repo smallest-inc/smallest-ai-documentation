@@ -19,8 +19,14 @@ jobs:
 
       - name: Extract preview URL
         id: preview
+        # Pass comment body via env var, never interpolate ${{ }} into
+        # an inline shell command — a malicious commenter could break
+        # out of the string and run arbitrary shell. See:
+        # https://docs.github.com/en/actions/reference/security/secure-use#good-practices-for-mitigating-script-injection-attacks
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
-          URL=$(echo "${{ github.event.comment.body }}" | grep -oP 'https://[a-z0-9-]+\.docs\.buildwithfern\.com' | head -1)
+          URL=$(printf '%s' "$COMMENT_BODY" | grep -oP 'https://[a-z0-9-]+\.docs\.buildwithfern\.com' | head -1)
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "Preview URL: $URL"
 
