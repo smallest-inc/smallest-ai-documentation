@@ -42,19 +42,45 @@ jobs:
           exit_code=${PIPESTATUS[0]}
           echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
 
+      # Cookbook URLs are external — link-check.py only audits internal
+      # slugs against docs.smallest.ai, so a renamed/moved cookbook sample
+      # would silently rot. This step issues a small GET against every
+      # github.com/smallest-inc/cookbook/* URL referenced in v4 MDX and
+      # appends the report to the same report file.
+      - name: Run cookbook URL audit
+        id: cookbook
+        continue-on-error: true
+        run: |
+          {
+            echo ""
+            echo "===== Cookbook URL audit ====="
+          } >> /tmp/link-check-report.txt
+          python3 scripts/check_cookbook_links.py --fail-on-broken 2>&1 | tee -a /tmp/link-check-report.txt
+          exit_code=${PIPESTATUS[0]}
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+
+      - name: Combine audit exit codes
+        id: combined
+        run: |
+          if [ "${{ steps.check.outputs.exit_code }}" != "0" ] || [ "${{ steps.cookbook.outputs.exit_code }}" != "0" ]; then
+            echo "exit_code=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "exit_code=0" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Open issue on broken links
         id: open_issue
-        if: steps.check.outputs.exit_code != '0'
+        if: steps.combined.outputs.exit_code != '0'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
             const report = fs.readFileSync('/tmp/link-check-report.txt', 'utf8');
-            const title = `Weekly link audit: broken internal links on docs.smallest.ai (${new Date().toISOString().slice(0, 10)})`;
+            const title = `Weekly site audit: broken links on docs.smallest.ai or cookbook (${new Date().toISOString().slice(0, 10)})`;
             const body = [
-              `The scheduled weekly link audit found broken internal links on \`docs.smallest.ai\`.`,
+              `The scheduled weekly site audit found broken links.`,
               ``,
-              `These are links inside published MDX files that return a non-2xx/3xx status when HEAD-tested against production docs. They were not caught by PR-level checks (either merged before the check existed, or the TARGET of a link was renamed in a different PR).`,
+              `Two checks run: (1) internal slugs on \`docs.smallest.ai\`, and (2) external \`github.com/smallest-inc/cookbook/*\` URLs referenced from v4 MDX. Either failing will open this issue. PR-level checks don't catch this: docs slugs can break when the target page is renamed in a different PR, and cookbook URLs can break when a sample is moved/renamed in the cookbook repo.`,
               ``,
               `<details><summary>Full audit output</summary>`,
               ``,
@@ -84,20 +110,20 @@ jobs:
       # workflow uses (channel-bound), with an @-mention to ensure the
       # owner gets pinged in their notifications view.
       - name: Notify Slack on broken links
-        if: steps.check.outputs.exit_code != '0'
+        if: steps.combined.outputs.exit_code != '0'
         uses: slackapi/slack-github-action@v2.0.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "Weekly link audit — broken links on docs.smallest.ai (cc <@U0A5SG1LM1C>)",
+              "text": "Weekly site audit — broken links on docs.smallest.ai or cookbook (cc <@U0A5SG1LM1C>)",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": ":warning: *Weekly link audit — broken internal links found*\n\nIssue: <${{ steps.open_issue.outputs.issue_url }}|#${{ steps.open_issue.outputs.issue_number }}> (assigned to <@U0A5SG1LM1C>)\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|view logs>\n\ncc <@U0A5SG1LM1C>"
+                    "text": ":warning: *Weekly site audit — broken links found*\n\nIssue: <${{ steps.open_issue.outputs.issue_url }}|#${{ steps.open_issue.outputs.issue_number }}> (assigned to <@U0A5SG1LM1C>)\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|view logs>\n\ncc <@U0A5SG1LM1C>"
                   }
                 }
               ]
