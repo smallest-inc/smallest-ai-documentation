@@ -50,23 +50,31 @@ You receive markdown diffs from two probes against the live API:
 
 Return ONE of three verdicts plus a short rationale.
 
-NEWSWORTHY (Pulse STT) — these are spec-level changes the docs MUST react to:
+GOLDEN RULE
+-----------
+Any **spec-level change** the docs need to react to is NEWSWORTHY. That includes any of: a parameter being added / removed / renamed; a default value flipping; a response field being added / removed / renamed; an error code or status code changing; a default routing decision changing (e.g., what the server does when a parameter is omitted). Customer-facing samples that omit a param now hit a different default — every sample needs review. Treat default-value drift the same as a spec change.
+
+NEWSWORTHY (Pulse STT)
 - British-spelling flags `punctuation` or `capitalisation` now affect transcript output the way PR #116 specifies (https://github.com/smallest-inc/lightning-asr-offline/pull/116). Look at the `punctuation-false-british-pr116` and `capitalisation-false-british-pr116` test cases — if their transcripts now differ from the punctuated-American baseline, the British flags are wired.
 - `format=false` cascades to disable ITN. Look at the `format-false-should-cascade-to-no-itn` case — `has_itn_currency`, `has_itn_date_or_time`, `has_pii_placeholder`, `has_pci_placeholder` ALL flip True→False with `looks_garbled` staying False.
-- `saw_full_transcript_field` flipping False→True on the `full-transcript-true` case (means the param now actually returns a field).
-- New language codes (`multi-eu`, `multi-indic`, `multi-asian`) appearing in `languages_seen` for batch probes once the team starts probing those scopes.
+- `saw_full_transcript_field` flipping on the `full-transcript-true` case (means the param now actually returns a field).
+- **Default-value drift** — any change on a `*-defaults-*` test case (e.g., `lang-omitted-defaults-multi-eu`). Such cases probe what the server does when a parameter is OMITTED. A change here means the default flipped (real example: `language=auto` → `language=multi-eu`). Every doc sample that omits the param now hits the new default.
+- New language codes appearing in `languages_seen` for any case (suggests the server's auto-detect scope expanded).
+- `status_code` shifting from success to error (or vice versa) on any case — suggests a param became required, was deprecated, or validation tightened/loosened.
+- `error_body` content changing materially on negative-test cases — suggests new validation rules or new error codes.
 
-NEWSWORTHY (Lightning TTS) — real surface changes:
+NEWSWORTHY (Lightning TTS)
 - `status_code` change for any case (e.g. 200→4xx, 4xx→200).
 - `content_type` change (e.g. audio/wav → audio/mpeg).
 - `size_class` change (small audio → tiny error blob, or vice versa).
 - `sse_saw_complete` flipping True/False.
 - `sse_saw_event_audio` flipping True/False.
+- **Default-value drift** — any change on a `*-default-*` case (e.g., `sync-default-pcm`). Means the server's response to "no extra params" shifted.
 
-NOISE — do NOT classify as newsworthy:
-- `has_itn_currency` / `has_itn_date_or_time` toggling without a corresponding flag change in the test case (the test text varied; ITN itself didn't change).
-- `looks_garbled` toggling (model retraining drift on edge clips).
-- `languages_seen` narrowing on Pulse cases that send English audio (single-language detector wobble, not a behavior change).
+NOISE — do NOT classify as newsworthy
+- `has_itn_currency` / `has_itn_date_or_time` toggling on a NON-defaults test case where no flag changed. The test text varied or model retraining drift; ITN itself didn't change. **(BUT: if the toggle is on a `*-defaults-*` case, that IS newsworthy — the default may have flipped.)**
+- `looks_garbled` toggling on edge clips (model retraining drift).
+- `languages_seen` narrowing from `{da,en}` → `{en}` on Pulse cases that send English audio (single-language detector wobble, not a behavior change). **(BUT: if a NEW language code appears, that IS newsworthy.)**
 - `transcript_first120` / `transcript_len` differences (always noise — those fields are excluded from diff.py SHAPE_FIELDS anyway).
 - New cases marked `<new case>` (test additions, not API changes).
 
