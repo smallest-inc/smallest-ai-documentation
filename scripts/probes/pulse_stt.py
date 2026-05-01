@@ -55,14 +55,9 @@ TEST_CASES: list[tuple[str, dict]] = [
         "lang-multi",
         {"language": "multi", "encoding": "linear16", "sample_rate": "24000"},
     ),
-    (
-        "lang-multi-indic",
-        {"language": "multi-indic", "encoding": "linear16", "sample_rate": "24000"},
-    ),
-    (
-        "lang-multi-asian",
-        {"language": "multi-asian", "encoding": "linear16", "sample_rate": "24000"},
-    ),
+    # Note: multi-indic and multi-asian are only available on the
+    # pre-recorded HTTP endpoint, not this WebSocket endpoint. We don't
+    # probe them here — they belong in a future pre-recorded probe.
     (
         "full-transcript-true-should-be-ignored",
         {
