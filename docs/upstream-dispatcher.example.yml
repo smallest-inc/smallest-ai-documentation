@@ -3,18 +3,21 @@
 # Required upstream-repo setup (one-time per repo):
 #   1. Create a fine-grained PAT (or GitHub App installation token) with
 #      "Contents: read" + "Metadata: read" on the upstream repo, and
-#      "Repository dispatches: write" on smallest-inc/smallest-ai-documentation.
-#   2. Add it as a repo secret named DOCS_DISPATCH_TOKEN in this upstream repo.
+#      "Repository dispatches: write" on the docs repo.
+#   2. Add two secrets in this upstream repo:
+#        DOCS_DISPATCH_TOKEN  — the PAT above
+#        DOCS_REPO_OWNER_NAME — the docs repo as `owner/name` (e.g. set
+#                              once in your internal runbook). Kept as a
+#                              secret so this public-template file does
+#                              not enumerate the docs/upstream relationship.
 #   3. Commit this workflow file. From the next merged PR onwards, the
-#      docs repo's pr-drift-detector.yml gets a repository_dispatch event,
-#      runs the Claude classifier, and DMs Abhishek (U0A5SG1LM1C) only if
+#      docs repo's pr-drift-detector.yml gets a repository_dispatch
+#      event, runs the Claude classifier, and DMs the docs owner only if
 #      verdict == DOCS_NEEDED or MAYBE.
 #
-# Repos that should have this:
-#   - smallest-inc/lightning-asr-offline   (Pulse STT engine)
-#   - smallest-inc/waves-platform          (TTS / cloning backend)
-#   - smallest-inc/atoms-platform          (agent platform)
-#   - smallest-inc/godspeed                (model demos)
+# Where to install: any private upstream repo whose merges may require
+# docs follow-up (backend services, demos, etc.). The list lives in the
+# operators' internal runbook, not here.
 
 name: Notify docs of merged PR
 
@@ -30,9 +33,11 @@ jobs:
       - name: Dispatch upstream_pr_merged event to docs repo
         env:
           # PAT or App token with `repository_dispatch:write` on the
-          # smallest-ai-documentation repo. Fine-grained scope, ONE repo.
+          # docs repo. Fine-grained scope, ONE repo.
           DOCS_DISPATCH_TOKEN: ${{ secrets.DOCS_DISPATCH_TOKEN }}
+          DOCS_REPO_OWNER_NAME: ${{ secrets.DOCS_REPO_OWNER_NAME }}
         run: |
+          : "${DOCS_REPO_OWNER_NAME:?DOCS_REPO_OWNER_NAME secret not set on this repo}"
           # Build client_payload as JSON. We send a small subset; the docs
           # workflow fetches body + diff via the GitHub API itself so the
           # payload stays tight (GitHub caps client_payload at 64 KB).
@@ -59,6 +64,6 @@ jobs:
             -H "Authorization: Bearer $DOCS_DISPATCH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/smallest-inc/smallest-ai-documentation/dispatches \
+            "https://api.github.com/repos/$DOCS_REPO_OWNER_NAME/dispatches" \
             -d @/tmp/dispatch.json
           echo "Dispatched upstream_pr_merged for ${{ github.repository }}#${{ github.event.pull_request.number }}"

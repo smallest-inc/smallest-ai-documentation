@@ -21,11 +21,13 @@ a `repository_dispatch: upstream_pr_merged` event with PR metadata in
 github.event.client_payload.
 
 Usage:
-    ANTHROPIC_API_KEY=... python3 scripts/probes/upstream_pr_classifier.py \\
-        --repo smallest-inc/lightning-asr-offline \\
+    ANTHROPIC_API_KEY=... \\
+    UPSTREAM_REPO_HINTS_JSON='{"OWNER/REPO": ["fern/apis/.../pulse-stt-ws.yaml"]}' \\
+    python3 scripts/probes/upstream_pr_classifier.py \\
+        --repo OWNER/REPO \\
         --pr 142 \\
-        --pr-title "Add enable_word_alternatives flag" \\
-        --pr-url https://github.com/.../pull/142 \\
+        --pr-title "Add some_new_flag" \\
+        --pr-url https://github.com/OWNER/REPO/pull/142 \\
         --pr-body-file /tmp/pr-body.txt \\
         --pr-diff-file /tmp/pr-diff.txt \\
         --out-json /tmp/upstream-classification.json
@@ -44,48 +46,35 @@ ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 MODEL = "claude-sonnet-4-6"
 
 # Map upstream repos to the doc trees they typically touch. The classifier
-# uses this to suggest concrete file paths in the affected_doc_files
+# uses these hints to suggest concrete file paths in the affected_doc_files
 # output, so the DM ends up actionable instead of "go look around the
 # whole repo."
-REPO_DOC_HINTS = {
-    "smallest-inc/lightning-asr-offline": [
-        "fern/apis/waves/asyncapi/pulse-stt-ws.yaml",
-        "fern/apis/waves/asyncapi/pulse-stt-ws-overrides.yml",
-        "fern/apis/waves/openapi/pulse-stt-openapi.yaml",
-        "fern/apis/waves-v4/overrides/pulse-stt-ws-overrides.yml",
-        "fern/products/waves/pages/v4.0.0/api-references/pulse-stt-ws.mdx",
-        "fern/products/waves/pages/v4.0.0/speech-to-text/realtime/...",
-        "fern/products/waves/pages/v4.0.0/speech-to-text/features/...",
-        "fern/products/waves/pages/v4.0.0/speech-to-text/model-cards/pulse.mdx",
-        "fern/products/waves/pages/v4.0.0/changelog-entries/",
-    ],
-    "smallest-inc/waves-platform": [
-        "fern/apis/waves/asyncapi/lightning-v3.1-ws.yaml",
-        "fern/apis/waves/openapi/get-voices-openapi.yaml",
-        "fern/apis/waves-v4/overrides/",
-        "fern/products/waves/pages/v4.0.0/text-to-speech/...",
-        "fern/products/waves/pages/v4.0.0/text-to-speech/model-cards/lightning-v3-1.mdx",
-        "fern/products/waves/pages/v4.0.0/voice-cloning/...",
-        "fern/products/waves/pages/v4.0.0/changelog-entries/",
-    ],
-    "smallest-inc/atoms-platform": [
-        "fern/apis/atoms/openapi/openapi.yaml",
-        "fern/apis/atoms/asyncapi/agent-ws.yaml",
-        "fern/products/atoms/pages/...",
-        "fern/products/atoms/pages/intro/reference/changelog-entries/",
-    ],
-    "smallest-inc/godspeed": [
-        "fern/products/waves/pages/v4.0.0/changelog-entries/",
-        "(godspeed is a demos repo — usually no doc impact unless a new feature is exposed)",
-    ],
-}
+#
+# This source file lives in a public repo, so we deliberately avoid
+# hardcoding upstream repo names here — they're loaded from a workflow
+# secret at runtime (UPSTREAM_REPO_HINTS_JSON, set on the docs repo).
+# Format of the secret: a JSON object mapping `owner/repo` -> list of
+# doc-tree path hints. Operators control the mapping; this code stays
+# generic.
+def load_repo_doc_hints() -> dict[str, list[str]]:
+    blob = os.environ.get("UPSTREAM_REPO_HINTS_JSON", "").strip()
+    if not blob:
+        return {}
+    try:
+        return json.loads(blob)
+    except json.JSONDecodeError as e:
+        print(f"WARN: UPSTREAM_REPO_HINTS_JSON is not valid JSON: {e}", file=sys.stderr)
+        return {}
+
+
+REPO_DOC_HINTS = load_repo_doc_hints()
 
 SYSTEM_PROMPT = """You are the docs-impact reviewer for Smallest AI.
 
 You receive a merged PR from an upstream backend or demos repo
 (lightning-asr-offline / waves-platform / atoms-platform / godspeed).
-Your job: decide whether the docs at smallest-inc/smallest-ai-documentation
-need an update, and if so, which files.
+Your job: decide whether this docs repo needs an update, and if so,
+which files.
 
 Return ONE of three verdicts:
 

@@ -13,11 +13,11 @@ name: PR drift detector (upstream-merged → docs-impact classifier)
 #
 # client_payload shape:
 #   {
-#     "repo":      "smallest-inc/lightning-asr-offline",
+#     "repo":      "OWNER/REPO",
 #     "pr_number": 142,
-#     "pr_title":  "Add enable_word_alternatives flag",
-#     "pr_url":    "https://github.com/smallest-inc/.../pull/142",
-#     "merged_by": "alice",
+#     "pr_title":  "Add some_new_flag",
+#     "pr_url":    "https://github.com/OWNER/REPO/pull/142",
+#     "merged_by": "username",
 #     "base_ref":  "main"
 #   }
 
@@ -25,12 +25,15 @@ on:
   repository_dispatch:
     types: [upstream_pr_merged]
   workflow_dispatch:
-    # Allow manual smoke tests with a synthetic payload.
+    # Allow manual smoke tests with a synthetic payload. Defaults are
+    # generic placeholders so this public workflow file doesn't enumerate
+    # the upstream repos that wire into it. Operators fill in the real
+    # owner/name when smoke-testing.
     inputs:
       repo:
         description: 'Upstream repo (owner/name)'
         required: true
-        default: 'smallest-inc/lightning-asr-offline'
+        default: 'OWNER/REPO'
       pr_number:
         description: 'PR number'
         required: true
@@ -42,7 +45,7 @@ on:
       pr_url:
         description: 'PR URL'
         required: true
-        default: 'https://github.com/smallest-inc/lightning-asr-offline/pull/1'
+        default: 'https://github.com/OWNER/REPO/pull/1'
 
 jobs:
   classify-and-notify:
@@ -56,23 +59,38 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Resolve event context
+      - name: Resolve event context + mask repo names from logs
         id: ctx
         run: |
           # Two trigger paths: repository_dispatch (real upstream signal)
           # and workflow_dispatch (manual smoke test). Normalise both to
           # the same env vars so the rest of the job is uniform.
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "repo=${{ github.event.client_payload.repo }}"           >> "$GITHUB_OUTPUT"
-            echo "pr_number=${{ github.event.client_payload.pr_number }}" >> "$GITHUB_OUTPUT"
-            echo "pr_title=${{ github.event.client_payload.pr_title }}"   >> "$GITHUB_OUTPUT"
-            echo "pr_url=${{ github.event.client_payload.pr_url }}"       >> "$GITHUB_OUTPUT"
+            REPO="${{ github.event.client_payload.repo }}"
+            PR_NUMBER="${{ github.event.client_payload.pr_number }}"
+            PR_TITLE="${{ github.event.client_payload.pr_title }}"
+            PR_URL="${{ github.event.client_payload.pr_url }}"
           else
-            echo "repo=${{ inputs.repo }}"             >> "$GITHUB_OUTPUT"
-            echo "pr_number=${{ inputs.pr_number }}"   >> "$GITHUB_OUTPUT"
-            echo "pr_title=${{ inputs.pr_title }}"     >> "$GITHUB_OUTPUT"
-            echo "pr_url=${{ inputs.pr_url }}"         >> "$GITHUB_OUTPUT"
+            REPO="${{ inputs.repo }}"
+            PR_NUMBER="${{ inputs.pr_number }}"
+            PR_TITLE="${{ inputs.pr_title }}"
+            PR_URL="${{ inputs.pr_url }}"
           fi
+          # Docs repo is public, so its run logs are public too. Mask the
+          # upstream repo identity so log readers can't enumerate which
+          # private backend repos this workflow is wired to. The classifier
+          # and the Slack DM still see the real value via outputs/env.
+          echo "::add-mask::$REPO"
+          # PR title can contain the repo name in some teams' conventions —
+          # mask it too just in case. The Slack message and run summary
+          # render it; only raw stdout sees the redacted form.
+          echo "::add-mask::$PR_TITLE"
+          {
+            echo "repo=$REPO"
+            echo "pr_number=$PR_NUMBER"
+            echo "pr_title=$PR_TITLE"
+            echo "pr_url=$PR_URL"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Fetch PR body + diff from upstream repo
         id: pr_data
@@ -107,6 +125,12 @@ jobs:
         id: classify
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # JSON map of upstream `owner/repo` -> list of doc-tree path
+          # hints. Lives in the docs-repo secret store so the public
+          # workflow file doesn't enumerate which private backends are
+          # wired in. If unset, the classifier falls back to a generic
+          # hint (slightly less actionable Slack DMs but still works).
+          UPSTREAM_REPO_HINTS_JSON: ${{ secrets.UPSTREAM_REPO_HINTS_JSON }}
         run: |
           python3 scripts/probes/upstream_pr_classifier.py \
             --repo "${{ steps.ctx.outputs.repo }}" \
