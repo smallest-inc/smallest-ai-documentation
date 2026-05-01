@@ -1,0 +1,199 @@
+name: PR drift detector (upstream-merged → docs-impact classifier)
+
+# Listens for PRs merged on upstream backend / demos repos and asks
+# Claude whether the docs need an update. Only NEWSWORTHY verdicts
+# (DOCS_NEEDED or MAYBE) ping Slack — NO_DOCS_IMPACT keeps the workflow
+# silent so the channel doesn't drown in upstream merges.
+#
+# Trigger: repository_dispatch event_type=upstream_pr_merged, sent from
+# each source repo's notify-docs-on-merge.yml (see
+# docs/upstream-dispatcher.example.yml in this repo for the source-side
+# workflow you copy into atoms-platform / waves-platform /
+# lightning-asr-offline / godspeed).
+#
+# client_payload shape:
+#   {
+#     "repo":      "OWNER/REPO",
+#     "pr_number": 142,
+#     "pr_title":  "Add some_new_flag",
+#     "pr_url":    "https://github.com/OWNER/REPO/pull/142",
+#     "merged_by": "username",
+#     "base_ref":  "main"
+#   }
+
+on:
+  repository_dispatch:
+    types: [upstream_pr_merged]
+  workflow_dispatch:
+    # Allow manual smoke tests with a synthetic payload. Defaults are
+    # generic placeholders so this public workflow file doesn't enumerate
+    # the upstream repos that wire into it. Operators fill in the real
+    # owner/name when smoke-testing.
+    inputs:
+      repo:
+        description: 'Upstream repo (owner/name)'
+        required: true
+        default: 'OWNER/REPO'
+      pr_number:
+        description: 'PR number'
+        required: true
+        default: '1'
+      pr_title:
+        description: 'PR title'
+        required: true
+        default: '[smoke test] sample PR for classifier dry-run'
+      pr_url:
+        description: 'PR URL'
+        required: true
+        default: 'https://github.com/OWNER/REPO/pull/1'
+
+jobs:
+  classify-and-notify:
+    name: Classify upstream PR for docs impact
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Resolve event context + mask repo names from logs
+        id: ctx
+        run: |
+          # Two trigger paths: repository_dispatch (real upstream signal)
+          # and workflow_dispatch (manual smoke test). Normalise both to
+          # the same env vars so the rest of the job is uniform.
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            REPO="${{ github.event.client_payload.repo }}"
+            PR_NUMBER="${{ github.event.client_payload.pr_number }}"
+            PR_TITLE="${{ github.event.client_payload.pr_title }}"
+            PR_URL="${{ github.event.client_payload.pr_url }}"
+          else
+            REPO="${{ inputs.repo }}"
+            PR_NUMBER="${{ inputs.pr_number }}"
+            PR_TITLE="${{ inputs.pr_title }}"
+            PR_URL="${{ inputs.pr_url }}"
+          fi
+          # Docs repo is public, so its run logs are public too. Mask the
+          # upstream repo identity so log readers can't enumerate which
+          # private backend repos this workflow is wired to. The classifier
+          # and the Slack DM still see the real value via outputs/env.
+          echo "::add-mask::$REPO"
+          # PR title can contain the repo name in some teams' conventions —
+          # mask it too just in case. The Slack message and run summary
+          # render it; only raw stdout sees the redacted form.
+          echo "::add-mask::$PR_TITLE"
+          {
+            echo "repo=$REPO"
+            echo "pr_number=$PR_NUMBER"
+            echo "pr_title=$PR_TITLE"
+            echo "pr_url=$PR_URL"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Fetch PR body + diff from upstream repo
+        id: pr_data
+        env:
+          # Read-Contents PAT scoped to the upstream repos we care about.
+          # Add as a docs-repo secret named UPSTREAM_PR_READ_TOKEN. If
+          # unset, the job still runs but with empty body/diff (the
+          # classifier degrades gracefully — verdict will lean MAYBE/
+          # NO_DOCS_IMPACT since it can't see the actual change).
+          GH_TOKEN: ${{ secrets.UPSTREAM_PR_READ_TOKEN }}
+        run: |
+          REPO="${{ steps.ctx.outputs.repo }}"
+          PR="${{ steps.ctx.outputs.pr_number }}"
+          if [ -z "$GH_TOKEN" ]; then
+            echo "WARN: UPSTREAM_PR_READ_TOKEN not set — skipping body/diff fetch."
+            : > /tmp/pr-body.txt
+            : > /tmp/pr-diff.txt
+            exit 0
+          fi
+          curl -sS -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/pulls/$PR" \
+            | jq -r '.body // ""' > /tmp/pr-body.txt
+          curl -sS -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github.v3.diff" \
+            "https://api.github.com/repos/$REPO/pulls/$PR" \
+            > /tmp/pr-diff.txt
+          echo "PR body: $(wc -c < /tmp/pr-body.txt) bytes"
+          echo "PR diff: $(wc -c < /tmp/pr-diff.txt) bytes"
+
+      - name: Classify (Claude)
+        id: classify
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # JSON map of upstream `owner/repo` -> list of doc-tree path
+          # hints. Lives in the docs-repo secret store so the public
+          # workflow file doesn't enumerate which private backends are
+          # wired in. If unset, the classifier falls back to a generic
+          # hint (slightly less actionable Slack DMs but still works).
+          UPSTREAM_REPO_HINTS_JSON: ${{ secrets.UPSTREAM_REPO_HINTS_JSON }}
+        run: |
+          python3 scripts/probes/upstream_pr_classifier.py \
+            --repo "${{ steps.ctx.outputs.repo }}" \
+            --pr   "${{ steps.ctx.outputs.pr_number }}" \
+            --pr-title "${{ steps.ctx.outputs.pr_title }}" \
+            --pr-url   "${{ steps.ctx.outputs.pr_url }}" \
+            --pr-body-file /tmp/pr-body.txt \
+            --pr-diff-file /tmp/pr-diff.txt \
+            --out-json /tmp/classification.json
+          VERDICT=$(jq -r '.verdict' /tmp/classification.json)
+          echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Upstream PR drift classifier"
+            echo ""
+            echo "**Repo:** \`${{ steps.ctx.outputs.repo }}\`  "
+            echo "**PR:** [#${{ steps.ctx.outputs.pr_number }}](${{ steps.ctx.outputs.pr_url }}) — ${{ steps.ctx.outputs.pr_title }}  "
+            echo "**Verdict:** \`$VERDICT\`"
+            echo ""
+            jq -r '.summary' /tmp/classification.json
+            echo ""
+            echo "### Affected doc files"
+            jq -r '.affected_doc_files | map("- `" + . + "`") | join("\n")' /tmp/classification.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build Slack payload (DOCS_NEEDED or MAYBE only)
+        if: steps.classify.outputs.verdict == 'DOCS_NEEDED' || steps.classify.outputs.verdict == 'MAYBE'
+        run: |
+          SUMMARY=$(jq -r '.summary' /tmp/classification.json)
+          FILES=$(jq -r '.affected_doc_files | map("• `" + . + "`") | join("\n")' /tmp/classification.json)
+          QUESTIONS=$(jq -r '.questions_for_human | map("• " + .) | join("\n")' /tmp/classification.json)
+          VERDICT="${{ steps.classify.outputs.verdict }}"
+          if [ "$VERDICT" = "DOCS_NEEDED" ]; then
+            HEADER=":rotating_light: Upstream PR likely needs docs update"
+          else
+            HEADER=":mag: Upstream PR — maybe needs docs (your call)"
+          fi
+          jq -n \
+            --arg header "$HEADER" \
+            --arg verdict "$VERDICT" \
+            --arg repo "${{ steps.ctx.outputs.repo }}" \
+            --arg pr "#${{ steps.ctx.outputs.pr_number }} — ${{ steps.ctx.outputs.pr_title }}" \
+            --arg pr_url "${{ steps.ctx.outputs.pr_url }}" \
+            --arg run_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --arg summary "$SUMMARY" \
+            --arg files "$FILES" \
+            --arg questions "$QUESTIONS" \
+            --arg ping "<@U0A5SG1LM1C>" \
+            '{
+              text: ("Upstream PR drift: " + $verdict + " — cc " + $ping),
+              blocks: [
+                { type: "header",  text: { type: "plain_text", text: $header } },
+                { type: "section", text: { type: "mrkdwn",     text: ("*" + $repo + "* — <" + $pr_url + "|" + $pr + ">") } },
+                { type: "section", text: { type: "mrkdwn",     text: $summary } },
+                { type: "section", text: { type: "mrkdwn",     text: ("*Affected doc files:*\n" + $files) } },
+                { type: "section", text: { type: "mrkdwn",     text: (if $questions == "" then "_no open questions_" else ("*Need from you:*\n" + $questions) end) } },
+                { type: "context", elements: [ { type: "mrkdwn", text: ("Classifier run: <" + $run_url + "|view logs>") } ] }
+              ]
+            }' > /tmp/slack-payload.json
+
+      - name: Notify Slack
+        if: steps.classify.outputs.verdict == 'DOCS_NEEDED' || steps.classify.outputs.verdict == 'MAYBE'
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_DM_WEBHOOK_URL || secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload-file-path: /tmp/slack-payload.json
