@@ -125,13 +125,11 @@ def call_anthropic(stt_diff: str, tts_diff: str, run_url: str, api_key: str) -> 
         },
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            payload = json.load(resp)
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", "replace")
-        print(f"Anthropic API HTTP {e.code}: {body[:500]}", file=sys.stderr)
-        raise
+    # Don't catch HTTPError here — let it propagate so main() can apply
+    # the degrade-to-NOISE policy uniformly. Other exceptions (network,
+    # JSON parse) also bubble up and main() handles them too.
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        payload = json.load(resp)
     text = "".join(b["text"] for b in payload["content"] if b["type"] == "text").strip()
     # Sometimes the model wraps JSON in ```json fences; strip them.
     if text.startswith("```"):
@@ -165,7 +163,34 @@ def main() -> int:
     stt_diff = Path(args.stt_diff).read_text() if Path(args.stt_diff).exists() else ""
     tts_diff = Path(args.tts_diff).read_text() if Path(args.tts_diff).exists() else ""
 
-    result = call_anthropic(stt_diff, tts_diff, args.run_url, api_key)
+    # Anthropic-side failures (billing/quota/rate-limit/transient outage)
+    # should NOT crash the whole workflow — the diff is already in the run
+    # summary + artifact. Degrade to NOISE with a clear "classifier
+    # unavailable" summary so the operator sees the situation but the
+    # workflow stays green.
+    try:
+        result = call_anthropic(stt_diff, tts_diff, args.run_url, api_key)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace") if not isinstance(e.fp, type(None)) else ""
+        # Common billing/quota signal; keep the operator-visible summary
+        # specific so it's clear what to do.
+        kind = "billing/quota" if e.code == 400 and "credit balance" in body.lower() else f"HTTP {e.code}"
+        print(f"WARN: Anthropic API {kind} error; degrading to NOISE.", file=sys.stderr)
+        result = {
+            "verdict": "NOISE",
+            "summary": f"Classifier unavailable ({kind}). Diff is in the run summary + artifact for manual review. Anthropic raw error (truncated): {body[:300]}",
+            "newsworthy_signals": [],
+            "doc_files_to_audit": [],
+        }
+    except Exception as e:
+        print(f"WARN: Classifier call failed ({type(e).__name__}: {e}); degrading to NOISE.", file=sys.stderr)
+        result = {
+            "verdict": "NOISE",
+            "summary": f"Classifier unavailable ({type(e).__name__}). Diff is in the run summary + artifact for manual review.",
+            "newsworthy_signals": [],
+            "doc_files_to_audit": [],
+        }
+
     # Validate shape — fail loudly if Claude returned something unexpected.
     for key in ("verdict", "summary", "newsworthy_signals", "doc_files_to_audit"):
         if key not in result:
