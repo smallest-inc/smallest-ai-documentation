@@ -1,0 +1,21 @@
+---
+title: Pulse STT — `multi-indic` and `multi-asian` clarified as pre-recorded HTTP only (correction)
+---
+
+The `multi-indic` and `multi-asian` regional auto-detection scopes announced earlier today apply only to the **Pulse STT pre-recorded HTTP endpoint** (`POST /waves/v1/pulse/get_text`). They are **not** supported on the WebSocket streaming endpoint (`wss://api.smallest.ai/waves/v1/pulse/get_text`).
+
+Specs and reference docs corrected accordingly:
+
+- `fern/apis/waves/asyncapi/pulse-stt-ws.yaml` — `multi-indic` / `multi-asian` removed from the WebSocket `language` enum.
+- `fern/apis/waves/asyncapi/pulse-stt-ws-overrides.yml` — same.
+- `fern/apis/waves-v4/overrides/pulse-stt-ws-overrides.yml` — same.
+- `fern/products/waves/pages/v4.0.0/api-references/pulse-stt-ws.mdx` (+ versions mirror) — WebSocket reference table cell trimmed to `multi-eu` / `multi` only.
+- `fern/products/waves/pages/v4.0.0/speech-to-text/pre-recorded/quickstart.mdx` (+ versions mirror) — language Note now lists all four scopes (`multi-eu`, `multi-indic`, `multi-asian`, `multi`).
+
+The pre-recorded OpenAPI spec (`fern/apis/waves/openapi/pulse-stt-openapi.yaml`) and the rendered API reference page (`pulse-stt.mdx`) continue to advertise all four scopes — that surface is unchanged.
+
+The Pulse STT WebSocket probe (`scripts/probes/pulse_stt.py`) was also stripped of the two invalid test cases that were probing the WS endpoint with these scopes; the probe baseline (`scripts/probes/baseline-pulse-stt.json`) was regenerated.
+
+If your code already passes `language=multi-indic` or `language=multi-asian` to the **pre-recorded HTTP endpoint**, no action needed — that path is correct. If you wired either scope into a **WebSocket streaming** call, switch back to `multi-eu` or `multi` until streaming-side coverage ships.
+
+→ [Pulse STT pre-recorded](/waves/documentation/speech-to-text-pulse/pre-recorded/quickstart)
