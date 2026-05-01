@@ -1,20 +1,24 @@
 name: API Flag Probe
 
-# Weekly probe of the live Pulse STT WebSocket API for behavior changes.
+# Weekly probe of the live Smallest AI APIs for behavior changes:
+#   - Pulse STT WebSocket  → scripts/probes/pulse_stt.py
+#   - Lightning v3.1 TTS   → scripts/probes/lightning_tts.py (sync REST + SSE)
+#
 # Compares observable shape (param accepted? response field present?
-# transcript garbled?) against scripts/probes/baseline-pulse-stt.json.
-# Posts to Slack only when something diverges from baseline.
+# size class right? SSE stream complete?) against committed baselines.
+# Both diffs are fed to a Claude classifier; only NEWSWORTHY verdicts
+# ping Slack. NOISE/NONE keeps the workflow silent.
 #
 # Manual run: Actions tab -> "API Flag Probe" -> "Run workflow".
 # Schedule: Mondays 03:30 UTC = 09:00 IST.
 #
 # Why this exists: docs lag the live API silently when params are
-# accepted-but-ignored or default behavior shifts. Two real cases caught
+# accepted-but-ignored or default behavior shifts. Real cases caught
 # manually before this workflow existed:
 #   1. full_transcript=true accepted but field never returned.
 #   2. format=false documented to cascade to ITN, but ITN still ran.
-# A weekly probe surfaces the next one of these without anyone needing
-# to remember to look.
+#   3. Lightning TTS SSE doc snippet wrote empty WAVs because the
+#      response shape silently changed.
 
 on:
   workflow_dispatch:
@@ -22,8 +26,8 @@ on:
     - cron: '30 3 * * 1'
 
 jobs:
-  probe-pulse-stt:
-    name: Probe Pulse STT for behavior changes
+  probe-and-classify:
+    name: Probe Pulse STT + Lightning TTS, classify, notify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,24 +54,70 @@ jobs:
           DIFF_RC=$?
           set -e
           case "$DIFF_RC" in
-            0) echo "diff_found=false" >> "$GITHUB_OUTPUT"; echo "✅ No behavior change vs baseline." ;;
-            1) echo "diff_found=true"  >> "$GITHUB_OUTPUT"; echo "⚠️ Diffs detected — running classifier." ;;
-            *) echo "diff_found=error" >> "$GITHUB_OUTPUT"; echo "❌ diff.py failed with code $DIFF_RC"; exit $DIFF_RC ;;
+            0) echo "stt_diff_found=false" >> "$GITHUB_OUTPUT"; echo "✅ Pulse STT: no behavior change vs baseline." ;;
+            1) echo "stt_diff_found=true"  >> "$GITHUB_OUTPUT"; echo "⚠️ Pulse STT: diffs detected." ;;
+            *) echo "stt_diff_found=error" >> "$GITHUB_OUTPUT"; echo "❌ Pulse STT diff.py failed with code $DIFF_RC"; exit $DIFF_RC ;;
           esac
+
+      - name: Run Lightning TTS probe + diff against baseline
+        id: probe_tts
+        env:
+          SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
+        run: |
+          set -e
+          python3 scripts/probes/lightning_tts.py --out /tmp/live-lightning-tts.json
+          set +e
+          python3 scripts/probes/diff.py \
+            scripts/probes/baseline-lightning-tts.json \
+            /tmp/live-lightning-tts.json --markdown > /tmp/diff-tts-report.md
+          DIFF_RC=$?
+          set -e
+          case "$DIFF_RC" in
+            0) echo "tts_diff_found=false" >> "$GITHUB_OUTPUT"; echo "✅ Lightning TTS: no behavior change vs baseline." ;;
+            1) echo "tts_diff_found=true"  >> "$GITHUB_OUTPUT"; echo "⚠️ Lightning TTS: diffs detected." ;;
+            *) echo "tts_diff_found=error" >> "$GITHUB_OUTPUT"; echo "❌ Lightning TTS diff.py failed with code $DIFF_RC"; exit $DIFF_RC ;;
+          esac
+
+      - name: Set combined diff_found output
+        id: combined
+        run: |
+          if [ "${{ steps.probe.outputs.stt_diff_found }}" = "true" ] || [ "${{ steps.probe_tts.outputs.tts_diff_found }}" = "true" ]; then
+            echo "diff_found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "diff_found=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Job summary
         if: always()
         run: |
-          if [ -f /tmp/diff-report.md ]; then
-            cat /tmp/diff-report.md >> "$GITHUB_STEP_SUMMARY"
-          fi
+          {
+            if [ -f /tmp/diff-report.md ]; then
+              echo "## Pulse STT"
+              cat /tmp/diff-report.md
+              echo ""
+            fi
+            if [ -f /tmp/diff-tts-report.md ]; then
+              echo "---"
+              echo ""
+              echo "## Lightning TTS"
+              cat /tmp/diff-tts-report.md
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload live probe results as artifact
+      - name: Upload Pulse STT live probe results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: live-pulse-stt-probe
           path: /tmp/live-pulse-stt.json
+          retention-days: 30
+
+      - name: Upload Lightning TTS live probe results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-lightning-tts-probe
+          path: /tmp/live-lightning-tts.json
           retention-days: 30
 
       # ─── AI classifier ───
@@ -80,13 +130,15 @@ jobs:
       # team. NOISE/NONE keeps the workflow silent — the diff is still
       # in the job summary + artifact for anyone curious.
 
-      - name: Classify diff (Claude)
-        if: steps.probe.outputs.diff_found == 'true'
+      - name: Classify diffs (Claude)
+        if: steps.combined.outputs.diff_found == 'true'
         id: classify
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          touch /tmp/diff-tts-report.md   # placeholder until TTS probe lands
+          # Both diff files exist by this point — STT from probe step,
+          # TTS from probe_tts step. classify.py treats either as
+          # optional, so passing both real files is the canonical call.
           python3 scripts/probes/classify.py \
             --stt-diff /tmp/diff-report.md \
             --tts-diff /tmp/diff-tts-report.md \
@@ -110,23 +162,28 @@ jobs:
           SUMMARY=$(jq -r '.summary' /tmp/classification.json)
           SIGNALS=$(jq -r '.newsworthy_signals | map("• " + .) | join("\n")' /tmp/classification.json)
           FILES=$(jq -r '.doc_files_to_audit | map("• `" + . + "`") | join("\n")' /tmp/classification.json)
-          # Truncate report to fit Slack's 3000-char text limit with margin.
-          REPORT=$(head -c 2200 /tmp/diff-report.md)
+          # Slack's 3000-char text limit per section. Combine STT + TTS
+          # diffs with a header each, and truncate the whole thing with
+          # margin so we don't blow the limit.
+          STT_REPORT=$(head -c 1000 /tmp/diff-report.md 2>/dev/null || echo "(no STT diff)")
+          TTS_REPORT=$(head -c 1000 /tmp/diff-tts-report.md 2>/dev/null || echo "(no TTS diff)")
           jq -n \
             --arg run_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             --arg summary "$SUMMARY" \
             --arg signals "$SIGNALS" \
             --arg files "$FILES" \
-            --arg report "$REPORT" \
+            --arg stt_report "$STT_REPORT" \
+            --arg tts_report "$TTS_REPORT" \
             --arg ping "<@U0A5SG1LM1C>" \
             '{
-              text: ("Pulse STT probe — newsworthy behavior change — cc " + $ping),
+              text: ("API probe — newsworthy behavior change — cc " + $ping),
               blocks: [
-                { type: "header", text: { type: "plain_text", text: ":rotating_light: Pulse STT — newsworthy change" } },
+                { type: "header", text: { type: "plain_text", text: ":rotating_light: API probe — newsworthy change" } },
                 { type: "section", text: { type: "mrkdwn", text: ($summary + "\n\ncc " + $ping) } },
                 { type: "section", text: { type: "mrkdwn", text: ("*Signals:*\n" + $signals) } },
                 { type: "section", text: { type: "mrkdwn", text: ("*Doc files to audit:*\n" + $files) } },
-                { type: "section", text: { type: "mrkdwn", text: ("*Diff (truncated):*\n```\n" + $report + "\n```") } },
+                { type: "section", text: { type: "mrkdwn", text: ("*Pulse STT diff (truncated):*\n```\n" + $stt_report + "\n```") } },
+                { type: "section", text: { type: "mrkdwn", text: ("*Lightning TTS diff (truncated):*\n```\n" + $tts_report + "\n```") } },
                 { type: "context", elements: [ { type: "mrkdwn", text: ("Run: <" + $run_url + "|view logs>") } ] }
               ]
             }' > /tmp/slack-payload.json
