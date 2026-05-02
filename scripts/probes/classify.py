@@ -62,6 +62,10 @@ NEWSWORTHY (Pulse STT)
 - New language codes appearing in `languages_seen` for any case (suggests the server's auto-detect scope expanded).
 - `status_code` shifting from success to error (or vice versa) on any case — suggests a param became required, was deprecated, or validation tightened/loosened.
 - `error_body` content changing materially on negative-test cases — suggests new validation rules or new error codes.
+- **Finalize-control regressions** — these three test cases probe params Gaurav shipped:
+  * `finalize-on-words-false-suppresses-auto`: `is_final_count` going up significantly (e.g., from 1 to 6) means `finalize_on_words=false` stopped suppressing auto-finalize. Newsworthy.
+  * `max-words-20-soft-cap`: `max_is_final_word_count` exceeding 20 means the cap is broken. Newsworthy.
+  * `from-finalize-presence-on-manual`: `saw_from_finalize_field` flipping (especially True→False) means the response field stopped being labeled. Newsworthy — this is the field Gaurav confirmed shipped.
 
 NEWSWORTHY (Lightning TTS)
 - `status_code` change for any case (e.g. 200→4xx, 4xx→200).
@@ -76,6 +80,7 @@ NOISE — do NOT classify as newsworthy
 - `looks_garbled` toggling on edge clips (model retraining drift).
 - `languages_seen` narrowing from `{da,en}` → `{en}` on Pulse cases that send English audio (single-language detector wobble, not a behavior change). **(BUT: if a NEW language code appears, that IS newsworthy.)**
 - `transcript_first120` / `transcript_len` differences (always noise — those fields are excluded from diff.py SHAPE_FIELDS anyway).
+- `is_final_count` / `max_is_final_word_count` shifting by ±1 on test cases other than the three finalize-control ones — counts drift slightly with model retraining, only meaningful on the cases that explicitly probe finalize control.
 - New cases marked `<new case>` (test additions, not API changes).
 
 NONE — both diffs are empty / the probe found nothing.
