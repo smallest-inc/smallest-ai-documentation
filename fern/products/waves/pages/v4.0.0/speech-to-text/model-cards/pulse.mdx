@@ -47,13 +47,13 @@ Pulse is a high-accuracy, low-latency speech-to-text model built for real-time t
     39 languages supported across streaming and non-streaming modes, with automatic language detection and code-switching within a single session.
   </Card>
   <Card title="PII / PCI Redaction" icon="shield-halved">
-    Built-in redaction of personal and payment card data, enterprise-ready for both streaming and non-streaming use cases.
+    Built-in redaction of personal and payment card data across both streaming and non-streaming use cases.
   </Card>
   <Card title="Speaker Diarization" icon="users">
     Automatic multi-speaker identification across both streaming and non-streaming modes, with per-word and per-utterance speaker labels.
   </Card>
   <Card title="Noise Reduction" icon="volume-low">
-    Background noise handling built into the model — enterprise-ready in streaming mode.
+    Background noise handling built into the model.
   </Card>
   <Card title="Code-Switching" icon="language">
     Supports multi-language audio within a single session. Best used by setting the known primary language (e.g. `es` for Spanish handles English+Spanish automatically).
@@ -64,9 +64,9 @@ Pulse is a high-accuracy, low-latency speech-to-text model built for real-time t
 
 ## Performance & Benchmarks
 
-Pulse STT is evaluated against three open-source datasets — [FLEURS](https://huggingface.co/datasets/google/fleurs), [ESB](https://huggingface.co/datasets/esb/datasets), and WildASR — and one internal English perturbation suite. Word Error Rate (WER) by language. Lower is better. `NA` = not available or not supported by that provider.
+Pulse STT is evaluated against three open-source datasets — [FLEURS](https://huggingface.co/datasets/google/fleurs), [ESB](https://huggingface.co/datasets/esb/datasets), and [WildASR](https://huggingface.co/datasets/bosonai/WildASR) — and one internal English perturbation suite. Word Error Rate (WER) by language. Lower is better. `NA` = not available or not supported by that provider.
 
-For the full benchmark comparison including Deepgram Nova 2 and Nova 3 numbers across every dataset, see the [Performance page](/waves/documentation/speech-to-text-pulse/benchmarks/performance).
+For the full benchmark comparison across every dataset, see the [Performance page](/waves/documentation/speech-to-text-pulse/benchmarks/performance).
 
 ### FLEURS — Streaming
 
@@ -192,7 +192,7 @@ An open-source robustness benchmark designed to stress-test STT under real-world
 Not a public dataset. The English audio is sliced by perturbation type (Emotion, Entity, Disfluency, Noise, Accent, Silence, Speaker Diversity, Speed, Boundary, Pitch, Audio Quality, Volume) to isolate model weaknesses.
 
 | Category | Pulse English (Streaming) | Deepgram Nova 3 (en) |
-| :---: | :---: | :---: |
+| :--- | :---: | :---: |
 | **Emotion** | 15.43% | 19.42% |
 | **Entity** | 12.14% | 11.80% |
 | **Disfluency** | 11.91% | 8.64% |
@@ -219,7 +219,7 @@ Not a public dataset. The English audio is sliced by perturbation type (Emotion,
 | Sentence-level timestamps | Yes | Requires `word_timestamps=true` to be enabled |
 | Punctuation | Yes | Auto punctuation |
 | Profanity filter | Yes | Explicit content filtering |
-| Language detection | Yes | Auto language ID — not enterprise-ready |
+| Language detection | Yes | Auto language ID |
 | Code-switching | Yes | Multi-language in same audio |
 | Noise reduction | Yes | Background noise handling |
 | Emotion, age and gender detection | Yes | Returns the percentage score of detected emotion, age, and gender |
@@ -349,20 +349,12 @@ For example, setting the language parameter to `es` (Spanish) tells the model to
 | `multi-eu` | Unknown European-language audio (auto-detects across the European set) |
 | `multi` | Truly unknown or mixed-language audio (full multilingual auto-detection) |
 
-<Warning>
-Omitting `language` routes to `multi-eu` and can mis-detect on non-European audio (for example, returning Russian for English input). Always pass `language` explicitly when the source language is known.
-</Warning>
-
 <Note>
 **When to use `multi-eu` or `multi`:**
 - When the language is truly unknown beforehand
 - When processing audio from varied or unpredictable sources
 - Prefer `multi-eu` for European-language input; use `multi` only for truly mixed multilingual audio
 </Note>
-
-### Use features only when needed
-
-Enable optional features (diarization, PII redaction, timestamps) only when the use case requires them. Unnecessary features add latency.
 
 ---
 
@@ -386,19 +378,7 @@ Enable optional features (diarization, PII redaction, timestamps) only when the 
 
 ---
 
-## Limitations & Safety
-
-### Known Limitations
-
-Accuracy varies across languages. The following gaps are known and actively being addressed:
-
-- **Hindi** — still training on proper nouns and order IDs; not enterprise-ready for non-streaming
-- **Low-resource languages** — Kannada, Malayalam, Marathi, Gujarati, Telugu, Oriya, Bengali, Punjabi, Tamil, Japanese, Cantonese, Mandarin, Korean, Tagalog, Indonesian, and Malay are available but not yet enterprise-ready
-- **Language detection (`multi`)** — automatic language identification does not perform reliably enough for production workloads; specify the known language parameter instead
-- **Audio quality** — transcription accuracy is directly affected by input audio quality; background noise, low bitrate, or overlapping speech may degrade results even with noise reduction enabled
-- **Code-switching** — works best when the primary language is explicitly set; fully automatic multi-language detection in a single audio stream is not enterprise-ready
-
-### Safety & Compliance
+## Safety & Compliance
 
 Pulse must not be used for:
 
