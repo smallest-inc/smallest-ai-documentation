@@ -78,10 +78,31 @@ jobs:
             *) echo "tts_diff_found=error" >> "$GITHUB_OUTPUT"; echo "❌ Lightning TTS diff.py failed with code $DIFF_RC"; exit $DIFF_RC ;;
           esac
 
+      - name: Run Atoms probe + diff against baseline
+        id: probe_atoms
+        env:
+          SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
+        run: |
+          set -e
+          python3 scripts/probes/atoms.py --out /tmp/live-atoms.json
+          set +e
+          python3 scripts/probes/diff.py \
+            scripts/probes/baseline-atoms.json \
+            /tmp/live-atoms.json --markdown > /tmp/diff-atoms-report.md
+          DIFF_RC=$?
+          set -e
+          case "$DIFF_RC" in
+            0) echo "atoms_diff_found=false" >> "$GITHUB_OUTPUT"; echo "✅ Atoms: no behavior change vs baseline." ;;
+            1) echo "atoms_diff_found=true"  >> "$GITHUB_OUTPUT"; echo "⚠️ Atoms: diffs detected." ;;
+            *) echo "atoms_diff_found=error" >> "$GITHUB_OUTPUT"; echo "❌ Atoms diff.py failed with code $DIFF_RC"; exit $DIFF_RC ;;
+          esac
+
       - name: Set combined diff_found output
         id: combined
         run: |
-          if [ "${{ steps.probe.outputs.stt_diff_found }}" = "true" ] || [ "${{ steps.probe_tts.outputs.tts_diff_found }}" = "true" ]; then
+          if [ "${{ steps.probe.outputs.stt_diff_found }}" = "true" ] \
+             || [ "${{ steps.probe_tts.outputs.tts_diff_found }}" = "true" ] \
+             || [ "${{ steps.probe_atoms.outputs.atoms_diff_found }}" = "true" ]; then
             echo "diff_found=true" >> "$GITHUB_OUTPUT"
           else
             echo "diff_found=false" >> "$GITHUB_OUTPUT"
@@ -101,6 +122,13 @@ jobs:
               echo ""
               echo "## Lightning TTS"
               cat /tmp/diff-tts-report.md
+              echo ""
+            fi
+            if [ -f /tmp/diff-atoms-report.md ]; then
+              echo "---"
+              echo ""
+              echo "## Atoms"
+              cat /tmp/diff-atoms-report.md
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -118,6 +146,14 @@ jobs:
         with:
           name: live-lightning-tts-probe
           path: /tmp/live-lightning-tts.json
+          retention-days: 30
+
+      - name: Upload Atoms live probe results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-atoms-probe
+          path: /tmp/live-atoms.json
           retention-days: 30
 
       # ─── AI classifier ───
@@ -142,6 +178,7 @@ jobs:
           python3 scripts/probes/classify.py \
             --stt-diff /tmp/diff-report.md \
             --tts-diff /tmp/diff-tts-report.md \
+            --atoms-diff /tmp/diff-atoms-report.md \
             --out-json /tmp/classification.json \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           VERDICT=$(jq -r '.verdict' /tmp/classification.json)
