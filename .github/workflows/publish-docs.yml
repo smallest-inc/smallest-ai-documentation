@@ -13,9 +13,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install Fern CLI tool
+        run: |
+          npm install -g fern-api@latest
+          fern upgrade
+          fern --version
+
       - name: Publish Docs
         env:
           FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
-        run: |
-          npx --yes fern-api@5.7.6 --version
-          npx --yes fern-api@5.7.6 generate --docs --log-level debug
+        run: fern generate --docs --log-level debug
