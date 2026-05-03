@@ -23,6 +23,7 @@ import argparse
 import json
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -60,6 +61,12 @@ def find_cookbook_urls() -> dict[str, list[str]]:
                 continue
             for raw in COOKBOOK_RE.findall(text):
                 url = raw.rstrip(TRAILING_PUNCT)
+                # Strip URL fragment (#section). GitHub returns 200 for
+                # any valid path regardless of whether the anchor exists,
+                # so checking the path is the only meaningful signal.
+                # Anchor rot is a separate concern not covered by this
+                # audit; HEAD-checking the path catches actual link rot.
+                url = url.split("#", 1)[0]
                 # Skip the bare prefix that survives when the regex
                 # stops at a space mid-sentence (e.g., "see the
                 # https://github.com/smallest-inc/cookbook/raw/main/ folder").
@@ -72,8 +79,16 @@ def find_cookbook_urls() -> dict[str, list[str]]:
     return found
 
 
-def head_check(url: str, timeout: int = 15) -> tuple[int, str]:
-    """Return (status_code, error_message). status_code=0 on network error."""
+def head_check(url: str, timeout: int = 15, max_attempts: int = 3) -> tuple[int, str]:
+    """Return (status_code, error_message). status_code=0 on network error.
+
+    Retries with exponential backoff on transient failures (5xx responses
+    and URL/network errors). 4xx responses are treated as definitive and
+    not retried — those are real broken links, not flakes. The audit runs
+    weekly against ~50 URLs, so an extra 1–4s per genuine flake is cheap
+    insurance against false-positive issues + Slack pings on Monday
+    morning when GitHub blips.
+    """
     # GitHub redirects HEAD on blob/tree URLs to a login page (302). Use
     # a small GET instead and let the connection close after headers.
     req = urllib.request.Request(
@@ -84,15 +99,29 @@ def head_check(url: str, timeout: int = 15) -> tuple[int, str]:
             "Accept": "*/*",
         },
     )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.status, ""
-    except urllib.error.HTTPError as e:
-        return e.code, f"HTTP {e.code} {e.reason}"
-    except urllib.error.URLError as e:
-        return 0, f"URLError: {e.reason}"
-    except Exception as e:  # noqa: BLE001
-        return 0, f"{type(e).__name__}: {e}"
+    last_status = 0
+    last_err = ""
+    for attempt in range(max_attempts):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.status, ""
+        except urllib.error.HTTPError as e:
+            last_status = e.code
+            last_err = f"HTTP {e.code} {e.reason}"
+            # 4xx is a definitive answer — don't retry.
+            if 400 <= e.code < 500:
+                return last_status, last_err
+            # 5xx falls through to retry.
+        except urllib.error.URLError as e:
+            last_status = 0
+            last_err = f"URLError: {e.reason}"
+        except Exception as e:  # noqa: BLE001
+            last_status = 0
+            last_err = f"{type(e).__name__}: {e}"
+        # Backoff before next attempt: 1s, 2s, 4s …
+        if attempt < max_attempts - 1:
+            time.sleep(2 ** attempt)
+    return last_status, last_err
 
 
 def main() -> int:
