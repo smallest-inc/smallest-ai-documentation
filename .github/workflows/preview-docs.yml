@@ -12,19 +12,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Fern CLI tool
-        run: |
-          npm uninstall -g fern-api || true
-          npm cache clean --force
-          npm install -g fern-api@5.7.6
-          fern --version
-
       - name: Generate preview URL
         id: generate-docs
         env:
           FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
         run: |
-          OUTPUT=$(fern generate --docs --instance smallest-ai.docs.buildwithfern.com --preview 2>&1) || true
+          npx --yes fern-api@5.7.6 --version
+          OUTPUT=$(npx --yes fern-api@5.7.6 generate --docs --instance smallest-ai.docs.buildwithfern.com --preview 2>&1) || true
           echo "$OUTPUT"
           URL=$(echo "$OUTPUT" | grep -oP 'Published docs to \K.*(?= \()')
           echo "Preview URL: $URL"
