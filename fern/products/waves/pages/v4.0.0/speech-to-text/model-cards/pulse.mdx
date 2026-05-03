@@ -50,7 +50,7 @@ Pulse is a high-accuracy, low-latency speech-to-text model built for real-time t
     Built-in redaction of personal and payment card data, enterprise-ready for both streaming and non-streaming use cases.
   </Card>
   <Card title="Speaker Diarization" icon="users">
-    Automatic multi-speaker identification available across both modes. Streaming diarization is enterprise-ready; non-streaming is available with a cap of 4 speakers.
+    Automatic multi-speaker identification across both streaming and non-streaming modes, with per-word and per-utterance speaker labels.
   </Card>
   <Card title="Noise Reduction" icon="volume-low">
     Background noise handling built into the model — enterprise-ready in streaming mode.
@@ -64,13 +64,11 @@ Pulse is a high-accuracy, low-latency speech-to-text model built for real-time t
 
 ## Performance & Benchmarks
 
-Word Error Rate (WER) by language evaluated on the [FLEURS](https://huggingface.co/datasets/google/fleurs) dataset. Lower is better. `NA` = not available or not supported by that provider.
+Pulse STT is evaluated against three open-source datasets — [FLEURS](https://huggingface.co/datasets/google/fleurs), [ESB](https://huggingface.co/datasets/esb/datasets), and WildASR — and one internal English perturbation suite. Word Error Rate (WER) by language. Lower is better. `NA` = not available or not supported by that provider.
 
-<Note>
-**Evaluation.** FLEURS dataset across 32 languages. Competitor numbers sourced from Deepgram internal benchmarks.
-</Note>
+For the full benchmark comparison including Deepgram Nova 2 and Nova 3 numbers across every dataset, see the [Performance page](/waves/documentation/speech-to-text-pulse/benchmarks/performance).
 
-### Streaming
+### FLEURS — Streaming
 
 <Tabs>
   <Tab title="European Languages">
@@ -95,7 +93,7 @@ Word Error Rate (WER) by language evaluated on the [FLEURS](https://huggingface.
   </Tab>
 </Tabs>
 
-### Pre-recorded
+### FLEURS — Pre-recorded
 
 <Tabs>
   <Tab title="European Languages">
@@ -144,13 +142,68 @@ Word Error Rate (WER) by language evaluated on the [FLEURS](https://huggingface.
   </Tab>
 </Tabs>
 
+### English STT — ESB Dataset (Streaming)
+
+A Hugging Face benchmark suite aggregating 8 English speech datasets across diverse domains (audiobooks, parliament, meetings, finance, etc.) to test STT generalization.
+
+*Evaluated on the open-source Hugging Face ESB datasets. Smallest Pulse numbers from internal evaluation.*
+
+| Dataset | Smallest Pulse | Deepgram Nova 2 | Deepgram Nova 3 |
+| ----- | :---: | :---: | :---: |
+| **LibriSpeech Clean** | 3.22 | 4.35 | 3.71 |
+| **LibriSpeech Other** | 5.83 | 9.36 | 7.72 |
+| **Common Voice** | 11.05 | 17.79 | 14.59 |
+| **VoxPopuli** | 7.74 | 9.95 | 9.38 |
+| **TEDELIUM** | 4.85 | 4.35 | 3.57 |
+| **GigaSpeech** | 10.34 | 11.63 | 10.05 |
+| **SPGISpeech** | 3.59 | 5.26 | 3.28 |
+| **Earnings22** | 13.12 | 18.98 | 15.34 |
+| **AMI** | 14.25 | 19.86 | 16.06 |
+| **Overall** | 8.22 | 11.28 | 9.30 |
+
+### ASR Robustness — WildASR Dataset (Streaming)
+
+An open-source robustness benchmark designed to stress-test STT under real-world degraded conditions: clipping, far-field capture, background noise, phone codec compression, reverberation, and accented speech.
+
+*Evaluated on the open-source WildASR dataset. Smallest Pulse numbers from internal evaluation.*
+
+| Dataset | Smallest Pulse | Deepgram Nova 2 | Deepgram Nova 3 |
+| ----- | :---: | :---: | :---: |
+| **Clean** | 6.16 | 15.28 | 10.76 |
+| **Clipping** | 14.54 | 70.41 | 43.15 |
+| **Far Field** | 12.11 | 74.52 | 58.72 |
+| **Noise Gap** | 7.84 | 21.91 | 14.19 |
+| **Phone Codec** | 7.13 | 12.22 | 9.27 |
+| **Reverberation** | 8.78 | 40.71 | 27.21 |
+| **Accent** | 9.78 | 9.17 | 7.23 |
+| **Overall** | 9.48 | 34.89 | 24.36 |
+
+### Internal English Perturbation Benchmark
+
+Not a public dataset. The English audio is sliced by perturbation type (Emotion, Entity, Disfluency, Noise, Accent, Silence, Speaker Diversity, Speed, Boundary, Pitch, Audio Quality, Volume) to isolate model weaknesses.
+
+| Category | Pulse English (Streaming) | Deepgram Nova 3 (en) |
+| :---: | :---: | :---: |
+| **Emotion** | 15.43% | 19.42% |
+| **Entity** | 12.14% | 11.80% |
+| **Disfluency** | 11.91% | 8.64% |
+| **Noise** | 11.57% | 14.61% |
+| **Accent** | 9.13% | 10.43% |
+| **Silence** | 8.99% | 13.17% |
+| **Speaker Diversity** | 7.77% | 9.91% |
+| **Speed** | 3.54% | 6.85% |
+| **Boundary** | 3.02% | 6.30% |
+| **Pitch** | 2.60% | 4.04% |
+| **Audio Quality** | 2.45% | 4.05% |
+| **Volume** | 2.11% | 3.59% |
+
 ---
 
 ## Features — Non-streaming
 
 | Feature | Available | Notes |
 |---|---|---|
-| Speaker diarization | Yes | Capped at 4 speakers; known issues |
+| Speaker diarization | Yes | Multi-speaker identification |
 | PII redaction | Yes | Personal info redaction |
 | PCI redaction | Yes | Payment card data redaction |
 | Word-level timestamps | Yes | Per-word timing |
@@ -167,7 +220,7 @@ Word Error Rate (WER) by language evaluated on the [FLEURS](https://huggingface.
 | Feature | Available | Notes |
 |---|---|---|
 | Speaker diarization | Yes | Multi-speaker identification |
-| [Keyword boosting](/waves/documentation/speech-to-text-pulse/features/keyword-boosting) | Yes | Custom vocabulary enhancement |
+| Keyword boosting | Yes | Custom vocabulary enhancement |
 | PII redaction | Yes | Personal info redaction |
 | PCI redaction | Yes | Payment card data redaction |
 | Word-level timestamps | Yes | Per-word timing |
@@ -333,7 +386,6 @@ Accuracy varies across languages. The following gaps are known and actively bein
 - **Hindi** — still training on proper nouns and order IDs; not enterprise-ready for non-streaming
 - **Low-resource languages** — Kannada, Malayalam, Marathi, Gujarati, Telugu, Oriya, Bengali, Punjabi, Tamil, Japanese, Cantonese, Mandarin, Korean, Tagalog, Indonesian, and Malay are available but not yet enterprise-ready
 - **Language detection (`multi`)** — automatic language identification does not perform reliably enough for production workloads; specify the known language parameter instead
-- **Non-streaming speaker diarization** — capped at 4 speakers; known accuracy issues; contact support for higher speaker count requirements
 - **Audio quality** — transcription accuracy is directly affected by input audio quality; background noise, low bitrate, or overlapping speech may degrade results even with noise reduction enabled
 - **Code-switching** — works best when the primary language is explicitly set; fully automatic multi-language detection in a single audio stream is not enterprise-ready
 
