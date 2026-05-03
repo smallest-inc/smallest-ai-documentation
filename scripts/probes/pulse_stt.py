@@ -8,6 +8,10 @@ the same demo audio, and records observable behavior:
 - Is `language` echoed back in the final?
 - Is `full_transcript` returned (it shouldn't be — server ignores the flag)?
 - Are PII / PCI / ITN placeholders present in the transcript?
+- How many `is_final` chunks fired and what was the largest? (catches
+  `finalize_on_words=false` regressions and `max_words` cap regressions)
+- Did any response carry `from_finalize: true`? (catches regressions
+  where the manual finalize control message stops being labeled)
 
 The output is one canonical JSON record per combination. The diff layer
 (`diff.py`) compares against a committed baseline and flags any change.
@@ -142,16 +146,59 @@ TEST_CASES: list[tuple[str, dict]] = [
             "keywords": '["I:20,smiling:26"]',
         },
     ),
+    # Finalize-control flags. Three regressions to guard against:
+    #   1. `finalize_on_words=false` stops suppressing auto-finalize
+    #      → is_final_count climbs back up to baseline.
+    #   2. `max_words=20` stops capping the residual end transcript
+    #      → max_is_final_word_count exceeds 20.
+    #   3. `from_finalize: true` stops appearing on responses to manual
+    #      `{"type":"finalize"}` → saw_from_finalize_field flips False.
+    (
+        "finalize-on-words-false-suppresses-auto",
+        {
+            "language": "en",
+            "encoding": "linear16",
+            "sample_rate": "24000",
+            "finalize_on_words": "false",
+        },
+    ),
+    (
+        "max-words-20-soft-cap",
+        {
+            "language": "en",
+            "encoding": "linear16",
+            "sample_rate": "24000",
+            "max_words": "20",
+        },
+    ),
+    (
+        "from-finalize-presence-on-manual",
+        {
+            "language": "en",
+            "encoding": "linear16",
+            "sample_rate": "24000",
+            "finalize_on_words": "false",
+            # send_finalize_at_chunk consumed by run_one() — not a server
+            # param. Stripped before the URL is built.
+            "_send_finalize_at_chunk": 30,
+        },
+    ),
 ]
 
 
 async def run_one(label: str, params: dict, audio: bytes, api_key: str) -> dict:
-    qs = urlencode(params)
+    # Strip non-server keys (e.g. _send_finalize_at_chunk is consumed
+    # locally to schedule a manual finalize message mid-stream).
+    server_params = {k: v for k, v in params.items() if not k.startswith("_")}
+    send_finalize_at_chunk = params.get("_send_finalize_at_chunk")
+
+    qs = urlencode(server_params)
     url = f"{BASE_WS_URL}?{qs}" if qs else BASE_WS_URL
     headers = {"Authorization": f"Bearer {api_key}"}
 
     finals: list[dict] = []
     saw_full_transcript_field = False
+    saw_from_finalize_field = False
     error: str | None = None
 
     try:
@@ -159,12 +206,22 @@ async def run_one(label: str, params: dict, audio: bytes, api_key: str) -> dict:
 
             async def sender():
                 step = 4096
+                chunks_sent = 0
                 for i in range(0, len(audio), step):
                     try:
                         await ws.send(audio[i : i + step])
                     except websockets.ConnectionClosed:
                         return
+                    chunks_sent += 1
                     await asyncio.sleep(0.04)
+                    # Send manual finalize control message at the
+                    # configured chunk index, if any. Used by the
+                    # from-finalize-presence test case.
+                    if send_finalize_at_chunk is not None and chunks_sent == send_finalize_at_chunk:
+                        try:
+                            await ws.send(json.dumps({"type": "finalize"}))
+                        except websockets.ConnectionClosed:
+                            return
                 try:
                     await ws.send(json.dumps({"type": "close_stream"}))
                 except websockets.ConnectionClosed:
@@ -177,6 +234,8 @@ async def run_one(label: str, params: dict, audio: bytes, api_key: str) -> dict:
                     data = json.loads(msg)
                     if "full_transcript" in data:
                         saw_full_transcript_field = True
+                    if data.get("from_finalize") is True:
+                        saw_from_finalize_field = True
                     if data.get("status") == "error" or data.get("error"):
                         error = json.dumps(data)[:200]
                     if data.get("is_final"):
@@ -214,15 +273,22 @@ async def run_one(label: str, params: dict, audio: bytes, api_key: str) -> dict:
         or joined.count('"I') > 5
     )
 
+    is_final_count = len(finals)
+    word_counts = [len((f["transcript"] or "").split()) for f in finals]
+    max_is_final_word_count = max(word_counts) if word_counts else 0
+
     return {
         "label": label,
-        "params": params,
+        "params": {k: v for k, v in params.items() if not k.startswith("_")},
         "ok": error is None,
         "error": error,
         "transcript_len": len(joined),
         "transcript_first120": joined[:120],
         "languages_seen": languages,
         "saw_full_transcript_field": saw_full_transcript_field,
+        "saw_from_finalize_field": saw_from_finalize_field,
+        "is_final_count": is_final_count,
+        "max_is_final_word_count": max_is_final_word_count,
         "has_pii_placeholder": has_pii_placeholder,
         "has_pci_placeholder": has_pci_placeholder,
         "has_itn_currency": has_itn_currency,
