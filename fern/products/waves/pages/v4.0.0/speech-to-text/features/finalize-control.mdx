@@ -1,0 +1,92 @@
+---
+title: 'Finalize Control'
+description: 'Take manual control of when transcripts are finalized using `finalize_on_words` and `max_words`'
+---
+
+<Badge color="purple">Real-Time</Badge>
+
+By default, Pulse STT auto-finalizes the live transcript every few words and again after each end-of-utterance timeout. For agentic pipelines that need precise control over *when* a final transcript is emitted — for example, holding a transcript open until the agent decides it has enough context — Pulse exposes two parameters that disable or constrain automatic finalization.
+
+## When to use it
+
+Most callers leave the defaults alone — automatic finalization gives you natural turn-taking out of the box. Reach for these flags when:
+
+- You're building an **agentic pipeline** and want the model to keep accumulating audio until *your code* sends a `finalize` message.
+- You're using **ITN** (`itn_normalize=true`) and want each ITN chunk to stay short for accuracy (long chunks degrade ITN quality).
+- You're running a **dictation or capture** workflow and want one big final transcript, not many small ones.
+
+## Parameters
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `finalize_on_words` | `"true"` \| `"false"` | `"true"` | When `false`, disables Pulse's automatic word-count-based finalization. The transcript continues to accumulate until you send a `{"type":"finalize"}` message or `{"type":"close_stream"}`. |
+| `max_words` | integer | (unset = no cap) | Maximum number of words allowed in a single transcript chunk before Pulse forces finalization. Useful for keeping ITN chunks short and accurate. |
+
+Both parameters are **WebSocket-only** — they don't apply to the pre-recorded HTTP endpoint, which always returns one final transcript per request.
+
+## Pattern: agentic pipeline with manual finalize
+
+Disable automatic finalization, stream audio for as long as you need, then trigger finalization via the `finalize` control message. The session stays open and you can keep streaming audio after each finalize.
+
+```javascript
+const url = new URL("wss://api.smallest.ai/waves/v1/pulse/get_text");
+url.searchParams.append("language", "en");
+url.searchParams.append("encoding", "linear16");
+url.searchParams.append("sample_rate", "16000");
+url.searchParams.append("finalize_on_words", "false"); // disable auto-finalize
+url.searchParams.append("itn_normalize", "true");      // enable ITN
+
+const ws = new WebSocket(url.toString(), {
+  headers: { Authorization: `Bearer ${API_KEY}` },
+});
+
+// Stream PCM audio as binary frames…
+ws.send(audioChunk1);
+ws.send(audioChunk2);
+
+// When YOUR pipeline decides the segment is complete:
+ws.send(JSON.stringify({ type: "finalize" }));
+// Pulse emits an is_final transcript with from_finalize: true.
+// Continue streaming for the next segment.
+```
+
+When you want to end the session entirely, send `{"type":"close_stream"}` instead of `finalize`. Pulse flushes any remaining audio, returns one final transcript with `is_last: true`, and closes the connection.
+
+## Pattern: bounded chunks with `max_words`
+
+Keep the default behavior but cap each chunk's word count. Helps when ITN is on — long chunks degrade ITN accuracy.
+
+```javascript
+url.searchParams.append("itn_normalize", "true");
+url.searchParams.append("max_words", "30"); // force finalization every 30 words
+```
+
+## Trade-offs
+
+| Setting | Behavior | Best for |
+| --- | --- | --- |
+| `finalize_on_words=true` (default) | Pulse auto-finalizes every few words + on EOU timeout. | Most use cases. Voice agents, conversational AI, transcription. |
+| `finalize_on_words=false` | No auto-finalize. You must send `{"type":"finalize"}` or `{"type":"close_stream"}` to flush. | Agentic pipelines that gate finalization on external state (LLM done thinking, user done talking, etc.). |
+| `max_words=N` (with default `finalize_on_words`) | Auto-finalize at the earlier of N words or EOU timeout. | Long-form ITN-heavy transcription where chunk-size accuracy matters. |
+| `finalize_on_words=false` + `max_words=N` | No automatic finalize *unless* word count hits N. Manual `finalize` always works. | Defensive default for agent pipelines — manual control with a safety cap. |
+
+## Response field
+
+The transcript response includes a `from_finalize` boolean when `itn_normalize=true`, indicating whether the final transcript was triggered by a manual `finalize` message (`true`) or by automatic finalization (`false`). Use it to attribute downstream logic to the correct trigger.
+
+```json
+{
+  "session_id": "sess_…",
+  "transcript": "Hello, how are you doing today?",
+  "is_final": true,
+  "is_last": false,
+  "from_finalize": true,
+  "language": "en"
+}
+```
+
+## Related
+
+- [Inverse Text Normalization (ITN)](/waves/documentation/speech-to-text-pulse/features/inverse-text-normalization) — `finalize_on_words` is most useful in combination with ITN.
+- [End-of-Utterance Timeout](/waves/documentation/speech-to-text-pulse/features/end-of-utterance-timeout) — controls automatic finalization timing when `finalize_on_words` stays `true`.
+- [Pulse STT WebSocket reference](/waves/api-reference/api-reference/speech-to-text/speech-to-text) — full parameter reference and the `finalize` / `close_stream` control messages.
