@@ -2048,6 +2048,338 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
+  /compliance/status:
+    get:
+      summary: Get compliance status
+      description: |
+        Returns the current compliance status for a given country, number type, and user type.
+        This is the single endpoint the frontend uses to determine which step to render
+        (form, submitted, accepted, rejected, expired, or suspended).
+      tags:
+        - Compliance
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: countryIso
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+          description: ISO 3166-1 alpha-2 country code
+          example: "IN"
+        - name: numberType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [local, mobile, tollfree]
+          description: The type of phone number
+          example: "local"
+        - name: userType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [individual, business]
+          description: The type of end user
+          example: "business"
+      responses:
+        "200":
+          description: Compliance status retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      step:
+                        type: string
+                        enum: [form, submitted, accepted, rejected, expired, suspended]
+                        description: |
+                          The current compliance step:
+                          - `form` — no application exists, user should submit one
+                          - `submitted` — application is under review
+                          - `accepted` — approved, user can rent numbers
+                          - `rejected` — rejected, user can resubmit with corrected documents
+                          - `expired` — compliance expired
+                          - `suspended` — compliance suspended
+                        example: "form"
+                      application:
+                        nullable: true
+                        description: The existing compliance application, or null if none exists
+                        $ref: "#/components/schemas/ComplianceApplication"
+                      requiredDocuments:
+                        type: array
+                        description: Document types required for this country/numberType/userType combination
+                        items:
+                          $ref: "#/components/schemas/RequiredDocumentType"
+        "400":
+          description: Invalid query parameters
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /compliance/requirements:
+    get:
+      summary: Get compliance requirements
+      description: |
+        Discover what documents are required for a given country, number type, and user type.
+        Results are cached for 1 hour. Returns an empty `documentTypes` array if no compliance
+        is needed for the given combination.
+      tags:
+        - Compliance
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: countryIso
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+          description: ISO 3166-1 alpha-2 country code
+          example: "IN"
+        - name: numberType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [local, mobile, tollfree]
+          description: The type of phone number
+          example: "local"
+        - name: userType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [individual, business]
+          description: The type of end user
+          example: "business"
+      responses:
+        "200":
+          description: Requirements retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/ComplianceRequirement"
+        "400":
+          description: Invalid query parameters
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /compliance/applications:
+    post:
+      summary: Submit a compliance application
+      description: |
+        Submit a new compliance application with end-user details and supporting documents.
+        One application is allowed per organization per country per number type per user type.
+
+        The request uses `multipart/form-data` because documents are uploaded inline.
+        The `endUser` and `documents` fields are JSON strings embedded in the form data.
+      tags:
+        - Compliance
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - countryIso
+                - numberType
+                - userType
+                - endUser
+                - documents
+                - files
+              properties:
+                countryIso:
+                  type: string
+                  minLength: 2
+                  maxLength: 2
+                  description: ISO 3166-1 alpha-2 country code
+                  example: "IN"
+                numberType:
+                  type: string
+                  enum: [local, mobile, tollfree]
+                  description: The type of phone number
+                  example: "local"
+                userType:
+                  type: string
+                  enum: [individual, business]
+                  description: The type of end user
+                  example: "business"
+                endUser:
+                  type: string
+                  description: |
+                    JSON string containing end-user details. Example:
+                    ```json
+                    {
+                      "name": "Acme Corp",
+                      "country": "IN"
+                    }
+                    ```
+                  example: '{"name": "Acme Corp", "country": "IN"}'
+                documents:
+                  type: string
+                  description: |
+                    JSON string containing an array of document metadata. Each entry must have a
+                    `documentTypeId` (from the requirements endpoint) and optional `dataFields`.
+                    Example:
+                    ```json
+                    [{"documentTypeId": "dt_123", "dataFields": {"business_name": "Acme Corp"}}]
+                    ```
+                  example: '[{"documentTypeId": "dt_123", "dataFields": {"business_name": "Acme Corp"}}]'
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: |
+                    Document files in the same order as the `documents` metadata array.
+                    Accepted formats: PDF, JPEG, PNG. Maximum 5 MB per file, up to 10 files.
+      responses:
+        "201":
+          description: Application submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/ComplianceApplication"
+        "400":
+          description: Validation error (invalid JSON, file count mismatch, unsupported file type)
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "409":
+          description: A compliance application already exists for this country/numberType/userType
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /compliance/applications/{id}:
+    patch:
+      summary: Resubmit a rejected compliance application
+      description: |
+        Resubmit a previously rejected compliance application with corrected documents.
+        Only applications in `rejected` status can be resubmitted. All documents must be
+        re-uploaded — partial updates are not supported.
+      tags:
+        - Compliance
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The compliance application ID
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - documents
+                - files
+              properties:
+                documents:
+                  type: string
+                  description: |
+                    JSON string containing an array of document metadata. Same format as
+                    the create endpoint.
+                  example: '[{"documentTypeId": "dt_123", "dataFields": {"business_name": "Acme Corp"}}]'
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: |
+                    Replacement document files. Must match the length of the `documents` array.
+                    Accepted formats: PDF, JPEG, PNG. Maximum 5 MB per file.
+      responses:
+        "200":
+          description: Application resubmitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/ComplianceApplication"
+        "400":
+          description: Only rejected applications can be resubmitted, or validation error
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Application not found or does not belong to this organization
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /compliance/applications/{id}/refresh:
+    post:
+      summary: Refresh compliance application status
+      description: |
+        Manually poll Plivo for the latest status of a compliance application.
+        Use this as a fallback when webhooks are delayed. The frontend enforces a
+        60-second cooldown between refreshes.
+      tags:
+        - Compliance
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The compliance application ID
+      responses:
+        "200":
+          description: Application status refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/ComplianceApplication"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Application not found or does not belong to this organization
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
   /webhook:
     get:
       summary: Get webhooks
@@ -5175,6 +5507,140 @@ components:
           type: boolean
           default: false
           description: Route analytics evaluation through the reasoning model for higher-quality results at a latency/cost tradeoff.
+
+    ComplianceApplication:
+      type: object
+      description: A compliance application for a specific country, number type, and user type
+      properties:
+        _id:
+          type: string
+          description: Unique identifier
+          example: "663f1a2b4c5d6e7f8a9b0c1d"
+        organizationId:
+          type: string
+          description: The organization this application belongs to
+        plivoComplianceId:
+          type: string
+          description: Plivo's compliance application identifier
+        alias:
+          type: string
+          description: Auto-generated alias (orgId-countryIso-env)
+          example: "663f1a2b-IN-production"
+        status:
+          type: string
+          enum: [draft, submitted, accepted, rejected, suspended, expired]
+          description: Current status of the compliance application
+          example: "submitted"
+        countryIso:
+          type: string
+          description: ISO 3166-1 alpha-2 country code
+          example: "IN"
+        numberType:
+          type: string
+          enum: [local, mobile, tollfree]
+          example: "local"
+        userType:
+          type: string
+          enum: [individual, business]
+          example: "business"
+        endUserName:
+          type: string
+          description: Legal business or individual name
+          example: "Acme Corp"
+        endUserLastName:
+          type: string
+          nullable: true
+        endUserEmail:
+          type: string
+          nullable: true
+        endUserCountry:
+          type: string
+          nullable: true
+          example: "IN"
+        documentFileNames:
+          type: array
+          items:
+            type: string
+          description: Names of uploaded document files
+          example: ["certificate_of_incorporation.pdf"]
+        rejectionReason:
+          type: string
+          nullable: true
+          description: Reason for rejection, if applicable
+        createdBy:
+          type: string
+          description: User ID of the person who created this application
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ComplianceRequirement:
+      type: object
+      description: Compliance requirements for a country/numberType/userType combination
+      properties:
+        requirementId:
+          type: string
+          description: Plivo's requirement identifier
+        countryIso:
+          type: string
+          example: "IN"
+        numberType:
+          type: string
+          example: "local"
+        userType:
+          type: string
+          example: "business"
+        documentTypes:
+          type: array
+          description: Required document types. Empty array means no compliance is needed.
+          items:
+            $ref: "#/components/schemas/RequiredDocumentType"
+
+    RequiredDocumentType:
+      type: object
+      description: A document type required for compliance
+      properties:
+        documentTypeId:
+          type: string
+          description: Identifier to use when submitting this document type
+          example: "dt_certificate_of_incorporation"
+        name:
+          type: string
+          description: Human-readable name
+          example: "Certificate of Incorporation"
+        description:
+          type: string
+          description: Description of what this document should contain
+          example: "A government-issued certificate proving business registration"
+        proofRequired:
+          type: boolean
+          description: Whether a file upload is required for this document type
+          example: true
+        requiredFields:
+          type: array
+          description: Data fields that must be provided alongside the document
+          items:
+            type: object
+            properties:
+              fieldName:
+                type: string
+                example: "business_name"
+              friendlyName:
+                type: string
+                example: "Business Name"
+              helpText:
+                type: string
+                example: "Exact name as on the certificate"
+              fieldType:
+                type: string
+                example: "string"
+              required:
+                type: boolean
+                example: true
+
   responses:
     UnauthorizedError:
       description: Access token is missing or invalid
@@ -5225,6 +5691,11 @@ tags:
     description: Real-time streaming of call transcript events via Server-Sent Events (SSE). Subscribe to an active call to receive user speech, agent speech, and lifecycle events in real time.
   - name: Phone Numbers
     description: Operations related to phone numbers
+  - name: Compliance
+    description: |
+      Regulatory compliance for phone number rentals. Some countries require identity verification
+      and document submission before numbers can be rented. Use these endpoints to check requirements,
+      submit compliance applications, and track approval status.
   - name: Webhooks
     description: Operations related to webhooks and webhook subscriptions
   - name: Audience
