@@ -1,4 +1,4 @@
-"""Classify Pulse STT / Lightning TTS probe diffs as NEWSWORTHY or NOISE.
+"""Classify Pulse STT / Lightning TTS / Atoms probe diffs as NEWSWORTHY or NOISE.
 
 Reads the markdown diff reports produced by `diff.py --markdown`, sends them
 to the Anthropic API with a domain-specific prompt, and emits JSON with a
@@ -22,6 +22,7 @@ Usage:
     ANTHROPIC_API_KEY=... python3 scripts/probes/classify.py \\
         --stt-diff /tmp/diff-report.md \\
         --tts-diff /tmp/diff-tts-report.md \\
+        --atoms-diff /tmp/diff-atoms-report.md \\
         --out-json /tmp/classification.json \\
         --run-url https://github.com/.../actions/runs/123
 """
@@ -44,9 +45,10 @@ MODEL = "claude-sonnet-4-6"
 # call.
 SYSTEM_PROMPT = """You classify weekly probe diffs from the Smallest AI docs CI.
 
-You receive markdown diffs from two probes against the live API:
+You receive markdown diffs from three probes against the live API:
 1. Pulse STT (speech-to-text) — formatting / language / keyword flags
 2. Lightning v3.1 TTS — sync REST + SSE streaming surface
+3. Atoms (agent platform) — read-only API surface (GET endpoints only)
 
 Return ONE of three verdicts plus a short rationale.
 
@@ -70,6 +72,18 @@ NEWSWORTHY (Lightning TTS)
 - `sse_saw_complete` flipping True/False.
 - `sse_saw_event_audio` flipping True/False.
 - **Default-value drift** — any change on a `*-default-*` case (e.g., `sync-default-pcm`). Means the server's response to "no extra params" shifted.
+
+NEWSWORTHY (Atoms — agent platform, GET-only)
+- `status_code` change on any endpoint (e.g. 200→404, 404→200, 200→400) — endpoint added, removed, or validation tightened/loosened.
+- `envelope_keys` change — top-level envelope keys added/removed (e.g. `{status,data}` → `{status,data,error}` means new error shape).
+- `data_keys` change on object responses — fields added/removed/renamed on `/user`, `/organization`, etc.
+- `item_keys_first` change on list responses — list-item schema gained/lost/renamed fields (agent objects, conversation objects, etc.).
+- `data_kind` change (object → list, list → null, etc.) — response shape flipped.
+- `count_class` going to/from `empty` — list endpoint returning 0 items where it previously returned data (or vice versa) often signals an auth, scoping, or pagination change worth a doc note.
+
+NOISE (Atoms) — do NOT classify as newsworthy
+- `count_class` drift between `few` ↔ `many` ↔ `lots` (operator just created/deleted some real records on their account; not a spec change).
+- `elapsed_ms` differences (always noise; backend perf, not customer-facing surface).
 
 NOISE — do NOT classify as newsworthy
 - `has_itn_currency` / `has_itn_date_or_time` toggling on a NON-defaults test case where no flag changed. The test text varied or model retraining drift; ITN itself didn't change. **(BUT: if the toggle is on a `*-defaults-*` case, that IS newsworthy — the default may have flipped.)**
@@ -102,12 +116,18 @@ Lightning TTS diff:
 {tts_diff}
 ```
 
+Atoms diff:
+
+```
+{atoms_diff}
+```
+
 Run URL: {run_url}
 
 Classify per the rules. Return only the JSON object."""
 
 
-def call_anthropic(stt_diff: str, tts_diff: str, run_url: str, api_key: str) -> dict:
+def call_anthropic(stt_diff: str, tts_diff: str, atoms_diff: str, run_url: str, api_key: str) -> dict:
     body = {
         "model": MODEL,
         "max_tokens": 1024,
@@ -118,6 +138,7 @@ def call_anthropic(stt_diff: str, tts_diff: str, run_url: str, api_key: str) -> 
                 "content": USER_TEMPLATE.format(
                     stt_diff=stt_diff or "(no diff — probe ran clean)",
                     tts_diff=tts_diff or "(no diff — probe ran clean)",
+                    atoms_diff=atoms_diff or "(no diff — probe ran clean)",
                     run_url=run_url or "(unknown)",
                 ),
             }
@@ -149,6 +170,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--stt-diff", required=True, help="path to Pulse STT diff markdown (from diff.py)")
     parser.add_argument("--tts-diff", required=True, help="path to Lightning TTS diff markdown (from diff.py)")
+    parser.add_argument("--atoms-diff", default="", help="path to Atoms diff markdown (from diff.py); optional")
     parser.add_argument("--out-json", required=True, help="path to write the classification JSON")
     parser.add_argument("--run-url", default="", help="URL of the GH Actions run, used in the prompt")
     args = parser.parse_args()
@@ -170,6 +192,7 @@ def main() -> int:
 
     stt_diff = Path(args.stt_diff).read_text() if Path(args.stt_diff).exists() else ""
     tts_diff = Path(args.tts_diff).read_text() if Path(args.tts_diff).exists() else ""
+    atoms_diff = Path(args.atoms_diff).read_text() if args.atoms_diff and Path(args.atoms_diff).exists() else ""
 
     # Anthropic-side failures (billing/quota/rate-limit/transient outage)
     # should NOT crash the whole workflow — the diff is already in the run
@@ -177,7 +200,7 @@ def main() -> int:
     # unavailable" summary so the operator sees the situation but the
     # workflow stays green.
     try:
-        result = call_anthropic(stt_diff, tts_diff, args.run_url, api_key)
+        result = call_anthropic(stt_diff, tts_diff, atoms_diff, args.run_url, api_key)
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", "replace") if not isinstance(e.fp, type(None)) else ""
         # Common billing/quota signal; keep the operator-visible summary
