@@ -97,12 +97,44 @@ jobs:
             *) echo "atoms_diff_found=error" >> "$GITHUB_OUTPUT"; echo "❌ Atoms diff.py failed with code $DIFF_RC"; exit $DIFF_RC ;;
           esac
 
+      # Atoms spec diff: testAutomation (source of truth for the Atoms API
+      # surface) vs Fern OpenAPI. Catches new endpoints shipped in
+      # testAutomation but never added to OpenAPI/docs/SDK, and
+      # endpoints removed from testAutomation that still appear in
+      # OpenAPI. Read-only: clones testAutomation via UPSTREAM_PR_READ_TOKEN
+      # (same PAT used by the cross-repo PR drift detector). Diffs against
+      # a committed baseline so previously-known drift doesn't fire every
+      # week — only NEW drift since the baseline produces a NEWSWORTHY
+      # signal.
+      - name: Atoms spec diff (testAutomation ↔ Fern OpenAPI)
+        id: probe_atoms_spec
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_PR_READ_TOKEN }}
+        run: |
+          set -e
+          # Clone testAutomation read-only into a tmp dir.
+          gh repo clone smallest-inc/testAutomation /tmp/testAutomation -- --depth 1 --quiet
+          set +e
+          python3 scripts/probes/atoms_spec_diff.py \
+            --testautomation /tmp/testAutomation \
+            --openapi fern/apis/atoms/openapi/openapi.yaml \
+            --baseline scripts/probes/baseline-atoms-spec-diff.json \
+            --markdown > /tmp/diff-atoms-spec-report.md
+          DIFF_RC=$?
+          set -e
+          case "$DIFF_RC" in
+            0) echo "atoms_spec_diff_found=false" >> "$GITHUB_OUTPUT"; echo "✅ Atoms spec diff: no NEW drift since baseline." ;;
+            1) echo "atoms_spec_diff_found=true"  >> "$GITHUB_OUTPUT"; echo "⚠️ Atoms spec diff: NEW drift detected." ;;
+            *) echo "atoms_spec_diff_found=error" >> "$GITHUB_OUTPUT"; echo "❌ atoms_spec_diff.py failed with code $DIFF_RC"; exit $DIFF_RC ;;
+          esac
+
       - name: Set combined diff_found output
         id: combined
         run: |
           if [ "${{ steps.probe.outputs.stt_diff_found }}" = "true" ] \
              || [ "${{ steps.probe_tts.outputs.tts_diff_found }}" = "true" ] \
-             || [ "${{ steps.probe_atoms.outputs.atoms_diff_found }}" = "true" ]; then
+             || [ "${{ steps.probe_atoms.outputs.atoms_diff_found }}" = "true" ] \
+             || [ "${{ steps.probe_atoms_spec.outputs.atoms_spec_diff_found }}" = "true" ]; then
             echo "diff_found=true" >> "$GITHUB_OUTPUT"
           else
             echo "diff_found=false" >> "$GITHUB_OUTPUT"
@@ -127,8 +159,15 @@ jobs:
             if [ -f /tmp/diff-atoms-report.md ]; then
               echo "---"
               echo ""
-              echo "## Atoms"
+              echo "## Atoms (live probe)"
               cat /tmp/diff-atoms-report.md
+              echo ""
+            fi
+            if [ -f /tmp/diff-atoms-spec-report.md ]; then
+              echo "---"
+              echo ""
+              echo "## Atoms (spec diff vs testAutomation)"
+              cat /tmp/diff-atoms-spec-report.md
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -179,6 +218,7 @@ jobs:
             --stt-diff /tmp/diff-report.md \
             --tts-diff /tmp/diff-tts-report.md \
             --atoms-diff /tmp/diff-atoms-report.md \
+            --atoms-spec-diff /tmp/diff-atoms-spec-report.md \
             --out-json /tmp/classification.json \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           VERDICT=$(jq -r '.verdict' /tmp/classification.json)
