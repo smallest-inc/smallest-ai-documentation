@@ -33,10 +33,12 @@ SCAN_PATHS = [
 ]
 
 # Skip categories that don't benefit from a description (auto-rendered
-# from spec, or content type where description doesn't apply).
+# from spec, included via `<Snippet>`, or content type where description
+# doesn't apply).
 SKIP_DIR_NAMES = {
     "api-references",
     "changelog-entries",
+    "snippets",
 }
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
@@ -66,7 +68,12 @@ def should_skip(path: Path) -> bool:
 
 
 def audit() -> tuple[list[dict], list[dict]]:
-    """Return (pages_missing_description, pages_missing_title)."""
+    """Return (pages_missing_description, pages_missing_title).
+
+    Skips empty stub files — those need content, not frontmatter, and
+    pollute the audit signal. Empty stubs (0 bytes or whitespace-only)
+    are tracked separately by the broken-link / nav-check workflows.
+    """
     missing_desc: list[dict] = []
     missing_title: list[dict] = []
     for root in SCAN_PATHS:
@@ -79,8 +86,16 @@ def audit() -> tuple[list[dict], list[dict]]:
                 text = path.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 continue
+            if not text.strip():
+                continue
             fm = parse_frontmatter(text)
             rel = str(path.relative_to(REPO_ROOT))
+            # Pages explicitly marked noindex are hidden from search /
+            # Ask Fern by design. They don't need a description — the
+            # whole point is they don't surface. Only stub pages should
+            # be in this state; once content is written, drop noindex.
+            if fm.get("noindex", "").lower() == "true":
+                continue
             if not fm.get("description"):
                 missing_desc.append({"path": rel, "title": fm.get("title", "")})
             if not fm.get("title"):
