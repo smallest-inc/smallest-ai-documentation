@@ -89,6 +89,12 @@ NOISE (Atoms) — do NOT classify as newsworthy
 - `count_class` drift between `few` ↔ `many` ↔ `lots` (operator just created/deleted some real records on their account; not a spec change).
 - `elapsed_ms` differences (always noise; backend perf, not customer-facing surface).
 
+NEWSWORTHY (Atoms spec diff — testAutomation ↔ Fern OpenAPI)
+The spec-diff probe reports the union of (method, path) tuples present in only one side. By design it only fires when there's NEW drift since the committed baseline, so any non-empty report is a real signal.
+- Endpoints in **testAutomation but NOT Fern OpenAPI** = undocumented surface. The platform serves them, but the docs/SDK don't expose them. Classify NEWSWORTHY — these need OpenAPI entries + reference pages + (optionally) SDK regen.
+- Endpoints in **Fern OpenAPI but NOT testAutomation** = unverified docs claims. Either the endpoint is stale, pre-release, admin-only, or testAutomation just doesn't cover it. NEWSWORTHY but lower priority — verify with platform team before assuming it's gone.
+- Bulk drift (e.g. testAutomation suddenly missing 10+ endpoints) usually means the testAutomation repo got reorganised (path moved). Still NEWSWORTHY but flag the bulk pattern in the summary so the operator triages once instead of file-by-file.
+
 NOISE — do NOT classify as newsworthy
 - `has_itn_currency` / `has_itn_date_or_time` toggling on a NON-defaults test case where no flag changed. The test text varied or model retraining drift; ITN itself didn't change. **(BUT: if the toggle is on a `*-defaults-*` case, that IS newsworthy — the default may have flipped.)**
 - `looks_garbled` toggling on edge clips (model retraining drift).
@@ -127,12 +133,18 @@ Atoms diff:
 {atoms_diff}
 ```
 
+Atoms spec diff (testAutomation ↔ Fern OpenAPI):
+
+```
+{atoms_spec_diff}
+```
+
 Run URL: {run_url}
 
 Classify per the rules. Return only the JSON object."""
 
 
-def call_anthropic(stt_diff: str, tts_diff: str, atoms_diff: str, run_url: str, api_key: str) -> dict:
+def call_anthropic(stt_diff: str, tts_diff: str, atoms_diff: str, atoms_spec_diff: str, run_url: str, api_key: str) -> dict:
     body = {
         "model": MODEL,
         "max_tokens": 1024,
@@ -144,6 +156,7 @@ def call_anthropic(stt_diff: str, tts_diff: str, atoms_diff: str, run_url: str, 
                     stt_diff=stt_diff or "(no diff — probe ran clean)",
                     tts_diff=tts_diff or "(no diff — probe ran clean)",
                     atoms_diff=atoms_diff or "(no diff — probe ran clean)",
+                    atoms_spec_diff=atoms_spec_diff or "(no diff — testAutomation and Fern OpenAPI agree)",
                     run_url=run_url or "(unknown)",
                 ),
             }
@@ -176,6 +189,7 @@ def main() -> int:
     parser.add_argument("--stt-diff", required=True, help="path to Pulse STT diff markdown (from diff.py)")
     parser.add_argument("--tts-diff", required=True, help="path to Lightning TTS diff markdown (from diff.py)")
     parser.add_argument("--atoms-diff", default="", help="path to Atoms diff markdown (from diff.py); optional")
+    parser.add_argument("--atoms-spec-diff", default="", help="path to Atoms spec-diff markdown (from atoms_spec_diff.py); optional")
     parser.add_argument("--out-json", required=True, help="path to write the classification JSON")
     parser.add_argument("--run-url", default="", help="URL of the GH Actions run, used in the prompt")
     args = parser.parse_args()
@@ -198,6 +212,7 @@ def main() -> int:
     stt_diff = Path(args.stt_diff).read_text() if Path(args.stt_diff).exists() else ""
     tts_diff = Path(args.tts_diff).read_text() if Path(args.tts_diff).exists() else ""
     atoms_diff = Path(args.atoms_diff).read_text() if args.atoms_diff and Path(args.atoms_diff).exists() else ""
+    atoms_spec_diff = Path(args.atoms_spec_diff).read_text() if args.atoms_spec_diff and Path(args.atoms_spec_diff).exists() else ""
 
     # Anthropic-side failures (billing/quota/rate-limit/transient outage)
     # should NOT crash the whole workflow — the diff is already in the run
@@ -205,7 +220,7 @@ def main() -> int:
     # unavailable" summary so the operator sees the situation but the
     # workflow stays green.
     try:
-        result = call_anthropic(stt_diff, tts_diff, atoms_diff, args.run_url, api_key)
+        result = call_anthropic(stt_diff, tts_diff, atoms_diff, atoms_spec_diff, args.run_url, api_key)
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", "replace") if not isinstance(e.fp, type(None)) else ""
         # Common billing/quota signal; keep the operator-visible summary
