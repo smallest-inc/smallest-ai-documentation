@@ -1,0 +1,15 @@
+---
+title: Compliance endpoints — phone-number rentals with Plivo identity verification
+---
+
+Five new endpoints under `/atoms/v1/compliance/*` document the regulatory-compliance flow for renting phone numbers in countries that require identity verification (India, UAE, etc.). Submit an end-user's documents, track approval status, and resubmit on rejection.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/atoms/v1/compliance/status` | Get the current step (`form`, `submitted`, `accepted`, `rejected`, `expired`, `suspended`) for a country / number-type / user-type combination. |
+| `GET` | `/atoms/v1/compliance/requirements` | Discover which document types are required. Empty array means no compliance is needed. |
+| `POST` | `/atoms/v1/compliance/applications` | Submit an application with end-user details + supporting documents (multipart form-data). |
+| `PATCH` | `/atoms/v1/compliance/applications/{id}` | Resubmit a rejected application with corrected documents. |
+| `POST` | `/atoms/v1/compliance/applications/{id}/refresh` | Manually poll Plivo for status updates (60-second cooldown). |
+
+Three new schemas back the responses: `ComplianceApplication`, `ComplianceRequirement`, `RequiredDocumentType`. All endpoints require a Bearer token and are scoped to the calling organization. Rentals in countries that don't require compliance are unaffected.
