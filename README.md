@@ -106,7 +106,14 @@ This repository contains the source files for the Smallest AI documentation site
 | Logos, favicon | `fern/docs/assets/` |
 | Shared MDX snippets | `fern/snippets/` |
 
-> **Important**: The `fern/apis/waves-v4/overrides/` directory controls what renders on the docs API reference pages. The `fern/apis/waves/openapi/` and `fern/apis/waves/asyncapi/` directories are used for SDK generation. Both need to stay in sync when API parameters change.
+> **Important — three spec layers for waves**:
+> 1. **Base spec** at `fern/apis/waves/{openapi,asyncapi}/*.yaml` — source of truth for structure.
+> 2. **SDK overrides** at `fern/apis/waves/{openapi,asyncapi}/*-overrides.yaml` (siblings of base) — drive SDK method names, examples, and deprecations via `fern/apis/unified/generators.yml`.
+> 3. **v4 docs overrides** at `fern/apis/waves-v4/overrides/*.yaml` — drive what renders on the `docs.smallest.ai/waves` API reference pages via `fern/apis/waves-v4/generators.yml`.
+>
+> A `description`, `default`, `enum`, or `example` set in the v4 docs override **wins** on docs render. Editing the same field in the base spec alone is invisible. Always update both layers in lockstep, and run `python3 scripts/spec-live-tests/spec_drift_check.py` before pushing — CI runs it on every PR that touches `fern/apis/waves/**` or `fern/apis/waves-v4/overrides/**`.
+>
+> **Atoms is not affected** — it has a single spec pipeline. `fern/apis/atoms/openapi/openapi.yaml` + sibling `openapi-overrides.yaml` flow through `fern/apis/unified/generators.yml` for both SDK gen and docs render.
 
 ## Setup
 

@@ -1,49 +1,73 @@
 openapi: 3.0.1
 info:
   title: Lightning V3.1 API
-  description: |
-    API for the Lightning V3.1 text-to-speech model.
+  description: 'API for the Lightning V3.1 text-to-speech model.
+
     Features improved speech synthesis with support for English and Hindi languages.
+
+    '
   version: 3.1.0
 servers:
-  - url: https://api.smallest.ai
-    description: Waves API server
-
+- url: https://api.smallest.ai
+  description: Waves API server
 paths:
   /waves/v1/lightning-v3.1/get_speech:
     post:
       tags:
-        - Lightning V3.1
+      - Lightning V3.1
       operationId: synthesizeLightningV31Speech
       summary: Generate speech from text (Lightning V3.1)
-      description: |
-        Converts provided text to speech using the Lightning V3.1 model.
-        Send `Accept: audio/wav` to receive binary WAV audio. Omitting it may result in empty or unplayable responses.
+      description: 'Get speech for given text using the Lightning v3.1 model
+
+
+        ## Overview
+
+
+        Lightning v3.1 is a 44 kHz text-to-speech model that delivers natural, expressive, and realistic speech synthesis.
+
+
+        ## Key Features
+
+
+        * **Voice Cloning Support**: Compatible with cloned voices
+
+        * **Ultra-Low Latency**: Optimized for real-time applications
+
+        * **Multi-Language**: Supports English (en) and Hindi (hi)
+
+        * **Multiple Output Formats**: PCM, MP3, WAV, and mulaw
+
+        * **Flexible Sample Rates**: 8000 Hz to 44100 Hz
+
+        * **Speed Control**: Adjustable from 0.5x to 2x speed
+
+        '
       parameters:
-        - name: Accept
-          in: header
-          required: true
-          schema:
-            type: string
-            enum: [audio/wav]
-            default: audio/wav
-          description: Must be `audio/wav` to receive binary audio. Required for proper playback.
+      - name: Accept
+        in: header
+        required: true
+        schema:
+          type: string
+          enum:
+          - audio/wav
+          default: audio/wav
+        description: Must be `audio/wav` to receive binary audio. Required for proper playback.
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LightningV31Request"
+              $ref: '#/components/schemas/LightningV31Request'
             example:
-              text: "Hey i am your a text to speech model"
-              voice_id: "daniel"
-              output_format: "mp3"
+              text: Hey i am your a text to speech model
+              voice_id: daniel
+              output_format: mp3
               sample_rate: 44100
               speed: 1.0
       responses:
-        "200":
+        '200':
           description: Synthesized speech retrieved successfully.
           headers:
             X-Session-Id:
@@ -68,7 +92,7 @@ paths:
                 type: string
                 format: binary
                 description: A PCM int16 WAV file at the specified sample rate.
-        "400":
+        '400':
           description: Bad request.
           content:
             application/json:
@@ -82,9 +106,9 @@ paths:
                     type: string
                     description: Error message.
               example:
-                error: "InvalidRequest"
-                message: "The 'text' field is required."
-        "401":
+                error: InvalidRequest
+                message: The 'text' field is required.
+        '401':
           description: Unauthorized.
           content:
             application/json:
@@ -98,9 +122,9 @@ paths:
                     type: string
                     description: Error message.
               example:
-                error: "Unauthorized"
-                message: "Bearer token is missing or invalid."
-        "500":
+                error: Unauthorized
+                message: Bearer token is missing or invalid.
+        '500':
           description: Server error occurred.
           content:
             application/json:
@@ -114,26 +138,60 @@ paths:
                     type: string
                     description: Error message.
               example:
-                error: "InternalServerError"
-                message: "An unexpected error occurred."
-
+                error: InternalServerError
+                message: An unexpected error occurred.
   /waves/v1/lightning-v3.1/stream:
     post:
       tags:
-        - Lightning V3.1
+      - Lightning V3.1
       operationId: streamLightningV31Speech
       summary: Stream speech from text (Lightning V3.1)
-      description: Converts provided text to speech using the Lightning V3.1 model with streaming response.
+      description: 'Stream speech for given text using the Lightning v3.1 SSE API
+
+
+        ## Overview
+
+
+        The Lightning v3.1 SSE API provides real-time text-to-speech streaming capabilities with natural, expressive voice synthesis. This API uses Server-Sent Events (SSE) to deliver audio chunks as they''re generated, enabling low-latency audio playback without waiting for the entire audio file to process.
+
+
+        Lightning v3.1 is a 44 kHz model that produces natural, expressive, and realistic speech, with support for voice cloning.
+
+
+        ## When to Use
+
+
+        * **Interactive Applications**: Perfect for chatbots, virtual assistants, and other applications requiring immediate voice responses
+
+        * **Long-Form Content**: Efficiently stream audio for articles, stories, or other long-form content without buffering delays
+
+        * **Voice User Interfaces**: Create natural-sounding voice interfaces with minimal perceived latency
+
+        * **Accessibility Solutions**: Provide real-time audio versions of written content for users with visual impairments
+
+
+        ## How It Works
+
+
+        1. **Make a POST Request**: Send your text and voice settings to the API endpoint
+
+        2. **Receive Audio Chunks**: The API processes your text and streams audio back as base64-encoded chunks with 1024 byte size
+
+        3. **Process the Stream**: Handle the SSE events to decode and play audio chunks sequentially
+
+        4. **End of Stream**: The API sends a completion event when all audio has been delivered
+
+        '
       security:
-        - bearerAuth: []
+      - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LightningV31Request"
+              $ref: '#/components/schemas/LightningV31Request'
       responses:
-        "200":
+        '200':
           description: Synthesized speech retrieved successfully.
           headers:
             X-Session-Id:
@@ -155,12 +213,14 @@ paths:
           content:
             text/event-stream:
               example:
-                data: |
-                  event: chunk
+                data: 'event: chunk
+
                   data: <WAV_DATA>
+
                   done: false
 
-        "400":
+                  '
+        '400':
           description: Bad request.
           content:
             application/json:
@@ -174,9 +234,9 @@ paths:
                     type: string
                     description: Error message.
               example:
-                error: "InvalidRequest"
-                message: "The 'text' field is required."
-        "401":
+                error: InvalidRequest
+                message: The 'text' field is required.
+        '401':
           description: Unauthorized.
           content:
             application/json:
@@ -190,9 +250,9 @@ paths:
                     type: string
                     description: Error message.
               example:
-                error: "Unauthorized"
-                message: "Bearer token is missing or invalid."
-        "500":
+                error: Unauthorized
+                message: Bearer token is missing or invalid.
+        '500':
           description: Server error occurred.
           content:
             application/json:
@@ -206,33 +266,32 @@ paths:
                     type: string
                     description: Error message.
               example:
-                error: "InternalServerError"
-                message: "An unexpected error occurred."
-
+                error: InternalServerError
+                message: An unexpected error occurred.
 components:
   schemas:
     LightningV31Request:
       type: object
       required:
-        - text
-        - voice_id
+      - text
+      - voice_id
       properties:
         text:
           type: string
           description: The text to convert to speech.
-          default: "Hey i am your a text to speech model"
+          default: Hey i am your a text to speech model
         voice_id:
           type: string
           description: The voice identifier to use for speech generation.
-          default: "daniel"
+          default: daniel
         sample_rate:
           type: integer
           description: The sample rate for the generated audio.
           enum:
-            - 8000
-            - 16000
-            - 24000
-            - 44100
+          - 8000
+          - 16000
+          - 24000
+          - 44100
           default: 44100
         speed:
           type: number
@@ -243,25 +302,31 @@ components:
         language:
           type: string
           description: Determines how numbers are spelled out. If set to 'en', numbers will be read in English. If set to 'hi', numbers will be read in Hindi.
-          default: "en"
+          default: en
           enum:
-            - en
-            - hi
+          - en
+          - hi
         output_format:
           type: string
-          description: |
-            Format of the returned audio. `pcm` is the lowest-latency option
+          description: 'Format of the returned audio. `pcm` is the lowest-latency option
+
             but requires a decoder to play; `mp3` and `wav` are directly
+
             playable in browsers and most media players. The server default
+
             is `pcm` when the field is omitted — the API playground uses
+
             `mp3` so the generated audio is directly playable.
-          default: "pcm"
-          example: "mp3"
+
+            '
+          default: pcm
+          example: mp3
           enum:
-            - pcm
-            - mp3
-            - wav
-            - mulaw
+          - mp3
+          - pcm
+          - wav
+          - ulaw
+          - alaw
         pronunciation_dicts:
           type: array
           items:
@@ -272,13 +337,12 @@ components:
           type: string
           description: Optional client-provided session identifier for correlation. Only alphanumeric characters, hyphens, underscores, and dots are allowed. Max 128 characters. Echoed back in response headers as `X-External-Session-Id`.
           maxLength: 128
-          pattern: "^[a-zA-Z0-9_\\-.]+$"
+          pattern: ^[a-zA-Z0-9_\-.]+$
         request_id:
           type: string
           description: Optional client-provided request identifier for correlation. Only alphanumeric characters, hyphens, underscores, and dots are allowed. Max 128 characters. Echoed back in response headers as `X-External-Request-Id`.
           maxLength: 128
-          pattern: "^[a-zA-Z0-9_\\-.]+$"
-
+          pattern: ^[a-zA-Z0-9_\-.]+$
   securitySchemes:
     bearerAuth:
       type: http

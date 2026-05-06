@@ -15,16 +15,16 @@ servers:
     protocol: wss
     description: Production WebSocket API endpoint
     security:
-      - $ref: "#/components/securitySchemes/bearerAuth"
+    - $ref: '#/components/securitySchemes/bearerAuth'
 channels:
   lightningV31Stream:
     address: /waves/v1/lightning-v3.1/get_speech/stream
     parameters:
       Authorization:
-        description: "Bearer token for authentication. Format: Bearer YOUR_API_KEY"
+        description: 'Bearer token for authentication. Format: Bearer YOUR_API_KEY'
         location: $message.header#/Authorization
     servers:
-      - $ref: "#/servers/production"
+    - $ref: '#/servers/production'
     messages:
       lightningV31TtsRequest.message:
         name: LightningV31TtsRequest
@@ -32,8 +32,8 @@ channels:
         payload:
           type: object
           required:
-            - voice_id
-            - text
+          - voice_id
+          - text
           properties:
             voice_id:
               type: string
@@ -63,14 +63,14 @@ channels:
               maximum: 10000
             language:
               type: string
-              description: "The language code, available options: `en`, `hi`"
+              description: 'The language code, available options: `en`, `hi`'
               default: en
               enum:
-                - en
-                - hi
+              - en
+              - hi
             sample_rate:
               type: integer
-              description: "Audio sample rate in Hz. Supported values: 8000, 16000, 24000, 44100"
+              description: 'Audio sample rate in Hz. Supported values: 8000, 16000, 24000, 44100'
               default: 44100
             speed:
               type: number
@@ -82,20 +82,20 @@ channels:
               type: string
               description: Optional client-provided session identifier for correlation. Only alphanumeric characters, hyphens, underscores, and dots allowed. Max 128 characters. Echoed back in responses as `external_session_id`.
               maxLength: 128
-              pattern: "^[a-zA-Z0-9_\\-.]+$"
+              pattern: ^[a-zA-Z0-9_\-.]+$
             request_id:
               type: string
               description: Optional client-provided request identifier for correlation. Only alphanumeric characters, hyphens, underscores, and dots allowed. Max 128 characters. Echoed back in responses as `external_request_id`.
               maxLength: 128
-              pattern: "^[a-zA-Z0-9_\\-.]+$"
+              pattern: ^[a-zA-Z0-9_\-.]+$
         examples:
-          - name: basicTts
-            payload:
-              voice_id: ryan
-              text: Hello, this is a sample text to convert to speech.
-              sample_rate: 24000
-              language: en
-              speed: 1
+        - name: basicTts
+          payload:
+            voice_id: ryan
+            text: Hello, this is a sample text to convert to speech.
+            sample_rate: 24000
+            language: en
+            speed: 1
       lightningV31TtsResponse.message:
         name: LightningV31TtsResponse
         contentType: application/json
@@ -117,8 +117,8 @@ channels:
             status:
               type: string
               enum:
-                - chunk
-                - complete
+              - chunk
+              - complete
               description: Status of the TTS request, `chunk` indicates incoming audio chunk, `complete` indicates completion.
             data:
               type: object
@@ -127,39 +127,40 @@ channels:
                   type: string
                   description: Base64-encoded audio chunk
         examples:
-          - name: audioChunk
-            payload:
-              session_id: ws_550e8400-e29b
-              request_id: task_6ba7b810-9dad
-              external_session_id: my-session-123
-              external_request_id: my-request-456
-              status: chunk
-              data:
-                audio: SGVsbG8gV29ybGQ=
-          - name: completionStatus
-            payload:
-              session_id: ws_550e8400-e29b
-              request_id: task_6ba7b810-9dad
-              external_session_id: my-session-123
-              external_request_id: my-request-456
-              status: complete
+        - name: audioChunk
+          payload:
+            session_id: ws_550e8400-e29b
+            request_id: task_6ba7b810-9dad
+            external_session_id: my-session-123
+            external_request_id: my-request-456
+            status: chunk
+            data:
+              audio: SGVsbG8gV29ybGQ=
+        - name: completionStatus
+          payload:
+            session_id: ws_550e8400-e29b
+            request_id: task_6ba7b810-9dad
+            external_session_id: my-session-123
+            external_request_id: my-request-456
+            status: complete
+    description: "# Lightning v3.1 WebSocket\n\nThe Lightning v3.1 WebSocket API provides real-time text-to-speech streaming capabilities with natural, expressive voice synthesis. This API uses WebSocket to deliver audio chunks as they're generated, enabling low-latency audio playback without waiting for the entire audio file to process.\n\n## Overview\n\nThe Lightning v3.1 WebSocket API delivers state-of-the-art text-to-speech synthesis through a persistent WebSocket connection, providing ultra-low latency audio streaming for applications that demand real-time voice generation. Unlike traditional HTTP-based TTS APIs, this WebSocket implementation streams audio chunks as they're processed, significantly reducing perceived latency and enabling seamless user experiences.\n\nLightning v3.1 is a 44 kHz model that produces natural, expressive, and realistic speech, with support for voice cloning.\n\n## Key Benefits\n\n* **Ultra-Low Latency**: Audio chunks delivered as soon as they're generated\n* **Real-Time Streaming**: Continuous audio delivery without waiting for complete text processing\n* **Natural Speech**: Expressive synthesis that sounds realistic\n* **Voice Cloning Support**: Compatible with cloned voices\n* **Persistent Connection**: Maintains connection for multiple requests, reducing connection overhead\n* **Interactive Applications**: Perfect for chatbots, voice assistants, and live communication systems\n\n## Use Cases\n\n* **Voice Assistants**: Real-time response generation for conversational AI\n* **Interactive Chatbots**: Immediate audio feedback for user interactions\n* **Live Streaming**: Real-time narration and commentary\n* **Accessibility Tools**: Screen readers and text-to-speech applications\n* **Gaming**: Dynamic voice generation for characters and narration\n* **Customer Service**: Automated voice responses with natural speech patterns\n\n## Concurrency and Rate Limits\n\nThis WebSocket API is subject to concurrency limits to ensure optimal performance for all users. Here's how it works:\n\n* **1 Concurrency Unit** = 1 active TTS request that can be processed at any given time\n* **5 WebSocket Connections** can be established per concurrency unit\n* **Total Connections** = Your concurrency limit × 5\n\n**Examples:**\n\n* **1 concurrency** = Up to 5 WebSocket connections, but only 1 active request\n* **3 concurrency** = Up to 15 WebSocket connections, but only 3 active requests simultaneously\n* **5 concurrency** = Up to 25 WebSocket connections, but only 5 active requests simultaneously\n\nWhile you can maintain multiple WebSocket connections, only your concurrency limit number of requests can be actively processed at once. Additional requests sent through any connection while at the concurrency limit will be rejected with an error.\n\nFor detailed information about concurrency limits, rate limiting, and best practices for handling these constraints, see our [Concurrency and Limits](/waves/api-reference/api-references/concurrency-and-limits) documentation.\n\n<Note>\n  When multiple requests are sent simultaneously beyond your concurrency limit,\n  additional requests will be rejected with an error. Implement proper error\n  handling and request queuing to manage concurrency effectively.\n</Note>\n"
 operations:
   LightningV31TtsRequest:
     action: send
     channel:
-      $ref: "#/channels/lightningV31Stream"
+      $ref: '#/channels/lightningV31Stream'
     summary: Send text-to-speech request
     description: Send a JSON message with voice_id, text, and optional parameters to generate speech audio.
     messages:
-      - $ref: "#/channels/lightningV31Stream/messages/lightningV31TtsRequest.message"
+    - $ref: '#/channels/lightningV31Stream/messages/lightningV31TtsRequest.message'
   LightningV31TtsResponse:
     action: receive
     channel:
-      $ref: "#/channels/lightningV31Stream"
+      $ref: '#/channels/lightningV31Stream'
     summary: Receive audio stream chunks
     description: Receive audio data chunks and completion status from the server.
     messages:
-      - $ref: "#/channels/lightningV31Stream/messages/lightningV31TtsResponse.message"
+    - $ref: '#/channels/lightningV31Stream/messages/lightningV31TtsResponse.message'
 components:
   securitySchemes:
     bearerAuth:
@@ -195,7 +196,7 @@ components:
         status:
           type: string
           enum:
-            - complete
+          - complete
           description: Indicates that the streaming is complete
     ErrorResponse:
       type: object
@@ -203,7 +204,7 @@ components:
         status:
           type: string
           enum:
-            - error
+          - error
         error:
           type: object
           properties:

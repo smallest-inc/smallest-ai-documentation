@@ -1,24 +1,38 @@
 openapi: 3.0.1
 info:
   title: Pulse ASR API
-  description: |
-    API for speech-to-text conversion using the Pulse ASR model.
+  description: 'API for speech-to-text conversion using the Pulse ASR model.
+
     Upload audio files and receive transcribed text using the Pulse model.
+
+    '
   version: 1.0.0
 servers:
-  - url: https://api.smallest.ai
-    description: Waves API server
-
+- url: https://api.smallest.ai
+  description: Waves API server
 paths:
   /waves/v1/pulse/get_text:
     post:
       tags:
-        - Speech to Text
+      - Speech to Text
       summary: Convert speech to text
-      description: Convert speech to text using the Pulse ASR model. Supports two input methods - raw audio bytes (application/octet-stream) with query parameters, or audio URL (application/json) with URL in body.
+      description: 'Convert speech to text using file upload with the Pulse STT POST API
+
+
+        The STT POST API allows you to convert speech to text using two different input methods:
+
+
+        1. **Raw Audio Bytes** (`application/octet-stream`) - Send raw audio data with all parameters as query parameters
+
+        2. **Audio URL** (`application/json`) - Provide only a URL to an audio file in the JSON body, with all other parameters as query parameters
+
+
+        Both methods use our Pulse STT model with automatic language detection across 30+ languages.
+
+        '
       operationId: speechToText
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -35,153 +49,182 @@ paths:
                   type: string
                   format: uri
                   description: URL to the audio file to transcribe. Must be publicly accessible
-                  example: "https://example.com/audio.mp3"
+                  example: https://example.com/audio.mp3
               required:
-                - url
+              - url
             example:
-              url: "https://example.com/audio.mp3"
+              url: https://example.com/audio.mp3
       parameters:
-        - name: language
-          in: query
-          required: false
-          schema:
-            type: string
-            enum:
-              [
-                "it",
-                "es",
-                "en",
-                "pt",
-                "hi",
-                "de",
-                "fr",
-                "uk",
-                "ru",
-                "kn",
-                "ml",
-                "pl",
-                "mr",
-                "gu",
-                "cs",
-                "sk",
-                "te",
-                "or",
-                "nl",
-                "bn",
-                "lv",
-                "et",
-                "ro",
-                "pa",
-                "fi",
-                "sv",
-                "bg",
-                "ta",
-                "hu",
-                "da",
-                "lt",
-                "mt",
-                "multi",
-                "multi-eu",
-                "multi-indic",
-                "multi-asian",
-              ]
-            default: multi-eu
-          description: |
-            Language of the audio file. Set explicitly to the known language for best accuracy.
+      - name: language
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - it
+          - es
+          - en
+          - pt
+          - hi
+          - de
+          - fr
+          - uk
+          - ru
+          - kn
+          - ml
+          - pl
+          - mr
+          - gu
+          - cs
+          - sk
+          - te
+          - or
+          - nl
+          - bn
+          - lv
+          - et
+          - ro
+          - pa
+          - fi
+          - sv
+          - bg
+          - ta
+          - hu
+          - da
+          - lt
+          - mt
+          - multi
+          - multi-eu
+          - multi-indic
+          - multi-asian
+          default: multi-eu
+        description: 'Language of the audio file. Set explicitly to the known language for best accuracy.
 
-            Auto-detection scopes:
-            - `multi-eu` (default) — European set: de, en, fr, it, nl, pt, ru, es.
-            - `multi-indic` — Indic set: en, hi, mr, pa, gu, or, ka, ta, te, ml, bn.
-            - `multi-asian` — East Asian set: en, ja, ko, zh, yue.
-            - `multi` — full multilingual auto-detection across all supported languages.
 
-            Omitting `language` routes to `multi-eu`, which can mis-detect on non-European audio. Always pass `language` explicitly when the source language is known, or pick the regional `multi-*` scope that matches your audio.
-        - name: webhook_url
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uri
-            description: URL to the webhook to receive the transcription results
-            example: "https://example.com/webhook"
-        - name: webhook_extra
-          in: query
-          required: false
-          schema:
-            type: string
-            description: Extra parameters to pass to the transcription. These will be added to the request body as a JSON object. Add comma separated key-value pairs to the query string. eg "custom_key:custom_value,custom_key2:custom_value2"
-            example: "custom_key:custom_value,custom_key2:custom_value2"
-        - name: word_timestamps
-          in: query
-          required: false
-          schema:
-            type: boolean
-            default: false
-          description: Whether to include word and utterance level timestamps in the response
-        - name: diarize
-          in: query
-          required: false
-          schema:
-            type: boolean
-            default: false
-          description: Whether to perform speaker diarization
-        - name: gender_detection
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: ["true", "false"]
-            default: "false"
-          description: Whether to predict the gender of the speaker
-        - name: emotion_detection
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: ["true", "false"]
-            default: "false"
-          description: Whether to predict speaker emotions
-        - name: format
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: ["true", "false"]
-            default: "true"
-          description: |
-            Master formatting switch for the transcript. When `false`, forces
-            `punctuate=false`, `capitalize=false`, and also disables Inverse
-            Text Normalization (ITN) so it cannot silently reintroduce
-            punctuation or casing.
+          Auto-detection scopes:
 
-            When `true`, the `punctuate` and `capitalize` params take effect
-            independently. Leave `format=true` and use those two to fine-tune.
-        - name: punctuate
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: ["true", "false"]
-            default: "true"
-          description: |
-            When `false`, strips end-of-sentence punctuation (`.`, `,`, `?`, `!`)
-            from the transcript, `words[].word`, and
-            `utterances[].transcript`. Does not affect casing — use
-            `capitalize` for that. Overridden to `false` when `format=false`.
-        - name: capitalize
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: ["true", "false"]
-            default: "true"
-          description: |
-            When `false`, lowercases the entire transcript output (transcript,
-            `words[].word`, and `utterances[].transcript`). Does not affect
-            punctuation — use `punctuate` for that. Overridden to `false`
-            when `format=false`.
+          - `multi-eu` (default) — European set: de, en, fr, it, nl, pt, ru, es.
+
+          - `multi-indic` — Indic set: en, hi, mr, pa, gu, or, ka, ta, te, ml, bn.
+
+          - `multi-asian` — East Asian set: en, ja, ko, zh, yue.
+
+          - `multi` — full multilingual auto-detection across all supported languages.
+
+
+          Omitting `language` routes to `multi-eu`, which can mis-detect on non-European audio. Always pass `language` explicitly when the source language is known, or pick the regional `multi-*` scope that matches your audio.
+
+          '
+      - name: webhook_url
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uri
+          description: URL to the webhook to receive the transcription results
+          example: https://example.com/webhook
+      - name: webhook_extra
+        in: query
+        required: false
+        schema:
+          type: string
+          description: Extra parameters to pass to the transcription. These will be added to the request body as a JSON object. Add comma separated key-value pairs to the query string. eg "custom_key:custom_value,custom_key2:custom_value2"
+          example: custom_key:custom_value,custom_key2:custom_value2
+      - name: word_timestamps
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+        description: Whether to include word and utterance level timestamps in the response
+      - name: diarize
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+        description: Whether to perform speaker diarization
+      - name: gender_detection
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - 'true'
+          - 'false'
+          default: 'false'
+        description: Whether to predict the gender of the speaker
+      - name: emotion_detection
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - 'true'
+          - 'false'
+          default: 'false'
+        description: Whether to predict speaker emotions
+      - name: format
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - 'true'
+          - 'false'
+          default: 'true'
+        description: 'Master formatting switch for the transcript. When `false`, forces
+
+          `punctuate=false`, `capitalize=false`, and also disables Inverse
+
+          Text Normalization (ITN) so it cannot silently reintroduce
+
+          punctuation or casing.
+
+
+          When `true`, the `punctuate` and `capitalize` params take effect
+
+          independently. Leave `format=true` and use those two to fine-tune.
+
+          '
+      - name: punctuate
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - 'true'
+          - 'false'
+          default: 'true'
+        description: 'When `false`, strips end-of-sentence punctuation (`.`, `,`, `?`, `!`)
+
+          from the transcript, `words[].word`, and
+
+          `utterances[].transcript`. Does not affect casing — use
+
+          `capitalize` for that. Overridden to `false` when `format=false`.
+
+          '
+      - name: capitalize
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - 'true'
+          - 'false'
+          default: 'true'
+        description: 'When `false`, lowercases the entire transcript output (transcript,
+
+          `words[].word`, and `utterances[].transcript`). Does not affect
+
+          punctuation — use `punctuate` for that. Overridden to `false`
+
+          when `format=false`.
+
+          '
       responses:
-        "200":
+        '200':
           description: Speech transcribed successfully
           content:
             application/json:
@@ -195,7 +238,7 @@ paths:
                   transcription:
                     type: string
                     description: The transcribed text from the audio file
-                    example: "Hello world."
+                    example: Hello world.
                   audio_length:
                     type: number
                     description: Duration of the audio file in seconds
@@ -215,10 +258,10 @@ paths:
                         speaker:
                           type: string
                           description: Speaker if diarization is enabled
-                          example: "speaker_0"
+                          example: speaker_0
                         word:
                           type: string
-                          example: "Hello"
+                          example: Hello
                   utterances:
                     type: array
                     description: List of utterances with start and end times
@@ -227,7 +270,7 @@ paths:
                       properties:
                         text:
                           type: string
-                          example: "Hello world."
+                          example: Hello world.
                         start:
                           type: number
                           example: 0.0
@@ -237,12 +280,14 @@ paths:
                         speaker:
                           type: string
                           description: Speaker if diarization is enabled
-                          example: "speaker_0"
+                          example: speaker_0
                   gender:
                     type: string
                     description: Predicted gender of the speaker if requested
                     example: male
-                    enum: [male, female]
+                    enum:
+                    - male
+                    - female
                   emotions:
                     type: object
                     description: Predicted emotions of the speaker if requested
@@ -274,7 +319,7 @@ paths:
                       filename:
                         type: string
                         description: Name of the audio file
-                        example: "audio.mp3"
+                        example: audio.mp3
                       duration:
                         type: number
                         description: Duration of the audio file in minutes
@@ -284,23 +329,23 @@ paths:
                         description: Size of the audio file in bytes
                         example: 1000000
               example:
-                status: "success"
-                transcription: "Hello world."
+                status: success
+                transcription: Hello world.
                 words:
-                  - start: 0.0
-                    end: 0.5
-                    speaker: "speaker_0"
-                    word: "Hello"
-                  - start: 0.6
-                    end: 0.9
-                    speaker: "speaker_0"
-                    word: "world."
+                - start: 0.0
+                  end: 0.5
+                  speaker: speaker_0
+                  word: Hello
+                - start: 0.6
+                  end: 0.9
+                  speaker: speaker_0
+                  word: world.
                 utterances:
-                  - text: "Hello world."
-                    start: 0.0
-                    end: 0.9
-                    speaker: "speaker_0"
-                gender: "male"
+                - text: Hello world.
+                  start: 0.0
+                  end: 0.9
+                  speaker: speaker_0
+                gender: male
                 emotions:
                   happiness: 0.8
                   sadness: 0.15
@@ -308,60 +353,66 @@ paths:
                   fear: 0.03
                   anger: 0.05
                 metadata:
-                  filename: "audio.mp3"
+                  filename: audio.mp3
                   duration: 1.7
                   fileSize: 1000000
-        "400":
+        '400':
           description: Bad request - Invalid parameters or file format
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: '#/components/schemas/ErrorResponse'
               example:
-                error: "Invalid file format. Supported formats: audio/*"
-        "401":
+                error: 'Invalid file format. Supported formats: audio/*'
+        '401':
           description: Unauthorized - Invalid or missing authentication
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: '#/components/schemas/ErrorResponse'
               example:
-                error: "Unauthorized - Invalid API key"
-        "413":
+                error: Unauthorized - Invalid API key
+        '413':
           description: Payload too large - File size exceeds limit
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: '#/components/schemas/ErrorResponse'
               example:
-                error: "File size exceeds maximum limit of 25MB"
-        "429":
+                error:
+                  code: '413'
+                  message: File size exceeds maximum limit of 25MB
+                status: error
+        '429':
           description: Too many requests - Rate limit exceeded
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: '#/components/schemas/ErrorResponse'
               example:
-                error: "Rate limit exceeded. Please try again later."
-        "500":
+                error:
+                  code: '429'
+                  message: Rate limit exceeded. Please try again later.
+                status: error
+        '500':
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: '#/components/schemas/ErrorResponse'
               example:
-                error: "Internal server error"
-
+                error: Internal server error
 components:
   securitySchemes:
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: |
-        API key authentication using Bearer token format.
+      description: 'API key authentication using Bearer token format.
+
         Include your API key in the Authorization header as: `Bearer YOUR_API_KEY`
 
+        '
   schemas:
     ErrorResponse:
       type: object
@@ -370,5 +421,4 @@ components:
           type: string
           description: Error message describing what went wrong
       required:
-        - error
-
+      - error
