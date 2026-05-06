@@ -1,0 +1,119 @@
+name: API Spec Live Test
+
+# Runs on PRs that change one of the API spec files. For each spec area
+# that changed, hits the live Smallest AI API and verifies that what we
+# document is actually what the platform implements.
+#
+#   - Atoms (fern/apis/atoms/**)        → scripts/spec-live-tests/atoms_live_test.py
+#   - Waves TTS Lightning v3.1          → scripts/spec-live-tests/waves_tts_live_test.py
+#   - Waves STT Pulse                   → scripts/spec-live-tests/waves_stt_live_test.py
+#
+# Why: PR #121 added 14 documented fields to CreateAgentRequest. `fern
+# check` validated YAML, but only a live PATCH against the platform
+# proved each field is actually accepted and persists. This workflow
+# catches the same class of drift on every future spec change without
+# anyone having to remember to test.
+#
+# Required repo secret: SMALLEST_API_KEY (test-tenant key, NOT prod).
+#
+# Atoms test creates a real agent on the test tenant and archives it
+# at the end. A janitor sweep at the start removes any leftover
+# `CI-spec-test-*` agents from prior crashed runs.
+
+on:
+  pull_request:
+    paths:
+      - 'fern/apis/atoms/**'
+      - 'fern/apis/waves/openapi/lightning-v3.1*'
+      - 'fern/apis/waves/openapi/pulse-stt*'
+      - 'fern/apis/waves/asyncapi/lightning-v3.1*'
+      - 'fern/apis/waves/asyncapi/pulse-stt*'
+      - 'fern/apis/waves/asyncapi/stream-tts-ws*'
+      - 'scripts/spec-live-tests/**'
+      - '.github/workflows/api-spec-live-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    name: Detect which spec areas changed
+    runs-on: ubuntu-latest
+    outputs:
+      atoms: ${{ steps.filter.outputs.atoms }}
+      tts: ${{ steps.filter.outputs.tts }}
+      stt: ${{ steps.filter.outputs.stt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            atoms:
+              - 'fern/apis/atoms/**'
+              - 'scripts/spec-live-tests/atoms_live_test.py'
+              - '.github/workflows/api-spec-live-test.yml'
+            tts:
+              - 'fern/apis/waves/openapi/lightning-v3.1*'
+              - 'fern/apis/waves/asyncapi/lightning-v3.1*'
+              - 'fern/apis/waves/asyncapi/stream-tts-ws*'
+              - 'scripts/spec-live-tests/waves_tts_live_test.py'
+              - '.github/workflows/api-spec-live-test.yml'
+            stt:
+              - 'fern/apis/waves/openapi/pulse-stt*'
+              - 'fern/apis/waves/asyncapi/pulse-stt*'
+              - 'scripts/spec-live-tests/waves_stt_live_test.py'
+              - '.github/workflows/api-spec-live-test.yml'
+
+  atoms-live-test:
+    name: Atoms — live PATCH all CreateAgentRequest fields
+    needs: detect-changes
+    if: needs.detect-changes.outputs.atoms == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run Atoms live test
+        env:
+          SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
+        run: python3 scripts/spec-live-tests/atoms_live_test.py
+
+  tts-live-test:
+    name: Waves TTS — Lightning v3.1 REST + WS smoke test
+    needs: detect-changes
+    if: needs.detect-changes.outputs.tts == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install websockets
+        run: pip install --quiet websockets
+      - name: Run TTS live test
+        env:
+          SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
+        run: python3 scripts/spec-live-tests/waves_tts_live_test.py
+
+  stt-live-test:
+    name: Waves STT — Pulse WS smoke test
+    needs: detect-changes
+    if: needs.detect-changes.outputs.stt == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install websockets
+        run: pip install --quiet websockets
+      - name: Run STT live test
+        env:
+          SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
+        run: python3 scripts/spec-live-tests/waves_stt_live_test.py

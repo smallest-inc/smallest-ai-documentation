@@ -374,8 +374,11 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
+  /agent/{id}/archive:
     delete:
+      operationId: deleteAgent
       summary: Delete an agent
+      description: Delete an agent. The agent is removed from listings and stops accepting calls.
       tags:
         - Agents
       security:
@@ -4424,6 +4427,11 @@ components:
               type: number
               enum: [0, 1, 2]
               default: 1
+            sampleRate:
+              type: number
+              enum: [8000, 16000, 24000, 44100]
+              default: 16000
+              description: Output audio sample rate in Hz.
         globalKnowledgeBaseId:
           type: string
           description: The global knowledge base ID of the agent. You can create a global knowledge base by using the /knowledgebase endpoint and assign it to the agent. The agent will use this knowledge base for its responses.
@@ -4498,6 +4506,137 @@ components:
           $ref: "#/components/schemas/WorkflowType"
           default: workflow_graph
           description: The type of workflow to create for the agent. Defaults to workflow_graph if not specified.
+        firstMessage:
+          type: string
+          maxLength: 500
+          description: The first message the agent sends when a conversation starts.
+        muteUserUntilFirstBotResponse:
+          type: boolean
+          description: When true, the user's audio is muted until the agent has finished its first response.
+        allowInterruptions:
+          type: boolean
+          description: Whether the user can interrupt the agent while it is speaking.
+        waitForUserToSpeakFirst:
+          type: boolean
+          description: When true, the agent waits for the user to speak before sending the first message.
+        interruptionBackoffTimer:
+          type: number
+          minimum: 0
+          maximum: 10
+          description: Seconds the agent waits after being interrupted before resuming speech.
+        smartTurnConfig:
+          type: object
+          description: Smart turn-detection configuration. When enabled, the agent uses an additional model to decide whether the user has finished a turn.
+          properties:
+            isEnabled:
+              type: boolean
+            waitTimeInSecs:
+              type: number
+              minimum: 0
+              maximum: 10
+              description: How long to wait after the user stops speaking before responding.
+        voiceDetectionConfig:
+          type: object
+          description: Voice activity detection (VAD) configuration. Controls how the agent decides when speech is present.
+          properties:
+            confidence:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: Minimum VAD confidence threshold to register speech.
+            minVolume:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: Minimum input volume threshold to register speech.
+            triggerTimeInSecs:
+              type: number
+              minimum: 0
+              maximum: 10
+              description: How long sustained speech must be detected before turning the VAD on.
+            releaseTimeInSecs:
+              type: number
+              minimum: 0
+              maximum: 10
+              description: How long after silence before the VAD turns off.
+        voiceMailDetectionConfig:
+          type: object
+          description: Voicemail-detection configuration. When the call hits a voicemail tone, the agent plays `endText` and ends the call.
+          properties:
+            enabled:
+              type: boolean
+            endText:
+              type: string
+              maxLength: 200
+              description: Message played before hanging up when voicemail is detected.
+        denoisingConfig:
+          type: object
+          description: Background-noise denoising configuration for the agent's input audio.
+          properties:
+            isEnabled:
+              type: boolean
+        redactionConfig:
+          type: object
+          description: PII redaction configuration. When enabled, personally identifiable information is redacted from transcripts before storage.
+          properties:
+            isEnabled:
+              type: boolean
+        pronunciationDicts:
+          type: array
+          description: Pronunciation overrides — words the TTS engine should pronounce differently from its default.
+          items:
+            type: object
+            required:
+              - word
+              - pronunciation
+            properties:
+              word:
+                type: string
+                description: The word to override.
+              pronunciation:
+                type: string
+                description: How the word should be pronounced (phonetic spelling).
+        llmIdleTimeoutConfig:
+          type: object
+          description: Timeout configuration for the LLM stage of a conversation. Triggers a retry or call termination when the LLM does not respond within the configured window.
+          properties:
+            chatTimeoutTimeInSecs:
+              type: number
+              minimum: 1
+              maximum: 300
+              description: LLM idle timeout for chat conversations, in seconds.
+            webcallTimeoutTimeInSecs:
+              type: number
+              minimum: 1
+              maximum: 300
+              description: LLM idle timeout for web calls, in seconds.
+            telephonyTimeoutTimeInSecs:
+              type: number
+              minimum: 1
+              maximum: 300
+              description: LLM idle timeout for telephony calls, in seconds.
+            maxRetries:
+              type: number
+              description: Maximum number of LLM-idle retries before terminating the call. System-defined min/max.
+        sessionTimeoutConfig:
+          type: object
+          description: Maximum duration of a conversation session. The call ends after this elapsed time even if active.
+          properties:
+            timeoutTimeInSecs:
+              type: number
+              maximum: 3600
+              default: 1800
+              description: Maximum session duration in seconds (max 1 hour). Defaults to 1800 (30 minutes).
+        timezone:
+          type: object
+          description: Timezone applied to scheduled actions and timestamps the agent reports to the user.
+          properties:
+            label:
+              type: string
+              description: IANA timezone label (e.g. `America/New_York`).
+            offset:
+              type: number
+              description: UTC offset in minutes (e.g. -300 for EST).
 
     UpdateAgentRequest:
       type: object
