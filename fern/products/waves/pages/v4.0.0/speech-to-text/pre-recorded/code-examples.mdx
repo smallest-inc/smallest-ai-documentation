@@ -3,7 +3,7 @@ title: 'Code Examples'
 description: 'Complete code samples for transcribing pre-recorded audio with Pulse STT'
 ---
 
-Below is a complete Python example demonstrating audio preprocessing, transcription with age/gender detection, emotion detection, and sentence-level timestamps (utterances).
+Below is a complete Python example demonstrating audio preprocessing, transcription with gender detection, emotion detection, and sentence-level timestamps (utterances).
 
 {/* TODO: Restore SDK as the primary example once smallestai Python SDK ships its fix. */}
 <Note>
@@ -36,14 +36,13 @@ def preprocess_audio(input_path, output_path):
 
 def transcribe_with_features(audio_path):
     """
-    Transcribe audio with age detection, emotion detection, and utterances.
+    Transcribe audio with gender detection, emotion detection, and utterances.
     """
     response = client.transcribe(
         file_path=audio_path,
         model="pulse",
         language="en",
         word_timestamps=True,
-        age_detection=True,
         gender_detection=True,
         emotion_detection=True,
         diarize=True
@@ -61,10 +60,8 @@ def process_results(response):
     
     print(f"\nTranscription: {response.get('transcription', 'N/A')}")
     
-    if 'age' in response:
-        print(f"\nAge: {response['age']}")
     if 'gender' in response:
-        print(f"Gender: {response['gender']}")
+        print(f"\nGender: {response['gender']}")
     
     if 'emotions' in response:
         print("\nEmotion Scores:")
@@ -94,7 +91,7 @@ if __name__ == "__main__":
         print("Preprocessing audio...")
         preprocess_audio(input_audio, preprocessed_audio)
         
-        print("\nTranscribing audio with age, emotion, and utterance detection...")
+        print("\nTranscribing audio with gender, emotion, and utterance detection...")
         result = transcribe_with_features(preprocessed_audio)
         
         process_results(result)
@@ -122,7 +119,7 @@ pip install smallestai pydub
 ## Key Features Demonstrated
 
 1. **Audio Preprocessing**: Converts audio to 16 kHz mono WAV, normalizes levels, and removes silence
-2. **Age & Gender Detection**: Enables demographic analysis
+2. **Gender Detection**: Predicts speaker gender
 3. **Emotion Detection**: Captures emotional tone with confidence scores
 4. **Utterances**: Retrieves sentence-level timestamps with speaker labels
 5. **Diarization**: Separates speakers for multi-speaker audio
@@ -131,7 +128,7 @@ pip install smallestai pydub
 
 The script will output:
 - Full transcription text
-- Age and gender predictions
+- Gender predictions
 - Emotion scores (happiness, sadness, disgust, fear, anger)
 - Sentence-level utterances with timestamps and speaker IDs
 
