@@ -20,4 +20,8 @@ The synthesizer schema also gains `sampleRate` (`8000`, `16000`, `24000`, `44100
 
 All fields are optional — a draft save may include any subset. Existing drafts and the `POST /campaign` request body shape are unchanged.
 
+The `deleteAgent` operation now points to its real path: `DELETE /agent/{id}/archive`. The previously documented `DELETE /agent/{id}` returned 404 because the route does not exist. SDK method name (`deleteAgent`) is unchanged.
+
+A new CI workflow (`api-spec-live-test`) now runs on every PR that touches `fern/apis/atoms/**`, `fern/apis/waves/openapi/lightning-v3.1*`, or `fern/apis/waves/openapi/pulse-stt*`. It creates a dummy agent, PATCHes every documented `CreateAgentRequest` field, asserts the platform's diff endpoint reports the change, then exercises `deleteAgent` — catching the same class of silent drift this PR fixed.
+
 → [Agent versioning guide](/atoms/atoms-platform/features/versioning)
