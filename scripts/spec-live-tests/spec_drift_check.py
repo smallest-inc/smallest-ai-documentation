@@ -70,13 +70,22 @@ def asyncapi_param_xref(base, override):
         ovr_params = (chan or {}).get("parameters") or {}
         base_chan = (base.get("channels") or {}).get(chan_name) or {}
         msgs = base_chan.get("messages") or {}
-        # find the request message (any message with payload.properties)
+        # Aggregate properties across all messages (request payloads, control
+        # signals, response payloads). Later entries override earlier; the
+        # last write wins for any duplicate property name. This is a best-
+        # effort heuristic — pulse-stt-ws-style specs put request params in
+        # an override-only `parameters` block with no base counterpart, in
+        # which case nothing matches and no drift is reported (correct).
         properties = {}
         for msg in msgs.values():
             payload = (msg or {}).get("payload") or {}
             if isinstance(payload, dict) and isinstance(payload.get("properties"), dict):
-                properties = payload["properties"]
-                break
+                for pname, pdef in payload["properties"].items():
+                    # Prefer non-empty property definitions over stubs.
+                    if isinstance(pdef, dict) and pdef.get("description"):
+                        properties[pname] = pdef
+                    elif pname not in properties:
+                        properties[pname] = pdef
         for pname, pblock in ovr_params.items():
             if not isinstance(pblock, dict):
                 continue
@@ -117,9 +126,11 @@ def main() -> int:
                     if f not in base_node or base_node[f] != ovr_node[f]:
                         drift.append((path, f, base_node.get(f), ovr_node[f]))
 
-        # AsyncAPI cross-structural-path check for parameters block
+        # AsyncAPI cross-structural-path check for parameters block.
+        # Detect by presence of the top-level `asyncapi` key (which holds the
+        # spec version, e.g. "3.0.0"). OpenAPI specs use `openapi` instead.
         xref = []
-        if base_path.suffix in (".yaml", ".yml") and "asyncapi" in base.get("openapi", "") + str(base.get("asyncapi", "")):
+        if "asyncapi" in base:
             xref = asyncapi_param_xref(base, ovr)
 
         if drift or xref:
