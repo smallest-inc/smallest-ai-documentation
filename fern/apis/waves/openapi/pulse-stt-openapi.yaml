@@ -115,6 +115,34 @@ paths:
           Omitting `language` routes to `multi-eu`, which can mis-detect on non-European audio. Always pass `language` explicitly when the source language is known, or pick the regional `multi-*` scope that matches your audio.
 
           '
+      - name: encoding
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+            - linear16
+            - linear32
+            - alaw
+            - mulaw
+            - m4a
+            - mp3
+            - opus
+            - ogg_opus
+            - flac
+            - webm
+        description: |
+          Audio encoding of the file you upload. Lets the server skip
+          format auto-detection and decode directly. Mirrors the
+          `encoding` parameter on the realtime WS endpoint.
+
+          - PCM: `linear16`, `linear32`
+          - Telephony codecs: `alaw`, `mulaw`
+          - Compressed: `m4a`, `mp3`, `opus`, `ogg_opus`, `flac`, `webm`
+
+          If omitted, the server infers the format from the file's
+          container header. Pass this when you want to be explicit
+          (e.g. headerless raw PCM streams).
       - name: webhook_url
         in: query
         required: false
