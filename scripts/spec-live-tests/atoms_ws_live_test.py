@@ -105,14 +105,19 @@ EXPECTED_SERVER_TYPES = {
 
 
 async def run_session(agent_id: str) -> tuple[bool, dict]:
-    qs = urlencode({"agent_id": agent_id, "token": API_KEY})
+    # Spec lists two auth schemes: `Authorization: Bearer <key>` header
+    # OR `?token=<key>` query string. We prefer the header — it's more
+    # consistent across edge / proxy paths (CI's network rejected the
+    # query-token form with HTTP 401 even though it works locally).
+    qs = urlencode({"agent_id": agent_id})
     url = f"{WS_URL}?{qs}"
+    headers = {"Authorization": f"Bearer {API_KEY}"}
     seen_types: set[str] = set()
     session_created = False
     error_msg: str | None = None
 
     try:
-        async with websockets.connect(url, open_timeout=15) as ws:
+        async with websockets.connect(url, additional_headers=headers, open_timeout=15) as ws:
             # Receive a short window of server events
             try:
                 deadline = time.time() + 8
