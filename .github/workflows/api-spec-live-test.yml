@@ -220,6 +220,24 @@ jobs:
           SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
         run: python3 scripts/spec-live-tests/waves_tts_live_test.py
 
+  spec-enum-vs-api-check:
+    name: Spec enums match live API
+    needs: detect-changes
+    if: (needs.detect-changes.outputs.tts == 'true' || needs.detect-changes.outputs.stt == 'true' || needs.detect-changes.outputs.atoms == 'true' || needs.detect-changes.outputs.atoms_ws == 'true') && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pyyaml
+        run: pip install --quiet 'pyyaml>=6.0,<7.0'
+      - name: Run spec-vs-live-API enum check
+        env:
+          SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
+        run: python3 scripts/spec-live-tests/spec_enum_vs_api_check.py
+
   spec-drift-check:
     name: Waves spec drift — base vs v4 docs overrides
     runs-on: ubuntu-latest

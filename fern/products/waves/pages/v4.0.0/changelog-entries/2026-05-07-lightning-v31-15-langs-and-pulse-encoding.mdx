@@ -1,9 +1,11 @@
 ---
-title: Lightning v3.1 — 15 supported languages documented; Pulse STT — `encoding` query param documented for the pre-recorded REST endpoint
+title: Lightning v3.1 — 23 supported languages documented; Pulse STT — `encoding` query param documented for the pre-recorded REST endpoint
 ---
 
-Two doc gaps closed today.
+Two doc gaps closed today, plus a new CI check that catches this class of bug going forward.
 
-**Lightning v3.1 supported languages.** The OpenAPI spec previously listed only `en` and `hi`. The platform actually accepts 15: Indian — `en`, `hi`, `mr`, `kn`, `ta`, `bn`, `gu`; European — `de`, `fr`, `es`, `it`, `pl`, `nl`, `ru`; MENA — `ar`. Both REST (`POST /waves/v1/lightning-v3.1/get_speech` and `/stream`) and WebSocket (`/waves/v1/lightning-v3.1/get_speech/stream`) accept the same enum. The model card on the Lightning v3.1 page has been updated with the same list (4 entries that the platform rejects — `te`, `ml`, `sv`, `pt` — were removed; 4 entries the platform accepts but were missing — `bn`, `pl`, `ru`, `ar` — were added).
+**Lightning v3.1 supported languages.** The OpenAPI spec previously listed only `en` and `hi`. The platform actually accepts 23: 11 Indian (`en`, `hi`, `mr`, `kn`, `ta`, `bn`, `gu`, `te`, `ml`, `pa`, `or`), 9 European (`de`, `fr`, `es`, `it`, `pl`, `nl`, `ru`, `sv`, `pt`), 2 MENA (`ar`, `he`), plus `auto` for code-switching. Both REST (`POST /waves/v1/lightning-v3.1/get_speech` and `/stream`) and WebSocket (`/waves/v1/lightning-v3.1/get_speech/stream`) accept the same enum. The model card on the Lightning v3.1 page has been updated to list all 23.
 
 **Pulse STT `encoding` parameter on the pre-recorded REST endpoint.** The streaming WS already documents `encoding` to declare the audio format being sent. The pre-recorded REST endpoint (`POST /waves/v1/pulse/get_text`) accepts the same parameter to skip auto-detection — the OpenAPI spec didn't mention it. Now documented with the same enum: `linear16`, `linear32`, `alaw`, `mulaw`, `m4a`, `mp3`, `opus`, `ogg_opus`, `flac`, `webm`. Optional — when omitted, the server still infers from the file's container header.
+
+**New CI check: `spec-enum-vs-api-check`.** Catches the class of bug above (spec ships an outdated enum) by sending a deliberately-bogus value to each documented enum field, parsing the canonical accepted-values list from the platform's `invalid_enum_value` error, and comparing against the spec. Runs on every PR that touches `fern/apis/waves/**`. Already caught one drift while this PR was being written: my initial language fix said 15 codes but the API actually returns 23 — the script flagged the gap before merge.
