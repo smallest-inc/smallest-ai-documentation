@@ -132,9 +132,13 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           marker='<!-- atoms-ws-backend-bug-suspected -->'
+          # Filter by both marker AND author — review bots (entelligence-ai
+          # etc.) quote our marker comment verbatim in their summaries, so
+          # marker-only matching would risk updating/deleting a bot's
+          # review by mistake.
           existing_id=$(gh api --paginate \
             "/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
-            --jq ".[] | select(.body | contains(\"$marker\")) | .id" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\") | select(.body | contains(\"$marker\")) | .id" \
             | head -1)
           if [ -n "$existing_id" ]; then
             echo "atoms WS test passing — deleting stale backend-bug comment $existing_id"
@@ -171,9 +175,13 @@ jobs:
 
           # List PR comments via REST (returns integer IDs we can PATCH); find
           # the one carrying the marker and update it. If none, create a new one.
+          # Filter by both marker AND author — review bots (entelligence-ai
+          # etc.) quote our marker comment verbatim in their summaries, so
+          # marker-only matching would risk updating/deleting a bot's
+          # review by mistake.
           existing_id=$(gh api --paginate \
             "/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
-            --jq ".[] | select(.body | contains(\"$marker\")) | .id" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\") | select(.body | contains(\"$marker\")) | .id" \
             | head -1)
 
           if [ -n "$existing_id" ]; then
