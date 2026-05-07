@@ -104,21 +104,12 @@ EXPECTED_SERVER_TYPES = {
 }
 
 
-async def run_session(agent_id: str) -> tuple[bool, dict]:
-    # Spec lists two auth schemes: `Authorization: Bearer <key>` header
-    # OR `?token=<key>` query string. We prefer the header — it's more
-    # consistent across edge / proxy paths (CI's network rejected the
-    # query-token form with HTTP 401 even though it works locally).
-    qs = urlencode({"agent_id": agent_id})
-    url = f"{WS_URL}?{qs}"
-    headers = {"Authorization": f"Bearer {API_KEY}"}
+async def _attempt_session(url: str, headers: dict) -> tuple[bool, dict]:
     seen_types: set[str] = set()
     session_created = False
     error_msg: str | None = None
-
     try:
         async with websockets.connect(url, additional_headers=headers, open_timeout=15) as ws:
-            # Receive a short window of server events
             try:
                 deadline = time.time() + 8
                 while time.time() < deadline:
@@ -141,12 +132,10 @@ async def run_session(agent_id: str) -> tuple[bool, dict]:
             except websockets.exceptions.ConnectionClosed:
                 pass
 
-            # Send the documented session.close to end cleanly
             try:
                 await ws.send(json.dumps({"type": "session.close"}))
             except Exception:
                 pass
-
     except Exception as e:
         return False, {"error": f"{type(e).__name__}: {e}"}
 
@@ -155,6 +144,40 @@ async def run_session(agent_id: str) -> tuple[bool, dict]:
         "session_created": session_created,
         "error_msg": error_msg,
     }
+
+
+async def run_session(agent_id: str) -> tuple[bool, dict]:
+    """Open a WS session against the freshly-created agent.
+
+    Spec lists two auth schemes (Authorization header OR `?token=` query).
+    We use the header — it's consistent across edge / proxy paths (CI's
+    network rejected the query-token form locally vs CI).
+
+    Retries: a freshly-created agent occasionally races the session-
+    backend propagation, returning HTTP 500 on the first WS handshake.
+    Retry up to 3x with exponential backoff. 4xx on connect (e.g., 401)
+    means real auth/config error and short-circuits.
+    """
+    qs = urlencode({"agent_id": agent_id})
+    url = f"{WS_URL}?{qs}"
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+
+    last_result: dict = {}
+    for attempt in range(1, 4):
+        ok, result = await _attempt_session(url, headers)
+        if ok:
+            return True, result
+        last_result = result
+        err = result.get("error") or ""
+        # 4xx → bail immediately, retrying won't help
+        if "HTTP 4" in err or "InvalidStatus: server rejected WebSocket connection: HTTP 4" in err:
+            return False, result
+        # 5xx or transport error → wait and retry
+        if attempt < 3:
+            wait = attempt * 3
+            print(f"  attempt {attempt}: {err[:100]} — retrying in {wait}s")
+            await asyncio.sleep(wait)
+    return False, last_result
 
 
 def main() -> int:
@@ -178,6 +201,12 @@ def main() -> int:
         return 1
     print(f"created agent {agent_id} (name={name!r})")
     print()
+
+    # Brief warm-up: REST returns 201 before the session backend has
+    # propagated the agent. Without this pause the first WS handshake
+    # races and frequently returns 500 (subsequent attempts succeed —
+    # see retry loop in run_session).
+    time.sleep(2)
 
     # 2. Connect and observe
     print("=== open WS session, observe documented event types ===")
