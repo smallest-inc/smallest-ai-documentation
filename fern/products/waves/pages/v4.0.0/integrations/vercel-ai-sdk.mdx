@@ -324,6 +324,26 @@ for await (const msg of parseTranscriptionStreamSSE(res)) {
 }
 ```
 
+<Note>
+**Next.js setup, one-time** — only required for server-side `auth: 'header'` (the default, used by the SSE proxy above). Add this to `next.config.{js,mjs,ts}`:
+
+```js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  serverExternalPackages: ['smallestai-vercel-provider', 'ws'],
+};
+export default nextConfig;
+```
+
+And install the optional native deps so `ws` masks frames at native speed:
+
+```bash
+npm install bufferutil utf-8-validate
+```
+
+Browser-only consumers using `auth: 'query'` (option C) or `signedUrl` (option B) don't need this — the SDK lazy-loads `ws` only when the `Authorization` header path is reached, so browser bundles never pull in `ws` or its Node-only deps.
+</Note>
+
 #### B. Browser-native via signed URL (also production-grade)
 
 Your server mints a short-lived URL on demand; the browser opens the WebSocket directly with that URL. Same security profile as (A) but with one less hop:
