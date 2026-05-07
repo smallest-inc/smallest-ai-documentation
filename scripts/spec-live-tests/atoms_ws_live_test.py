@@ -35,10 +35,13 @@ import json
 import os
 import sys
 import time
+import urllib.error
+import urllib.request
 from urllib.parse import urlencode
 
 import websockets
 
+REST_BASE = "https://api.smallest.ai/atoms/v1"
 WS_URL = "wss://api.smallest.ai/atoms/v1/agent/connect"
 
 # Long-lived configured fixture on the test tenant. Has the working
@@ -146,10 +149,67 @@ def is_session_bootstrap_5xx(error_msg: str) -> bool:
     return "HTTP 500" in error_msg or "HTTP 502" in error_msg or "HTTP 503" in error_msg
 
 
+def preflight_check_agent(agent_id: str) -> tuple[bool, str]:
+    """Pre-flight: confirm the fixture agent exists and the API key can
+    access it. Returns (ok, message). Catches the most common operational
+    failure (fixture deleted on the platform) early, with a clear
+    actionable message instead of a confusing WS-handshake error."""
+    r = urllib.request.Request(
+        f"{REST_BASE}/agent/{agent_id}",
+        headers={"Authorization": f"Bearer {API_KEY}"},
+    )
+    try:
+        with urllib.request.urlopen(r, timeout=15) as resp:
+            data = json.loads(resp.read())
+            agent = data.get("data") or {}
+            name = agent.get("name") or "(no name)"
+            org = agent.get("organization") or "(no org)"
+            return True, f"agent reachable: name={name!r} org={org}"
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode("utf-8", "replace")
+        # The platform returns 400 with `{"errors": ["No agent found"]}` for a
+        # non-existent agent ID rather than the more conventional 404. Treat
+        # both as the "fixture missing" case.
+        body_lower = body_text.lower()
+        is_not_found = (
+            e.code == 404
+            or (e.code == 400 and ("no agent found" in body_lower or "agent not found" in body_lower))
+        )
+        if is_not_found:
+            return False, (
+                f"FIXTURE MISSING: agent {agent_id} not found on the tenant "
+                f"(GET returned {e.code}: {body_text[:120]}). Recreate the "
+                "test-fixture agent per CLAUDE.md → 'Atoms WS test — uses a "
+                "fixture agent' section, then update DEFAULT_TEST_AGENT_ID in "
+                "this script (or set the ATOMS_WS_TEST_AGENT_ID secret to the "
+                "new ID)."
+            )
+        if e.code in (401, 403):
+            return False, (
+                f"AUTH FAILED: GET /agent/{agent_id} returned {e.code}. The API key "
+                "(SMALLEST_API_KEY) doesn't have access to this agent — check the "
+                "secret is set to a key on the same tenant as the fixture."
+            )
+        return False, f"GET /agent/{agent_id} returned {e.code}: {body_text[:200]}"
+    except Exception as e:
+        return False, f"GET /agent/{agent_id} failed: {type(e).__name__}: {e}"
+
+
 def main() -> int:
     print("=== Atoms Agent WebSocket live test ===")
     print(f"WS:       {WS_URL}")
     print(f"agent_id: {AGENT_ID} {'(env override)' if AGENT_ID != DEFAULT_TEST_AGENT_ID else '(default fixture)'}")
+    print()
+
+    # Pre-flight: confirm the fixture exists before attempting WS connect.
+    # A confusing 5xx on handshake against a deleted fixture would otherwise
+    # masquerade as the upstream backend bug.
+    print("=== pre-flight: GET /agent/{id} ===")
+    ok, msg = preflight_check_agent(AGENT_ID)
+    print(f"  {msg}")
+    if not ok:
+        print()
+        return 1
     print()
 
     ok, result = asyncio.run(run_session())
