@@ -116,6 +116,29 @@ jobs:
             echo "backend_bug_suspected=false" >> "$GITHUB_OUTPUT"
           fi
           exit $rc
+      - name: Resolve PR comment on success
+        # Counterpart to the backend-bug-suspected comment: when the test
+        # passes (e.g. backend bug fixed, or fixture mode flipped on),
+        # remove any stale comment so reviewers don't see a misleading
+        # "backend bug" notice on a now-green PR.
+        if: success() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          marker='<!-- atoms-ws-backend-bug-suspected -->'
+          existing_id=$(gh api --paginate \
+            "/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+            --jq ".[] | select(.body | contains(\"$marker\")) | .id" \
+            | head -1)
+          if [ -n "$existing_id" ]; then
+            echo "atoms WS test passing — deleting stale backend-bug comment $existing_id"
+            gh api --method DELETE \
+              "/repos/${{ github.repository }}/issues/comments/$existing_id"
+          else
+            echo "no stale comment to clean up"
+          fi
+
       - name: Comment on PR (backend-bug-suspected)
         if: failure() && steps.atoms_ws.outputs.backend_bug_suspected == 'true' && github.event_name == 'pull_request'
         env:
