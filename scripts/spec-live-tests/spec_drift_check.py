@@ -90,8 +90,24 @@ def asyncapi_param_xref(base, override):
             if not isinstance(pblock, dict):
                 continue
             ovr_desc = pblock.get("description")
+            ovr_enum = pblock.get("enum")
             base_field = properties.get(pname) or {}
-            base_desc = base_field.get("description") if isinstance(base_field, dict) else None
+            if not isinstance(base_field, dict):
+                continue
+            base_desc = base_field.get("description")
+            base_enum = base_field.get("enum")
+            # Only flag drift when both sides clearly describe the same kind
+            # of field. We use a matching enum set as the disambiguator —
+            # this avoids false positives when a name (e.g. `language`)
+            # exists both as a request param and an unrelated response
+            # field with the same name but different semantics.
+            same_field = (
+                ovr_enum is not None
+                and base_enum is not None
+                and sorted(map(str, ovr_enum)) == sorted(map(str, base_enum))
+            )
+            if not same_field:
+                continue
             if ovr_desc is not None and base_desc is not None and ovr_desc.strip() != base_desc.strip():
                 out.append((f"channels.{chan_name}.parameters.{pname}", base_desc, ovr_desc))
     return out
