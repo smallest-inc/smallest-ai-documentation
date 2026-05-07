@@ -156,10 +156,21 @@ def main() -> int:
     for label, base_path, ovr_path in PAIRS:
         if not ovr_path.exists() or not base_path.exists():
             continue
-        with open(ovr_path) as f:
-            ovr = yaml.safe_load(f) or {}
-        with open(base_path) as f:
-            base = yaml.safe_load(f) or {}
+        # Wrap parse with try/except so a malformed YAML in either layer
+        # produces a clear error instead of an unhandled stack trace
+        # (fern check would also catch syntax errors, but this gives the
+        # CI run output a focused signal pointing at the file).
+        try:
+            with open(ovr_path) as f:
+                ovr = yaml.safe_load(f) or {}
+            with open(base_path) as f:
+                base = yaml.safe_load(f) or {}
+        except yaml.YAMLError as exc:
+            sys.stderr.write(
+                f"ERROR: failed to parse YAML in {label} pair "
+                f"(base={base_path}, ovr={ovr_path}): {exc}\n"
+            )
+            sys.exit(2)
 
         ovr_idx = index(ovr)
         base_idx = index(base)

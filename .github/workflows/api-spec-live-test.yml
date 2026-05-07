@@ -75,7 +75,7 @@ jobs:
   atoms-live-test:
     name: Atoms — live PATCH all CreateAgentRequest fields
     needs: detect-changes
-    if: needs.detect-changes.outputs.atoms == 'true' || github.event_name == 'workflow_dispatch'
+    if: (needs.detect-changes.outputs.atoms == 'true' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -91,7 +91,7 @@ jobs:
   atoms-ws-live-test:
     name: Atoms WS — agent/connect handshake + documented event types
     needs: detect-changes
-    if: needs.detect-changes.outputs.atoms_ws == 'true' || github.event_name == 'workflow_dispatch'
+    if: (needs.detect-changes.outputs.atoms_ws == 'true' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -100,7 +100,10 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install websockets
-        run: pip install --quiet websockets
+        # Pin to a known-good range — websockets has shipped breaking
+        # changes in `additional_headers` API across recent majors, and
+        # an unpinned install would silently pick up a future breaking release.
+        run: pip install --quiet 'websockets>=12.0,<14.0'
       - name: Run Atoms WS live test
         id: atoms_ws
         env:
@@ -195,7 +198,7 @@ jobs:
   tts-live-test:
     name: Waves TTS — Lightning v3.1 REST + WS smoke test
     needs: detect-changes
-    if: needs.detect-changes.outputs.tts == 'true' || github.event_name == 'workflow_dispatch'
+    if: (needs.detect-changes.outputs.tts == 'true' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -204,7 +207,10 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install websockets
-        run: pip install --quiet websockets
+        # Pin to a known-good range — websockets has shipped breaking
+        # changes in `additional_headers` API across recent majors, and
+        # an unpinned install would silently pick up a future breaking release.
+        run: pip install --quiet 'websockets>=12.0,<14.0'
       - name: Run TTS live test
         env:
           SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
@@ -220,7 +226,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install pyyaml
-        run: pip install --quiet pyyaml
+        run: pip install --quiet 'pyyaml>=6.0,<7.0'
       - name: Run spec drift check
         run: python3 scripts/spec-live-tests/spec_drift_check.py
 
@@ -247,7 +253,7 @@ jobs:
   stt-live-test:
     name: Waves STT — Pulse WS smoke test
     needs: detect-changes
-    if: needs.detect-changes.outputs.stt == 'true' || github.event_name == 'workflow_dispatch'
+    if: (needs.detect-changes.outputs.stt == 'true' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -256,7 +262,10 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install websockets
-        run: pip install --quiet websockets
+        # Pin to a known-good range — websockets has shipped breaking
+        # changes in `additional_headers` API across recent majors, and
+        # an unpinned install would silently pick up a future breaking release.
+        run: pip install --quiet 'websockets>=12.0,<14.0'
       - name: Run STT live test
         env:
           SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
