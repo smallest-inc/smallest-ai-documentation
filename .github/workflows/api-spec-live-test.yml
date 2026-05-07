@@ -160,14 +160,12 @@ jobs:
           marker='<!-- atoms-ws-backend-bug-suspected -->'
           body=$(cat <<EOF
           $marker
-          ⚠️ **Atoms WS live test failed with HTTP 5xx after retries — likely upstream backend bug.**
+          ⚠️ **Atoms WS live test failed with HTTP 5xx after retries — likely upstream platform issue.**
 
           **What's verified:** auth + endpoint reachability + routing (no 4xx, request reached server).
           **What failed:** session bootstrap on \`WSS /atoms/v1/agent/connect\`.
 
-          **Suspected upstream cause:** Express route ordering — \`/agent/connect\` falling through to \`/agent/:id\` and CastError'ing on \`Agent.findById("connect")\`. Same class of bug as the \`DELETE /agent/{id}\` vs \`/agent/{id}/archive\` mismatch we just fixed in the spec.
-
-          **Action:** check Sentry → atoms-backend project → recent \`CastError GET /atoms/v1/agent/connect\`. If backend team has acknowledged, **force-merge is allowed when this is the only red check**.
+          **Action:** share this run's URL with the platform team for investigation against their request logs and monitoring. Force-merge is allowed when this is the only red check and the platform team has acknowledged the issue.
 
           [Run log]($RUN_URL) · last updated $(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF

@@ -221,14 +221,11 @@ def main() -> int:
             print("=" * 72)
             print("HARD FAIL: endpoint returned 5xx after 3 retries.")
             print("           Auth + reachability OK (no 4xx, request reached server).")
-            print("           Likely backend bug, NOT a docs/spec issue:")
-            print("             - Express route ordering: /agent/connect matched")
-            print("               by /agent/:id catch-all → CastError on findById")
-            print("             - Or session orchestrator can't bootstrap the agent")
-            print("           Check Sentry for `CastError GET /atoms/v1/agent/connect`")
-            print("           in atoms-backend project (recent events match this run).")
+            print("           Likely an upstream platform issue, not a docs/spec bug.")
+            print("           The platform team has request logs and monitoring for")
+            print("           this endpoint — share this run's URL with them.")
             print("           Force-merge is allowed when this is the only red check")
-            print("           AND backend team has acknowledged the upstream bug.")
+            print("           AND the platform team has acknowledged the issue.")
             print("=" * 72)
         return 1
 
