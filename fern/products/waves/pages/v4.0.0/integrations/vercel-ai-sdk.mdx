@@ -24,7 +24,7 @@ export SMALLEST_API_KEY="your_key_here"
 
 ## Text-to-Speech
 
-Supported model: `lightning-v3.1` — 44.1 kHz, natural expressive speech, voice cloning, ~100 ms latency. The package also exports `DEFAULT_LIGHTNING_MODEL` so you don't have to hard-code the id; bumping it on a new Lightning release flows through to every caller that imports the constant.
+Supported model: `lightning-v3.1` — 44.1 kHz, natural expressive speech, voice cloning, ~100 ms latency, 22 languages plus `auto` for code-switching detection (see the [Lightning v3.1 model card](/waves/model-cards/text-to-speech/lightning-v-3-1#supported-languages) for the full list). The package also exports `DEFAULT_LIGHTNING_MODEL` so you don't have to hard-code the id; bumping it on a new Lightning release flows through to every caller that imports the constant.
 
 ```typescript
 import { experimental_generateSpeech as generateSpeech } from 'ai';
@@ -37,12 +37,17 @@ const { audio } = await generateSpeech({
   model: smallestai.speech(DEFAULT_LIGHTNING_MODEL),
   text: 'Hello from Smallest AI!',
   voice: 'sophia',
+  language: 'auto',   // 'en', 'hi', 'es', ... — defaults to 'auto'
   speed: 1.0,
 });
 
 // audio.uint8Array — raw WAV bytes
 // audio.base64    — base64-encoded audio
 ```
+
+<Note>
+Pass `outputFormat` under `providerOptions.smallestai.outputFormat`, not as Vercel's top-level `outputFormat` arg — the SDK rejects the top-level form with a warning. See [TTS Options](#tts-options) below.
+</Note>
 
 ## Speech-to-Text (batch)
 
@@ -109,7 +114,7 @@ const { audio } = await generateSpeech({
   providerOptions: {
     smallestai: {
       sampleRate: 44100,        // 8000 | 16000 | 24000 | 44100
-      outputFormat: 'mp3',      // pcm | mp3 | wav | mulaw | alaw
+      outputFormat: 'mp3',      // pcm | mp3 | wav | ulaw | alaw
       similarity: 0.5,          // voice similarity (0–1)
       enhancement: 1,           // audio enhancement (0 | 1 | 2)
       addWavHeader: false,
@@ -129,7 +134,7 @@ const result = await transcribe({
   mediaType: 'audio/wav',
   providerOptions: {
     smallestai: {
-      language: 'multi',         // 'en' | 'hi' | 'multi' | 30+ ISO codes
+      language: 'multi',         // 'en' | 'hi' | 'multi' | 'multi-eu' | 'multi-asian' | 'multi-indic' — see Pulse model card
       diarize: true,
       emotionDetection: true,
       genderDetection: true,
@@ -144,9 +149,6 @@ const result = await transcribe({
       punctuate: true,
       capitalize: true,
 
-      // Keyword boosting (max 100; "WORD:INTENSIFIER")
-      keywords: ['NVIDIA:5', 'Jensen:4'],
-
       // Async webhook delivery
       webhookUrl: 'https://example.com/asr-webhook',
       webhookMethod: 'POST',
@@ -157,7 +159,9 @@ const result = await transcribe({
 ```
 
 <Note>
-`ageDetection` was removed from the server API and emits a deprecation warning if set.
+**`ageDetection`** was removed from the server API and emits a deprecation warning if set.
+
+**`keywords`, `itnNormalize`, `sentenceTimestamps`, `finalizeOnWords`, `maxWords`, `eouTimeoutMs`** are forwarded by the SDK on the batch path but only take effect on the streaming WebSocket. Use `smallestai.transcriptionStream(...)` (below) when you need them.
 </Note>
 
 ## Streaming Speech-to-Text (WebSocket)
