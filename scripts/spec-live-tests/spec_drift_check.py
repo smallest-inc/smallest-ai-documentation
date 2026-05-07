@@ -25,49 +25,85 @@ import yaml
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-WAVES = ROOT / "fern/apis/waves"
-V4 = ROOT / "fern/apis/waves-v4/overrides"
+APIS = ROOT / "fern/apis"
+
+# Override locations that decorate a base spec. Each tuple is
+# (override_root, base_search_roots). The override filename pattern
+# `<stem>-overrides.{yml,yaml}` resolves to `<stem>.{yaml,yml}` under one
+# of the base search roots. `ai_examples_override.{yml,yaml}` is treated
+# as a special-case override of the file named `openapi.{yml,yaml}` in
+# the same directory.
+OVERRIDE_LAYOUTS = [
+    # waves v4 docs render layer
+    (APIS / "waves-v4/overrides",
+     [APIS / "waves/openapi", APIS / "waves/asyncapi"]),
+    # waves SDK-gen siblings (overrides live next to the base)
+    (APIS / "waves/openapi",
+     [APIS / "waves/openapi"]),
+    (APIS / "waves/asyncapi",
+     [APIS / "waves/asyncapi"]),
+    # atoms — siblings (single layer for both SDK and docs)
+    (APIS / "atoms/openapi",
+     [APIS / "atoms/openapi"]),
+    (APIS / "atoms/asyncapi",
+     [APIS / "atoms/asyncapi"]),
+]
 
 
-def discover_pairs() -> list[tuple[str, Path]]:
-    """Auto-discover (override_filename, base_path) pairs from V4 directory.
+def _resolve_base(stem: str, search_roots: list[Path]) -> Path | None:
+    for root in search_roots:
+        for suffix in (".yaml", ".yml"):
+            candidate = root / f"{stem}{suffix}"
+            if candidate.exists():
+                return candidate
+    return None
 
-    The override filename pattern is `<basename>-overrides.{yml,yaml}`. We
-    strip the suffix and look for a matching base spec under either
-    `waves/openapi/` or `waves/asyncapi/`. Surfaces any new override the
-    moment it's added to V4 — no edit to this script required.
 
-    Files in V4 with no resolvable base counterpart raise SystemExit so
-    the misconfiguration is caught loudly rather than silently skipped.
+def discover_pairs() -> list[tuple[str, Path, Path]]:
+    """Auto-discover (label, base_path, override_path) triples across atoms,
+    waves, and waves-v4 layers. Each base spec may have multiple decorating
+    override files; we emit one pair per override.
+
+    Files matching `<stem>-overrides.{yml,yaml}` strip the suffix and search
+    sibling/openapi/asyncapi roots. `ai_examples_override.{yml,yaml}` decorates
+    `openapi.{yml,yaml}` in the same directory.
+
+    Hard-fails on any override file with no resolvable base counterpart so
+    misconfiguration is caught loudly rather than silently uncovered.
     """
-    pairs: list[tuple[str, Path]] = []
-    unmatched: list[str] = []
-    for ovr_file in sorted(V4.iterdir()):
-        if not ovr_file.is_file() or ovr_file.suffix not in (".yaml", ".yml"):
+    pairs: list[tuple[str, Path, Path]] = []
+    unmatched: list[Path] = []
+    for ovr_root, base_roots in OVERRIDE_LAYOUTS:
+        if not ovr_root.exists():
             continue
-        name = ovr_file.name
-        if not name.endswith(("-overrides.yaml", "-overrides.yml")):
-            unmatched.append(name)
-            continue
-        stem = name.rsplit("-overrides.", 1)[0]
-        # search both openapi/ and asyncapi/ for a matching base file
-        candidates = [
-            WAVES / "openapi" / f"{stem}.yaml",
-            WAVES / "openapi" / f"{stem}.yml",
-            WAVES / "asyncapi" / f"{stem}.yaml",
-            WAVES / "asyncapi" / f"{stem}.yml",
-        ]
-        match = next((c for c in candidates if c.exists()), None)
-        if match is None:
-            unmatched.append(name)
-            continue
-        pairs.append((name, match))
+        for ovr in sorted(ovr_root.iterdir()):
+            if not ovr.is_file() or ovr.suffix not in (".yaml", ".yml"):
+                continue
+            name = ovr.name
+            if name.startswith("ai_examples_override"):
+                # Decorates a sibling `openapi.{yaml,yml}`. If no such sibling
+                # exists in the same dir (e.g. waves uses per-endpoint base
+                # filenames like `lightning-v3.1-openapi.yaml`, not `openapi.yaml`),
+                # this override is broad-spectrum and skipped here.
+                base = _resolve_base("openapi", [ovr.parent])
+                if base is None:
+                    continue
+            elif name.endswith(("-overrides.yaml", "-overrides.yml")):
+                stem = name.rsplit("-overrides.", 1)[0]
+                base = _resolve_base(stem, base_roots)
+                if base is None:
+                    unmatched.append(ovr)
+                    continue
+            else:
+                # plain spec file (e.g. base file in same dir as overrides)
+                continue
+            if base.resolve() == ovr.resolve():
+                continue  # pointing at itself
+            label = str(ovr.relative_to(ROOT))
+            pairs.append((label, base, ovr))
     if unmatched:
-        sys.stderr.write(
-            f"ERROR: override files in {V4} have no matching base spec under "
-            f"{WAVES}/openapi or {WAVES}/asyncapi:\n"
-            + "\n".join(f"  - {n}" for n in unmatched) + "\n"
-        )
+        sys.stderr.write("ERROR: override files with no resolvable base spec:\n"
+                         + "\n".join(f"  - {p.relative_to(ROOT)}" for p in unmatched) + "\n")
         sys.exit(2)
     return pairs
 
@@ -117,8 +153,7 @@ def main() -> int:
     print("Spec drift check — fern/apis/waves-v4/overrides vs fern/apis/waves base")
     print("=" * 78)
 
-    for ovr_name, base_path in PAIRS:
-        ovr_path = V4 / ovr_name
+    for label, base_path, ovr_path in PAIRS:
         if not ovr_path.exists() or not base_path.exists():
             continue
         with open(ovr_path) as f:
@@ -140,7 +175,7 @@ def main() -> int:
                         drift.append((path, f, base_node.get(f), ovr_node[f]))
 
         if drift:
-            print(f"\n{ovr_name}")
+            print(f"\n{label}")
             for p, f, b, o in drift:
                 bs = (str(b) if b is not None else "(missing)")[:90]
                 os_ = str(o)[:90]

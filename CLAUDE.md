@@ -18,7 +18,19 @@ The waves API has **three spec layers**, not one. Editing the base spec alone wi
 3. Update both base and override in lockstep when a tracked content field exists in both.
 4. CI will block the PR if the drift check fails.
 
-**Atoms is exempt** from this trap — it has only one spec pipeline. `fern/apis/atoms/openapi/*` flows to both SDK gen and docs render through the same `fern/apis/unified/generators.yml`. Editing base + sibling override is the only thing to keep in sync there.
+**Atoms also has its own base + override pairs** (corrected from an earlier note in this file). The atoms layout is:
+- REST: `fern/apis/atoms/openapi/openapi.yaml` + sibling `openapi-overrides.yaml` + `ai_examples_override.yml`
+- WS:   `fern/apis/atoms/asyncapi/agent-ws.yaml` + sibling `agent-ws-overrides.yaml` (the realtime agent endpoint at `WSS /atoms/v1/agent/connect`)
+
+The drift CI auto-discovers all of these — atoms and waves both. The atoms WS endpoint renders at `/atoms/api-reference/api-reference/realtime-agent/realtime-agent` and is the primary surface for the WebSocket SDK + mobile widget integration guides.
+
+## Auditing API surface — count BOTH OpenAPI paths AND AsyncAPI channels
+
+When verifying that the docs render every documented endpoint, walk *both*:
+- Every `paths.<path>.<method>` in any `openapi*.yaml` under `fern/apis/`
+- Every `channels.<chan>` in any `asyncapi*.yaml` under `fern/apis/`
+
+The atoms realtime agent endpoint lives in `fern/apis/atoms/asyncapi/agent-ws.yaml` and is easy to miss if you only look at `openapi/`. Same for the four waves WS specs (`pulse-stt-ws`, `lightning-v3.1-ws`, `lightning-v2-ws`, `stream-tts-ws`). A spec audit that only counts REST operations under-reports.
 
 ## Pulse STT WS exception — cross-structural-path drift
 

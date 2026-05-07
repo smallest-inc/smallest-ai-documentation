@@ -113,7 +113,7 @@ This repository contains the source files for the Smallest AI documentation site
 >
 > A `description`, `default`, `enum`, or `example` set in the v4 docs override **wins** on docs render. Editing the same field in the base spec alone is invisible. Always update both layers in lockstep, and run `python3 scripts/spec-live-tests/spec_drift_check.py` before pushing — CI runs it on every PR that touches `fern/apis/waves/**` or `fern/apis/waves-v4/overrides/**`.
 >
-> **Atoms is not affected** — it has a single spec pipeline. `fern/apis/atoms/openapi/openapi.yaml` + sibling `openapi-overrides.yaml` flow through `fern/apis/unified/generators.yml` for both SDK gen and docs render.
+> **Atoms has its own base + override pairs** (REST under `fern/apis/atoms/openapi/` and WS under `fern/apis/atoms/asyncapi/`). The atoms WebSocket endpoint at `WSS /atoms/v1/agent/connect` lives in `agent-ws.yaml` and renders at `/atoms/api-reference/api-reference/realtime-agent/realtime-agent` — easy to miss if you only audit `openapi/`. The drift check script auto-discovers all atoms and waves layers.
 
 ## Setup
 
