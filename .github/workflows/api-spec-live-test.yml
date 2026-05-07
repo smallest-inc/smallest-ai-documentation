@@ -35,6 +35,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write   # atoms-ws-live-test posts a PR comment on backend-bug-suspected failures
 
 jobs:
   detect-changes:
@@ -101,9 +102,61 @@ jobs:
       - name: Install websockets
         run: pip install --quiet websockets
       - name: Run Atoms WS live test
+        id: atoms_ws
         env:
           SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
-        run: python3 scripts/spec-live-tests/atoms_ws_live_test.py
+        run: |
+          set +e
+          python3 scripts/spec-live-tests/atoms_ws_live_test.py 2>&1 | tee /tmp/atoms_ws.log
+          rc=${PIPESTATUS[0]}
+          # signal whether the failure (if any) is the backend-bug-suspected pattern
+          if [ "$rc" -ne 0 ] && grep -q "HARD FAIL: endpoint returned 5xx after 3 retries" /tmp/atoms_ws.log; then
+            echo "backend_bug_suspected=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend_bug_suspected=false" >> "$GITHUB_OUTPUT"
+          fi
+          exit $rc
+      - name: Comment on PR (backend-bug-suspected)
+        if: failure() && steps.atoms_ws.outputs.backend_bug_suspected == 'true' && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Idempotent: find an existing marker comment, update if present, else create.
+          # Marker is an HTML comment so it doesn't render but lets us locate the comment.
+          marker='<!-- atoms-ws-backend-bug-suspected -->'
+          body=$(cat <<EOF
+          $marker
+          ⚠️ **Atoms WS live test failed with HTTP 5xx after retries — likely upstream backend bug.**
+
+          **What's verified:** auth + endpoint reachability + routing (no 4xx, request reached server).
+          **What failed:** session bootstrap on \`WSS /atoms/v1/agent/connect\`.
+
+          **Suspected upstream cause:** Express route ordering — \`/agent/connect\` falling through to \`/agent/:id\` and CastError'ing on \`Agent.findById("connect")\`. Same class of bug as the \`DELETE /agent/{id}\` vs \`/agent/{id}/archive\` mismatch we just fixed in the spec.
+
+          **Action:** check Sentry → atoms-backend project → recent \`CastError GET /atoms/v1/agent/connect\`. If backend team has acknowledged, **force-merge is allowed when this is the only red check**.
+
+          [Run log]($RUN_URL) · last updated $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EOF
+          )
+
+          # List PR comments via REST (returns integer IDs we can PATCH); find
+          # the one carrying the marker and update it. If none, create a new one.
+          existing_id=$(gh api --paginate \
+            "/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+            --jq ".[] | select(.body | contains(\"$marker\")) | .id" \
+            | head -1)
+
+          if [ -n "$existing_id" ]; then
+            echo "updating existing comment $existing_id"
+            gh api --method PATCH \
+              "/repos/${{ github.repository }}/issues/comments/$existing_id" \
+              -f body="$body" >/dev/null
+          else
+            echo "posting new comment on PR #$PR_NUMBER"
+            gh pr comment "$PR_NUMBER" --body "$body"
+          fi
 
   tts-live-test:
     name: Waves TTS — Lightning v3.1 REST + WS smoke test
