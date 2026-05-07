@@ -162,7 +162,7 @@ These run on every PR that touches `fern/apis/**` or related folders. Failures m
 | `Nav & Link Check` | broken internal links, orphan pages |
 | `Changelog required for spec changes` | requires a changelog entry for any `fern/apis/**` PR |
 | `API Spec Live Test / Atoms` | creates a real agent on the test tenant, PATCHes every documented `CreateAgentRequest` field, asserts diff endpoint reports it, archives. Also exercises `deleteAgent`. |
-| `API Spec Live Test / Atoms WS` | opens `WSS /atoms/v1/agent/connect`, asserts `session.created` arrives + at least one of the documented server-pushed events (`agent_start_talking`, `output_audio.delta`, etc.) — flags any undocumented type. |
+| `API Spec Live Test / Atoms WS` | opens `WSS /atoms/v1/agent/connect`, asserts `session.created` arrives + at least one of the documented server-pushed events (`agent_start_talking`, `output_audio.delta`, etc.). Hard-fails on 5xx-after-retry and posts a self-cleaning PR comment about suspected upstream backend bug (Express route ordering on `/agent/connect` → CastError). |
 | `API Spec Live Test / Waves TTS` | Lightning v3.1 REST + WS smoke test |
 | `API Spec Live Test / Waves STT` | Pulse WS streams the demo WAV, asserts non-empty transcript |
 | `Waves spec drift` | base vs override drift across **all three** waves layers + atoms layers (auto-discovered) |
@@ -185,6 +185,22 @@ SMALLEST_API_KEY=... python3 scripts/spec-live-tests/atoms_ws_live_test.py     #
 SMALLEST_API_KEY=... python3 scripts/spec-live-tests/waves_tts_live_test.py    # Lightning v3.1 TTS
 SMALLEST_API_KEY=... python3 scripts/spec-live-tests/waves_stt_live_test.py    # Pulse STT
 ```
+
+### Atoms WS test — fixture vs per-run mode
+
+The atoms WS test runs in one of two modes depending on whether `ATOMS_WS_TEST_AGENT_ID` is set:
+
+| Mode | When | Behavior |
+|---|---|---|
+| **Per-run (default)** | `ATOMS_WS_TEST_AGENT_ID` not set | Creates a fresh bare agent each run via `POST /agent`, archives at end. Hard-fails on 5xx-after-retry — bare agents on tenants without a default workflow can't bootstrap a session. |
+| **Fixture (recommended for CI)** | `ATOMS_WS_TEST_AGENT_ID` set to a pre-configured agent on the same tenant as `SMALLEST_API_KEY` | Connects directly. Skips agent lifecycle. Hard pass/fail on `session.created`. Reliable, no per-run noise on the tenant. |
+
+**To enable fixture mode on CI:**
+
+1. Create an agent in the CI test tenant via the dashboard. Configure: an LLM model, a voice, a system prompt. Anything that supports a webcall session.
+2. Copy the agent ID from the dashboard URL (or via `GET /agent`).
+3. Add a GitHub Actions secret named `ATOMS_WS_TEST_AGENT_ID` with that ID.
+4. Workflow already passes the secret through — no code change needed.
 
 ---
 
