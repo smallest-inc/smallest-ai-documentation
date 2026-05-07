@@ -4,7 +4,9 @@ description: "Use Smallest AI TTS and STT with the Vercel AI SDK in Next.js and 
 icon: "triangle"
 ---
 
-Use Smallest AI as a speech and transcription provider in the [Vercel AI SDK](https://ai-sdk.dev). Generate speech and transcribe audio with a few lines of code.
+Use Smallest AI as a speech and transcription provider in the [Vercel AI SDK](https://ai-sdk.dev). Generate speech and transcribe audio with a few lines of code. The package also exposes streaming WebSocket transcription and voice cloning APIs that sit alongside the Vercel `SpeechModelV2` / `TranscriptionModelV2` interfaces.
+
+Latest: **`smallestai-vercel-provider@0.4.0`** — adds streaming STT (`itn_normalize`, `redact_pii`, `redact_pci`, `numerals`, `keywords`, `sentence_timestamps`, `finalize_on_words`, `max_words`) and voice cloning.
 
 ## Installation
 
@@ -22,38 +24,45 @@ export SMALLEST_API_KEY="your_key_here"
 
 ## Text-to-Speech
 
-Supported model: `lightning-v3.1` — 44.1 kHz, natural expressive speech, voice cloning, ~100ms latency.
+Supported model: `lightning-v3.1` — 44.1 kHz, natural expressive speech, voice cloning, ~100 ms latency, 22 languages plus `auto` for code-switching detection (see the [Lightning v3.1 model card](/waves/model-cards/text-to-speech/lightning-v-3-1#supported-languages) for the full list). The package also exports `DEFAULT_LIGHTNING_MODEL` so you don't have to hard-code the id; bumping it on a new Lightning release flows through to every caller that imports the constant.
 
 ```typescript
 import { experimental_generateSpeech as generateSpeech } from 'ai';
-import { smallestai } from 'smallestai-vercel-provider';
+import {
+  smallestai,
+  DEFAULT_LIGHTNING_MODEL,
+} from 'smallestai-vercel-provider';
 
 const { audio } = await generateSpeech({
-  model: smallestai.speech('lightning-v3.1'),
+  model: smallestai.speech(DEFAULT_LIGHTNING_MODEL),
   text: 'Hello from Smallest AI!',
   voice: 'sophia',
+  language: 'auto',   // 'en', 'hi', 'es', ... — defaults to 'auto'
   speed: 1.0,
 });
 
 // audio.uint8Array — raw WAV bytes
-// audio.base64 — base64 encoded audio
+// audio.base64    — base64-encoded audio
 ```
 
-## Speech-to-Text
+<Note>
+Pass `outputFormat` under `providerOptions.smallestai.outputFormat`, not as Vercel's top-level `outputFormat` arg — the SDK rejects the top-level form with a warning. See [TTS Options](#tts-options) below.
+</Note>
+
+## Speech-to-Text (batch)
 
 ```typescript
 import { experimental_transcribe as transcribe } from 'ai';
 import { smallestai } from 'smallestai-vercel-provider';
 import { readFileSync } from 'fs';
 
-const { text, segments } = await transcribe({
+const { text, segments, durationInSeconds } = await transcribe({
   model: smallestai.transcription('pulse'),
   audio: readFileSync('recording.wav'),
   mediaType: 'audio/wav',
 });
 
-console.log(text);       // "Hello from Smallest AI!"
-console.log(segments);   // [{ text: "Hello", startSecond: 0, endSecond: 0.5 }, ...]
+console.log(text);
 ```
 
 ## Next.js API Route Example
@@ -64,6 +73,8 @@ Create a TTS endpoint in your Next.js app:
 // app/api/speak/route.ts
 import { experimental_generateSpeech as generateSpeech } from 'ai';
 import { smallestai } from 'smallestai-vercel-provider';
+
+export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   const { text, voice } = await req.json();
@@ -102,18 +113,19 @@ const { audio } = await generateSpeech({
   voice: 'robert',
   providerOptions: {
     smallestai: {
-      sampleRate: 24000,         // 8000 | 16000 | 24000 | 44100
-      outputFormat: 'mp3',       // pcm | mp3 | wav | ulaw | alaw
-      language: 'en',            // ISO 639-1 code
-      consistency: 0.5,          // voice consistency (0–1)
-      similarity: 0.5,           // voice similarity (0–1)
-      enhancement: 1,            // audio enhancement level (0–2)
+      sampleRate: 44100,        // 8000 | 16000 | 24000 | 44100
+      outputFormat: 'mp3',      // pcm | mp3 | wav | ulaw | alaw
+      similarity: 0.5,          // voice similarity (0–1)
+      enhancement: 1,           // audio enhancement (0 | 1 | 2)
+      addWavHeader: false,
+      saveHistory: false,
+      pronunciationDicts: ['<dict-id>'],
     },
   },
 });
 ```
 
-### STT Options
+### Batch STT Options
 
 ```typescript
 const result = await transcribe({
@@ -122,19 +134,197 @@ const result = await transcribe({
   mediaType: 'audio/wav',
   providerOptions: {
     smallestai: {
-      language: 'hi',            // ISO 639-1 code
-      diarize: true,             // speaker identification
-      emotionDetection: true,    // detect emotions
-      genderDetection: true,     // detect speaker gender
-      itnNormalize: true,        // recommended over `numerals` — converts spoken numbers, dates, currencies, phone numbers, and other entities into written form (Pulse STT WS only)
+      language: 'multi',         // 'en' | 'hi' | 'multi' | 'multi-eu' | 'multi-asian' | 'multi-indic' — see Pulse model card
+      diarize: true,
+      emotionDetection: true,
+      genderDetection: true,
+      wordTimestamps: true,
+
+      // Privacy
+      redactPii: true,           // names, addresses → [FIRSTNAME_1] etc.
+      redactPci: true,           // card #s, CVV → [CREDITCARDCVV_1] etc.
+
+      // Formatting
+      numerals: 'auto',          // 'true' | 'false' | 'auto'
+      punctuate: true,
+      capitalize: true,
+
+      // Async webhook delivery
+      webhookUrl: 'https://example.com/asr-webhook',
+      webhookMethod: 'POST',
+      webhookExtra: 'job_id:abc123',
     },
   },
 });
 ```
 
 <Note>
-`itnNormalize` requires the underlying [Smallest provider for Vercel AI SDK](https://github.com/smallest-inc/smallest-ai-vercel) to forward the option to the Pulse STT WebSocket layer. If you're on an older provider release that doesn't whitelist this key, the option is silently dropped client-side. Verify against the provider's release notes if `itnNormalize` doesn't take effect.
+**`ageDetection`** was removed from the server API and emits a deprecation warning if set.
+
+**`keywords`, `itnNormalize`, `sentenceTimestamps`, `finalizeOnWords`, `maxWords`, `eouTimeoutMs`** are forwarded by the SDK on the batch path but only take effect on the streaming WebSocket. Use `smallestai.transcriptionStream(...)` (below) when you need them.
 </Note>
+
+## Streaming Speech-to-Text (WebSocket)
+
+For real-time transcription (TTFT ~64 ms server-side), the SDK exposes a WebSocket session that wraps `wss://api.smallest.ai/waves/v1/pulse/get_text` with the canonical `Authorization: Bearer` flow. WS-only flags like `itnNormalize`, `sentenceTimestamps`, `finalizeOnWords`, `maxWords`, and `eouTimeoutMs` only take effect on this path.
+
+```typescript
+import { smallestai } from 'smallestai-vercel-provider';
+import { readFileSync } from 'fs';
+
+const stream = smallestai.transcriptionStream('pulse', {
+  language: 'en',
+  encoding: 'linear16',
+  sampleRate: 16000,
+  wordTimestamps: true,
+  diarize: true,
+  redactPii: true,
+  redactPci: true,
+  numerals: 'auto',
+  itnNormalize: true,
+  sentenceTimestamps: true,
+  keywords: ['NVIDIA:5', 'Jensen'],
+});
+
+await stream.connect();
+
+// Stream raw PCM s16le @ 16 kHz mono
+const pcm = readFileSync('audio.s16le');
+for (let i = 0; i < pcm.length; i += 32 * 1024) {
+  stream.sendAudio(pcm.subarray(i, i + 32 * 1024));
+}
+stream.closeStream(); // server flushes, emits is_last: true, then closes
+
+let fullTranscript = '';
+for await (const msg of stream) {
+  if (!msg.is_final) {
+    console.log('partial:', msg.transcript);
+  } else {
+    console.log('final:', msg.transcript);
+    fullTranscript += (fullTranscript ? ' ' : '') + (msg.transcript || '');
+  }
+  if (msg.is_last) break;
+}
+console.log('full transcript:', fullTranscript);
+```
+
+### One-shot helper for pre-recorded audio
+
+```typescript
+import {
+  smallestai,
+  SmallestAITranscriptionStream,
+} from 'smallestai-vercel-provider';
+
+const stream = smallestai.transcriptionStream('pulse', {
+  language: 'en', encoding: 'linear16', sampleRate: 16000,
+  wordTimestamps: true, sentenceTimestamps: true, itnNormalize: true,
+});
+
+const { transcript } = await SmallestAITranscriptionStream.transcribeOnce(
+  stream,
+  audioBytes,
+);
+```
+
+## Voice Cloning
+
+The provider exposes the voice-cloning REST endpoints alongside TTS / STT. Defaults to `lightning-v3.1`; the legacy `lightning-v2` model is rejected upstream.
+
+```typescript
+import { smallestai } from 'smallestai-vercel-provider';
+import { readFileSync } from 'fs';
+
+// Create an instant clone
+const clone = await smallestai.voiceClone.create({
+  file: readFileSync('my-voice.wav'),
+  fileName: 'my-voice.wav',
+  displayName: 'My voice',
+  description: 'Warm narrator',
+  language: 'en',
+});
+console.log(clone.voiceId); // → "voice_abc123"
+
+// List all clones in your org
+const all = await smallestai.voiceClone.list();
+
+// Use the cloned voice in TTS
+const { audio } = await generateSpeech({
+  model: smallestai.speech('lightning-v3.1'),
+  text: 'Hello in my own voice.',
+  voice: clone.voiceId,
+});
+
+// Delete when done
+await smallestai.voiceClone.delete(clone.voiceId);
+```
+
+## Patterns & Caveats
+
+### Accumulate `full_transcript` client-side
+
+The streaming API accepts `fullTranscript: true`, but the server-side `full_transcript` field is currently returned as an empty string on every frame. Concatenate `is_final: true` frames yourself instead:
+
+```typescript
+let fullTranscript = '';
+for await (const msg of stream) {
+  if (msg.is_final && msg.transcript) {
+    fullTranscript += (fullTranscript ? ' ' : '') + msg.transcript;
+  }
+  if (msg.is_last) break;
+}
+```
+
+The `transcribeOnce()` helper does this for you — use it for the pre-recorded case.
+
+### Streaming is Node-only — proxy from the browser
+
+`smallestai.transcriptionStream()` opens a WebSocket with an `Authorization: Bearer` header. Browser-native `WebSocket` cannot set custom headers (it's a fundamental browser limitation, not an SDK choice), so this method only runs server-side. Browser apps should proxy through their own server:
+
+```typescript
+// app/api/transcribe-stream/route.ts (Next.js, Node runtime)
+import { smallestai } from 'smallestai-vercel-provider';
+import type { NextRequest } from 'next/server';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: NextRequest) {
+  const audio = new Uint8Array(await req.arrayBuffer());
+  const stream = smallestai.transcriptionStream('pulse', {
+    language: 'en',
+    encoding: 'linear16',
+    sampleRate: 16000,
+    wordTimestamps: true,
+    itnNormalize: true,
+  });
+  await stream.connect();
+  for (let i = 0; i < audio.length; i += 32 * 1024) {
+    stream.sendAudio(audio.subarray(i, i + 32 * 1024));
+  }
+  stream.closeStream();
+
+  // Pipe server frames back to the browser via SSE.
+  const encoder = new TextEncoder();
+  const sse = new ReadableStream({
+    async start(controller) {
+      for await (const msg of stream) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(msg)}\n\n`));
+        if (msg.is_last) break;
+      }
+      controller.close();
+    },
+  });
+  return new Response(sse, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+    },
+  });
+}
+```
+
+The browser opens this same-origin endpoint with `EventSource` or `fetch` + `ReadableStream` — no API key in the browser, no header restriction, no SDK in the bundle.
 
 ## Available Voices
 
@@ -164,10 +354,10 @@ curl -s "https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices" \
   <Card title="GitHub" icon="github" href="https://github.com/smallest-inc/smallest-ai-vercel-provider">
     Source code
   </Card>
+  <Card title="Runnable Examples" icon="play" href="https://github.com/smallest-inc/smallest-ai-vercel-provider/tree/main/examples">
+    TTS, batch + streaming STT, voice cloning
+  </Card>
   <Card title="Vercel AI SDK" icon="triangle" href="https://ai-sdk.dev">
     AI SDK documentation
-  </Card>
-  <Card title="Cookbook" icon="book" href="https://github.com/smallest-inc/cookbook">
-    More examples
   </Card>
 </CardGroup>
