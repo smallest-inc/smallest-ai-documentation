@@ -71,7 +71,21 @@ channels:
         required: false
         location: $message.header#/language
       encoding:
-        description: "Audio encoding format"
+        description: |
+          Audio encoding of the bytes you stream over the socket. The
+          server uses this to decode incoming frames — set it to match
+          what your client is sending.
+
+          - `linear16`, `linear32` — raw PCM (16-bit and 32-bit). Pair
+            with the appropriate `sample_rate`.
+          - `alaw`, `mulaw` — 8 kHz telephony codecs. Pair with
+            `sample_rate=8000`.
+          - `opus`, `ogg_opus` — Opus compressed audio (raw and Ogg
+            container).
+
+          Streaming-only — the pre-recorded REST endpoint
+          (`POST /pulse/get_text`) auto-detects the format from the
+          file's container header and ignores this parameter.
         enum:
           - linear16
           - linear32
@@ -83,10 +97,15 @@ channels:
         required: false
         location: $message.header#/encoding
       sample_rate:
-        description: "Audio sample rate in Hz. Supported values: 8000, 16000, 24000, 44100, 48000."
+        description: |
+          Audio sample rate in Hz of the bytes you stream. Must match
+          the actual rate of your audio source. Streaming-only — the
+          pre-recorded REST endpoint reads the rate from the file's
+          container.
         enum:
           - "8000"
           - "16000"
+          - "22050"
           - "24000"
           - "44100"
           - "48000"
