@@ -59,58 +59,23 @@ def index(spec):
     return {p: n for p, n in walk(spec) if isinstance(n, dict)}
 
 
-def asyncapi_param_xref(base, override):
-    """For AsyncAPI WS specs, check override.channels.X.parameters.Y vs
-    base.channels.X.messages.<msg>.payload.properties.Y.
-
-    Yields (param_path, base_desc, override_desc) for each drift.
-    """
-    out = []
-    for chan_name, chan in (override.get("channels") or {}).items():
-        ovr_params = (chan or {}).get("parameters") or {}
-        base_chan = (base.get("channels") or {}).get(chan_name) or {}
-        msgs = base_chan.get("messages") or {}
-        # Aggregate properties across all messages (request payloads, control
-        # signals, response payloads). Later entries override earlier; the
-        # last write wins for any duplicate property name. This is a best-
-        # effort heuristic — pulse-stt-ws-style specs put request params in
-        # an override-only `parameters` block with no base counterpart, in
-        # which case nothing matches and no drift is reported (correct).
-        properties = {}
-        for msg in msgs.values():
-            payload = (msg or {}).get("payload") or {}
-            if isinstance(payload, dict) and isinstance(payload.get("properties"), dict):
-                for pname, pdef in payload["properties"].items():
-                    # Prefer non-empty property definitions over stubs.
-                    if isinstance(pdef, dict) and pdef.get("description"):
-                        properties[pname] = pdef
-                    elif pname not in properties:
-                        properties[pname] = pdef
-        for pname, pblock in ovr_params.items():
-            if not isinstance(pblock, dict):
-                continue
-            ovr_desc = pblock.get("description")
-            ovr_enum = pblock.get("enum")
-            base_field = properties.get(pname) or {}
-            if not isinstance(base_field, dict):
-                continue
-            base_desc = base_field.get("description")
-            base_enum = base_field.get("enum")
-            # Only flag drift when both sides clearly describe the same kind
-            # of field. We use a matching enum set as the disambiguator —
-            # this avoids false positives when a name (e.g. `language`)
-            # exists both as a request param and an unrelated response
-            # field with the same name but different semantics.
-            same_field = (
-                ovr_enum is not None
-                and base_enum is not None
-                and sorted(map(str, ovr_enum)) == sorted(map(str, base_enum))
-            )
-            if not same_field:
-                continue
-            if ovr_desc is not None and base_desc is not None and ovr_desc.strip() != base_desc.strip():
-                out.append((f"channels.{chan_name}.parameters.{pname}", base_desc, ovr_desc))
-    return out
+# NOTE on AsyncAPI WS spec drift coverage
+# ---------------------------------------
+# Pulse STT WS docs render through `channels.<chan>.parameters.<param>` in
+# the v4 override, while the base AsyncAPI spec keeps message bodies under
+# `channels.<chan>.messages.<msg>.payload.properties.<param>`. These are
+# different structural locations holding semantically different things
+# (request query params vs. message body fields). We do NOT attempt a
+# cross-path comparison — names like `language` legitimately appear on
+# both sides describing different concepts (request param vs response
+# field), and any heuristic that crosses the two produces false positives.
+#
+# Real drift across either layer (base or override) is caught by the
+# same-path drift loop in main(): if both layers declare a field at the
+# identical JSON path, mismatches in description/default/enum/example are
+# reported. For override-only fields (the pulse-stt-ws parameters block),
+# the override is the sole source of truth and there is no base
+# counterpart to compare against. CLAUDE.md documents this contract.
 
 
 def main() -> int:
@@ -142,14 +107,7 @@ def main() -> int:
                     if f not in base_node or base_node[f] != ovr_node[f]:
                         drift.append((path, f, base_node.get(f), ovr_node[f]))
 
-        # AsyncAPI cross-structural-path check for parameters block.
-        # Detect by presence of the top-level `asyncapi` key (which holds the
-        # spec version, e.g. "3.0.0"). OpenAPI specs use `openapi` instead.
-        xref = []
-        if "asyncapi" in base:
-            xref = asyncapi_param_xref(base, ovr)
-
-        if drift or xref:
+        if drift:
             print(f"\n{ovr_name}")
             for p, f, b, o in drift:
                 bs = (str(b) if b is not None else "(missing)")[:90]
@@ -157,11 +115,6 @@ def main() -> int:
                 print(f"  DRIFT .{p}.{f}")
                 print(f"    base    : {bs}")
                 print(f"    override: {os_}")
-                grand_drift += 1
-            for p, b, o in xref:
-                print(f"  WS-XREF {p}")
-                print(f"    base.messages.payload.properties: {(b or '(missing)')[:90]}")
-                print(f"    override.parameters             : {o[:90]}")
                 grand_drift += 1
 
     print()

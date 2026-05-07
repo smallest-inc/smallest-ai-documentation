@@ -114,6 +114,20 @@ jobs:
       - name: Run spec drift check
         run: python3 scripts/spec-live-tests/spec_drift_check.py
 
+  v4-mirror-check:
+    name: v4 docs mirror — pages/ vs versions/
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need full history to diff against base
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run mirror check (PR-scoped)
+        run: python3 scripts/spec-live-tests/v4_mirror_check.py --base origin/${{ github.base_ref }}
+
   stt-live-test:
     name: Waves STT — Pulse WS smoke test
     needs: detect-changes
