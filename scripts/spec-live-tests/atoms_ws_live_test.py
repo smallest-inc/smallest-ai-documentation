@@ -88,18 +88,19 @@ def janitor_sweep() -> int:
     return swept
 
 
-# Documented message types from agent-ws.yaml. Receiving any of these
-# during the observation window proves the WS protocol is alive end-to-end.
+# Documented message types from agent-ws.yaml. Sourced by grepping
+# `const:` declarations in the spec — keep this list in sync when the
+# spec adds/removes message variants. Receiving any of these during the
+# observation window proves the protocol is alive end-to-end.
 EXPECTED_SERVER_TYPES = {
     "session.created",
-    "session.updated",
+    "session.closed",
     "agent_start_talking",
     "agent_stop_talking",
     "output_audio.delta",
-    "input_audio_buffer.committed",
     "interruption",
-    "conversation.item.created",
-    "response.done",
+    "transcript",
+    "error",
 }
 
 
@@ -193,7 +194,7 @@ def main() -> int:
         return _cleanup(agent_id, 1)
 
     # 4. Confirm any observed types are documented (catches typos / undocumented events)
-    undocumented = set(result["seen_types"]) - EXPECTED_SERVER_TYPES - {"error", "warning"}
+    undocumented = set(result["seen_types"]) - EXPECTED_SERVER_TYPES
     if undocumented:
         print()
         print(f"WARN: undocumented server message types: {undocumented}")

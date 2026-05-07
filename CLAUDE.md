@@ -177,6 +177,15 @@ python3 scripts/spec-live-tests/spec_drift_check.py
 python3 scripts/spec-live-tests/v4_mirror_check.py        # PR-scoped vs origin/main
 ```
 
+When changing a spec, also run the relevant live test (needs `SMALLEST_API_KEY` against the test tenant):
+
+```bash
+SMALLEST_API_KEY=... python3 scripts/spec-live-tests/atoms_live_test.py        # Atoms REST
+SMALLEST_API_KEY=... python3 scripts/spec-live-tests/atoms_ws_live_test.py     # Atoms WS
+SMALLEST_API_KEY=... python3 scripts/spec-live-tests/waves_tts_live_test.py    # Lightning v3.1 TTS
+SMALLEST_API_KEY=... python3 scripts/spec-live-tests/waves_stt_live_test.py    # Pulse STT
+```
+
 ---
 
 ## Ironclad rules (no exceptions)
