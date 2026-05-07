@@ -42,6 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       atoms: ${{ steps.filter.outputs.atoms }}
+      atoms_ws: ${{ steps.filter.outputs.atoms_ws }}
       tts: ${{ steps.filter.outputs.tts }}
       stt: ${{ steps.filter.outputs.stt }}
     steps:
@@ -51,8 +52,12 @@ jobs:
         with:
           filters: |
             atoms:
-              - 'fern/apis/atoms/**'
+              - 'fern/apis/atoms/openapi/**'
               - 'scripts/spec-live-tests/atoms_live_test.py'
+              - '.github/workflows/api-spec-live-test.yml'
+            atoms_ws:
+              - 'fern/apis/atoms/asyncapi/**'
+              - 'scripts/spec-live-tests/atoms_ws_live_test.py'
               - '.github/workflows/api-spec-live-test.yml'
             tts:
               - 'fern/apis/waves/openapi/lightning-v3.1*'
@@ -81,6 +86,24 @@ jobs:
         env:
           SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
         run: python3 scripts/spec-live-tests/atoms_live_test.py
+
+  atoms-ws-live-test:
+    name: Atoms WS — agent/connect handshake + documented event types
+    needs: detect-changes
+    if: needs.detect-changes.outputs.atoms_ws == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install websockets
+        run: pip install --quiet websockets
+      - name: Run Atoms WS live test
+        env:
+          SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
+        run: python3 scripts/spec-live-tests/atoms_ws_live_test.py
 
   tts-live-test:
     name: Waves TTS — Lightning v3.1 REST + WS smoke test
