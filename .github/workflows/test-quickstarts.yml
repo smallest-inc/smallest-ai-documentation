@@ -226,11 +226,21 @@ jobs:
           SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
 
       - name: "External: Cookbook audio sample accessible"
+        # Retry up to 3x on 5xx — github.com/raw occasionally returns
+        # transient HTTP 502 / 503 on backend hiccups. The accessibility
+        # check is purely informational; flaking it on a CDN burp gives
+        # false-failures with no signal about our PR. Fail fast on 4xx
+        # (real misconfiguration) but soak transient 5xx.
         run: |
-          response=$(curl -sL -o /dev/null -w "%{http_code}" \
-            "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav")
-          echo "HTTP $response"
-          [ "$response" = "200" ] || exit 1
+          for attempt in 1 2 3; do
+            response=$(curl -sL -o /dev/null -w "%{http_code}" \
+              "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav")
+            echo "attempt $attempt: HTTP $response"
+            if [ "$response" = "200" ]; then exit 0; fi
+            case "$response" in 5*) ;; *) exit 1 ;; esac
+            [ $attempt -lt 3 ] && sleep $((attempt * 5))
+          done
+          exit 1
 
       # ─── Slack Notification on Failure ───
 

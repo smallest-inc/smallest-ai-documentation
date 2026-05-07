@@ -1,0 +1,11 @@
+---
+title: Waves API spec — corrected `output_format` enum and resynced base ↔ v4 overrides
+---
+
+The `output_format` enum on Lightning v3.1 (`POST /waves/v1/lightning-v3.1/get_speech` and `/stream`) is now correctly documented as `["pcm", "mp3", "wav", "ulaw", "alaw"]`. The previously listed `mulaw` is rejected by the platform with an `invalid_enum_value` error and has been removed. Verified live against `api.smallest.ai`.
+
+The `sample_rate` enum on the same endpoints now correctly includes `44100` (the model's native rate) on both the SDK schema and the rendered API reference.
+
+Internally, the base API specs at `fern/apis/waves/{openapi,asyncapi}/*` and the v4 docs override at `fern/apis/waves-v4/overrides/*` have been resynced — descriptions, error response shapes, and channel summaries that had drifted between the two layers are now identical. A new CI workflow (`spec-drift-check`) blocks any future PR that edits one layer without the other.
+
+No customer-facing request shape, response field, or default value changes beyond the `output_format`/`sample_rate` corrections.

@@ -102,8 +102,8 @@ const { audio } = await generateSpeech({
   voice: 'robert',
   providerOptions: {
     smallestai: {
-      sampleRate: 48000,         // 8000 | 16000 | 24000 | 44100 | 48000
-      outputFormat: 'mp3',       // pcm | mp3 | wav | mulaw
+      sampleRate: 24000,         // 8000 | 16000 | 24000 | 44100
+      outputFormat: 'mp3',       // pcm | mp3 | wav | ulaw | alaw
       language: 'en',            // ISO 639-1 code
       consistency: 0.5,          // voice consistency (0–1)
       similarity: 0.5,           // voice similarity (0–1)
@@ -125,12 +125,16 @@ const result = await transcribe({
       language: 'hi',            // ISO 639-1 code
       diarize: true,             // speaker identification
       emotionDetection: true,    // detect emotions
-      ageDetection: true,        // detect speaker age
       genderDetection: true,     // detect speaker gender
+      itnNormalize: true,        // recommended over `numerals` — converts spoken numbers, dates, currencies, phone numbers, and other entities into written form (Pulse STT WS only)
     },
   },
 });
 ```
+
+<Note>
+`itnNormalize` requires the underlying [Smallest provider for Vercel AI SDK](https://github.com/smallest-inc/smallest-ai-vercel) to forward the option to the Pulse STT WebSocket layer. If you're on an older provider release that doesn't whitelist this key, the option is silently dropped client-side. Verify against the provider's release notes if `itnNormalize` doesn't take effect.
+</Note>
 
 ## Available Voices
 
