@@ -178,11 +178,15 @@ def preflight_check_agent(agent_id: str) -> tuple[bool, str]:
         if is_not_found:
             return False, (
                 f"FIXTURE MISSING: agent {agent_id} not found on the tenant "
-                f"(GET returned {e.code}: {body_text[:120]}). Recreate the "
-                "test-fixture agent per CLAUDE.md → 'Atoms WS test — uses a "
-                "fixture agent' section, then update DEFAULT_TEST_AGENT_ID in "
-                "this script (or set the ATOMS_WS_TEST_AGENT_ID secret to the "
-                "new ID)."
+                f"(GET returned {e.code}: {body_text[:120]}). To recreate:\n"
+                "  1. Create a new agent on the same tenant as SMALLEST_API_KEY\n"
+                "     (any LLM model + voice + system prompt is sufficient).\n"
+                "  2. Either:\n"
+                "       a) update DEFAULT_TEST_AGENT_ID in this file with the\n"
+                "          new agent ID and commit, OR\n"
+                "       b) set the ATOMS_WS_TEST_AGENT_ID GitHub Actions secret\n"
+                "          (or env var locally) to override at runtime.\n"
+                "  3. Verify by re-running this script."
             )
         if e.code in (401, 403):
             return False, (
