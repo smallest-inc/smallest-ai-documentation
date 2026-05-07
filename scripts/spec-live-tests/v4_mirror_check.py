@@ -36,29 +36,58 @@ VERSIONS = ROOT / "fern/products/waves/versions/v4.0.0"
 
 # Subdirs allowed to differ between pages/ and versions/.
 # changelog-entries: versions/ pins to release-time entries by design.
-# audio, video, assets: binary asset folders that may live in only one tree.
+# audio, video, images: binary asset folders that may live in only one tree.
+# Match on directory boundary (trailing /) or exact filename to avoid
+# `changelog-entries` falsely matching `changelog-entries-archive/foo.mdx`.
 ALLOWED_DIFF_PREFIXES = (
-    "changelog-entries",
+    "changelog-entries/",
     "changelog/announcements",  # mainline announcements, not mirror-versioned
-    "audio",
-    "video",
+    "audio/",
+    "video/",
+    "images/",
 )
 
 
 def is_allowed_diff(rel_path: str) -> bool:
-    return any(rel_path.startswith(p) for p in ALLOWED_DIFF_PREFIXES)
+    """True if rel_path falls under a directory listed in ALLOWED_DIFF_PREFIXES.
+    Uses trailing-slash-aware matching so similar-named siblings don't collide."""
+    return any(
+        rel_path == p.rstrip("/") or rel_path.startswith(p)
+        for p in ALLOWED_DIFF_PREFIXES
+    )
+
+
+def _verify_ref(ref: str) -> None:
+    """Ensure `ref` resolves locally. Hard-fail (not silent) if it doesn't —
+    a missing base ref means the diff scope is undefined and we'd otherwise
+    silently report 'no files changed' on every run, defeating the check."""
+    r = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", ref],
+        cwd=ROOT, capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        sys.stderr.write(
+            f"ERROR: base ref {ref!r} not found locally. "
+            f"In CI, ensure 'fetch-depth: 0' on actions/checkout and that the "
+            f"target branch is fetched. Locally, run: git fetch origin\n"
+        )
+        sys.exit(2)
 
 
 def changed_files(base_ref: str) -> set[str]:
-    """Files changed in HEAD vs base_ref, relative to repo root."""
-    try:
-        out = subprocess.check_output(
-            ["git", "diff", "--name-only", f"{base_ref}...HEAD"],
-            cwd=ROOT, text=True, stderr=subprocess.DEVNULL,
-        )
-    except subprocess.CalledProcessError:
-        return set()
-    return {l.strip() for l in out.splitlines() if l.strip()}
+    """Files changed in HEAD vs base_ref, relative to repo root.
+
+    Errors are fatal — a silent empty set would let CI pass without checking
+    anything (defect #1 in the review pass that motivated this hardening)."""
+    _verify_ref(base_ref)
+    r = subprocess.run(
+        ["git", "diff", "--name-only", f"{base_ref}...HEAD"],
+        cwd=ROOT, capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        sys.stderr.write(f"ERROR: git diff against {base_ref} failed:\n{r.stderr}\n")
+        sys.exit(2)
+    return {l.strip() for l in r.stdout.splitlines() if l.strip()}
 
 
 def main() -> int:

@@ -116,6 +116,10 @@ jobs:
 
   v4-mirror-check:
     name: v4 docs mirror — pages/ vs versions/
+    # PR-scoped check — needs github.base_ref. Skip on workflow_dispatch
+    # (no base_ref → script would hard-fail on missing ref). Manual audits
+    # can run locally with `python3 scripts/spec-live-tests/v4_mirror_check.py --all`.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -125,6 +129,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Ensure base ref is fetched
+        run: git fetch origin ${{ github.base_ref }}
       - name: Run mirror check (PR-scoped)
         run: python3 scripts/spec-live-tests/v4_mirror_check.py --base origin/${{ github.base_ref }}
 

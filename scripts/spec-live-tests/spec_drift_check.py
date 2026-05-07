@@ -28,19 +28,51 @@ ROOT = Path(__file__).resolve().parents[2]
 WAVES = ROOT / "fern/apis/waves"
 V4 = ROOT / "fern/apis/waves-v4/overrides"
 
-PAIRS = [
-    ("add-voice-openapi-overrides.yaml", WAVES / "openapi/add-voice-openapi.yaml"),
-    ("delete-cloned-voice-openapi-overrides.yaml", WAVES / "openapi/delete-cloned-voice-openapi.yaml"),
-    ("get-cloned-voices-openapi-overrides.yaml", WAVES / "openapi/get-cloned-voices-openapi.yaml"),
-    ("get-voices-openapi-overrides.yaml", WAVES / "openapi/get-voices-openapi.yaml"),
-    ("lightning-v2-ws-overrides.yml", WAVES / "asyncapi/lightning-v2-ws.yaml"),
-    ("lightning-v3.1-openapi-overrides.yaml", WAVES / "openapi/lightning-v3.1-openapi.yaml"),
-    ("lightning-v3.1-ws-overrides.yml", WAVES / "asyncapi/lightning-v3.1-ws.yaml"),
-    ("pulse-stt-openapi-overrides.yaml", WAVES / "openapi/pulse-stt-openapi.yaml"),
-    ("pulse-stt-ws-overrides.yml", WAVES / "asyncapi/pulse-stt-ws.yaml"),
-    ("voice-cloning-openapi-overrides.yaml", WAVES / "openapi/voice-cloning-openapi.yaml"),
-    ("waves-api-overrides.yaml", WAVES / "openapi/waves-api.yaml"),
-]
+
+def discover_pairs() -> list[tuple[str, Path]]:
+    """Auto-discover (override_filename, base_path) pairs from V4 directory.
+
+    The override filename pattern is `<basename>-overrides.{yml,yaml}`. We
+    strip the suffix and look for a matching base spec under either
+    `waves/openapi/` or `waves/asyncapi/`. Surfaces any new override the
+    moment it's added to V4 — no edit to this script required.
+
+    Files in V4 with no resolvable base counterpart raise SystemExit so
+    the misconfiguration is caught loudly rather than silently skipped.
+    """
+    pairs: list[tuple[str, Path]] = []
+    unmatched: list[str] = []
+    for ovr_file in sorted(V4.iterdir()):
+        if not ovr_file.is_file() or ovr_file.suffix not in (".yaml", ".yml"):
+            continue
+        name = ovr_file.name
+        if not name.endswith(("-overrides.yaml", "-overrides.yml")):
+            unmatched.append(name)
+            continue
+        stem = name.rsplit("-overrides.", 1)[0]
+        # search both openapi/ and asyncapi/ for a matching base file
+        candidates = [
+            WAVES / "openapi" / f"{stem}.yaml",
+            WAVES / "openapi" / f"{stem}.yml",
+            WAVES / "asyncapi" / f"{stem}.yaml",
+            WAVES / "asyncapi" / f"{stem}.yml",
+        ]
+        match = next((c for c in candidates if c.exists()), None)
+        if match is None:
+            unmatched.append(name)
+            continue
+        pairs.append((name, match))
+    if unmatched:
+        sys.stderr.write(
+            f"ERROR: override files in {V4} have no matching base spec under "
+            f"{WAVES}/openapi or {WAVES}/asyncapi:\n"
+            + "\n".join(f"  - {n}" for n in unmatched) + "\n"
+        )
+        sys.exit(2)
+    return pairs
+
+
+PAIRS = discover_pairs()
 
 TRACK = ("description", "default", "example", "examples", "enum")
 
