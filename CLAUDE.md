@@ -186,21 +186,17 @@ SMALLEST_API_KEY=... python3 scripts/spec-live-tests/waves_tts_live_test.py    #
 SMALLEST_API_KEY=... python3 scripts/spec-live-tests/waves_stt_live_test.py    # Pulse STT
 ```
 
-### Atoms WS test — fixture vs per-run mode
+### Atoms WS test — uses a fixture agent, not per-run
 
-The atoms WS test runs in one of two modes depending on whether `ATOMS_WS_TEST_AGENT_ID` is set:
+The atoms WS test connects to a **long-lived fixture agent** baked into `scripts/spec-live-tests/atoms_ws_live_test.py` as `DEFAULT_TEST_AGENT_ID`. Current value: `69fc27fb038062dc952d2bba`, named `CI-ws-test-fixture-DO-NOT-DELETE` on the tenant.
 
-| Mode | When | Behavior |
-|---|---|---|
-| **Per-run (default)** | `ATOMS_WS_TEST_AGENT_ID` not set | Creates a fresh bare agent each run via `POST /agent`, archives at end. Hard-fails on 5xx-after-retry — bare agents on tenants without a default workflow can't bootstrap a session. |
-| **Fixture (recommended for CI)** | `ATOMS_WS_TEST_AGENT_ID` set to a pre-configured agent on the same tenant as `SMALLEST_API_KEY` | Connects directly. Skips agent lifecycle. Hard pass/fail on `session.created`. Reliable, no per-run noise on the tenant. |
+**Do not delete this agent on the platform** — CI hard-fails if it's archived. If it ever needs to be recreated:
 
-**To enable fixture mode on CI:**
+1. Create a new agent in the CI tenant dashboard with: any LLM model, any voice, any system prompt (the tenant default workflow is sufficient). Name it `CI-ws-test-fixture-DO-NOT-DELETE` for clarity.
+2. Update `DEFAULT_TEST_AGENT_ID` in the script to the new ID.
+3. Verify with `python3 scripts/spec-live-tests/atoms_ws_live_test.py` (should hard-pass).
 
-1. Create an agent in the CI test tenant via the dashboard. Configure: an LLM model, a voice, a system prompt. Anything that supports a webcall session.
-2. Copy the agent ID from the dashboard URL (or via `GET /agent`).
-3. Add a GitHub Actions secret named `ATOMS_WS_TEST_AGENT_ID` with that ID.
-4. Workflow already passes the secret through — no code change needed.
+**Override path** (rarely needed): set `ATOMS_WS_TEST_AGENT_ID` GitHub Actions secret to use a different agent — already plumbed through the workflow.
 
 ---
 
