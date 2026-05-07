@@ -266,23 +266,27 @@ def _run_per_run_agent() -> int:
     if not ok:
         err = result.get("error") or ""
         print(f"  {err}")
-        # Differentiate REAL bugs from environment-specific session-bootstrap
-        # failures. A 5xx after exhausting retries means the endpoint accepted
-        # our handshake (auth + routing OK) but the agent couldn't initialise
-        # a session — typical for a freshly-created bare CI agent without an
-        # STT/LLM/TTS workflow. That's a tenant/agent-config issue, not a
-        # docs or spec bug. Auth and reachability are still proven, which is
-        # what this test exists to verify.
         if is_session_bootstrap_5xx(err):
+            # 5xx after retries usually means a real backend issue — most
+            # commonly the Express route ordering bug where /agent/connect
+            # falls through to /agent/:id and CastErrors on
+            # `Agent.findById("connect")`. Hard-fail by default so the
+            # backend team gets a clear signal. To force-merge while the
+            # backend is being fixed, an admin can override the failed
+            # check via the GitHub UI — the loud log below documents WHY.
             print()
-            print("SOFT PASS: endpoint reachable, auth accepted (no 4xx).")
-            print("           Session bootstrap returned 5xx after 3 retries —")
-            print("           expected for a bare CI test-tenant agent lacking")
-            print("           a configured workflow. Set ATOMS_WS_TEST_AGENT_ID")
-            print("           in CI secrets to a pre-configured agent for full")
-            print("           protocol verification.")
-            return _cleanup(agent_id, 0)
-        # Anything else (4xx, network failure, etc.) is a real bug
+            print("=" * 72)
+            print("HARD FAIL: endpoint returned 5xx after 3 retries.")
+            print("           Auth + reachability OK (no 4xx, request reached server).")
+            print("           Likely backend bug, NOT a docs/spec issue:")
+            print("             - Express route ordering: /agent/connect matched")
+            print("               by /agent/:id catch-all → CastError on findById")
+            print("             - Or session orchestrator can't bootstrap the agent")
+            print("           Check Sentry for `CastError GET /atoms/v1/agent/connect`")
+            print("           in atoms-backend project (recent events match this run).")
+            print("           Force-merge is allowed when this is the only red check")
+            print("           AND backend team has acknowledged the upstream bug.")
+            print("=" * 72)
         return _cleanup(agent_id, 1)
 
     print(f"  session.created received: {result['session_created']}")
