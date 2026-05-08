@@ -162,15 +162,24 @@ def main() -> int:
             print(f"  ✓ enum matches API ({len(api_set)} values)")
             continue
 
-        print(f"  ✗ DRIFT detected:")
         only_in_spec = sorted(spec_set - api_set)
         only_in_api = sorted(api_set - spec_set)
+
+        # Spec broader than API = real bug: docs claim a value the platform
+        # silently rejects. Fail.
+        # Spec narrower than API = deliberate curation (e.g. Lightning v3.1
+        # language enum only documents codes that have voices in the
+        # catalog; the schema accepts more but the model can't produce
+        # them). Allowed — the spec_enum_vs_voice_catalog check covers
+        # this dimension separately.
         if only_in_spec:
+            print(f"  ✗ DRIFT detected:")
             print(f"     in spec but API REJECTS:  {only_in_spec}")
-        if only_in_api:
-            print(f"     accepted by API, NOT in spec: {only_in_api}")
-        print(f"     spec has {len(spec_set)}, API has {len(api_set)}")
-        drift_count += 1
+            print(f"     spec has {len(spec_set)}, API has {len(api_set)}")
+            drift_count += 1
+        elif only_in_api:
+            print(f"  ✓ spec narrower than API ({len(spec_set)}/{len(api_set)} — deliberate curation)")
+            print(f"     accepted by API, not in spec: {only_in_api}")
 
     print()
     print("=" * 78)
