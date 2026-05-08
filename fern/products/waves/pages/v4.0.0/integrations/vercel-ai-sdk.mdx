@@ -6,7 +6,7 @@ icon: "triangle"
 
 Use Smallest AI as a speech and transcription provider in the [Vercel AI SDK](https://ai-sdk.dev). Generate speech and transcribe audio with a few lines of code. The package also exposes streaming WebSocket transcription and voice cloning APIs that sit alongside the Vercel `SpeechModelV2` / `TranscriptionModelV2` interfaces.
 
-Latest: **`smallestai-vercel-provider@0.4.0`** — adds streaming STT (`itn_normalize`, `redact_pii`, `redact_pci`, `numerals`, `keywords`, `sentence_timestamps`, `finalize_on_words`, `max_words`) and voice cloning.
+Latest: **`smallestai-vercel-provider@0.6.2`** — adds browser-native streaming (no proxy required), microphone capture hooks, auto-reconnect on socket drops (with counter reset across the session, so multi-hour streams survive sporadic blips), and a security-validated `signedUrl` flow for production browser apps. The SDK lazy-loads its `ws` dependency so browser-only consumers (using `auth: 'query'` or `signedUrl`) ship a smaller bundle and don't need the `bufferutil` / `serverExternalPackages` setup that older versions required.
 
 ## Installation
 
@@ -159,9 +159,9 @@ const result = await transcribe({
 ```
 
 <Note>
-**`ageDetection`** was removed from the server API and emits a deprecation warning if set.
+**`ageDetection`** was removed from the API and emits a deprecation warning if set.
 
-**`keywords`, `itnNormalize`, `sentenceTimestamps`, `finalizeOnWords`, `maxWords`, `eouTimeoutMs`** are forwarded by the SDK on the batch path but only take effect on the streaming WebSocket. Use `smallestai.transcriptionStream(...)` (below) when you need them.
+**`itnNormalize`, `sentenceTimestamps`, `finalizeOnWords`, `maxWords`, `eouTimeoutMs`** are accepted only on the streaming WebSocket — TS will error if you set them on `transcribe()`. Use `smallestai.transcriptionStream(...)` (below) for those.
 </Note>
 
 ## Streaming Speech-to-Text (WebSocket)
@@ -277,19 +277,24 @@ for await (const msg of stream) {
 
 The `transcribeOnce()` helper does this for you — use it for the pre-recorded case.
 
-### Streaming is Node-only — proxy from the browser
+### Browser streaming — three options
 
-`smallestai.transcriptionStream()` opens a WebSocket with an `Authorization: Bearer` header. Browser-native `WebSocket` cannot set custom headers (it's a fundamental browser limitation, not an SDK choice), so this method only runs server-side. Browser apps should proxy through their own server:
+The default `transcriptionStream()` uses an `Authorization: Bearer` header that native browser `WebSocket` can't set. Three patterns for browser apps, in order of recommendation:
+
+#### A. Proxy via your server (recommended for production)
+
+Server holds the API key, browser never sees it. The SDK ships a one-line helper that turns the stream into Server-Sent Events:
 
 ```typescript
 // app/api/transcribe-stream/route.ts (Next.js, Node runtime)
-import { smallestai } from 'smallestai-vercel-provider';
-import type { NextRequest } from 'next/server';
+import {
+  smallestai,
+  createTranscriptionStreamSSEResponse,
+} from 'smallestai-vercel-provider';
 
 export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   const audio = new Uint8Array(await req.arrayBuffer());
   const stream = smallestai.transcriptionStream('pulse', {
     language: 'en',
@@ -303,28 +308,175 @@ export async function POST(req: NextRequest) {
     stream.sendAudio(audio.subarray(i, i + 32 * 1024));
   }
   stream.closeStream();
-
-  // Pipe server frames back to the browser via SSE.
-  const encoder = new TextEncoder();
-  const sse = new ReadableStream({
-    async start(controller) {
-      for await (const msg of stream) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(msg)}\n\n`));
-        if (msg.is_last) break;
-      }
-      controller.close();
-    },
-  });
-  return new Response(sse, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-    },
-  });
+  return createTranscriptionStreamSSEResponse(stream, { signal: req.signal });
 }
 ```
 
-The browser opens this same-origin endpoint with `EventSource` or `fetch` + `ReadableStream` — no API key in the browser, no header restriction, no SDK in the bundle.
+The browser parses the SSE response with the matching helper:
+
+```typescript
+import { parseTranscriptionStreamSSE } from 'smallestai-vercel-provider';
+
+const res = await fetch('/api/transcribe-stream', { method: 'POST', body: audioBytes });
+for await (const msg of parseTranscriptionStreamSSE(res)) {
+  if (msg.is_final) console.log(msg.transcript);
+  if (msg.is_last) break;
+}
+```
+
+<Note>
+**Next.js setup, one-time** — only required for server-side `auth: 'header'` (the default, used by the SSE proxy above). Add this to `next.config.{js,mjs,ts}`:
+
+```js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  serverExternalPackages: ['smallestai-vercel-provider', 'ws'],
+};
+export default nextConfig;
+```
+
+And install the optional native deps so `ws` masks frames at native speed:
+
+```bash
+npm install bufferutil utf-8-validate
+```
+
+Browser-only consumers using `auth: 'query'` (option C) or `signedUrl` (option B) don't need this — the SDK lazy-loads `ws` only when the `Authorization` header path is reached, so browser bundles never pull in `ws` or its Node-only deps.
+</Note>
+
+#### B. Browser-native via signed URL (also production-grade)
+
+Your server mints a short-lived URL on demand; the browser opens the WebSocket directly with that URL. Same security profile as (A) but with one less hop:
+
+```typescript
+// Browser code:
+const stream = smallestai.transcriptionStream('pulse', {
+  language: 'en',
+  encoding: 'linear16',
+  sampleRate: 16000,
+}, {
+  signedUrl: async () => {
+    const res = await fetch('/api/get-stream-url');
+    return (await res.json()).url; // wss://api.smallest.ai/...
+  },
+});
+await stream.connect();
+```
+
+The SDK calls `signedUrl()` on every `connect()` and on every reconnect, so each session uses a fresh URL. Your server endpoint (`/api/get-stream-url`) decides how to scope and time-bound those URLs.
+
+#### C. Browser-native with API key in URL (dev / internal apps only)
+
+```typescript
+const stream = smallestai.transcriptionStream('pulse', {
+  language: 'en', encoding: 'linear16', sampleRate: 16000,
+}, {
+  apiKey: 'sk_...',
+  auth: 'query',
+});
+```
+
+<Warning>
+The API key appears in the WebSocket URL — visible in browser devtools, history, server access logs, and any error reporting tool that captures URLs. The SDK emits a one-time `console.warn` when this mode is used so it can't be deployed unnoticed. Use only for dev / internal apps with per-user-scoped keys; for end-user production, use option (A) or (B).
+</Warning>
+
+### Auto-reconnect on socket drops
+
+Long-running sessions drop sockets for prosaic reasons (network blips, load-balancer recycling, idle timeouts). Pass `autoReconnect: true` and the SDK transparently re-opens with the same parameters and emits a synthetic `{ type: 'reconnected', attempt }` frame so consumers can react:
+
+```typescript
+const stream = smallestai.transcriptionStream('pulse', {
+  language: 'en',
+  encoding: 'linear16',
+  sampleRate: 16000,
+  autoReconnect: true,
+  maxReconnectAttempts: 5,    // default 5
+  reconnectBackoffMs: 500,    // exponential, capped at 30s
+});
+
+for await (const msg of stream) {
+  if (msg.type === 'reconnected') {
+    console.log(`recovered after ${msg.attempt} attempt(s)`);
+    continue;
+  }
+  // ... normal transcript handling
+}
+```
+
+Reconnect only fires on **unexpected** closes — `is_last`, an explicit `closeStream()`, and server-emitted error frames all terminate cleanly without retry.
+
+`maxReconnectAttempts` counts **consecutive** failed attempts: the counter resets to zero after every successful reconnect, so a multi-hour stream that survives one blip per hour does not exhaust its retry budget across the whole session.
+
+The optional 3rd argument to `transcriptionStream(modelId, options, config)` lets you override per-session connection config — the `autoReconnect` knobs above can also live there if you want them outside the WS-protocol options. The same slot accepts `auth: 'query'`, `signedUrl`, `signedUrlTimeoutMs`, `allowedSignedHosts`, and `suppressInsecureAuthWarning`.
+
+## Microphone capture (browser)
+
+Live captions and voice agents need raw mic data on the wire. The SDK ships two browser-side hooks for this:
+
+### `useMicrophoneTranscription` (high-level)
+
+The all-in-one: captures the mic, streams chunks to your SSE proxy as a `ReadableStream` request body, exposes live transcript state.
+
+```tsx
+'use client';
+import { useMicrophoneTranscription } from 'smallestai-vercel-provider/react';
+
+export function LiveCaptions() {
+  const {
+    transcript, partial,
+    isCapturing, isStreaming,
+    chunksDelivered, chunksDropped,
+    start, stop, reset,
+  } = useMicrophoneTranscription({ apiPath: '/api/transcribe-mic-stream' });
+
+  return (
+    <>
+      <button onClick={isCapturing ? stop : () => start()}>
+        {isCapturing ? 'Stop' : 'Start'}
+      </button>
+      <p>{transcript}{partial && <em> {partial}</em>}</p>
+      {chunksDropped > 0 && <small>⚠ {chunksDropped} chunks dropped (lagging)</small>}
+    </>
+  );
+}
+```
+
+The hook captures via `getUserMedia` + `AudioWorklet`, downsamples to `linear16` @ 16 kHz mono, batches into ~100 ms chunks, and POSTs them as a streaming request body. Drop-oldest backpressure means a slow network never balloons memory.
+
+### `useMicrophonePCM` (low-level)
+
+If you want the raw mic stream and your own pipe (custom WS, WebRTC, etc.):
+
+```ts
+import { useMicrophonePCM } from 'smallestai-vercel-provider/react';
+
+const { start, stop, isCapturing, chunksDropped } = useMicrophonePCM({
+  sampleRate: 16000,
+  batchMs: 100,
+  maxQueuedChunks: 50,
+  onChunk: (chunk) => myPipe.send(chunk),
+});
+```
+
+The `AudioWorklet` processor is inlined as a Blob URL — no separate worklet file to host.
+
+## Security notes for browser deployments
+
+The SDK enforces these guards on the new browser-native paths so you can't accidentally ship insecure code:
+
+| Guard | What it blocks |
+|---|---|
+| `signedUrl()` results must be `wss:` | TLS-stripping attacks. `ws://localhost` only works when you opt in via `allowedSignedHosts: ['localhost']`. |
+| `signedUrl()` host must match `baseURL` host | A bug in your signing endpoint can't redirect audio to `attacker.com`. Add additional hosts via `allowedSignedHosts`. |
+| `signedUrlTimeoutMs` (default 10 s) | A hung signing endpoint fast-fails instead of stalling forever. |
+| `auth: 'query'` console warning | One-time warning makes URL-based auth visible in dev so it can't deploy unnoticed. Suppress via `suppressInsecureAuthWarning: true` after audit. |
+
+What stays your job:
+
+- **CSRF-protect your SSE proxy and `signedUrl` mint endpoints.**
+- **Rate-limit the proxy** per-user — a malicious client can otherwise spam your route to burn API budget.
+- **Pick short token TTLs** for `signedUrl` (60 s is plenty — it only needs to live long enough for the browser to open the WS).
+- **Never include user-controlled hosts in `allowedSignedHosts`.**
 
 ## Available Voices
 
