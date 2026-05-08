@@ -238,6 +238,24 @@ jobs:
           SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
         run: python3 scripts/spec-live-tests/spec_enum_vs_api_check.py
 
+  spec-enum-vs-voice-catalog:
+    name: Lightning v3.1 spec language enum ↔ voice catalog
+    needs: detect-changes
+    if: (needs.detect-changes.outputs.tts == 'true') && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: pip install --quiet 'pyyaml>=6.0,<7.0' 'requests>=2.31,<3.0'
+      - name: Run spec-vs-voice-catalog drift check
+        env:
+          SMALLEST_API_KEY: ${{ secrets.SMALLEST_API_KEY }}
+        run: python3 scripts/spec-live-tests/spec_enum_vs_voice_catalog.py
+
   spec-drift-check:
     name: Waves spec drift — base vs v4 docs overrides
     runs-on: ubuntu-latest
