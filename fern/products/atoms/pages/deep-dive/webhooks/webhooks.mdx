@@ -4,7 +4,9 @@ description: "Get event updates from your agent calls on a webhook"
 icon: "webhook"
 ---
 
-This guide will walk you through setting up and using webhooks with atoms.
+This guide walks you through setting up and using webhooks with Atoms.
+
+For the full field-level schema reference, see the [Webhooks feature page](/atoms/atoms-platform/features/webhooks).
 
 ## Setting Up Webhooks
 
@@ -14,7 +16,7 @@ This guide will walk you through setting up and using webhooks with atoms.
 2. Go to the "Webhook" section
 3. Click on "Create"
 4. Enter your webhook URL where you want to receive events
-5. (Optional) Add a small description
+5. (Optional) Add a description — this is echoed back in every event body
 6. Click "Add endpoint" to create your webhook
 
 <img src="../../images/webhook-create.png" className="rounded-lg" />
@@ -23,20 +25,22 @@ This guide will walk you through setting up and using webhooks with atoms.
 
 1. Go to your agent's configuration page
 2. Press the "add webhook" button
-3. Select the webhook url from dropdown and choose which events you want to receive
+3. Select the webhook URL from dropdown and choose which events you want to receive
 4. Save your changes
 
 <img src="../../images/webhook-agent-configure.png" className="rounded-lg" />
-You should start recieving events on your agent calls. You can check all webhook
-events directly from your dashboard.
+
+You should start receiving events on your agent calls. You can check all webhook events directly from your dashboard.
 
 ## Webhook Event Types
 
 Your webhook will receive the following types of events:
 
-- `pre-conversation`: When an agent call begins
-- `post-conversation`: When an agent call completes
-- `analytics-completed`: When post-call analytics are generated and ready
+- `pre-conversation` — Fired **before** the agent begins speaking
+- `post-conversation` — Fired **after** the call ends; contains full transcript, recording URL, call metadata, and agent variables
+- `analytics-completed` — Fired **after** post-call analytics are computed; contains summary, disposition metrics, and success metrics
+
+All three events share the same `callId` — use it as the join key when correlating events for the same call.
 
 ## Webhook Payload Format
 
@@ -44,111 +48,128 @@ Each webhook event includes different data based on the event type. You can view
 
 <Tabs>
   <Tab title="Pre-conversation Event">
-  
+
 ```json
 {
-  "url": "https://webhook-test.com/abc123",
-  "description": "test webhook",
-  "event": "agent123.pre-conversation",
+  "url": "https://example.com/webhook",
+  "description": "Debt Collection Agent's Endpoint",
+  "event": "69fc7dd072a0c1d28d948ace.pre-conversation",
   "metadata": {
-    "agentId": "agent123",
+    "agentId": "69fc7dd072a0c1d28d948ace",
     "eventType": "pre-conversation",
     "conversationType": "telephonyOutbound",
-    "toPhone": "+1234567890",
-    "fromPhone": "+0987654321"
-    "callId: "CALL-1231231233-123123"
+    "toPhone": "+916296641821",
+    "fromPhone": "+918035317096",
+    "callId": "CALL-1778226705739-7e4c17"
   },
-  "id": "webhook123"
+  "id": "69fd96118fd277fc807e4c23"
 }
 ```
+
   </Tab>
   <Tab title="Post-conversation Event">
-  
+
 ```json
 {
-  "url": "https://webhook-test.com/abc123",
-  "description": "test webhook",
-  "event": "agent123.post-conversation",
+  "url": "https://example.com/webhook",
+  "description": "Debt Collection Agent's Endpoint",
+  "event": "69fc7dd072a0c1d28d948ace.post-conversation",
   "metadata": {
-    "agentId": "agent123",
+    "agentId": "69fc7dd072a0c1d28d948ace",
     "eventType": "post-conversation",
     "conversationType": "telephonyOutbound",
+    "callId": "CALL-1778226705739-7e4c17",
+    "recordingUrl": "https://db2izkvf1oocn.cloudfront.net/call-recordings/CALL-.../composite.wav",
     "callData": {
-      "answerTime": "2024-03-21T10:00:01Z",
+      "answerTime": "2026-05-08T07:51:58.813Z",
       "callDirection": "telephony_outbound",
-      "callDuration": "30",
+      "callDuration": 49.350622,
       "callStatus": "completed",
-      "endTime":    "2024-03-21T10:00:31Z",
-      "fromNumber": "+911234567890",
-      "toNumber": "+911234567789",
+      "endTime": "2026-05-08T07:52:48.164Z",
+      "fromNumber": "+918035317096",
+      "toNumber": "+916296641821"
     },
-    "recordingUrl": "https://recordingurl.smallest.ai",
-    "callId": "CALL-XXXXXXX-YYYY",
     "transcript": [
       {
-        "role": "user",
-        "content": "Hello, I need help with my account",
-        "timestamp": "2024-03-21T10:00:05Z"
+        "role": "agent",
+        "content": "नमस्ते, मैं Nisha बोल रही हूँ…",
+        "timestamp": "2026-05-08T07:52:05.123Z"
       },
       {
-        "role": "agent", 
-        "content": "Hi! I'd be happy to help you with your account.",
-        "timestamp": "2024-03-21T10:00:08Z"
+        "role": "user",
+        "content": "हाँ बोलिए",
+        "timestamp": "2026-05-08T07:52:07.369Z"
       }
     ],
     "variables": {
-      "var1": "v_123",
-      "var2": "v_234",
+      "agent_name": "Nisha",
+      "customer_name": "Rahul Sharma",
+      "due_amount": "29000"
     }
   },
-  "id": "webhook123"
+  "id": "69fd96578d7c3809f58ce555"
 }
 ```
 
   </Tab>
   <Tab title="Analytics Completed Event">
-  
+
 ```json
 {
-  "url": "https://webhook-test.com/abc123",
-  "description": "test webhook",
-  "event": "agent123.analytics-completed",
+  "url": "https://example.com/webhook",
+  "description": "Debt Collection Agent's Endpoint",
+  "event": "69fc7dd072a0c1d28d948ace.analytics-completed",
   "metadata": {
-    "agentId": "agent123",
+    "agentId": "69fc7dd072a0c1d28d948ace",
     "eventType": "analytics-completed",
     "conversationType": "telephonyOutbound",
-    "callId": "CALL-XXXXXXX-YYYY",
+    "callId": "CALL-1778226705739-7e4c17",
     "analytics": {
-      "summary": "Customer called to inquire about account balance. Agent provided balance information and offered additional services.",
-      "successMetrics": [
+      "summary": "The call involved the agent discussing an overdue EMI payment…",
+      "dispositionMetrics": [
         {
-          "successMetricPrompt": "Did the agent provide the account balance?",
-          "successMetricType": "boolean",
-          "value": true,
-          "confidence": 0.95,
-          "reasoning": "Agent clearly stated the account balance of $1,250.00"
+          "identifier": "turn_taking_balance",
+          "value": 2,
+          "confidence": 1,
+          "reasoning": "The user had 4 speaking turns while the agent had 5…",
+          "dispositionMetricPrompt": "Measure the balance of speaking turns…",
+          "dispositionMetricType": "INTEGER"
         },
         {
-          "successMetricPrompt": "What was the customer's satisfaction level?",
-          "successMetricType": "scale",
-          "value": 4,
-          "confidence": 0.88,
-          "reasoning": "Customer expressed satisfaction and thanked the agent"
+          "identifier": "escalation_needed",
+          "value": false,
+          "confidence": 1,
+          "reasoning": "The call did not present complex issues…",
+          "dispositionMetricPrompt": "Based on the interaction, did this call require escalation?",
+          "dispositionMetricType": "BOOLEAN"
         }
-      ]
+      ],
+      "successMetrics": []
     },
     "callData": {
-      "fromNumber": "+911234567890",
-      "toNumber": "+911234567789",
-      "callDuration": 180000,
+      "fromNumber": "+918035317096",
+      "toNumber": "+916296641821",
+      "callDuration": 49.350622,
       "callStatus": "completed",
-      "answerTime": "2024-03-21T10:00:01Z",
-      "endTime": "2024-03-21T10:03:01Z"
+      "answerTime": "2026-05-08T07:51:58.813Z",
+      "endTime": "2026-05-08T07:52:48.164Z"
     }
   },
-  "id": "webhook123"
+  "id": "69fd96632b717269846aa433"
 }
 ```
 
   </Tab>
 </Tabs>
+
+<Note>
+**Field-level reference:** see the [Webhooks feature page](/atoms/atoms-platform/features/webhooks) for the complete schema of every field, including the dynamic `variables` object and the `dispositionMetrics` / `successMetrics` array structure.
+</Note>
+
+## Integration notes
+
+1. **`variables` is dynamic** — never hard-code column mappings. Store as JSON or iterate keys.
+2. **`dispositionMetrics` / `successMetrics` are agent-configured** — identifiers and types vary per agent.
+3. **`pre-conversation` uses `toPhone` / `fromPhone`** while `post-conversation` and `analytics-completed` use `toNumber` / `fromNumber` — normalize these in your ingestion layer.
+4. **Timestamps** are always UTC ISO 8601 strings.
+5. **`callDuration`** is a float representing seconds (not milliseconds).

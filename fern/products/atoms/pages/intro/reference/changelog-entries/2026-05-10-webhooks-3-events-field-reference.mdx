@@ -1,0 +1,23 @@
+---
+title: Atoms webhooks — full 3-event field reference now in docs
+---
+
+The Atoms webhooks documentation now contains the full field-level schema for all three lifecycle events: `pre-conversation`, `post-conversation`, and `analytics-completed`. Previously the feature page listed only two of the three events and gave bullet-point payload summaries instead of complete examples.
+
+**What's now documented per event:**
+- Common envelope (`url`, `description`, `event`, `metadata`, `id`) and the common `metadata` fields.
+- Per-event `metadata` field tables with types and descriptions.
+- Full, copy-pasteable JSON example bodies.
+- The `metadata.callData` shape (E.164 numbers, `callDuration` as float seconds, ISO 8601 timestamps).
+- The `metadata.transcript[]` turn schema.
+- The dynamic `metadata.variables` object with guidance to store it as JSON.
+- The `metadata.analytics.dispositionMetrics` / `successMetrics` array schema (`identifier`, `value`, `confidence`, `reasoning`, `dispositionMetricPrompt`, `dispositionMetricType`).
+- Event lifecycle and ordering diagram.
+- Integration notes covering the `toPhone`/`fromPhone` vs `toNumber`/`fromNumber` normalization gotcha, dynamic `variables` warning, and unit conventions.
+
+**API spec update:** `eventType` enum on the subscription endpoints (`POST /webhooks/{id}/subscribe`, `WebhookAgentSubscription` schema, etc.) now includes `analytics-completed` alongside `pre-conversation` and `post-conversation` — was 2 values, now 3.
+
+**Surfaces updated:**
+- `fern/products/atoms/pages/platform/features/webhooks.mdx` — full rewrite of the canonical reference page.
+- `fern/products/atoms/pages/deep-dive/webhooks/webhooks.mdx` — corrected JSON examples (fixed callDuration unit error, `successMetrics` → `dispositionMetrics`/`successMetrics` split, dynamic-variables note), cross-link added to the feature page for full schema.
+- `fern/apis/atoms/openapi/openapi.yaml` — 4 `eventType` enum sites updated.
