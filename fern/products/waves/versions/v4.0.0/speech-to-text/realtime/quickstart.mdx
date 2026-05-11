@@ -84,8 +84,15 @@ SAMPLE_URL = "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/g
 CHUNK_SIZE = 4096
 
 async def transcribe():
-    # Download sample audio
-    audio_data = requests.get(SAMPLE_URL).content
+    # Download sample audio (retry on transient connection drops)
+    for attempt in range(3):
+        try:
+            audio_data = requests.get(SAMPLE_URL, timeout=30).content
+            break
+        except requests.exceptions.RequestException:
+            if attempt == 2:
+                raise
+            await asyncio.sleep(2)
     # Skip WAV header (44 bytes) to get raw PCM
     pcm_data = audio_data[44:]
 
