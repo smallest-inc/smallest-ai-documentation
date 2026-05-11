@@ -2483,6 +2483,39 @@ paths:
           $ref: "#/components/responses/UnauthorizedErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
+      callbacks:
+        webhookEvents:
+          "{$request.body#/endpoint}":
+            post:
+              summary: Event delivered to your endpoint
+              description: |
+                Atoms POSTs to your configured `endpoint` URL for each event
+                you subscribe to. Three event types fire per call:
+                `pre-conversation` (before agent speaks), `post-conversation`
+                (after call ends, with transcript + recording), and
+                `analytics-completed` (after metrics are computed).
+
+                All three events share the same `callId` — use it as the join
+                key when correlating events for the same call.
+
+                For the full field-level reference, see the
+                [Webhooks guide](/atoms/atoms-platform/features/webhooks).
+              requestBody:
+                description: Event body. The `metadata` shape depends on `metadata.eventType`.
+                content:
+                  application/json:
+                    schema:
+                      oneOf:
+                        - $ref: "#/components/schemas/WebhookEventPreConversation"
+                        - $ref: "#/components/schemas/WebhookEventPostConversation"
+                        - $ref: "#/components/schemas/WebhookEventAnalyticsCompleted"
+                      discriminator:
+                        propertyName: eventType
+              responses:
+                "2XX":
+                  description: |
+                    Your endpoint should return a 2XX status to acknowledge
+                    receipt. Non-2XX responses are not retried.
 
   /webhook/{id}:
     delete:
