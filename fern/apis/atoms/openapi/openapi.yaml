@@ -2452,7 +2452,7 @@ paths:
                         example: "60d0fe4f5311236168a109ca"
                       eventType:
                         type: string
-                        enum: [pre-conversation, post-conversation]
+                        enum: [pre-conversation, post-conversation, analytics-completed]
                         description: The type of event to subscribe to
                         example: "post-conversation"
                   required:
@@ -2483,6 +2483,82 @@ paths:
           $ref: "#/components/responses/UnauthorizedErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
+  /webhook-events/pre-conversation:
+    post:
+      x-fern-webhook: true
+      tags:
+        - Webhooks
+      summary: pre-conversation
+      operationId: webhookEventPreConversation
+      description: |
+        Fired **before** the agent begins speaking. Use this to enrich CRM
+        data, log call attempts, or gate outbound calls.
+
+        Does **not** contain `callData`, `transcript`, `variables`, `analytics`,
+        or `recordingUrl`. `callData` is on `post-conversation` and
+        `analytics-completed`; `transcript`, `variables`, and `recordingUrl`
+        are only on `post-conversation`; `analytics` is only on
+        `analytics-completed`.
+
+        For the full field-level reference, see the [Webhooks guide](/atoms/atoms-platform/features/webhooks).
+      requestBody:
+        description: Event body delivered to your configured webhook URL.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookEventPreConversation"
+      responses:
+        "2XX":
+          description: Your endpoint should return a 2XX status to acknowledge receipt.
+
+  /webhook-events/post-conversation:
+    post:
+      x-fern-webhook: true
+      tags:
+        - Webhooks
+      summary: post-conversation
+      operationId: webhookEventPostConversation
+      description: |
+        Fired **after** the call ends. Contains the full transcript, call
+        metadata, recording URL, and all agent variables that were in scope
+        during the conversation.
+
+        For the full field-level reference, see the [Webhooks guide](/atoms/atoms-platform/features/webhooks).
+      requestBody:
+        description: Event body delivered to your configured webhook URL.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookEventPostConversation"
+      responses:
+        "2XX":
+          description: Your endpoint should return a 2XX status to acknowledge receipt.
+
+  /webhook-events/analytics-completed:
+    post:
+      x-fern-webhook: true
+      tags:
+        - Webhooks
+      summary: analytics-completed
+      operationId: webhookEventAnalyticsCompleted
+      description: |
+        Fired **after** Atoms finishes running the configured disposition and
+        success metrics on the transcript. Arrives some time after
+        `post-conversation`.
+
+        For the full field-level reference, see the [Webhooks guide](/atoms/atoms-platform/features/webhooks).
+      requestBody:
+        description: Event body delivered to your configured webhook URL.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookEventAnalyticsCompleted"
+      responses:
+        "2XX":
+          description: Your endpoint should return a 2XX status to acknowledge receipt.
 
   /webhook/{id}:
     delete:
@@ -2537,7 +2613,7 @@ paths:
       summary: Get webhook subscriptions for an agent
       description: Retrieve webhook subscriptions for a given agent ID
       tags:
-        - Agents
+        - Webhooks
       security:
         - BearerAuth: []
       parameters:
@@ -2587,7 +2663,7 @@ paths:
       summary: Create webhook subscriptions for an agent
       description: Create webhook subscriptions for a specific agent with selected event types
       tags:
-        - Agents
+        - Webhooks
       security:
         - BearerAuth: []
       parameters:
@@ -2609,7 +2685,7 @@ paths:
                   description: Array of event types to subscribe to
                   items:
                     type: string
-                    enum: [pre-conversation, post-conversation]
+                    enum: [pre-conversation, post-conversation, analytics-completed]
                     description: The type of event to subscribe to
                     example: "post-conversation"
                 webhookId:
@@ -2675,7 +2751,7 @@ paths:
       summary: Delete webhook subscriptions for an agent
       description: Delete webhook subscriptions for a given agent ID
       tags:
-        - Agents
+        - Webhooks
       security:
         - BearerAuth: []
       parameters:
@@ -5093,7 +5169,7 @@ components:
           description: The populated agent details, or null if not assigned
         eventType:
           type: string
-          enum: [pre-conversation, post-conversation]
+          enum: [pre-conversation, post-conversation, analytics-completed]
           description: The type of event subscribed to
         createdAt:
           type: string
@@ -5157,7 +5233,7 @@ components:
           description: The ID of the agent
         eventType:
           type: string
-          enum: [pre-conversation, post-conversation]
+          enum: [pre-conversation, post-conversation, analytics-completed]
           description: The type of event subscribed to
         createdAt:
           type: string
@@ -5167,6 +5243,274 @@ components:
           type: string
           format: date-time
           description: The date and time when the subscription was last updated
+
+    WebhookEventEnvelope:
+      type: object
+      description: |
+        Common envelope shared by every webhook event Atoms delivers to your
+        endpoint. The `metadata` field's shape varies by event type — see the
+        per-event schemas (`WebhookEventPreConversation`,
+        `WebhookEventPostConversation`, `WebhookEventAnalyticsCompleted`).
+      properties:
+        url:
+          type: string
+          description: The webhook URL endpoint that received the event.
+          example: "https://example.com/webhook"
+        description:
+          type: string
+          description: Human-readable label configured on the webhook (e.g. "Debt Collection Agent's Endpoint").
+        event:
+          type: string
+          description: "Event identifier in the form `{agentId}.{eventType}`."
+          example: "69fc7dd072a0c1d28d948ace.post-conversation"
+        id:
+          type: string
+          description: Unique webhook delivery ID (separate from `metadata.callId`).
+          example: "69fd96118fd277fc807e4c23"
+      required:
+        - url
+        - description
+        - event
+        - id
+
+    WebhookEventPreConversation:
+      type: object
+      description: |
+        Fired **before** the agent begins speaking. Use this to enrich CRM data,
+        log call attempts, or gate outbound calls.
+
+        Does **not** contain `callData`, `transcript`, `variables`, `analytics`,
+        or `recordingUrl`. `callData` is on `post-conversation` and
+        `analytics-completed`; `transcript`, `variables`, and `recordingUrl`
+        are only on `post-conversation`; `analytics` is only on
+        `analytics-completed`.
+      allOf:
+        - $ref: "#/components/schemas/WebhookEventEnvelope"
+        - type: object
+          required: [metadata]
+          properties:
+            metadata:
+              type: object
+              required: [agentId, eventType, conversationType, toPhone, fromPhone, callId]
+              properties:
+                agentId:
+                  type: string
+                  description: The Atoms agent ID that handled the call.
+                  example: "69fc7dd072a0c1d28d948ace"
+                eventType:
+                  type: string
+                  enum: [pre-conversation]
+                  example: "pre-conversation"
+                conversationType:
+                  type: string
+                  description: "Channel type. Known values: `telephonyOutbound`, `telephonyInbound`."
+                  example: "telephonyOutbound"
+                toPhone:
+                  type: string
+                  description: Destination phone number in E.164 format.
+                  example: "+916296641821"
+                fromPhone:
+                  type: string
+                  description: Originating phone number in E.164 format.
+                  example: "+918035317096"
+                callId:
+                  type: string
+                  description: Unique call identifier.
+                  example: "CALL-1778226705739-7e4c17"
+
+    WebhookEventTranscriptTurn:
+      type: object
+      description: One speaking turn in a `post-conversation` transcript.
+      properties:
+        role:
+          type: string
+          enum: [agent, user]
+          description: Speaker role.
+        content:
+          type: string
+          description: The spoken text for this turn.
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of when this turn began (UTC).
+      required: [role, content, timestamp]
+
+    WebhookEventCallData:
+      type: object
+      description: |
+        Call-level metadata shared by `post-conversation` and
+        `analytics-completed` events. In `analytics-completed`, the
+        `callDirection` field may be absent.
+      properties:
+        fromNumber:
+          type: string
+          description: Originating phone number in E.164 format.
+          example: "+918035317096"
+        toNumber:
+          type: string
+          description: Destination phone number in E.164 format.
+          example: "+916296641821"
+        callDuration:
+          type: number
+          format: float
+          description: Total call duration in **seconds** (float).
+          example: 49.350622
+        callStatus:
+          type: string
+          enum: [completed, no-answer, busy, failed, canceled]
+          description: Terminal status.
+        callDirection:
+          type: string
+          enum: [telephony_outbound, telephony_inbound]
+          description: |
+            Call direction. Present on `post-conversation`; may be absent on
+            `analytics-completed`.
+        answerTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the call was answered (UTC).
+        endTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the call ended (UTC).
+      required: [fromNumber, toNumber, callDuration, callStatus, answerTime, endTime]
+
+    WebhookEventPostConversation:
+      type: object
+      description: |
+        Fired **after** the call ends. Contains the full transcript, call
+        metadata, recording URL, and all agent variables that were in scope
+        during the conversation.
+      allOf:
+        - $ref: "#/components/schemas/WebhookEventEnvelope"
+        - type: object
+          required: [metadata]
+          properties:
+            metadata:
+              type: object
+              required: [agentId, eventType, conversationType, callId, recordingUrl, callData, transcript, variables]
+              properties:
+                agentId:
+                  type: string
+                  example: "69fc7dd072a0c1d28d948ace"
+                eventType:
+                  type: string
+                  enum: [post-conversation]
+                  example: "post-conversation"
+                conversationType:
+                  type: string
+                  example: "telephonyOutbound"
+                callId:
+                  type: string
+                  example: "CALL-1778226705739-7e4c17"
+                recordingUrl:
+                  type: string
+                  format: uri
+                  description: URL to the composite call recording (`.wav`).
+                callData:
+                  $ref: "#/components/schemas/WebhookEventCallData"
+                transcript:
+                  type: array
+                  description: Ordered list of transcript turns.
+                  items:
+                    $ref: "#/components/schemas/WebhookEventTranscriptTurn"
+                variables:
+                  type: object
+                  additionalProperties: true
+                  description: |
+                    Flat key-value map of all agent variables in scope during the call.
+
+                    **This object is fully dynamic.** Keys and values are entirely determined by
+                    the agent's configuration; they are not fixed by the platform. New keys can
+                    appear at any time. Store as JSON and iterate keys — do not hard-code column
+                    mappings. Common platform keys include `agent_name`, `customer_name`,
+                    `current_date`, `default_language`; domain-specific keys (e.g. `due_amount`,
+                    `bank_name`) come from your agent's prompt configuration.
+                  example:
+                    agent_name: "Nisha"
+                    customer_name: "Rahul Sharma"
+                    due_amount: "29000"
+
+    WebhookEventAnalyticsMetric:
+      type: object
+      description: |
+        A single disposition or success metric computed by the
+        `analytics-completed` event. The set of metrics is configured
+        per-agent and can vary.
+      properties:
+        identifier:
+          type: string
+          description: "Machine-readable metric name (e.g. `turn_taking_balance`, `escalation_needed`)."
+          example: "turn_taking_balance"
+        value:
+          description: |
+            The evaluated result. Type depends on `dispositionMetricType`.
+          oneOf:
+            - type: integer
+            - type: string
+            - type: boolean
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Confidence score (0–1).
+          example: 1
+        reasoning:
+          type: string
+          description: LLM-generated explanation for the assigned value.
+        dispositionMetricPrompt:
+          type: string
+          description: The prompt/question that was used to evaluate this metric.
+        dispositionMetricType:
+          type: string
+          enum: [INTEGER, STRING, BOOLEAN]
+          description: Data type of `value`.
+      required: [identifier, value, confidence, reasoning, dispositionMetricPrompt, dispositionMetricType]
+
+    WebhookEventAnalyticsCompleted:
+      type: object
+      description: |
+        Fired **after** Atoms finishes running the configured disposition and
+        success metrics on the transcript. Arrives some time after
+        `post-conversation`.
+      allOf:
+        - $ref: "#/components/schemas/WebhookEventEnvelope"
+        - type: object
+          required: [metadata]
+          properties:
+            metadata:
+              type: object
+              required: [agentId, eventType, conversationType, callId, analytics, callData]
+              properties:
+                agentId:
+                  type: string
+                eventType:
+                  type: string
+                  enum: [analytics-completed]
+                  example: "analytics-completed"
+                conversationType:
+                  type: string
+                callId:
+                  type: string
+                analytics:
+                  type: object
+                  required: [summary, dispositionMetrics, successMetrics]
+                  properties:
+                    summary:
+                      type: string
+                      description: LLM-generated plain-text summary of the call.
+                    dispositionMetrics:
+                      type: array
+                      items:
+                        $ref: "#/components/schemas/WebhookEventAnalyticsMetric"
+                    successMetrics:
+                      type: array
+                      description: Same schema as `dispositionMetrics`. May be empty.
+                      items:
+                        $ref: "#/components/schemas/WebhookEventAnalyticsMetric"
+                callData:
+                  $ref: "#/components/schemas/WebhookEventCallData"
 
     KnowledgeBase:
       type: object
