@@ -85,11 +85,11 @@ paths:
         ## Common gotchas
 
         - **Set `Accept: audio/wav`.** Omitting it can return an empty or unplayable response.
-        - **Cloned voices** (`voice_*` from `add_voice`) work on this endpoint and support `pronunciation_dicts`. Earlier docs claimed they didn't; that was stale.
+        - **Cloned voices** (`voice_*` from `add_voice`) work on this endpoint and support `pronunciation_dicts`.
         - **`pronunciation_dicts` validates IDs at request time.** Passing an unknown ID returns `Invalid input data` — create the dict first via [`POST /pronunciation-dicts`](./create-pronunciation-dict) and save the returned `id`.
         - **Pronunciation matching is case-sensitive.** Add both `Synopsis` and `synopsis` if your text uses both casings.
         - **44.1 kHz output** is supported but most playback environments are happy with 24 kHz — drop the sample rate if bandwidth matters.
-        - **JavaScript SDK note**: the official `smallestai` npm package is pre-v3.1 and does not yet expose this endpoint. Use `fetch`/`axios` directly. A v2 JS SDK is on the roadmap.
+        - **JavaScript / TypeScript**: the official `smallestai` npm package predates Lightning v3.1, so call this endpoint with `fetch` or `axios` as shown above.
   /waves/v1/lightning-v3.1/stream:
     post:
       x-fern-server-name: waves
@@ -186,7 +186,7 @@ paths:
         - **Audio is base64 inside the event payload**, not the raw event bytes. Decode the `data.audio` field per event.
         - **`output_format=pcm`** gives the lowest overhead for streaming playback. `wav`/`mp3` work but add per-chunk framing bytes.
         - **First-chunk latency** is dominated by the model + network round-trip, not your client — typical 150–300 ms p50.
-        - **JavaScript SDK note**: the official `smallestai` npm package does not expose this endpoint. Use `fetch` as shown. A v2 JS SDK is on the roadmap.
+        - **JavaScript / TypeScript**: the official `smallestai` npm package predates Lightning v3.1, so call this endpoint with `fetch` as shown above.
 
 components:
   schemas:
