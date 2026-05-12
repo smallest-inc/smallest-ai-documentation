@@ -11,14 +11,80 @@ paths:
         - Speech to Text
       summary: Pulse (Pre-Recorded)
       description: |
-        Convert speech to text using file upload with the Pulse STT POST API
+        Transcribe an audio file to text using the Pulse model. The fastest way to get a transcript when you already have a recording — pass either the raw bytes or a URL.
 
-        The STT POST API allows you to convert speech to text using two different input methods:
+        ## When to use this
 
-        1. **Raw Audio Bytes** (`application/octet-stream`) - Send raw audio data with all parameters as query parameters
-        2. **Audio URL** (`application/json`) - Provide only a URL to an audio file in the JSON body, with all other parameters as query parameters
+        Use this endpoint when you have a complete audio file (call recording, voicemail, podcast episode) and want the transcript back in one response. For live transcription as audio arrives, use the [realtime WebSocket endpoint](./realtime-pulse) instead.
 
-        Both methods use our Pulse STT model with automatic language detection across 30+ languages.
+        ## Input methods
+
+        Send the audio in one of two ways:
+
+        1. **Raw bytes** — `Content-Type: application/octet-stream` with the audio in the body. All knobs (`language`, `word_timestamps`, etc.) are query parameters.
+        2. **URL** — `Content-Type: application/json` with `{"url": "..."}` in the body. Useful when the audio already lives in object storage. Same query parameters apply.
+
+        Pulse autodetects the language across 30+ supported locales. Pass `language` explicitly when you already know it — detection is fast but skipping it is faster.
+
+        ## Examples
+
+        **cURL** (raw bytes)
+        ```bash
+        curl -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en&word_timestamps=true" \
+          -H "Authorization: Bearer $SMALLEST_API_KEY" \
+          -H "Content-Type: application/octet-stream" \
+          --data-binary "@./call.wav"
+        ```
+
+        **cURL** (URL)
+        ```bash
+        curl -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
+          -H "Authorization: Bearer $SMALLEST_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{"url": "https://your-bucket.s3.amazonaws.com/call.wav"}'
+        ```
+
+        **Python** (using the SDK)
+        ```python
+        from smallestai import SmallestAI
+
+        client = SmallestAI(token="YOUR_API_KEY")
+        with open("./call.wav", "rb") as f:
+            result = client.waves.transcribe_pulse(
+                request=f.read(),
+                language="en",
+                word_timestamps=True,
+                diarize=True,
+            )
+        print(result.transcription)
+        ```
+
+        **JavaScript / TypeScript** (using `fetch`)
+        ```typescript
+        import { readFileSync } from "node:fs";
+
+        const audio = readFileSync("./call.wav");
+        const params = new URLSearchParams({ language: "en", word_timestamps: "true", diarize: "true" });
+
+        const res = await fetch(`https://api.smallest.ai/waves/v1/pulse/get_text?${params}`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.SMALLEST_API_KEY}`,
+            "Content-Type": "application/octet-stream",
+          },
+          body: audio,
+        });
+        const result = await res.json();
+        console.log(result.transcription);
+        ```
+
+        ## Common gotchas
+
+        - **Max file size is 25 MB.** Larger files return HTTP `413`. Compress to mono 16 kHz PCM if you're close to the limit; quality is unaffected.
+        - **Formatting flags (`format`, `punctuate`, `capitalize`) are accepted but currently return the same transcript** — server-side enforcement is in progress. The Python SDK exposes them as of `smallestai>=4.4.0` so your code is ready when the server starts honoring them.
+        - **Webhook-driven flow**: pass `webhook_url` to receive the transcript asynchronously. The endpoint returns immediately; the transcript hits your webhook when ready. Useful for long files where you don't want to hold an HTTP connection open.
+        - **Speaker diarization** (`diarize=true`) adds latency. Skip it if you only need the words.
+        - **JavaScript SDK note**: the official `smallestai` npm package is pre-v3.1 and does not yet expose this endpoint. Use `fetch`/`axios` directly as shown above. A v2 JS SDK is on the roadmap.
       responses:
         "413":
           content:
