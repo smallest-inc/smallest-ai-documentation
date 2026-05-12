@@ -42,23 +42,24 @@ paths:
           }' --output speech.wav
         ```
 
-        **Python** (using `smallestai>=4.4.0`)
+        **Python** (`pip install smallestai>=4.4.0`)
         ```python
         from smallestai import SmallestAI
 
         client = SmallestAI(token="YOUR_API_KEY")
-        audio = client.waves.synthesize_lightning_v31(
-            text="Hello from Lightning v3.1.",
-            voice_id="magnus",
-            sample_rate=24000,
-            output_format="wav",
-            # Optional: cloned voice support
-            # voice_id="voice_FlPKRWI7DX",
-            # Optional: pin pronunciations for specific words
-            # pronunciation_dicts=["<your dict id>"],
-        )
+
         with open("speech.wav", "wb") as f:
-            f.write(audio)
+            for chunk in client.waves.synthesize_lightning_v31(
+                text="Hello from Lightning v3.1.",
+                voice_id="magnus",
+                sample_rate=24000,
+                output_format="wav",
+                # Optional: cloned voice support
+                # voice_id="voice_FlPKRWI7DX",
+                # Optional: pin pronunciations for specific words
+                # pronunciation_dicts=["<your dict id>"],
+            ):
+                f.write(chunk)
         ```
 
         **JavaScript / TypeScript** (using `fetch`)
@@ -128,20 +129,24 @@ paths:
           }'
         ```
 
-        **Python**
+        **Python** (`pip install smallestai>=4.4.0`)
         ```python
-        import sys
+        import base64
         from smallestai import SmallestAI
 
         client = SmallestAI(token="YOUR_API_KEY")
-        for chunk in client.waves.synthesize_sse_lightning_v31(
-            text="Streaming this paragraph chunk by chunk so playback can start sooner.",
-            voice_id="magnus",
-            sample_rate=24000,
-            output_format="pcm",
-        ):
-            # `chunk` is decoded PCM bytes — pipe to your audio player.
-            sys.stdout.buffer.write(chunk)
+
+        with open("stream.pcm", "wb") as f:
+            for chunk in client.waves.synthesize_sse_lightning_v31(
+                text="Streaming this paragraph chunk by chunk so playback can start sooner.",
+                voice_id="magnus",
+                sample_rate=24000,
+                output_format="pcm",
+            ):
+                # Each chunk is `{"audio": "<base64-encoded PCM>"}`.
+                # Decode and pipe to your audio pipeline.
+                if chunk.get("audio"):
+                    f.write(base64.b64decode(chunk["audio"]))
         ```
 
         **JavaScript / TypeScript** (using `fetch` + a reader)
