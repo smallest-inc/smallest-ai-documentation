@@ -8,21 +8,20 @@ paths:
       - Text to Speech
       summary: Lightning v3.1
       description: |
-        Synthesize speech from text in a single request. The simplest way to get audio when you have the full text up front — pass `text` + `voice_id`, get back binary WAV.
+        Synthesize speech from text in a single request. The simplest way to get audio when you have the full text up front — pass `text` + `voice_id`, get back binary audio.
 
         ## When to use this
 
         - **Use this** for short utterances you can render before playback (notifications, prompts, batch jobs, audio file generation).
-        - **Use [SSE streaming](./synthesize-sse-lightning-v3-1)** when you want playback to start before the full audio is ready (long passages, latency-sensitive apps).
-        - **Use the [WebSocket endpoint](./streaming-tts-stream)** when text arrives incrementally (LLM token streams, live captioning).
-        - **Use [Lightning v2](./synthesize-lightning-v2)** only if you're locked to its voice catalog. v3.1 is faster, supports 44 kHz, and is the recommended path for new code.
+        - **Use the SSE streaming endpoint** when you want playback to start before the full audio is ready (long passages, latency-sensitive apps).
+        - **Use the WebSocket endpoint** when text arrives incrementally (LLM token streams, live captioning).
 
         ## Key features
 
         - 44 kHz natural, expressive synthesis
         - Cloned voice IDs (`voice_*`) work — same param as catalog voices
         - 12 documented languages — see the model card for the full list
-        - Output formats: `wav`, `pcm`, `mp3`, `mulaw`
+        - Output formats: `pcm`, `mp3`, `wav`, `ulaw`, `alaw`
         - Sample rates: 8 kHz – 44.1 kHz
         - Speed: 0.5× – 2×
         - Per-call pronunciation dictionaries via `pronunciation_dicts`
@@ -86,7 +85,7 @@ paths:
 
         - **Set `Accept: audio/wav`.** Omitting it can return an empty or unplayable response.
         - **Cloned voices** (`voice_*` from `add_voice`) work on this endpoint and support `pronunciation_dicts`.
-        - **`pronunciation_dicts` validates IDs at request time.** Passing an unknown ID returns `Invalid input data` — create the dict first via [`POST /pronunciation-dicts`](./create-pronunciation-dict) and save the returned `id`.
+        - **`pronunciation_dicts` validates IDs at request time.** Passing an unknown ID returns `Invalid input data` — create the dict first via the pronunciation-dicts endpoint and save the returned `id`.
         - **Pronunciation matching is case-sensitive.** Add both `Synopsis` and `synopsis` if your text uses both casings.
         - **44.1 kHz output** is supported but most playback environments are happy with 24 kHz — drop the sample rate if bandwidth matters.
         - **JavaScript / TypeScript**: the official `smallestai` npm package predates Lightning v3.1, so call this endpoint with `fetch` or `axios` as shown above.
@@ -99,13 +98,13 @@ paths:
       - Text to Speech
       summary: Lightning v3.1 SSE
       description: |
-        Synthesize speech and stream the audio back over Server-Sent Events. The body and parameters are identical to the [sync `/get_speech` endpoint](./synthesize-lightning-v3-1) — the difference is the response is a stream of base64-encoded PCM chunks instead of one binary blob.
+        Synthesize speech and stream the audio back over Server-Sent Events. The body and parameters are identical to the sync `/get_speech` endpoint — the difference is the response is a stream of base64-encoded PCM chunks instead of one binary blob.
 
         ## When to use this
 
         - **Use this** when you want playback to start before synthesis is complete — long passages, latency-sensitive UI, live narration. First chunk typically arrives in ~150–300 ms.
-        - **Use [sync `/get_speech`](./synthesize-lightning-v3-1)** when total latency doesn't matter and you'd rather get one buffer.
-        - **Use the [WebSocket endpoint](./streaming-tts-stream)** when the *text* arrives incrementally (LLM token stream). SSE assumes you have the full text up front.
+        - **Use sync `/get_speech`** when total latency doesn't matter and you'd rather get one buffer.
+        - **Use the WebSocket endpoint** when the *text* arrives incrementally (LLM token stream). SSE assumes you have the full text up front.
 
         ## How it works
 
@@ -131,6 +130,7 @@ paths:
 
         **Python**
         ```python
+        import sys
         from smallestai import SmallestAI
 
         client = SmallestAI(token="YOUR_API_KEY")
