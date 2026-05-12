@@ -168,19 +168,24 @@ paths:
         const reader = res.body!.getReader();
         const decoder = new TextDecoder();
         let buf = "";
-        for (;;) {
+        let finished = false;
+        while (!finished) {
           const { value, done } = await reader.read();
           if (done) break;
           buf += decoder.decode(value);
           const events = buf.split("\n\n");
           buf = events.pop() ?? "";
           for (const ev of events) {
-            const data = ev.replace(/^data:\s*/, "");
-            if (!data) continue;
-            const { data: payload, status } = JSON.parse(data);
-            if (status === "complete") break;
-            const pcm = Buffer.from(payload.audio, "base64");
-            // … hand pcm to your audio pipeline
+            // SSE frames are "event: audio\ndata: {json}" or just "data: {json}".
+            // We only care about the data line — pull it out and parse.
+            const dataLine = ev.split("\n").find((l) => l.startsWith("data:"));
+            if (!dataLine) continue;
+            const payload = JSON.parse(dataLine.slice(5).trim());
+            if (payload.done) { finished = true; break; }
+            if (payload.audio) {
+              const pcm = Buffer.from(payload.audio, "base64");
+              // … hand pcm to your audio pipeline
+            }
           }
         }
         ```

@@ -125,10 +125,7 @@ ws.on("message", (raw) => {
 ```
 
 ```python Python SDK
-# ci:skip — WavesStreamingTTS hardcodes the deprecated lightning-v2 WS URL
-# and a non-canonical host. Fix ships in the next SDK release (see PR #128
-# coordination). Use the cURL / Node.js examples above as the canonical
-# pattern until then.
+# Requires `smallestai>=4.4.0` — earlier versions hardcoded the v2 WS URL.
 import os
 import wave
 from smallestai.waves import TTSConfig, WavesStreamingTTS
@@ -196,10 +193,10 @@ for line in response.iter_lines():
         continue
 
     data = json.loads(line[6:])
-    if data["status"] == "chunk":
-        audio_chunks.append(base64.b64decode(data["data"]["audio"]))
-    elif data["status"] == "complete":
+    if data.get("done"):
         break
+    if data.get("audio"):
+        audio_chunks.append(base64.b64decode(data["audio"]))
 
 raw = b"".join(audio_chunks)
 with wave.open("sse_output.wav", "wb") as wf:
@@ -228,9 +225,7 @@ curl -N -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/stream" \
 For real-time applications where text arrives incrementally (e.g., from an LLM), the SDK supports streaming text input:
 
 ```python
-# ci:skip — same SDK URL/host issue as the Python SDK block above; ships
-# in next SDK release. The pattern below is correct — the WS connect will
-# work once the SDK is updated.
+# Requires `smallestai>=4.4.0`.
 import os
 from smallestai.waves import TTSConfig, WavesStreamingTTS
 
