@@ -103,16 +103,16 @@ paths:
 
         ## When to use this
 
-        - **Use this** when you want playback to start before synthesis is complete — long passages, latency-sensitive UI, live narration. First chunk typically arrives in ~150–300 ms.
+        - **Use this** when you want playback to start before synthesis is complete — long passages, latency-sensitive UI, live narration.
         - **Use sync `/get_speech`** when total latency doesn't matter and you'd rather get one buffer.
         - **Use the WebSocket endpoint** when the *text* arrives incrementally (LLM token stream). SSE assumes you have the full text up front.
 
         ## How it works
 
         1. POST your text + voice settings — same payload as `/get_speech`.
-        2. The response is `Content-Type: text/event-stream`. Each event has a JSON body containing a base64-encoded audio chunk (~1024 bytes of PCM).
-        3. Decode each chunk and feed it to your audio pipeline (browser `MediaSource`, ffmpeg pipe, raw PCM player, etc.).
-        4. A final event with `status: "complete"` marks end of stream.
+        2. The response is `Content-Type: text/event-stream`. Each chunk frame is `event: audio\n` followed by `data: {"audio": "<base64-pcm>"}\n\n`.
+        3. Decode each chunk's `audio` field with base64 and feed the PCM bytes to your audio pipeline (browser `MediaSource`, ffmpeg pipe, raw PCM player, etc.).
+        4. A final `data: {"done": true}\n\n` frame marks end of stream.
 
         ## Examples
 
@@ -195,7 +195,7 @@ paths:
         - **Use a streaming-friendly client.** `curl -N`, Python `iter_lines`, or a `fetch` `ReadableStream` reader. Buffering clients will hide the latency win.
         - **Audio is base64 inside the event payload**, not the raw event bytes. Decode the `data.audio` field per event.
         - **`output_format=pcm`** gives the lowest overhead for streaming playback. `wav`/`mp3` work but add per-chunk framing bytes.
-        - **First-chunk latency** is dominated by the model + network round-trip, not your client — typical 150–300 ms p50.
+        - **First-chunk latency** depends on model warm-up + network distance. Use `output_format=pcm` and a streaming-friendly client to minimize what you can control.
         - **JavaScript / TypeScript**: the official `smallestai` npm package predates Lightning v3.1, so call this endpoint with `fetch` as shown above.
 components:
   schemas:
