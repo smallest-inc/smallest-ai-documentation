@@ -260,24 +260,27 @@ Use **WebSocket** when sending multiple TTS requests over time (conversations, v
 
 ## Response Format
 
-Each WebSocket/SSE message is JSON:
+The two transports emit different JSON shapes — match your parser to the transport you're using.
 
-**Audio chunk:**
+**WebSocket** — each message is a nested envelope:
 ```json
-{
-  "status": "chunk",
-  "data": { "audio": "base64_encoded_pcm_data" }
-}
-```
+// audio chunk
+{ "status": "chunk", "data": { "audio": "base64_encoded_pcm_data" } }
 
-**Stream complete:**
-```json
-{
-  "status": "complete",
-  "message": "All chunks sent",
-  "done": true
-}
+// stream complete
+{ "status": "complete", "message": "All chunks sent", "done": true }
 ```
+Access audio at `data["data"]["audio"]`; terminator is `data["status"] == "complete"`.
+
+**SSE** — each `data:` line is a flat object:
+```json
+// audio chunk
+{ "audio": "base64_encoded_pcm_data" }
+
+// stream complete
+{ "done": true }
+```
+Access audio at `data["audio"]`; terminator is `data["done"] == true`. SSE frames are prefixed with `event: audio\n` followed by `data: {...}\n\n`.
 
 ## Configuration Parameters
 
