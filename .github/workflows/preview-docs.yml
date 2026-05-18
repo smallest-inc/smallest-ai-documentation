@@ -90,19 +90,23 @@ jobs:
           fi
 
       - name: Create comment content
+        env:
+          PREVIEW_URL: ${{ steps.generate-docs.outputs.preview_url }}
+          PAGE_LINKS: ${{ steps.page-links.outputs.page_links }}
+          API_PAGE_LINKS: ${{ steps.api-page-links.outputs.page_links }}
         run: |
-          echo ":herb: **Preview your docs:** <${{ steps.generate-docs.outputs.preview_url }}>" > comment.md
+          echo ":herb: **Preview your docs:** <$PREVIEW_URL>" > comment.md
 
-          if [ -n "${{ steps.page-links.outputs.page_links }}" ]; then
+          if [ -n "$PAGE_LINKS" ]; then
             echo "" >> comment.md
             echo "Here are the markdown pages you've updated:" >> comment.md
-            echo "${{ steps.page-links.outputs.page_links }}" >> comment.md
+            echo "$PAGE_LINKS" >> comment.md
           fi
 
-          if [ -n "${{ steps.api-page-links.outputs.page_links }}" ]; then
+          if [ -n "$API_PAGE_LINKS" ]; then
             echo "" >> comment.md
             echo "Here are the API spec pages you've updated:" >> comment.md
-            echo "${{ steps.api-page-links.outputs.page_links }}" >> comment.md
+            echo "$API_PAGE_LINKS" >> comment.md
           fi
 
       - name: Post PR comment
