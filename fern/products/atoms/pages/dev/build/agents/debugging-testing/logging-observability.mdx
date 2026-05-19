@@ -7,13 +7,13 @@ Good logging helps you understand what your agent is doing. In production, obser
 
 ## Basic Logging with Loguru
 
-The Atoms Agent Swarms SDK uses Loguru for logging. Set it up in your agent:
+The Atoms Agent Crews SDK uses Loguru for logging. Set it up in your agent:
 
 ```python
 from loguru import logger
 
 
-class MyAgent(OutputSwarmNode):
+class MyAgent(OutputCrewNode):
     async def generate_response(self):
         logger.info("Generating response")
         
@@ -71,7 +71,7 @@ logger.info(
 Track all events flowing through your agent:
 
 ```python
-class LoggingAgent(OutputSwarmNode):
+class LoggingAgent(OutputCrewNode):
     async def process_event(self, event):
         logger.debug(
             f"Processing event",
@@ -120,7 +120,7 @@ async def generate_response(self):
 Log session lifecycle:
 
 ```python
-async def setup(session: SwarmSession):
+async def setup(session: CrewSession):
     logger.info(f"Session started: {session.id}")
     
     agent = MyAgent()
@@ -168,7 +168,7 @@ Measure response times:
 import time
 
 
-class TimedAgent(OutputSwarmNode):
+class TimedAgent(OutputCrewNode):
     async def generate_response(self):
         start = time.time()
         chunk_count = 0
@@ -222,7 +222,7 @@ tool_calls = Counter("agent_tool_calls_total", "Total tool calls", ["tool_name"]
 response_time = Histogram("agent_response_seconds", "Response generation time")
 
 
-class MetricsAgent(OutputSwarmNode):
+class MetricsAgent(OutputCrewNode):
     async def generate_response(self):
         with response_time.time():
             # ... response generation ...
@@ -245,7 +245,7 @@ import os
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 
-class MyAgent(OutputSwarmNode):
+class MyAgent(OutputCrewNode):
     async def generate_response(self):
         if DEBUG:
             logger.debug(f"Context: {self.context.messages}")
