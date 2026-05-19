@@ -1,9 +1,9 @@
 ---
-title: "CLI Reference"
-description: "Test, deploy, and manage your agents from the terminal."
+title: "Agent Swarm CLI Reference"
+description: "Build, test, and deploy agent swarms from the terminal."
 ---
 
-The Atoms CLI is built for rapid iteration. Test your agent locally with a single command, then deploy to the cloud when ready. No configuration files, no Docker, no infrastructure management.
+The `smallestai agent-swarm` CLI is built for rapid iteration. Test your swarm locally with a single command, then deploy to the cloud when ready. No configuration files, no Docker, no infrastructure management.
 
 <Info>
   **Local-first development**: Run and test your agent entirely on your machine. Deploy only when you're satisfied.
@@ -25,6 +25,35 @@ Verify the installation:
 smallestai --help
 ```
 
+You'll also need an OpenAI API key for the example below — export it before running:
+
+```bash
+export OPENAI_API_KEY=sk-...
+```
+
+---
+
+## Create Your First Agent Swarm
+
+Before the CLI has anything to connect to, you need a Python file that defines a swarm and starts a WebSocket server. The fastest path is to copy the [`getting_started`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/getting_started) example from our cookbook — a minimal, single-node swarm that streams chat completions from an LLM and greets the caller on join.
+
+```bash
+# Grab the two files into a directory of your choice
+curl -O https://raw.githubusercontent.com/smallest-inc/cookbook/main/voice-agents/getting_started/server.py
+curl -O https://raw.githubusercontent.com/smallest-inc/cookbook/main/voice-agents/getting_started/assistant.py
+```
+
+`server.py` is the entry point — it boots an `AtomsSwarmApp` on `ws://localhost:8080/ws`. `assistant.py` contains the `OutputSwarmNode` subclass that streams the LLM response; extend it with your own prompt, tools, and logic.
+
+For a richer example with a background node running sentiment analysis alongside the main agent, see [`background_agent`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/background_agent) in the same cookbook.
+
+<Info>
+  **What you're working with:**
+  - `OutputSwarmNode` — the base class for nodes that produce user-facing output. Override `generate_response()` to define what the agent says.
+  - `SwarmSession` — the runtime that owns the WebSocket connection and runs your nodes for each call.
+  - `AtomsSwarmApp` — the FastAPI WebSocket server that the CLI's `chat` command, and the production Atoms orchestrator, connect to.
+</Info>
+
 ---
 
 ## Local Development Workflow
@@ -33,10 +62,10 @@ The CLI's best feature is instant local testing. No need to deploy to test chang
 
 <Steps>
   <Step title="Start Your Agent Server">
-    Run your agent file to start a local WebSocket server:
+    Run the entry point to start a local WebSocket server:
     
     ```bash
-    python your_agent.py
+    python server.py
     ```
     
     This spins up a server on `localhost:8080` that mimics the production environment.
@@ -88,7 +117,7 @@ When you're ready for production, deploy to Smallest AI's managed infrastructure
   
   <Step title="Deploy">
     ```bash
-    smallestai agent-swarm deploy --entry-point your_agent.py
+    smallestai agent-swarm deploy --entry-point server.py
     ```
     
     Packages your code and pushes it to the cloud. Takes about 30 seconds.
