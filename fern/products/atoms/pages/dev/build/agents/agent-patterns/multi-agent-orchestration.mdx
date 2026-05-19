@@ -36,10 +36,10 @@ flowchart TD
 ### Implementation
 
 ```python
-from smallestai.atoms.agent.nodes import Node, OutputAgentNode
+from smallestai.atoms.swarm.nodes import SwarmNode, OutputSwarmNode
 
 
-class RouterNode(Node):
+class RouterNode(SwarmNode):
     """Routes conversations to the appropriate specialist."""
     
     def __init__(self, sales_agent, support_agent, billing_agent):
@@ -65,7 +65,7 @@ class RouterNode(Node):
         await self.send_event(event)
 
 
-class SalesAgent(OutputAgentNode):
+class SalesAgent(OutputSwarmNode):
     """Handles sales inquiries."""
     
     def __init__(self):
@@ -78,7 +78,7 @@ class SalesAgent(OutputAgentNode):
             await self.send_event(event)
 
 
-class SupportAgent(OutputAgentNode):
+class SupportAgent(OutputSwarmNode):
     """Handles support requests."""
     
     def __init__(self):
@@ -94,7 +94,7 @@ class SupportAgent(OutputAgentNode):
 ### Setting Up the Graph
 
 ```python
-async def setup(session: AgentSession):
+async def setup(session: SwarmSession):
     # Create agents
     sales = SalesAgent()
     support = SupportAgent()
@@ -133,7 +133,7 @@ flowchart TD
 ### Implementation
 
 ```python
-class GreeterAgent(OutputAgentNode):
+class GreeterAgent(OutputSwarmNode):
     """Greets users and hands off to scheduler."""
     
     async def generate_response(self):
@@ -155,7 +155,7 @@ class GreeterAgent(OutputAgentNode):
         yield "Hello! How can I help you today?"
 
 
-class SchedulerAgent(OutputAgentNode):
+class SchedulerAgent(OutputSwarmNode):
     """Handles appointment scheduling."""
     
     async def process_event(self, event):
@@ -179,7 +179,7 @@ class HandoffEvent(SDKEvent):
     context: dict = {}  # Shared data
 
 
-class PrequalAgent(OutputAgentNode):
+class PrequalAgent(OutputSwarmNode):
     def __init__(self):
         super().__init__(name="prequal-agent")
         self.collected_data = {}
@@ -208,10 +208,10 @@ class PrequalAgent(OutputAgentNode):
 For complex routing, use an LLM:
 
 ```python
-from smallestai.atoms.agent.nodes import Node
-from smallestai.atoms.agent.clients.openai import OpenAIClient
+from smallestai.atoms.swarm.nodes import SwarmNode
+from smallestai.atoms.swarm.clients.openai import OpenAIClient
 
-class SmartRouterNode(Node):
+class SmartRouterNode(SwarmNode):
     def __init__(self):
         super().__init__(name="smart-router")
         self.llm = OpenAIClient(model="gpt-4o-mini")
@@ -247,7 +247,7 @@ class SmartRouterNode(Node):
 Add a fallback for unhandled cases:
 
 ```python
-class FallbackAgent(OutputAgentNode):
+class FallbackAgent(OutputSwarmNode):
     """Handles requests that don't match any specialist."""
     
     async def process_event(self, event):
@@ -265,7 +265,7 @@ class FallbackAgent(OutputAgentNode):
 Log handoffs for debugging:
 
 ```python
-class LoggingRouterNode(Node):
+class LoggingRouterNode(SwarmNode):
     async def process_event(self, event):
         route = self._determine_route(event)
         event.metadata["route"] = route

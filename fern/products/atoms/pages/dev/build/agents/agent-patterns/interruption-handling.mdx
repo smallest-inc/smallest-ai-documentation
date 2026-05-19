@@ -7,7 +7,7 @@ Users interrupt. They change their minds mid-sentence. They correct themselves. 
 
 ## Default Behavior
 
-`OutputAgentNode` handles interruptions automatically. When a user speaks while the agent is talking:
+`OutputSwarmNode` handles interruptions automatically. When a user speaks while the agent is talking:
 
 1. Audio playback stops immediately
 2. The current response generation is cancelled
@@ -15,7 +15,7 @@ Users interrupt. They change their minds mid-sentence. They correct themselves. 
 4. The agent responds to the interruption
 
 ```python
-class MyAgent(OutputAgentNode):
+class MyAgent(OutputSwarmNode):
     def __init__(self):
         super().__init__(
             name="my-agent",
@@ -28,7 +28,7 @@ class MyAgent(OutputAgentNode):
 For critical information that users must hear completely, disable interruption handling:
 
 ```python
-class PaymentAgent(OutputAgentNode):
+class PaymentAgent(OutputSwarmNode):
     def __init__(self):
         super().__init__(
             name="payment-agent",
@@ -55,7 +55,7 @@ Default to `is_interruptible=True` for natural conversation. Only disable for cr
 Override `_handle_interrupt()` for custom behavior:
 
 ```python
-class MyAgent(OutputAgentNode):
+class MyAgent(OutputSwarmNode):
     def __init__(self):
         super().__init__(name="my-agent")
         self.was_interrupted = False
@@ -87,7 +87,7 @@ class MyAgent(OutputAgentNode):
 Listen for interrupt events at the session level:
 
 ```python
-async def setup(session: AgentSession):
+async def setup(session: SwarmSession):
     agent = MyAgent()
     session.add_node(agent)
     await session.start()
@@ -106,7 +106,7 @@ async def setup(session: AgentSession):
 Track what was happening when the interruption occurred:
 
 ```python
-class StatefulAgent(OutputAgentNode):
+class StatefulAgent(OutputSwarmNode):
     def __init__(self):
         super().__init__(name="stateful-agent")
         self.current_task = None
@@ -145,7 +145,7 @@ class StatefulAgent(OutputAgentNode):
 Sometimes you want to resume the previous topic:
 
 ```python
-class ResumableAgent(OutputAgentNode):
+class ResumableAgent(OutputSwarmNode):
     def __init__(self):
         super().__init__(name="resumable-agent")
         self.last_topic = None
@@ -176,7 +176,7 @@ class ResumableAgent(OutputAgentNode):
 Tool calls in progress when an interruption occurs are typically allowed to complete:
 
 ```python
-class ToolAgent(OutputAgentNode):
+class ToolAgent(OutputSwarmNode):
     async def generate_response(self):
         # LLM calls a tool
         response = await self.llm.chat(

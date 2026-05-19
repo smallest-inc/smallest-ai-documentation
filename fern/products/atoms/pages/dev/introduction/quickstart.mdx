@@ -27,14 +27,14 @@ Create two files: one for the agent logic, and one to run the application.
 
 <Steps>
   <Step title="Create my_agent.py">
-    Subclass `OutputAgentNode` and implement `generate_response()` to stream LLM output.
+    Subclass `OutputSwarmNode` and implement `generate_response()` to stream LLM output.
 
     ```python my_agent.py
     import os
-    from smallestai.atoms.agent.nodes import OutputAgentNode
-    from smallestai.atoms.agent.clients.openai import OpenAIClient
+    from smallestai.atoms.swarm.nodes import OutputSwarmNode
+    from smallestai.atoms.swarm.clients.openai import OpenAIClient
 
-    class MyAgent(OutputAgentNode):
+    class MyAgent(OutputSwarmNode):
         def __init__(self):
             super().__init__(name="my-agent")
             self.llm = OpenAIClient(
@@ -54,20 +54,20 @@ Create two files: one for the agent logic, and one to run the application.
   </Step>
 
   <Step title="Create main.py">
-    Wire up `AtomsApp` with a `setup_handler` that adds your agent to the session.
+    Wire up `AtomsSwarmApp` with a `setup_handler` that adds your agent to the session.
 
     ```python main.py
-    from smallestai.atoms.agent.server import AtomsApp
-    from smallestai.atoms.agent.session import AgentSession
+    from smallestai.atoms.swarm.server import AtomsSwarmApp
+    from smallestai.atoms.swarm.session import SwarmSession
     from my_agent import MyAgent
 
-    async def on_start(session: AgentSession):
+    async def on_start(session: SwarmSession):
         session.add_node(MyAgent())
         await session.start()
         await session.wait_until_complete()
 
     if __name__ == "__main__":
-        app = AtomsApp(setup_handler=on_start)
+        app = AtomsSwarmApp(setup_handler=on_start)
         app.run()
     ```
 
@@ -104,7 +104,7 @@ Once your files are ready, you have two options:
     This starts a WebSocket server on `localhost:8080`. In a separate terminal, connect to it:
 
     ```bash
-    smallestai agent chat
+    smallestai agent-swarm chat
     ```
 
     No account or deployment needed.
@@ -126,17 +126,17 @@ Once your files are ready, you have two options:
       <Step title="Initialize">
         Link your directory to an existing agent on the platform.
         ```bash
-        smallestai agent init
+        smallestai agent-swarm init
         ```
       </Step>
       <Step title="Deploy">
         Push your code to the cloud.
         ```bash
-        smallestai agent deploy --entry-point main.py
+        smallestai agent-swarm deploy --entry-point main.py
         ```
       </Step>
       <Step title="Make Live">
-        Run `smallestai agent builds`, select your build, and choose **Make Live**.
+        Run `smallestai agent-swarm builds`, select your build, and choose **Make Live**.
       </Step>
     </Steps>
   </Tab>
