@@ -1,10 +1,10 @@
 ---
 title: "Quick Start"
 sidebarTitle: "Quick Start"
-description: "Install the SDK, build an agent swarm, and run it."
+description: "Install the SDK, build an agent crew, and run it."
 ---
 
-Install the SDK, write your first agent swarm, and test it — locally or deployed to the cloud.
+Install the SDK, write your first agent crew, and test it — locally or deployed to the cloud.
 
 ## Prerequisites
 
@@ -21,20 +21,20 @@ Install the SDK, write your first agent swarm, and test it — locally or deploy
 pip install smallestai
 ```
 
-## Write Your First Agent Swarm
+## Write Your First Agent Crew
 
-Create two files: one for the swarm node logic, and one to run the server.
+Create two files: one for the crew node logic, and one to run the server.
 
 <Steps>
   <Step title="Create assistant.py">
-    Subclass `OutputSwarmNode` and implement `generate_response()` to stream LLM output.
+    Subclass `OutputCrewNode` and implement `generate_response()` to stream LLM output.
 
     ```python assistant.py
     import os
-    from smallestai.atoms.swarm.nodes import OutputSwarmNode
-    from smallestai.atoms.swarm.clients.openai import OpenAIClient
+    from smallestai.atoms.crew.nodes import OutputCrewNode
+    from smallestai.atoms.crew.clients.openai import OpenAIClient
 
-    class Assistant(OutputSwarmNode):
+    class Assistant(OutputCrewNode):
         def __init__(self):
             super().__init__(name="assistant")
             self.llm = OpenAIClient(
@@ -54,20 +54,20 @@ Create two files: one for the swarm node logic, and one to run the server.
   </Step>
 
   <Step title="Create server.py">
-    Wire up `AtomsSwarmApp` with a `setup_handler` that adds your swarm node to the session.
+    Wire up `AtomsCrewApp` with a `setup_handler` that adds your crew node to the session.
 
     ```python server.py
-    from smallestai.atoms.swarm.server import AtomsSwarmApp
-    from smallestai.atoms.swarm.session import SwarmSession
+    from smallestai.atoms.crew.server import AtomsCrewApp
+    from smallestai.atoms.crew.session import CrewSession
     from assistant import Assistant
 
-    async def on_start(session: SwarmSession):
+    async def on_start(session: CrewSession):
         session.add_node(Assistant())
         await session.start()
         await session.wait_until_complete()
 
     if __name__ == "__main__":
-        app = AtomsSwarmApp(setup_handler=on_start)
+        app = AtomsCrewApp(setup_handler=on_start)
         app.run()
     ```
 
@@ -89,7 +89,7 @@ Create two files: one for the swarm node logic, and one to run the server.
   </Step>
 </Steps>
 
-## Run Your Agent Swarm
+## Run Your Agent Crew
 
 Once your files are ready, you have two options:
 
@@ -104,7 +104,7 @@ Once your files are ready, you have two options:
     This starts a WebSocket server on `localhost:8080`. In a separate terminal, connect to it:
 
     ```bash
-    smallestai agent-swarm chat
+    smallestai agent-crew chat
     ```
 
     No account or deployment needed.
@@ -126,17 +126,17 @@ Once your files are ready, you have two options:
       <Step title="Initialize">
         Link your directory to an existing agent on the platform.
         ```bash
-        smallestai agent-swarm init
+        smallestai agent-crew init
         ```
       </Step>
       <Step title="Deploy">
         Push your code to the cloud.
         ```bash
-        smallestai agent-swarm deploy --entry-point server.py
+        smallestai agent-crew deploy --entry-point server.py
         ```
       </Step>
       <Step title="Make Live">
-        Run `smallestai agent-swarm builds`, select your build, and choose **Make Live**.
+        Run `smallestai agent-crew builds`, select your build, and choose **Make Live**.
       </Step>
     </Steps>
   </Tab>
@@ -150,6 +150,12 @@ Once your files are ready, you have two options:
   </Card>
   <Card title="Orchestration" icon="diagram-project" href="/atoms/developer-guide/build/agents/patterns/multi-agent-orchestration">
     Connect multiple agents for complex workflows.
+  </Card>
+  <Card title="Cookbook" icon="book-open" href="https://github.com/smallest-inc/cookbook/tree/main/voice-agents">
+    ~15 ready-to-run voice-agent crews — tool calling, IVR, multi-language, background processing, and more.
+  </Card>
+  <Card title="Agent Crew CLI" icon="terminal" href="/atoms/developer-guide/get-started/agent-crew-cli">
+    Full CLI reference — local testing, deploy, builds management.
   </Card>
 </CardGroup>
 

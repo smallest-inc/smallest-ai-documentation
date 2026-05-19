@@ -18,7 +18,7 @@ Voice agents need to remember things. User names, order IDs, preferences, and wh
 Store data on `self` to remember it across turns within a call.
 
 ```python
-class DataCollectionAgent(OutputSwarmNode):
+class DataCollectionAgent(OutputCrewNode):
     def __init__(self):
         super().__init__(name="data-agent")
         
@@ -83,7 +83,7 @@ Initial variables are passed when making outbound calls or via the WebSocket con
 The conversation context tracks all messages:
 
 ```python
-class MyAgent(OutputSwarmNode):
+class MyAgent(OutputCrewNode):
     async def generate_response(self):
         # Access full message history
         all_messages = self.context.messages
@@ -101,7 +101,7 @@ class MyAgent(OutputSwarmNode):
 Use tools to extract and store structured data:
 
 ```python
-class IntakeAgent(OutputSwarmNode):
+class IntakeAgent(OutputCrewNode):
     def __init__(self):
         super().__init__(name="intake-agent")
         
@@ -140,7 +140,7 @@ class IntakeAgent(OutputSwarmNode):
 Track conversation progress:
 
 ```python
-class ProgressAgent(OutputSwarmNode):
+class ProgressAgent(OutputCrewNode):
     def __init__(self):
         super().__init__(name="progress-agent")
         self.turn_count = 0
@@ -173,7 +173,7 @@ class RouterNode(Node):
         await self.send_event(event)
 
 
-class SalesAgent(OutputSwarmNode):
+class SalesAgent(OutputCrewNode):
     async def process_event(self, event):
         # Read state from event
         if event.metadata.get("routed_to") == "sales":
@@ -188,7 +188,7 @@ For data that survives across calls, use an external store:
 import redis
 
 
-class PersistentAgent(OutputSwarmNode):
+class PersistentAgent(OutputCrewNode):
     def __init__(self):
         super().__init__(name="persistent-agent")
         self.redis = redis.Redis()
@@ -217,7 +217,7 @@ class PersistentAgent(OutputSwarmNode):
 Validate collected data before proceeding:
 
 ```python
-class ValidationAgent(OutputSwarmNode):
+class ValidationAgent(OutputCrewNode):
     def __init__(self):
         super().__init__(name="validation-agent")
         self.data = {}

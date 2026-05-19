@@ -12,12 +12,12 @@ Here's a full agent using a local Ollama model:
 
 ```python
 import os
-from smallestai.atoms.swarm.nodes import OutputSwarmNode
-from smallestai.atoms.swarm.clients.openai import OpenAIClient
-from smallestai.atoms.swarm.server import AtomsSwarmApp
-from smallestai.atoms.swarm.session import SwarmSession
+from smallestai.atoms.crew.nodes import OutputCrewNode
+from smallestai.atoms.crew.clients.openai import OpenAIClient
+from smallestai.atoms.crew.server import AtomsCrewApp
+from smallestai.atoms.crew.session import CrewSession
 
-class LocalAgent(OutputSwarmNode):
+class LocalAgent(OutputCrewNode):
     def __init__(self):
         super().__init__(name="local-agent")
         
@@ -42,13 +42,13 @@ class LocalAgent(OutputSwarmNode):
             if chunk.content:
                 yield chunk.content
 
-async def on_start(session: SwarmSession):
+async def on_start(session: CrewSession):
     session.add_node(LocalAgent())
     await session.start()
     await session.wait_until_complete()
 
 if __name__ == "__main__":
-    app = AtomsSwarmApp(setup_handler=on_start)
+    app = AtomsCrewApp(setup_handler=on_start)
     app.run()
 ```
 
@@ -67,7 +67,7 @@ Your model server must implement the [OpenAI Chat Completions API](https://platf
 Connect to any custom model server:
 
 ```python
-from smallestai.atoms.swarm.clients.openai import OpenAIClient
+from smallestai.atoms.crew.clients.openai import OpenAIClient
 
 llm = OpenAIClient(
     model="your-model-name",
@@ -96,7 +96,7 @@ ollama serve
 ### Usage
 
 ```python
-from smallestai.atoms.swarm.clients.openai import OpenAIClient
+from smallestai.atoms.crew.clients.openai import OpenAIClient
 
 llm = OpenAIClient(
     model="llama3",
@@ -122,7 +122,7 @@ python -m vllm.entrypoints.openai.api_server \
 ### Usage
 
 ```python
-from smallestai.atoms.swarm.clients.openai import OpenAIClient
+from smallestai.atoms.crew.clients.openai import OpenAIClient
 
 llm = OpenAIClient(
     model="meta-llama/Llama-3-8B-Instruct",
@@ -140,7 +140,7 @@ llm = OpenAIClient(
 3. Start the local server (Settings → Local Server)
 
 ```python
-from smallestai.atoms.swarm.clients.openai import OpenAIClient
+from smallestai.atoms.crew.clients.openai import OpenAIClient
 
 llm = OpenAIClient(
     model="local-model",

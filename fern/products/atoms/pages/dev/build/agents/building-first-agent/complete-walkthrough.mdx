@@ -24,7 +24,7 @@ By the end of this guide, your agent will:
 
 ## Step 1: Install the SDK
 
-Open your terminal and install the Atoms Agent Swarms SDK:
+Open your terminal and install the Atoms Agent Crews SDK:
 
 ```bash
 pip install smallestai
@@ -33,7 +33,7 @@ pip install smallestai
 Verify the installation:
 
 ```bash
-python -c "import smallestai; print('Atoms Agent Swarms SDK installed')"
+python -c "import smallestai; print('Atoms Agent Crews SDK installed')"
 ```
 
 ## Step 2: Set Up Environment Variables
@@ -52,11 +52,11 @@ Load these in your Python code or export them in your shell.
 Create a new file called `agent.py`:
 
 ```python
-from smallestai.atoms.swarm.nodes import OutputSwarmNode
-from smallestai.atoms.swarm.clients.openai import OpenAIClient
+from smallestai.atoms.crew.nodes import OutputCrewNode
+from smallestai.atoms.crew.clients.openai import OpenAIClient
 
 
-class OrderAssistant(OutputSwarmNode):
+class OrderAssistant(OutputCrewNode):
     """A voice agent that helps customers check order status."""
 
     def __init__(self):
@@ -100,13 +100,13 @@ This code defines an agent with:
 Tools let your agent perform actions. Add a tool to look up order status:
 
 ```python
-from smallestai.atoms.swarm.nodes import OutputSwarmNode
-from smallestai.atoms.swarm.clients.openai import OpenAIClient
-from smallestai.atoms.swarm.tools.decorator import function_tool
-from smallestai.atoms.swarm.tools.registry import ToolRegistry
+from smallestai.atoms.crew.nodes import OutputCrewNode
+from smallestai.atoms.crew.clients.openai import OpenAIClient
+from smallestai.atoms.crew.tools.decorator import function_tool
+from smallestai.atoms.crew.tools.registry import ToolRegistry
 
 
-class OrderAssistant(OutputSwarmNode):
+class OrderAssistant(OutputCrewNode):
     """A voice agent that helps customers check order status."""
 
     def __init__(self):
@@ -210,11 +210,11 @@ The `@function_tool()` decorator transforms your method into an LLM-compatible t
 Wrap your agent in a server that handles WebSocket connections:
 
 ```python
-from smallestai.atoms.swarm.server import AtomsSwarmApp
-from smallestai.atoms.swarm.session import SwarmSession
+from smallestai.atoms.crew.server import AtomsCrewApp
+from smallestai.atoms.crew.session import CrewSession
 
 
-async def setup(session: SwarmSession):
+async def setup(session: CrewSession):
     """Configure a new session when a user connects."""
     # Create the agent
     agent = OrderAssistant()
@@ -230,7 +230,7 @@ async def setup(session: SwarmSession):
 
 
 if __name__ == "__main__":
-    app = AtomsSwarmApp(setup_handler=setup)
+    app = AtomsCrewApp(setup_handler=setup)
     app.run()
 ```
 
@@ -254,7 +254,7 @@ INFO:     Waiting for connections...
 Open a new terminal and connect to your agent:
 
 ```bash
-smallestai agent-swarm chat
+smallestai agent-crew chat
 ```
 
 The CLI connects to your local server and starts an interactive voice session. Try saying:
@@ -268,15 +268,15 @@ The CLI connects to your local server and starts an interactive voice session. T
 Here is the full `agent.py` file:
 
 ```python
-from smallestai.atoms.swarm.server import AtomsSwarmApp
-from smallestai.atoms.swarm.session import SwarmSession
-from smallestai.atoms.swarm.nodes import OutputSwarmNode
-from smallestai.atoms.swarm.clients.openai import OpenAIClient
-from smallestai.atoms.swarm.tools.decorator import function_tool
-from smallestai.atoms.swarm.tools.registry import ToolRegistry
+from smallestai.atoms.crew.server import AtomsCrewApp
+from smallestai.atoms.crew.session import CrewSession
+from smallestai.atoms.crew.nodes import OutputCrewNode
+from smallestai.atoms.crew.clients.openai import OpenAIClient
+from smallestai.atoms.crew.tools.decorator import function_tool
+from smallestai.atoms.crew.tools.registry import ToolRegistry
 
 
-class OrderAssistant(OutputSwarmNode):
+class OrderAssistant(OutputCrewNode):
     """A voice agent that helps customers check order status."""
 
     def __init__(self):
@@ -370,7 +370,7 @@ class OrderAssistant(OutputSwarmNode):
                     yield chunk.content
 
 
-async def setup(session: SwarmSession):
+async def setup(session: CrewSession):
     """Configure a new session when a user connects."""
     agent = OrderAssistant()
     session.add_node(agent)
@@ -379,7 +379,7 @@ async def setup(session: SwarmSession):
 
 
 if __name__ == "__main__":
-    app = AtomsSwarmApp(setup_handler=setup)
+    app = AtomsCrewApp(setup_handler=setup)
     app.run()
 ```
 
@@ -387,7 +387,7 @@ if __name__ == "__main__":
 
 In this guide, you:
 
-1. Installed the Atoms Agent Swarms SDK
+1. Installed the Atoms Agent Crews SDK
 2. Created an agent class with a system prompt
 3. Added a tool for looking up order status
 4. Built a server to handle connections
