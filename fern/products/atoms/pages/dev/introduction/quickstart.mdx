@@ -1,10 +1,10 @@
 ---
 title: "Quick Start"
 sidebarTitle: "Quick Start"
-description: "Install the SDK, build an agent, and run it."
+description: "Install the SDK, build an agent swarm, and run it."
 ---
 
-Install the SDK, write your first agent, and test it — locally or deployed to the cloud.
+Install the SDK, write your first agent swarm, and test it — locally or deployed to the cloud.
 
 ## Prerequisites
 
@@ -21,22 +21,22 @@ Install the SDK, write your first agent, and test it — locally or deployed to 
 pip install smallestai
 ```
 
-## Write Your First Agent
+## Write Your First Agent Swarm
 
-Create two files: one for the agent logic, and one to run the application.
+Create two files: one for the swarm node logic, and one to run the server.
 
 <Steps>
-  <Step title="Create my_agent.py">
+  <Step title="Create assistant.py">
     Subclass `OutputSwarmNode` and implement `generate_response()` to stream LLM output.
 
-    ```python my_agent.py
+    ```python assistant.py
     import os
     from smallestai.atoms.swarm.nodes import OutputSwarmNode
     from smallestai.atoms.swarm.clients.openai import OpenAIClient
 
-    class MyAgent(OutputSwarmNode):
+    class Assistant(OutputSwarmNode):
         def __init__(self):
-            super().__init__(name="my-agent")
+            super().__init__(name="assistant")
             self.llm = OpenAIClient(
                 model="gpt-4o-mini",
                 api_key=os.getenv("OPENAI_API_KEY")
@@ -53,16 +53,16 @@ Create two files: one for the agent logic, and one to run the application.
     ```
   </Step>
 
-  <Step title="Create main.py">
-    Wire up `AtomsSwarmApp` with a `setup_handler` that adds your agent to the session.
+  <Step title="Create server.py">
+    Wire up `AtomsSwarmApp` with a `setup_handler` that adds your swarm node to the session.
 
-    ```python main.py
+    ```python server.py
     from smallestai.atoms.swarm.server import AtomsSwarmApp
     from smallestai.atoms.swarm.session import SwarmSession
-    from my_agent import MyAgent
+    from assistant import Assistant
 
     async def on_start(session: SwarmSession):
-        session.add_node(MyAgent())
+        session.add_node(Assistant())
         await session.start()
         await session.wait_until_complete()
 
@@ -72,7 +72,7 @@ Create two files: one for the agent logic, and one to run the application.
     ```
 
     <Tip>
-      Your entry point can be named anything (`app.py`, `run.py`, etc.). When deploying, specify it with `--entry-point your_file.py`.
+      Your entry point can be named anything (`run.py`, `serve.py`, etc.). When deploying, specify it with `--entry-point your_server.py`.
     </Tip>
 
     <Tip>
@@ -89,7 +89,7 @@ Create two files: one for the agent logic, and one to run the application.
   </Step>
 </Steps>
 
-## Run Your Agent
+## Run Your Agent Swarm
 
 Once your files are ready, you have two options:
 
@@ -98,7 +98,7 @@ Once your files are ready, you have two options:
     For development and testing, run the file directly:
 
     ```bash
-    python main.py
+    python server.py
     ```
 
     This starts a WebSocket server on `localhost:8080`. In a separate terminal, connect to it:
@@ -132,7 +132,7 @@ Once your files are ready, you have two options:
       <Step title="Deploy">
         Push your code to the cloud.
         ```bash
-        smallestai agent-swarm deploy --entry-point main.py
+        smallestai agent-swarm deploy --entry-point server.py
         ```
       </Step>
       <Step title="Make Live">
