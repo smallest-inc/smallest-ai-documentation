@@ -30,9 +30,9 @@ The `Node` class is the raw primitive. It gives you full control but assumes not
 Override `process_event()` to handle incoming events.
 
 ```python
-from smallestai.atoms.agent.nodes import Node
+from smallestai.atoms.swarm.nodes import SwarmNode
 
-class RouterNode(Node):
+class RouterNode(SwarmNode):
     async def process_event(self, event):
         # Deterministic logic
         if "sales" in event.content:
@@ -42,7 +42,7 @@ class RouterNode(Node):
             await self.send_event(event)
 ```
 
-### 2. The Output Agent (`OutputAgentNode`)
+### 2. The Output Agent (`OutputSwarmNode`)
 
 This is the most common node type. It is a full-featured conversational agent designed to interact with Large Language Models (LLMs).
 
@@ -56,10 +56,10 @@ This is the most common node type. It is a full-featured conversational agent de
 Implement `generate_response()` as an async generator that yields text chunks.
 
 ```python
-from smallestai.atoms.agent.nodes import OutputAgentNode
-from smallestai.atoms.agent.clients.openai import OpenAIClient
+from smallestai.atoms.swarm.nodes import OutputSwarmNode
+from smallestai.atoms.swarm.clients.openai import OpenAIClient
 
-class MyAgent(OutputAgentNode):
+class MyAgent(OutputSwarmNode):
     def __init__(self):
         super().__init__(name="my_agent")
         # Initialize your own LLM client
@@ -77,7 +77,7 @@ class MyAgent(OutputAgentNode):
                 yield chunk.content
 ```
 
-### 3. The Background Agent (`BackgroundAgentNode`)
+### 3. The Background Agent (`BackgroundSwarmNode`)
 
 A silent observer node that processes events without producing audio output.
 
@@ -89,10 +89,10 @@ A silent observer node that processes events without producing audio output.
 **Use Case**: Sentiment analysis, call quality monitoring, analytics, webhooks.
 
 ```python
-from smallestai.atoms.agent.nodes import BackgroundAgentNode
-from smallestai.atoms.agent.events import SDKEvent, SDKAgentTranscriptUpdateEvent
+from smallestai.atoms.swarm.nodes import BackgroundSwarmNode
+from smallestai.atoms.swarm.events import SDKEvent, SDKAgentTranscriptUpdateEvent
 
-class SentimentAnalyzer(BackgroundAgentNode):
+class SentimentAnalyzer(BackgroundSwarmNode):
     def __init__(self):
         super().__init__(name="sentiment-analyzer")
         self.current_sentiment = "neutral"
@@ -113,9 +113,9 @@ class SentimentAnalyzer(BackgroundAgentNode):
 
 <Steps>
   <Step title="Inherit from Node">
-    Create a new class that inherits from `Node` (or `OutputAgentNode`).
+    Create a new class that inherits from `Node` (or `OutputSwarmNode`).
     ```python
-    class LoggerNode(Node):
+    class LoggerNode(SwarmNode):
     ```
   </Step>
   <Step title="Override process_event">
@@ -146,9 +146,9 @@ class SentimentAnalyzer(BackgroundAgentNode):
   ```python Logger
   """Logs every event for debugging."""
   from loguru import logger
-  from smallestai.atoms.agent.nodes import Node
+  from smallestai.atoms.swarm.nodes import SwarmNode
 
-  class LoggerNode(Node):
+  class LoggerNode(SwarmNode):
       async def process_event(self, event):
           # Log the event
           logger.info(f"[{event.type}] {event}")
@@ -159,7 +159,7 @@ class SentimentAnalyzer(BackgroundAgentNode):
 
   ```python Filter
   """Only lets specific events pass through."""
-  class FilterNode(Node):
+  class FilterNode(SwarmNode):
       def __init__(self, allowed_types):
           super().__init__(name="filter")
           self.allowed_types = allowed_types
@@ -172,7 +172,7 @@ class SentimentAnalyzer(BackgroundAgentNode):
 
   ```python Counter
   """Counts events (e.g., conversation turns)."""
-  class TurnCounter(Node):
+  class TurnCounter(SwarmNode):
       def __init__(self):
           super().__init__(name="counter")
           self.count = 0
