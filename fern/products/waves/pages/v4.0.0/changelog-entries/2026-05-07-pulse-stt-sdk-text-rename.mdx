@@ -1,0 +1,27 @@
+---
+title: "SDK breaking change: Pulse STT response field renamed `transcription` → `text`"
+---
+
+**Wire format unchanged.** The Pulse STT pre-recorded REST endpoint (`POST /waves/v1/pulse/get_text`) still returns `"transcription"` over HTTP — direct REST callers and webhook payloads are not affected.
+
+**Breaking for SDK callers.** Generated SDKs (Python `smallestai`, JS/TS `smallestai`) now expose the field as `result.text` instead of `result.transcription`. The change brings Pulse in line with the OpenAI Whisper convention and the Vercel AI SDK's `experimental_transcribe` shape (`{ text, segments, durationInSeconds }`).
+
+**What to update**
+
+```python
+# before
+text = response.transcription
+
+# after
+text = response.text
+```
+
+```typescript
+// before
+const text = response.transcription;
+
+// after
+const text = response.text;
+```
+
+The change ships with the next coordinated SDK release (alongside other breaking renames being staged for that cut). Pin to your current SDK version if you can't migrate in this release window.

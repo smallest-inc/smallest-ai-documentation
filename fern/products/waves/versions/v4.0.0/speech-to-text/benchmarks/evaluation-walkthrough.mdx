@@ -52,14 +52,14 @@ def run_sample(sample):
         diarize=True
     )
     ref = normalizer(sample["reference"])
-    hyp = normalizer(response.transcription)
+    hyp = normalizer(response.text)
     return {
         "path": sample["audio"],
         "wer": wer(ref, hyp),
         "cer": cer(ref, hyp),
         "latency_ms": response.metrics["latency_ms"],
         "rtf": response.metrics["real_time_factor"],
-        "transcription": response.transcription
+        "text": response.text
     }
 ```
 
@@ -90,7 +90,7 @@ summary = {
 
 ```python
 def breakdown(df):
-    worst = df.sort_values("wer", ascending=False).head(5)[["path", "wer", "transcription"]]
+    worst = df.sort_values("wer", ascending=False).head(5)[["path", "wer", "text"]]
     return worst.to_dict(orient="records")
 
 outliers = breakdown(df)

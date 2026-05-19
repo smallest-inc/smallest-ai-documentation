@@ -5,6 +5,12 @@
 # Fixes 413/429 examples to match the merged ErrorResponse schema
 # (the REST ErrorResponse gets merged with the AsyncAPI ErrorResponse,
 #  so error must be an object with code/message, not a plain string)
+#
+# SDK property rename: server returns `transcription` over the wire, but
+# generated SDKs expose it as `.text` to match the Vercel AI SDK's
+# `experimental_transcribe` shape (`{ text, segments, durationInSeconds }`)
+# and OpenAI Whisper convention. Wire format is unchanged — only the SDK
+# accessor name shifts.
 
 paths:
   /waves/v1/pulse/get_text:
@@ -18,6 +24,13 @@ paths:
         - Speech to Text
       summary: Pulse (Pre-Recorded)
       responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                properties:
+                  transcription:
+                    x-fern-property-name: text
         "413":
           content:
             application/json:
