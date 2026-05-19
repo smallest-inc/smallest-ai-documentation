@@ -1,9 +1,9 @@
 ---
-title: "Agent Swarm CLI Reference"
-description: "Build, test, and deploy agent swarms from the terminal."
+title: "Agent Crew CLI Reference"
+description: "Build, test, and deploy agent crews from the terminal."
 ---
 
-The `smallestai agent-swarm` CLI is built for rapid iteration. Test your swarm locally with a single command, then deploy to the cloud when ready. No configuration files, no Docker, no infrastructure management.
+The `smallestai agent-crew` CLI is built for rapid iteration. Test your crew locally with a single command, then deploy to the cloud when ready. No configuration files, no Docker, no infrastructure management.
 
 <Info>
   **Local-first development**: Run and test your agent entirely on your machine. Deploy only when you're satisfied.
@@ -33,9 +33,9 @@ export OPENAI_API_KEY=sk-...
 
 ---
 
-## Create Your First Agent Swarm
+## Create Your First Agent Crew
 
-Before the CLI has anything to connect to, you need a Python file that defines a swarm and starts a WebSocket server. The fastest path is to copy the [`getting_started`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/getting_started) example from our cookbook — a minimal, single-node swarm that streams chat completions from an LLM and greets the caller on join.
+Before the CLI has anything to connect to, you need a Python file that defines a crew and starts a WebSocket server. The fastest path is to copy the [`getting_started`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/getting_started) example from our cookbook — a minimal, single-node crew that streams chat completions from an LLM and greets the caller on join.
 
 ```bash
 # Grab the two files into a directory of your choice
@@ -43,15 +43,15 @@ curl -O https://raw.githubusercontent.com/smallest-inc/cookbook/main/voice-agent
 curl -O https://raw.githubusercontent.com/smallest-inc/cookbook/main/voice-agents/getting_started/assistant.py
 ```
 
-`server.py` is the entry point — it boots an `AtomsSwarmApp` on `ws://localhost:8080/ws`. `assistant.py` contains the `OutputSwarmNode` subclass that streams the LLM response; extend it with your own prompt, tools, and logic.
+`server.py` is the entry point — it boots an `AtomsCrewApp` on `ws://localhost:8080/ws`. `assistant.py` contains the `OutputCrewNode` subclass that streams the LLM response; extend it with your own prompt, tools, and logic.
 
 For a richer example with a background node running sentiment analysis alongside the main agent, see [`background_agent`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/background_agent) in the same cookbook.
 
 <Info>
   **What you're working with:**
-  - `OutputSwarmNode` — the base class for nodes that produce user-facing output. Override `generate_response()` to define what the agent says.
-  - `SwarmSession` — the runtime that owns the WebSocket connection and runs your nodes for each call.
-  - `AtomsSwarmApp` — the FastAPI WebSocket server that the CLI's `chat` command, and the production Atoms orchestrator, connect to.
+  - `OutputCrewNode` — the base class for nodes that produce user-facing output. Override `generate_response()` to define what the agent says.
+  - `CrewSession` — the runtime that owns the WebSocket connection and runs your nodes for each call.
+  - `AtomsCrewApp` — the FastAPI WebSocket server that the CLI's `chat` command, and the production Atoms orchestrator, connect to.
 </Info>
 
 ---
@@ -75,7 +75,7 @@ The CLI's best feature is instant local testing. No need to deploy to test chang
     In another terminal, start an interactive voice session:
     
     ```bash
-    smallestai agent-swarm chat
+    smallestai agent-crew chat
     ```
     
     The CLI connects to your local server and lets you converse with your agent in real-time.
@@ -109,7 +109,7 @@ When you're ready for production, deploy to Smallest AI's managed infrastructure
   
   <Step title="Link to Platform Agent">
     ```bash
-    smallestai agent-swarm init
+    smallestai agent-crew init
     ```
     
     Select which agent from [atoms.smallest.ai](https://atoms.smallest.ai) to link your local code to.
@@ -117,7 +117,7 @@ When you're ready for production, deploy to Smallest AI's managed infrastructure
   
   <Step title="Deploy">
     ```bash
-    smallestai agent-swarm deploy --entry-point server.py
+    smallestai agent-crew deploy --entry-point server.py
     ```
     
     Packages your code and pushes it to the cloud. Takes about 30 seconds.
@@ -125,7 +125,7 @@ When you're ready for production, deploy to Smallest AI's managed infrastructure
   
   <Step title="Go Live">
     ```bash
-    smallestai agent-swarm builds
+    smallestai agent-crew builds
     ```
     
     Select your build and choose **Make Live** to start serving traffic.
@@ -147,10 +147,10 @@ When you're ready for production, deploy to Smallest AI's managed infrastructure
 
 | Command | Description |
 |---------|-------------|
-| `smallestai agent-swarm init` | Link local directory to a platform agent |
-| `smallestai agent-swarm deploy` | Deploy code to the cloud |
-| `smallestai agent-swarm builds` | View and manage deployments |
-| `smallestai agent-swarm chat` | Start interactive session with local agent |
+| `smallestai agent-crew init` | Link local directory to a platform agent |
+| `smallestai agent-crew deploy` | Deploy code to the cloud |
+| `smallestai agent-crew builds` | View and manage deployments |
+| `smallestai agent-crew chat` | Start interactive session with local agent |
 
 ### Common Options
 
@@ -170,16 +170,16 @@ Deployments are not live by default. This gives you a safety buffer.
 </Warning>
 
 **To promote a build:**
-1. Run `smallestai agent-swarm builds`
+1. Run `smallestai agent-crew builds`
 2. Select the desired build
 3. Choose **Make Live**
 
 **To roll back:**
-1. Run `smallestai agent-swarm builds`
+1. Run `smallestai agent-crew builds`
 2. Select the previous build
 3. Choose **Make Live**
 
 **To take down completely:**
-1. Run `smallestai agent-swarm builds`
+1. Run `smallestai agent-crew builds`
 2. Select the **LIVE** build
 3. Choose **Take Down**
