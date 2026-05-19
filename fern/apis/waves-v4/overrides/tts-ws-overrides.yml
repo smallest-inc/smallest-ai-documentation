@@ -1,0 +1,53 @@
+# v4 docs override for the unified TTS WebSocket spec.
+
+servers:
+  waves-ws:
+    host: api.smallest.ai
+    pathname: /waves/v1/tts/live
+    protocol: wss
+
+channels:
+  ttsStream:
+    x-fern-server-name: waves
+    x-fern-audiences:
+      - v4docs
+    x-fern-sdk-group-name: TTS
+    title: Live TTS WebSocket
+    description: |
+      # Live TTS WebSocket — `/waves/v1/tts/live`
+
+      Real-time text-to-speech over a persistent WebSocket connection. The
+      `model` field in the request payload selects which Lightning pool serves
+      the synthesis.
+
+      ## When to use this
+
+      - **Use this** when text arrives incrementally (LLM token streams, live
+        captioning, conversational pipelines where playback should start as
+        soon as the first chunk is ready).
+      - POST to `/waves/v1/tts/live` (SSE) when you have the full text up
+        front but still want chunked playback. (Same URL, different
+        protocol — HTTP POST gets you SSE; WSS connect gets you WebSocket.)
+      - Use `/waves/v1/tts` (sync) when total latency doesn't matter.
+
+      ## Selecting the model
+
+      Pass `"model": "lightning_v3.1"` (default) or
+      `"model": "lightning_v3.1_pro"` on each request. Concurrency and latency
+      are identical across both. Voice catalogs differ — see the
+      [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1) and
+      [Lightning v3.1 Pro](/waves/model-cards/text-to-speech/lightning-v-3-1-pro)
+      model cards for the per-model catalog.
+
+      ## Migrating from `/waves/v1/lightning-v3.1/get_speech/stream`
+
+      Same protocol, same payload shape — only the URL changes. Existing
+      clients should:
+
+      1. Update the WebSocket URL to `wss://api.smallest.ai/waves/v1/tts/live`.
+      2. Optionally add `"model": "lightning_v3.1_pro"` to route to the Pro
+         pool. Omitting `model` keeps the existing standard-pool behavior.
+
+      Voice IDs, sample rates, auth, and the response/streaming format are
+      unchanged, so downstream audio handling, jitter buffers, and barge-in
+      logic stay the same.

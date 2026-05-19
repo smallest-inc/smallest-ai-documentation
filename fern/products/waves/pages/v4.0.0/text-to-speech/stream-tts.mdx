@@ -19,7 +19,7 @@ sequenceDiagram
     participant Client
     participant API as Lightning TTS
     Note over Client,API: Synchronous — wait for full audio
-    Client->>API: POST /get_speech
+    Client->>API: POST /waves/v1/tts
     API-->>Client: Generating...
     API->>Client: Complete audio file
 
@@ -37,52 +37,62 @@ sequenceDiagram
 
 Persistent connections for continuous, low-latency audio. Best for conversational AI and real-time apps.
 
-**Endpoint:** `wss://api.smallest.ai/waves/v1/lightning-v3.1/get_speech/stream`
+**Endpoint:** `wss://api.smallest.ai/waves/v1/tts/live`
 
 <CodeGroup>
 
 ```python Python
+# ci:skip — requires sounddevice + an audio device, not available in CI
+# Plays audio chunks as they arrive AND saves the full stream to streamed.wav.
+# Requires: pip install websockets sounddevice numpy
 import asyncio
-import json
 import base64
-import wave
+import json
 import os
+import wave
+
+import numpy as np
+import sounddevice as sd
 import websockets
 
 API_KEY = os.environ["SMALLEST_API_KEY"]
-WS_URL = "wss://api.smallest.ai/waves/v1/lightning-v3.1/get_speech/stream"
+WS_URL = "wss://api.smallest.ai/waves/v1/tts/live"
+SAMPLE_RATE = 24000
 
 async def stream_tts(text):
     audio_chunks = []
+    # Open a non-blocking output stream so each chunk plays as it arrives.
+    stream = sd.OutputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16")
+    stream.start()
+    try:
+        async with websockets.connect(
+            WS_URL,
+            additional_headers={"Authorization": f"Bearer {API_KEY}"},
+        ) as ws:
+            await ws.send(json.dumps({
+                "text": text,
+                "voice_id": "meher",
+                "model": "lightning_v3.1_pro",
+                "sample_rate": SAMPLE_RATE,
+            }))
 
-    async with websockets.connect(
-        WS_URL,
-        additional_headers={"Authorization": f"Bearer {API_KEY}"},
-    ) as ws:
-        await ws.send(json.dumps({
-            "text": text,
-            "voice_id": "magnus",
-            "sample_rate": 24000,
-        }))
+            while True:
+                data = json.loads(await ws.recv())
+                status = data.get("status")
+                if status == "chunk":
+                    pcm = base64.b64decode(data["data"]["audio"])
+                    audio_chunks.append(pcm)
+                    # Play immediately (16-bit mono PCM).
+                    stream.write(np.frombuffer(pcm, dtype=np.int16))
+                elif status == "complete":
+                    break
+    finally:
+        # Always release the audio device, even if the WS errored mid-stream.
+        stream.stop(); stream.close()
 
-        while True:
-            response = await ws.recv()
-            data = json.loads(response)
-
-            if data["status"] == "chunk":
-                audio = base64.b64decode(data["data"]["audio"])
-                audio_chunks.append(audio)
-            elif data["status"] == "complete":
-                break
-
-    # Save as WAV
-    raw = b"".join(audio_chunks)
     with wave.open("streamed.wav", "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(24000)
-        wf.writeframes(raw)
-
+        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SAMPLE_RATE)
+        wf.writeframes(b"".join(audio_chunks))
     print(f"Saved streamed.wav ({len(audio_chunks)} chunks)")
 
 asyncio.run(stream_tts("Streaming delivers audio in real-time for voice assistants and chatbots."))
@@ -95,7 +105,7 @@ const fs = require("fs");
 const API_KEY = process.env.SMALLEST_API_KEY;
 
 const ws = new WebSocket(
-  "wss://api.smallest.ai/waves/v1/lightning-v3.1/get_speech/stream",
+  "wss://api.smallest.ai/waves/v1/tts/live",
   { headers: { Authorization: `Bearer ${API_KEY}` } }
 );
 
@@ -104,7 +114,8 @@ const audioChunks = [];
 ws.on("open", () => {
   ws.send(JSON.stringify({
     text: "Streaming delivers audio in real-time for voice assistants and chatbots.",
-    voice_id: "magnus",
+    voice_id: "meher",
+    model: "lightning_v3.1_pro",
     sample_rate: 24000,
   }));
 });
@@ -126,6 +137,9 @@ ws.on("message", (raw) => {
 
 ```python Python SDK
 # Requires `smallestai>=4.4.0` — earlier versions hardcoded the v2 WS URL.
+# The current SDK release targets /waves/v1/lightning-v3.1/get_speech/stream
+# (standard pool). Use the raw `websockets` example above to access the
+# Lightning v3.1 Pro pool until the SDK ships `model` field support.
 import os
 import wave
 from smallestai.waves import TTSConfig, WavesStreamingTTS
@@ -156,21 +170,28 @@ with wave.open("streamed.wav", "wb") as wf:
 
 Server-Sent Events over HTTP — simpler to set up, no persistent connection needed.
 
-**Endpoint:** `POST https://api.smallest.ai/waves/v1/lightning-v3.1/stream`
+**Endpoint:** `POST https://api.smallest.ai/waves/v1/tts/live`
 
 <CodeGroup>
 
 ```python Python
-import os
-import json
+# ci:skip — requires sounddevice + an audio device, not available in CI
+# Plays audio chunks as they arrive AND saves the full stream to sse_output.wav.
+# Requires: pip install requests sounddevice numpy
 import base64
+import json
+import os
 import wave
+
+import numpy as np
 import requests
+import sounddevice as sd
 
 API_KEY = os.environ["SMALLEST_API_KEY"]
+SAMPLE_RATE = 24000
 
 response = requests.post(
-    "https://api.smallest.ai/waves/v1/lightning-v3.1/stream",
+    "https://api.smallest.ai/waves/v1/tts/live",
     headers={
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json",
@@ -178,42 +199,51 @@ response = requests.post(
     },
     json={
         "text": "SSE streaming is simpler to set up than WebSocket.",
-        "voice_id": "magnus",
-        "sample_rate": 24000,
+        "voice_id": "meher",
+        "model": "lightning_v3.1_pro",
+        "sample_rate": SAMPLE_RATE,
     },
     stream=True,
 )
+response.raise_for_status()
 
 audio_chunks = []
-for line in response.iter_lines():
-    if not line:
-        continue
-    line = line.decode()
-    if not line.startswith("data: "):
-        continue
+stream = sd.OutputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16")
+stream.start()
+try:
+    for line in response.iter_lines():
+        if not line:
+            continue
+        decoded = line.decode()
+        if not decoded.startswith("data: "):
+            continue
+        data = json.loads(decoded[6:])
+        if data.get("done"):
+            break
+        if data.get("audio"):
+            pcm = base64.b64decode(data["audio"])
+            audio_chunks.append(pcm)
+            # Play immediately as each chunk arrives.
+            stream.write(np.frombuffer(pcm, dtype=np.int16))
+finally:
+    # Always release the audio device, even if the stream errored mid-flight.
+    stream.stop(); stream.close()
 
-    data = json.loads(line[6:])
-    if data.get("done"):
-        break
-    if data.get("audio"):
-        audio_chunks.append(base64.b64decode(data["audio"]))
-
-raw = b"".join(audio_chunks)
 with wave.open("sse_output.wav", "wb") as wf:
-    wf.setnchannels(1)
-    wf.setsampwidth(2)
-    wf.setframerate(24000)
-    wf.writeframes(raw)
+    wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SAMPLE_RATE)
+    wf.writeframes(b"".join(audio_chunks))
+print(f"Saved sse_output.wav ({len(audio_chunks)} chunks)")
 ```
 
 ```bash cURL
-curl -N -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/stream" \
+curl -N -X POST "https://api.smallest.ai/waves/v1/tts/live" \
   -H "Authorization: Bearer $SMALLEST_API_KEY" \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -d '{
     "text": "SSE streaming is simpler to set up than WebSocket.",
-    "voice_id": "magnus",
+    "voice_id": "meher",
+    "model": "lightning_v3.1_pro",
     "sample_rate": 24000
   }'
 ```
@@ -225,11 +255,16 @@ curl -N -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/stream" \
 For real-time applications where text arrives incrementally (e.g., from an LLM), the SDK supports streaming text input:
 
 ```python
-# Requires `smallestai>=4.4.0`.
+# ci:skip — requires sounddevice + an audio device, not available in CI
+# Requires `smallestai>=4.4.0`, plus: pip install sounddevice numpy
 import os
+
+import numpy as np
+import sounddevice as sd
 from smallestai.waves import TTSConfig, WavesStreamingTTS
 
-config = TTSConfig(voice_id="magnus", api_key=os.environ["SMALLEST_API_KEY"], sample_rate=24000)
+SAMPLE_RATE = 24000
+config = TTSConfig(voice_id="magnus", api_key=os.environ["SMALLEST_API_KEY"], sample_rate=SAMPLE_RATE)
 streaming_tts = WavesStreamingTTS(config)
 
 def text_stream():
@@ -238,10 +273,15 @@ def text_stream():
     for word in text.split():
         yield word + " "
 
-audio_chunks = []
-for chunk in streaming_tts.synthesize_streaming(text_stream()):
-    audio_chunks.append(chunk)
-    # In a real app, play each chunk immediately
+stream = sd.OutputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16")
+stream.start()
+try:
+    for chunk in streaming_tts.synthesize_streaming(text_stream()):
+        # Each chunk is raw 16-bit PCM. Play it immediately.
+        stream.write(np.frombuffer(chunk, dtype=np.int16))
+finally:
+    # Always release the audio device, even if synthesis errored.
+    stream.stop(); stream.close()
 ```
 
 ## WebSocket vs SSE
@@ -287,9 +327,10 @@ Access audio at `data["audio"]`; terminator is `data["done"] == true`. SSE frame
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `voice_id` | *required* | Voice identifier |
+| `model` | `lightning_v3.1` | TTS pool to use. Pass `lightning_v3.1_pro` to route to the [Pro pool](/waves/model-cards/text-to-speech/lightning-v-3-1-pro). |
 | `sample_rate` | `44100` | Audio sample rate (8000–44100 Hz) |
 | `speed` | `1.0` | Speech speed (0.5–2.0) |
-| `language` | `auto` | Language code |
+| `language` | `en` | Language code. Use `auto` for code-switching. Each voice's tags.language constrains what works — see `GET /waves/v1/lightning-v3.1/get_voices`. |
 | `output_format` | `pcm` | `pcm`, `mp3`, `wav`, `ulaw`, or `alaw` |
 
 For concurrency limits and connection management, see [Concurrency and Limits](/waves/api-reference/api-references/concurrency-and-limits).

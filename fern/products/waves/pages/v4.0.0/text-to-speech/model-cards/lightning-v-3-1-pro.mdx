@@ -1,0 +1,344 @@
+---
+title: "Lightning v3.1 Pro"
+description: "Model card for Lightning v3.1 Pro. Premium 44 kHz TTS pool with a curated voice catalog across American, British, and Indian accents, English + Hindi code-switching, and improved naturalness."
+icon: "sparkles"
+---
+
+<Badge color="purple">Latest Release</Badge>
+
+Lightning v3.1 Pro is a premium 44 kHz text-to-speech pool with improved naturalness and a curated voice catalog. Runs on dedicated inference capacity, isolated from general traffic. Concurrency, latency, and rate limits are identical to standard Lightning v3.1; the difference is voice quality and the catalog.
+
+<CardGroup cols={4}>
+  <Card title="44.1 kHz" icon="waveform-lines">
+    Native sample rate
+  </Card>
+  <Card title="200ms" icon="bolt">
+    TTFB at 40 concurrent requests
+  </Card>
+  <Card title="English + Hindi" icon="globe">
+    Indian voices code-switch; British and American voices English-only
+  </Card>
+  <Card title="3.3x" icon="gauge-high">
+    Real-time factor (faster than playback)
+  </Card>
+</CardGroup>
+
+## Model Overview
+
+| | |
+|---|---|
+| **Developed by** | Smallest AI |
+| **Model type** | Text-to-Speech / Speech Synthesis |
+| **Languages** | English (`en`), Hindi (`hi`), `auto` |
+| **License** | Proprietary |
+| **Version** | v3.1 Pro |
+| **Model ID** | `lightning_v3.1_pro` |
+| **Native sample rate** | 44,100 Hz |
+
+### Key Capabilities
+
+<CardGroup cols={3}>
+  <Card title="Real-Time Optimized" icon="bolt">
+    Ultra-low latency architecture designed for conversational AI and live streaming.
+  </Card>
+  <Card title="Streaming" icon="broadcast-tower">
+    HTTP, SSE, and WebSocket support for real-time applications.
+  </Card>
+  <Card title="Multi-Language" icon="globe">
+    Indian voices speak English + Hindi with automatic code-switching. British and American voices speak English.
+  </Card>
+  <Card title="High Fidelity" icon="waveform-lines">
+    Broadcast-quality 44.1 kHz audio with natural prosody, intonation, and conversational rhythm.
+  </Card>
+  <Card title="Curated Voice Catalog" icon="user-music">
+    Premium voices across American, British, and Indian accents.
+  </Card>
+  <Card title="Pronunciation Control" icon="spell-check">
+    Custom pronunciation dictionaries for specialized vocabulary, brand names, and domain-specific terms.
+  </Card>
+</CardGroup>
+
+---
+
+## How to use it
+
+Pro is selected via the `model` body parameter on the unified TTS routes — no separate endpoint to call.
+
+```bash
+curl -X POST "https://api.smallest.ai/waves/v1/tts" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Accept: audio/wav" \
+  -d '{
+    "text": "Hello from the Lightning v3.1 Pro pool.",
+    "voice_id": "meher",
+    "model": "lightning_v3.1_pro",
+    "language": "en",
+    "sample_rate": 24000,
+    "output_format": "wav"
+  }' --output speech.wav
+```
+
+The same `"model": "lightning_v3.1_pro"` body field also routes to the Pro pool on the WebSocket and SSE endpoints.
+
+<Tip>**On Atoms voice agents**, open the agent's voice picker and pick a Pro voice from the **Pro** filter chip. Atoms transparently routes to the Pro pool — no code change required.</Tip>
+
+---
+
+## Performance & Benchmarks
+
+Pro improves on standard Lightning v3.1 across accuracy and MOS quality. Numbers below pair Pro with v3.1 and the competitor scores reported on the [Lightning v3.1 model card](/waves/model-cards/text-to-speech/lightning-v-3-1) so you can compare like-for-like.
+
+### Accuracy (Whisper jiwer)
+
+Lower is better.
+
+| Metric | Lightning v3.1 Pro | Lightning v3.1 | GPT-4o-mini | ElevenLabs Turbo v2.5 | ElevenLabs Multilingual v2 | Sonic-3 | Gemini 2.5 Pro | MAI-Voice-1 | Inworld 1.5 | S2 Pro |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| WER | **1.36%** | 1.57% | 1.26% | 1.35% | 1.33% | 1.43% | 1.26% | 1.25% | 1.10% | 2.83% |
+| CER | **0.40%** | 0.67% | 0.52% | 0.60% | 0.54% | 0.59% | 0.62% | 0.50% | 0.47% | 1.16% |
+
+### Accuracy (Whisper LLM)
+
+Lower is better. Pro-only category — included for transparency.
+
+| Metric | Lightning v3.1 Pro |
+|---|---:|
+| WER | **0.96%** |
+| CER | **0.34%** |
+
+### MOS v2
+
+Higher is better.
+
+| Metric | Lightning v3.1 Pro | Lightning v3.1 | GPT-4o-mini | ElevenLabs Turbo v2.5 | ElevenLabs Multilingual v2 | Sonic-3 | Gemini 2.5 Pro | MAI-Voice-1 | Inworld 1.5 | S2 Pro |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Mean MOS | **4.22** | — | — | — | — | — | — | — | — | — |
+| UTMOS | **3.76** | — | — | — | — | — | — | — | — | — |
+| WV-MOS | **5.05** | 4.71 | 4.55 | 4.60 | 4.63 | 4.76 | 4.65 | 4.62 | 4.91 | 4.48 |
+
+<Note>
+Mean MOS and UTMOS are reported for the Pro pool only — the v3.1 model card publishes WV-MOS for cross-system comparison. Pro's WV-MOS (5.05) is the highest of any system in this benchmark suite.
+</Note>
+
+Want to reproduce these results? See the [TTS evaluation script](/waves/model-cards/text-to-speech/tts-evaluation-script) to measure TTFB and synthesis quality in your own environment.
+
+---
+
+## Supported Languages
+
+Pro language support varies per voice — Indian Pro voices speak English with native Hindi code-switching; British and American Pro voices speak English only. For languages outside these, use the standard [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1) model.
+
+| Voice group | Languages | Code-switching |
+|---|---|---|
+| Indian Pro voices | English (`en`), Hindi (`hi`) | English ↔ Hindi within a single utterance via `language="auto"` |
+| British Pro voices | English (`en`) | — |
+| American Pro voices | English (`en`) | — |
+
+---
+
+## Voice Catalog
+
+The Pro voice catalog is distinct from standard Lightning v3.1. Voices below are listed in recommended ranking per accent group.
+
+### Indian — Female
+
+| Voice ID | Name |
+|---|---|
+| `rhea` | Rhea |
+| `zariya` | Zariya |
+| `kareena` | Kareena |
+| `mishka` | Mishka |
+| `inaaya` | Inaaya |
+| `saira` | Saira |
+| `meher` | Meher |
+| `aarini` | Aarini |
+
+### Indian — Male
+
+| Voice ID | Name |
+|---|---|
+| `aviraj` | Aviraj |
+| `vyom` | Vyom |
+| `zoravar` | Zoravar |
+| `reyansh` | Reyansh |
+| `ahan` | Ahan |
+
+### British — Female
+
+| Voice ID | Name |
+|---|---|
+| `cressida` | Cressida |
+| `elowen` | Elowen |
+| `ottilie` | Ottilie |
+| `seraphina` | Seraphina |
+| `tabitha` | Tabitha |
+| `arabella` | Arabella |
+
+### British — Male
+
+| Voice ID | Name |
+|---|---|
+| `benedict` | Benedict |
+| `cormac` | Cormac |
+| `everett` | Everett |
+| `finley` | Finley |
+| `rupert` | Rupert |
+| `winston` | Winston |
+| `caspian` | Caspian |
+
+### American — Female
+
+| Voice ID | Name |
+|---|---|
+| `willow` | Willow |
+| `autumn` | Autumn |
+| `skylar` | Skylar |
+| `savannah` | Savannah |
+| `kennedy` | Kennedy |
+| `reagan` | Reagan |
+| `sierra` | Sierra |
+
+### American — Male
+
+| Voice ID | Name |
+|---|---|
+| `maverick` | Maverick |
+| `brooks` | Brooks |
+| `hunter` | Hunter |
+| `colton` | Colton |
+| `wesley` | Wesley |
+| `asher` | Asher |
+
+<Tip>
+Need a voice not in this list? Use the standard [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1) catalog (217 voices, more languages, voice cloning). Pass `"model": "lightning_v3.1"` (or omit the field) instead of `lightning_v3.1_pro`.
+</Tip>
+
+---
+
+## API Reference
+
+### Endpoints
+
+| Endpoint | Method | Use Case |
+|----------|--------|----------|
+| `https://api.smallest.ai/waves/v1/tts` | POST | Synchronous synthesis |
+| `https://api.smallest.ai/waves/v1/tts/live` | POST (SSE) | Server-sent events streaming |
+| `wss://api.smallest.ai/waves/v1/tts/live` | WebSocket | Real-time streaming |
+
+### Request Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `text` | string | Yes | — | Text to synthesize |
+| `voice_id` | string | Yes | — | Voice identifier (Pro catalog above) |
+| `model` | string | No | `lightning_v3.1` | Pass `lightning_v3.1_pro` to route to the Pro pool. The field is optional, but the default routes to standard Lightning v3.1 — for Pro you must set it explicitly. |
+| `sample_rate` | integer | No | `44100` | Output sample rate (Hz) |
+| `speed` | float | No | `1.0` | Speech speed (0.5–2.0) |
+| `language` | string | No | `"auto"` | `en`, `hi`, or `auto` (per voice's `tags.language`) |
+| `output_format` | string | No | `"pcm"` | `pcm`, `mp3`, `wav`, `ulaw`, `alaw` |
+| `pronunciation_dicts` | array | No | — | List of pronunciation dictionary IDs — works on REST sync, SSE, and WebSocket |
+
+<Card title="Quickstart" icon="rocket" href="/waves/documentation/text-to-speech-lightning/quickstart">
+  Generate your first audio in under a minute with a single API call.
+</Card>
+
+---
+
+## Technical Specifications
+
+### Audio Output
+
+| Specification | Details |
+|---------------|---------|
+| **Native sample rate** | 44,100 Hz |
+| **Supported sample rates** | 8,000 / 16,000 / 24,000 / 44,100 Hz |
+| **Output formats** | PCM, MP3, WAV, ulaw, alaw |
+| **Audio channels** | Mono |
+
+### Text Formatting Guidelines
+
+| Aspect | Recommendation |
+|--------|----------------|
+| **Language scripts** | Use native script for each language. English in Latin script; Hindi in Devanagari |
+| **Break points** | Natural punctuation (`.` `!` `?` `,`) |
+| **Mixed language** | Use native script per language; avoid transliteration |
+
+<Accordion title="Compute Infrastructure">
+
+**Hardware**
+- Recommended GPU: NVIDIA L40S
+- Recommended VRAM: 48 GB
+
+**Software**
+- Server regions (AWS): India (Hyderabad), USA (Oregon)
+- Automatic geo-location based routing for lowest latency
+
+</Accordion>
+
+---
+
+## Best Practices
+
+### Voice ID + model pairing
+
+Pair Pro voice IDs above with `"model": "lightning_v3.1_pro"`. The API does not currently reject mismatched pairings, but pairing a Pro voice with `"model": "lightning_v3.1"` (or omitting `model`) can produce wrong or hallucinated audio. Server-side validation is on the roadmap.
+
+### Language selection
+
+Each voice's supported languages live in `tags.language` on the voice catalog. Passing a `language` outside that list is accepted by the API but produces English-pronounced output, since the voice wasn't trained on it. Pick a voice whose `tags.language` matches your target language.
+
+### Text Formatting
+
+- **Chunk boundaries.** Segment input at natural prosodic boundaries (`.` `!` `?` `,`). Maximum chunk size is 250 characters; optimal throughput at 140 characters per request.
+- **Script integrity.** Use native script for each language. Mixed-script input within a single language token produces unpredictable phoneme mappings.
+- **Lexicon overrides.** Use [pronunciation dictionaries](/waves/documentation/text-to-speech-lightning/pronunciation-dictionaries) for domain-specific terms, brand names, and acronyms where default grapheme-to-phoneme conversion is insufficient.
+
+For comprehensive text formatting rules (numeric handling, date/time, symbols, chunking logic), see [TTS Best Practices](/waves/documentation/best-practices/tts-best-practices).
+
+---
+
+## Use Cases
+
+### Direct Use
+
+- Voice assistants and conversational AI
+- Interactive chatbots with voice output
+- Real-time narration and live streaming
+- Accessibility tools and screen readers
+- Customer service automation
+
+### Downstream Use
+
+- Multi-turn conversational agents
+- Audio content generation pipelines
+- Telephony and IVR systems
+- Podcast generation
+
+---
+
+## Limitations & Safety
+
+### Known Limitations
+
+- **No voice cloning.** Voice cloning is not available on the Pro pool. Clones continue to use standard [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1) and the existing voice-cloning flow.
+
+<Warning>
+  Lightning v3.1 Pro must **not** be used for impersonation or fraud, generating deceptive audio content (deepfakes), creating content that violates consent or privacy, harassment or abuse, or any illegal or unethical purposes.
+</Warning>
+
+### Safety & Compliance
+
+- No retention of synthesized audio
+- Usage monitoring for policy compliance
+
+For compliance documentation (GDPR, SOC2, HIPAA), contact [support@smallest.ai](mailto:support@smallest.ai).
+
+---
+
+| Channel | Details |
+|---------|---------|
+| **Support** | [support@smallest.ai](mailto:support@smallest.ai) |
+| **Documentation** | [docs.smallest.ai/waves](https://docs.smallest.ai/waves) |
+| **Console** | [app.smallest.ai](https://app.smallest.ai) |
+| **Community** | [Discord](https://discord.gg/9WtSXv26WE) |

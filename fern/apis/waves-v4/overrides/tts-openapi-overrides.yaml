@@ -1,0 +1,118 @@
+paths:
+  /waves/v1/tts:
+    post:
+      x-fern-server-name: waves
+      x-fern-audiences:
+      - v4docs
+      tags:
+      - Text to Speech
+      summary: Synthesize speech
+      description: |
+        Synthesize speech from text in a single request. Pass `text` + `voice_id`, get back binary audio.
+
+        Pick the model with the `model` body parameter: default `lightning_v3.1`, or `lightning_v3.1_pro` for the Pro pool. Other request parameters are identical across models.
+
+        ## When to use this
+
+        - **Use this** for short utterances you can render before playback (notifications, prompts, batch jobs, audio file generation).
+        - **Use `/waves/v1/tts/live`** when you want playback to start before the full audio is ready (long passages, latency-sensitive apps).
+        - **Use `/waves/v1/tts/live`** (WebSocket) when text arrives incrementally (LLM token streams, live captioning).
+
+        ## Key features
+
+        - 44 kHz natural, expressive synthesis
+        - Model selectable per request via `model` body parameter
+        - Cloned voice IDs (`voice_*`) work on `lightning_v3.1` — same param as catalog voices
+        - 12 documented languages on `lightning_v3.1`; English + Hindi on `lightning_v3.1_pro`
+        - Output formats: `pcm`, `mp3`, `wav`, `ulaw`, `alaw`
+        - Sample rates: 8 kHz – 44.1 kHz
+        - Speed: 0.5× – 2×
+        - Per-call pronunciation dictionaries via `pronunciation_dicts`
+
+        ## Examples
+
+        **cURL — Lightning v3.1 (default)**
+        ```bash
+        curl -X POST "https://api.smallest.ai/waves/v1/tts" \
+          -H "Authorization: Bearer $SMALLEST_API_KEY" \
+          -H "Content-Type: application/json" \
+          -H "Accept: audio/wav" \
+          -d '{
+            "text": "Hello from Waves TTS.",
+            "voice_id": "magnus",
+            "sample_rate": 24000,
+            "output_format": "wav"
+          }' --output speech.wav
+        ```
+
+        **cURL — Lightning v3.1 Pro**
+        ```bash
+        curl -X POST "https://api.smallest.ai/waves/v1/tts" \
+          -H "Authorization: Bearer $SMALLEST_API_KEY" \
+          -H "Content-Type: application/json" \
+          -H "Accept: audio/wav" \
+          -d '{
+            "text": "Hello from the Lightning v3.1 Pro pool.",
+            "voice_id": "meher",
+            "model": "lightning_v3.1_pro",
+            "sample_rate": 24000,
+            "output_format": "wav"
+          }' --output speech.wav
+        ```
+
+        ## Common gotchas
+
+        - **Set `Accept: audio/wav`.** Omitting it can return an empty or unplayable response.
+        - **Pair voice IDs with the right model.** Voice catalogs differ between `lightning_v3.1` and `lightning_v3.1_pro`. The API does not reject mismatched pairings, but using a Pro-only `voice_id` with `model=lightning_v3.1` (or omitting `model`) can return wrong or hallucinated audio. Pair Pro voices with `model=lightning_v3.1_pro`; standard catalog voices with `model=lightning_v3.1` (the default).
+        - **Cloned voices** (`voice_*` from `add_voice`) work with `lightning_v3.1` only; voice cloning is not available on `lightning_v3.1_pro`.
+        - **44.1 kHz output** is supported but most playback environments are happy with 24 kHz — drop the sample rate if bandwidth matters.
+  /waves/v1/tts/live:
+    post:
+      x-fern-server-name: waves
+      x-fern-audiences:
+      - v4docs
+      tags:
+      - Text to Speech
+      summary: Stream speech (SSE)
+      description: |
+        Synthesize speech and stream the audio back over Server-Sent Events. Same body as `/waves/v1/tts` — the only difference is the response is a stream of base64-encoded PCM chunks instead of one binary blob.
+
+        Pick the model with the `model` body parameter, same as the sync route.
+
+        <Note>
+          **The same URL serves the WebSocket endpoint.** `wss://api.smallest.ai/waves/v1/tts/live` accepts a WebSocket upgrade for streaming-text scenarios (LLM token streams, live captioning). The HTTP `POST` documented on this page returns SSE; use `wss://` to use the WebSocket protocol instead. See the [WebSocket reference](/waves/api-reference/api-reference/text-to-speech/live-tts-web-socket).
+        </Note>
+
+        ## When to use this
+
+        - **Use this** when you want playback to start before synthesis is complete — long passages, latency-sensitive UI, live narration.
+        - **Use sync `/waves/v1/tts`** when total latency doesn't matter and you'd rather get one buffer.
+        - **Use `/waves/v1/tts/live`** (WebSocket) when the *text* arrives incrementally (LLM token stream). SSE assumes you have the full text up front.
+
+        ## How it works
+
+        1. POST your text + voice settings — same payload as `/waves/v1/tts`, plus optional `model`.
+        2. The response is `Content-Type: text/event-stream`. Each chunk frame is `event: audio\n` followed by `data: {"audio": "<base64-pcm>"}\n\n`.
+        3. Decode each chunk's `audio` field with base64 and feed the PCM bytes to your audio pipeline (browser `MediaSource`, ffmpeg pipe, raw PCM player, etc.).
+        4. A final `data: {"done": true}\n\n` frame marks end of stream.
+
+        ## Examples
+
+        **cURL**
+        ```bash
+        curl -N -X POST "https://api.smallest.ai/waves/v1/tts/live" \
+          -H "Authorization: Bearer $SMALLEST_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "text": "Streaming this paragraph chunk by chunk so playback can start sooner.",
+            "voice_id": "magnus",
+            "sample_rate": 24000,
+            "output_format": "pcm"
+          }'
+        ```
+
+        ## Common gotchas
+
+        - **Use a streaming-friendly client.** `curl -N`, Python `iter_lines`, or a `fetch` `ReadableStream` reader. Buffering clients will hide the latency win.
+        - **Audio is base64 inside the event payload**, not the raw event bytes. Decode the `data.audio` field per event.
+        - **`output_format=pcm`** gives the lowest overhead for streaming playback. `wav`/`mp3` work but add per-chunk framing bytes.
