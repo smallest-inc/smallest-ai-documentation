@@ -25,17 +25,22 @@ Verify the installation:
 smallestai --help
 ```
 
-You'll also need an OpenAI API key for the example below — export it before running:
+You'll need a Smallest API key (from [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys)) for the CLI and SDK helpers. Export it:
 
 ```bash
-export OPENAI_API_KEY=sk-...
+export SMALLEST_API_KEY=sk_...
 ```
+
+Plus an LLM API key for the example below — pick one:
+
+- **Electron** (Smallest's own LLM, OpenAI-compatible) — reuses `SMALLEST_API_KEY`. Set `base_url="https://api.smallest.ai/waves/v1"` and `model="electron"` in `OpenAIClient`. No extra key needed.
+- **OpenAI** — `export OPENAI_API_KEY=sk-...` if you'd rather use GPT models.
 
 ---
 
 ## Create Your First Agent Crew
 
-Before the CLI has anything to connect to, you need a Python file that defines a crew and starts a WebSocket server. Pick one of the two patterns below and pull the example folder straight from the cookbook — the `tar` command drops a `getting_started/` or `background_agent/` directory into your cwd, ready to `cd` into. No `.env` file to set up; the examples read `OPENAI_API_KEY` straight from your shell. Each folder ships a one-line `requirements.txt` pinning `smallestai`, which the cloud build also uses when you `deploy`.
+Before the CLI has anything to connect to, you need a Python file that defines a crew and starts a WebSocket server. Pick one of the two patterns below and pull the example folder straight from the cookbook — the `tar` command drops a `getting_started/` or `background_agent/` directory into your cwd, ready to `cd` into. For **local development**, no `.env` is needed — the examples read `SMALLEST_API_KEY` (and optionally `OPENAI_API_KEY`) straight from your shell. For **cloud deployment**, you'll need a `.env` file (see the *Ship env vars in a .env* step further down). Each folder ships a one-line `requirements.txt` pinning `smallestai`, which the cloud build also uses when you `deploy`.
 
 ### Single-node crew
 
@@ -110,7 +115,19 @@ The CLI's best feature is instant local testing. No need to deploy to test chang
 When you're ready for production, deploy to Smallest AI's managed infrastructure.
 
 <Warning>
-  **Prerequisite:** You must first create an agent on the [Atoms platform](https://app.smallest.ai) before deploying. The CLI links your local code to an existing platform agent.
+  **Prerequisite:** You need an existing agent on the [Atoms platform](https://app.smallest.ai) — `agent-crew init` links your local code to it. Create one from the dashboard, or programmatically via the SDK:
+
+  ```python
+  from smallestai import SmallestAI
+  import os
+
+  # Pass token= explicitly — the client otherwise looks for SMALLEST_AI_TOKEN,
+  # not SMALLEST_API_KEY.
+  client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
+  response = client.atoms.agents.create_a_new_agent(name="my-test-agent")
+  agent_id = response.data   # the agent id is a string at .data
+  print(agent_id)
+  ```
 </Warning>
 
 <Steps>
@@ -118,32 +135,79 @@ When you're ready for production, deploy to Smallest AI's managed infrastructure
     ```bash
     smallestai auth login
     ```
-    
-    Opens a browser for OAuth. Your credentials are stored locally.
+
+    Prompts for your Smallest API key (paste it from [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys)). The key is stored at `~/.smallestai/credentials.json` with `0600` permissions.
+
+    <Tip>
+      Already have `SMALLEST_API_KEY` exported? Pipe it in:
+
+      ```bash
+      echo $SMALLEST_API_KEY | smallestai auth login
+      ```
+    </Tip>
   </Step>
-  
+
   <Step title="Link to Platform Agent">
     ```bash
     smallestai agent-crew init
     ```
-    
-    Select which agent from [app.smallest.ai](https://app.smallest.ai) to link your local code to.
+
+    Interactive picker — choose which agent from [app.smallest.ai](https://app.smallest.ai) to link to. Requires a TTY.
+
+    <Tip>
+      **No TTY?** `init` just writes one file. Create `.smallestai/config.toml` yourself:
+      ```toml
+      agent_id = "<your-agent-id>"
+      ```
+    </Tip>
   </Step>
-  
+
+  <Step title="Ship env vars in a .env (required)">
+    <Warning>
+      Platform-side secrets injection **isn't built yet.** The deploy zip does not carry your shell environment.
+    </Warning>
+
+    **How `.env` works on the cloud**: the zip ships every file in your dir except `__pycache__/`, `.venv/`, etc. — `.env` is **not** excluded. The cookbook's `assistant.py` calls `load_dotenv()` at import time, so on the cloud it reads `.env` from the same directory. Keys defined locally end up available to `os.getenv(...)` in the cloud agent.
+
+    Create one next to `server.py`:
+
+    ```bash
+    cat > .env <<EOF
+    OPENAI_API_KEY=$OPENAI_API_KEY
+    SMALLEST_API_KEY=$SMALLEST_API_KEY
+    EOF
+    ```
+  </Step>
+
   <Step title="Deploy">
     ```bash
     smallestai agent-crew deploy --entry-point server.py
     ```
-    
+
     Packages your code and pushes it to the cloud. Takes about 30 seconds.
   </Step>
-  
+
   <Step title="Go Live">
+    <Warning>
+      A successful deploy is **not live by default**. Builds land in `SUCCEEDED` with `isLive: null` — your agent will not answer calls until you promote one.
+    </Warning>
+
     ```bash
     smallestai agent-crew builds
     ```
-    
+
     Select your build and choose **Make Live** to start serving traffic.
+
+    <Tip>
+      **No TTY?** The `builds` command needs an interactive terminal. Promote via REST:
+
+      ```bash
+      curl -X PATCH "https://api.smallest.ai/atoms/v1/sdk/agents/$AGENT_ID/builds/$BUILD_ID" \
+        -H "Authorization: Bearer $SMALLEST_API_KEY" \
+        -H "Content-Type: application/json" \
+        -d '{"isLive": true}'
+      ```
+    </Tip>
   </Step>
 </Steps>
 
@@ -155,7 +219,7 @@ When you're ready for production, deploy to Smallest AI's managed infrastructure
 
 | Command | Description |
 |---------|-------------|
-| `smallestai auth login` | Authenticate with your Smallest AI account |
+| `smallestai auth login` | Prompts for your Smallest API key and stores it at `~/.smallestai/credentials.json`. Accepts the key piped on stdin. |
 | `smallestai auth logout` | Clear stored credentials |
 
 ### Agent Management

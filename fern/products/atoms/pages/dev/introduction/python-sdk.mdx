@@ -1,10 +1,13 @@
 ---
 title: "SDK Overview"
 sidebarTitle: "Python SDK"
-description: "The Atoms Python SDK for building voice agents."
+description: "The Smallest AI Python SDK — REST client plus the Atoms Agent Crews runtime."
 ---
 
-The Atoms Agent Crews SDK is the official Python package for building voice agents on the Smallest AI platform.
+`pip install smallestai` gives you two complementary surfaces in a single package:
+
+1. **`SmallestAI` REST client** — Fern-generated. Create/list/update agents, place calls, manage knowledge bases, phone numbers, campaigns, and webhooks.
+2. **`smallestai.atoms.crew.*` — Agent Crews runtime.** The Python framework for building the voice-agent logic itself (nodes, sessions, events, the local WebSocket server).
 
 ```bash
 pip install smallestai
@@ -14,7 +17,53 @@ pip install smallestai
 
 ---
 
-## Core Components
+## REST Client — Platform Operations
+
+Use the `SmallestAI` client to do anything the platform dashboard does, from Python.
+
+```python
+from smallestai import SmallestAI
+import os
+
+# Pass token= explicitly — the client otherwise looks for SMALLEST_AI_TOKEN,
+# not SMALLEST_API_KEY. (Yes, the names diverge. The CLI and helpers use
+# SMALLEST_API_KEY; only this generated REST client uses SMALLEST_AI_TOKEN.)
+client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
+
+# Create an agent — response.data is the agent id (a string)
+response = client.atoms.agents.create_a_new_agent(name="my-test-agent")
+agent_id = response.data
+print(agent_id)
+
+# Get user details
+print(client.atoms.user.get_user_details())
+```
+
+<Warning>
+  **Outbound calls live at `client.atoms.calls.start_an_outbound_call(...)`** — not on the `smallestai.atoms.Call` helper (which is analytics-only despite the name). The outbound API returns `status=True` even when the agent has no phone number attached; the call simply never connects. To poll terminal state and pull the transcript, use `client.atoms.logs.get_conversation_log_by_id(id=conversation_id)` — the `calls` namespace itself doesn't have a get/list method, only the `start_an_outbound_call` trigger.
+</Warning>
+
+An async variant is exported as `AsyncSmallestAI` with the same surface. See the [SDK reference](https://github.com/fern-demo/smallest-ai-python-sdk/blob/HEAD/reference.md) for the full API.
+
+| Namespace | What it covers |
+|-----------|----------------|
+| `client.atoms.agents` | Create, list, get, update, delete agents; duplicate; manage workflows |
+| `client.atoms.agent_templates` | Spawn agents from prebuilt templates |
+| `client.atoms.calls` | Trigger outbound calls (`start_an_outbound_call` only; see `logs` below for call retrieval) |
+| `client.atoms.knowledge_base` | Create, list, query KBs |
+| `client.atoms.campaigns` | Bulk outbound campaigns |
+| `client.atoms.audience` | Manage audience lists for campaigns |
+| `client.atoms.phone_numbers` | Attach Twilio / Telnyx / Vonage numbers |
+| `client.atoms.live_transcripts` | Subscribe to in-flight transcripts via SSE |
+| `client.atoms.logs` | Retrieve conversation logs and analytics |
+| `client.atoms.webhooks` | Manage webhook subscriptions |
+| `client.atoms.user`, `client.atoms.organization` | Account-level info |
+
+---
+
+## Agent Crews Runtime — Build the Conversation Logic
+
+For the voice-agent code itself (the part that runs on every call), use `smallestai.atoms.crew.*`.
 
 | Component | Description | Learn More |
 |-----------|-------------|------------|
@@ -23,28 +72,59 @@ pip install smallestai
 | **Graphs** | Connect nodes into pipelines | [Graphs →](/atoms/developer-guide/get-started/core-concepts/graphs) |
 | **Sessions** | Manage conversation state and lifecycle | [Sessions →](/atoms/developer-guide/get-started/core-concepts/sessions) |
 
----
-
-## Key Modules
+### Key modules
 
 | Import | Purpose |
 |--------|---------|
 | `smallestai.atoms.crew.nodes` | `Node`, `OutputCrewNode`, `BackgroundCrewNode` base classes |
 | `smallestai.atoms.crew.events` | Event types (`SDKEvent`, etc.) |
 | `smallestai.atoms.crew.tools` | `@function_tool` decorator, registry |
-| `smallestai.atoms.crew.clients` | LLM clients (OpenAI-compatible) |
+| `smallestai.atoms.crew.clients` | LLM clients (OpenAI-compatible — works with Electron, OpenAI, or any OAI-compatible endpoint) |
 | `smallestai.atoms.crew.server` | `AtomsCrewApp` for hosting |
 | `smallestai.atoms.crew.session` | `CrewSession` management |
+
+### Helper classes — for use inside or outside a crew
+
+Top-level convenience wrappers re-exported as `smallestai.atoms.Call`, `KB`, `Campaign`, `Audience`. Each reads `SMALLEST_API_KEY` from env by default:
+
+```python
+from smallestai.atoms import Call, KB
+
+call = Call()           # picks up SMALLEST_API_KEY
+kb = KB()               # picks up SMALLEST_API_KEY
+```
+
+---
+
+## Authentication
+
+Everything authenticates with the same key — your Smallest API key from [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys):
+
+```bash
+export SMALLEST_API_KEY=sk_...
+```
+
+| Surface | How it picks up the key |
+|---------|-------------------------|
+| `SmallestAI(token=...)` | Pass it explicitly: `SmallestAI(token=os.getenv("SMALLEST_API_KEY"))` |
+| `smallestai.atoms.Call/KB/Campaign/Audience` | Reads `SMALLEST_API_KEY` from env automatically |
+| `smallestai` CLI (`auth login`) | Interactive prompt; or pipe: `echo $SMALLEST_API_KEY \| smallestai auth login` |
 
 ---
 
 ## Next Steps
 
 <CardGroup cols={2}>
+  <Card title="Quick Start" icon="bolt" href="/atoms/developer-guide/get-started/quickstart">
+    Install, write your first agent, run locally or deploy.
+  </Card>
   <Card title="Core Concepts" icon="shapes" href="/atoms/developer-guide/get-started/core-concepts/nodes">
     Understand nodes, sessions, and events.
   </Card>
   <Card title="Agent Crew CLI" icon="terminal" href="/atoms/developer-guide/get-started/agent-crew-cli">
     Build, test, and deploy agent crews from the terminal.
+  </Card>
+  <Card title="SDK Reference" icon="book" href="https://github.com/fern-demo/smallest-ai-python-sdk/blob/HEAD/reference.md">
+    Full REST client reference, generated from the API spec.
   </Card>
 </CardGroup>
