@@ -9,10 +9,17 @@ Install the SDK, write your first agent crew, and test it — locally or deploye
 ## Prerequisites
 
 <Note>
-  **OpenAI API Key required.** Set it as an environment variable before running your agent:
+  **Smallest API key.** Get one from [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys) and export it:
   ```bash
-  export OPENAI_API_KEY="your-key-here"
+  export SMALLEST_API_KEY=sk_...
   ```
+  Used by the CLI (`smallestai auth login`) and the SDK helper classes (`Call`, `KB`, `Campaign`, `Audience`).
+</Note>
+
+<Note>
+  **An LLM API key.** Pick one — the examples below show both:
+  - **Electron** (Smallest's own LLM, OpenAI-compatible) — reuses your `SMALLEST_API_KEY`. No extra key needed.
+  - **OpenAI** — `export OPENAI_API_KEY=sk-...` if you'd rather use GPT models.
 </Note>
 
 ## Installation
@@ -29,28 +36,59 @@ Create two files: one for the crew node logic, and one to run the server.
   <Step title="Create assistant.py">
     Subclass `OutputCrewNode` and implement `generate_response()` to stream LLM output.
 
-    ```python assistant.py
-    import os
-    from smallestai.atoms.crew.nodes import OutputCrewNode
-    from smallestai.atoms.crew.clients.openai import OpenAIClient
+    <Tabs>
+      <Tab title="Electron (Smallest LLM)">
+        Reuses your `SMALLEST_API_KEY` — no extra key needed. `OpenAIClient` takes any OpenAI-compatible endpoint via `base_url`.
 
-    class Assistant(OutputCrewNode):
-        def __init__(self):
-            super().__init__(name="assistant")
-            self.llm = OpenAIClient(
-                model="gpt-4o-mini",
-                api_key=os.getenv("OPENAI_API_KEY")
-            )
+        ```python assistant.py
+        import os
+        from smallestai.atoms.crew.nodes import OutputCrewNode
+        from smallestai.atoms.crew.clients.openai import OpenAIClient
 
-        async def generate_response(self):
-            response = await self.llm.chat(
-                messages=self.context.messages,
-                stream=True
-            )
-            async for chunk in response:
-                if chunk.content:
-                    yield chunk.content
-    ```
+        class Assistant(OutputCrewNode):
+            def __init__(self):
+                super().__init__(name="assistant")
+                self.llm = OpenAIClient(
+                    model="electron",
+                    api_key=os.getenv("SMALLEST_API_KEY"),
+                    base_url="https://api.smallest.ai/waves/v1",
+                )
+
+            async def generate_response(self):
+                response = await self.llm.chat(
+                    messages=self.context.messages,
+                    stream=True
+                )
+                async for chunk in response:
+                    if chunk.content:
+                        yield chunk.content
+        ```
+      </Tab>
+      <Tab title="OpenAI">
+        ```python assistant.py
+        import os
+        from smallestai.atoms.crew.nodes import OutputCrewNode
+        from smallestai.atoms.crew.clients.openai import OpenAIClient
+
+        class Assistant(OutputCrewNode):
+            def __init__(self):
+                super().__init__(name="assistant")
+                self.llm = OpenAIClient(
+                    model="gpt-4o-mini",
+                    api_key=os.getenv("OPENAI_API_KEY"),
+                )
+
+            async def generate_response(self):
+                response = await self.llm.chat(
+                    messages=self.context.messages,
+                    stream=True
+                )
+                async for chunk in response:
+                    if chunk.content:
+                        yield chunk.content
+        ```
+      </Tab>
+    </Tabs>
   </Step>
 
   <Step title="Create server.py">
@@ -114,7 +152,16 @@ Once your files are ready, you have two options:
     To have Smallest AI host your agent in the cloud (for production, API access, or phone calls):
 
     <Warning>
-      **Prerequisite:** You must first create an agent on the [Atoms platform](https://app.smallest.ai?utm_source=documentation&utm_medium=docs). The `agent init` command links your local code to that agent.
+      **Prerequisite:** You need an existing agent on the [Atoms platform](https://app.smallest.ai?utm_source=documentation&utm_medium=docs) — `agent-crew init` links your local code to it. Create one from the dashboard, or programmatically via the SDK:
+
+      ```python
+      from smallestai import SmallestAI
+      import os
+
+      client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
+      agent = client.atoms.agents.create_a_new_agent(name="my-test-agent")
+      print(agent.id)  # use this when running `agent-crew init`
+      ```
     </Warning>
 
     <Steps>
@@ -122,6 +169,7 @@ Once your files are ready, you have two options:
         ```bash
         smallestai auth login
         ```
+        Paste your `SMALLEST_API_KEY` when prompted, or pipe it in: `echo $SMALLEST_API_KEY | smallestai auth login`. Credentials are stored at `~/.smallestai/credentials.json`.
       </Step>
       <Step title="Initialize">
         Link your directory to an existing agent on the platform.
