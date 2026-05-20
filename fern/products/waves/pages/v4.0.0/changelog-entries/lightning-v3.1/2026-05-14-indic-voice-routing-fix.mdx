@@ -1,0 +1,15 @@
+---
+title: Indic voices now produce clean audio regardless of the `language` field
+---
+
+Lightning v3.1 used to pick an inference pool from the request's `language` field, which meant Indic voices (Aadya, Yuvan, Samarth, Nilesh, Arnab, Niharika, Gargi, and other voices whose latents are trained on north_indic / south_indic encoders) could be served from the wrong pool when called with `language=en` or `language=hi` — producing distorted or unintelligible audio.
+
+Routing now derives from the **voice itself**, not the request language:
+
+- Voices tagged `odia` / `bengali` / `punjabi` / `gujarati` / `marathi` route to the **north_indic** inference pool
+- Voices tagged `kannada` / `malayalam` / `telugu` / `tamil` route to the **south_indic** pool
+- All other voices continue to route by language as before
+
+**No code change needed.** If you had previously worked around this by hard-coding `language` to match the voice family, you can remove that workaround — the platform now picks the correct pool automatically.
+
+**Voice clones are unaffected** — clones bypass this lookup since they aren't in the public voice catalog.

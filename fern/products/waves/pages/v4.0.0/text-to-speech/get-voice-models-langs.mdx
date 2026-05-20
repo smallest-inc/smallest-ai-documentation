@@ -1,83 +1,97 @@
 ---
 title: "Voices, Voice IDs, and Supported Languages"
 sidebarTitle: "Voices & Languages"
-description: "Find your voice ID, list available voices and models, and see the supported languages for each TTS model."
+description: "Find your voice ID, list available voices, filter by language and accent, and find the right voice for your use case."
 icon: "toolbox"
 ---
 
-Use this page to find your voice ID, list all voices available on each TTS model, and check the supported languages. Works via the REST API or Python SDK.
+Use this page to query the voice catalog, find voice IDs, and filter by language, accent, gender, or model. Every voice's metadata (`tags.language`, `tags.accent`, `tags.gender`) is the source of truth for what each voice supports.
 
 <CardGroup cols={2}>
-  <Card title="Lightning v3.1 — voices & languages reference" icon="id-card" href="/waves/model-cards/text-to-speech/lightning-v-3-1">
-    The Lightning v3.1 model card has the curated voice catalog, "Best Voices" tables per language, and the canonical supported-language list.
+  <Card title="Lightning v3.1 Pro — curated catalog" icon="sparkles" href="/waves/model-cards/text-to-speech/lightning-v-3-1-pro">
+    Premium voice catalog across American, British, and Indian accents. English + Hindi (Indian voices code-switch).
   </Card>
-  <Card title="Pulse STT — supported languages" icon="id-card" href="/waves/model-cards/speech-to-text/pulse">
-    The Pulse STT model card has the language list and which features are supported per language.
+  <Card title="Lightning v3.1 — full catalog" icon="id-card" href="/waves/model-cards/text-to-speech/lightning-v-3-1">
+    The Lightning v3.1 model card has the full voice catalog, "Best Voices" tables per language, and the canonical supported-language list.
   </Card>
 </CardGroup>
 
-{/* TODO: Restore SDK as the primary example once smallestai Python SDK ships its fix. */}
-<Note>
-The `smallestai` Python SDK is being updated. If the SDK example below doesn't work, use the underlying REST API directly (see the API reference under Waves → API Reference). Streaming synthesis via `WavesStreamingTTS` is unaffected.
-</Note>
+## Fetch Available Voices
 
-## Requirements
-
-Before you begin, ensure you have the following:
-
-- Python (3.9 or higher) installed on your machine.
-- An API key from the Smallest AI [platform](https://app.smallest.ai/dashboard/api-keys?utm_source=documentation&utm_medium=text-to-speech).
-- The Smallest AI Python SDK installed. If you haven't installed it yet, follow the instructions below:
-
-### Install the SDK
-```bash
-pip install smallestai
-```
-
-Set your API key as an environment variable:
-```bash
-export SMALLEST_API_KEY=YOUR_API_KEY
-```
-
-## Fetch Available Voices, Models, and Languages
-
-The Smallest AI SDK allows you to query the available languages, voices, and models for your TTS needs. Here's how you can do it:
+Query `GET /waves/v1/lightning-v3.1/get_voices` to list every voice in the catalog. The response includes both standard Lightning v3.1 voices and Pro voices — Pro voices are tagged so you can filter for them.
 
 <CodeGroup>
-```python python
-from smallestai.waves import WavesClient
 
-def main():
-    client = WavesClient(api_key="YOUR_API_KEY")
-
-    # Get available languages
-    languages = client.get_languages()
-    print(f"Available Languages: {languages}")
-
-    # Get available voices for the "lightning-v3.1" model
-    voices = client.get_voices(model="lightning-v3.1")
-    print(f"Available Voices (Model: 'lightning-v3.1'): {voices}")
-
-    # Get user-specific cloned voices
-    cloned_voices = client.get_cloned_voices()
-    print(f"Available Cloned Voices: {cloned_voices}")
-
-    # Get available models
-    models = client.get_models()
-    print(f"Available Models: {models}")
-
-if __name__ == "__main__":
-    main()
+```bash cURL
+curl "https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY"
 ```
+
+```python Python
+import os
+import requests
+
+response = requests.get(
+    "https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices",
+    headers={"Authorization": f"Bearer {os.environ['SMALLEST_API_KEY']}"},
+)
+response.raise_for_status()
+voices = response.json()["voices"]
+
+# Filter by language
+english_voices = [v for v in voices if "english" in v["tags"]["language"]]
+print(f"{len(english_voices)} English voices")
+
+# Filter by accent
+indian_voices = [v for v in voices if v["tags"].get("accent") == "indian"]
+print(f"{len(indian_voices)} Indian-accent voices")
+
+# Filter by gender
+female_voices = [v for v in voices if v["tags"].get("gender") == "female"]
+print(f"{len(female_voices)} female voices")
+```
+
+```javascript JavaScript
+const response = await fetch(
+  "https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices",
+  { headers: { Authorization: `Bearer ${process.env.SMALLEST_API_KEY}` } }
+);
+if (!response.ok) throw new Error(`HTTP ${response.status}`);
+const { voices } = await response.json();
+
+const english = voices.filter((v) => v.tags.language.includes("english"));
+const indian  = voices.filter((v) => v.tags.accent === "indian");
+const female  = voices.filter((v) => v.tags.gender === "female");
+
+console.log(`${english.length} English, ${indian.length} Indian-accent, ${female.length} female`);
+```
+
 </CodeGroup>
 
-## Explanation of Functions
+## Voice Object Shape
 
-- `get_languages()`: Retrieves the list of supported languages for Text-to-Speech.
-- `get_voices(model="model_name")`: Retrieves the voices available for a specific model (e.g., "lightning-v3.1").
-- `get_cloned_voices()`: Fetches all user-specific cloned voices.
-- `get_models()`: Retrieves the TTS models on the platform available through API.
+Each entry in the `voices` array has:
 
+| Field | Type | Description |
+|---|---|---|
+| `voiceId` | string | Use this with the `voice_id` body field in synthesis requests. |
+| `displayName` | string | Human-readable name. |
+| `tags.language` | string[] | Languages the voice was trained on (e.g., `["english"]`, `["english", "hindi"]`). |
+| `tags.accent` | string | One of `american`, `british`, `indian`. |
+| `tags.gender` | string | `male` or `female`. |
+| `tags.age` | string | `young`, `middle-aged`, `senior`. |
+| `tags.usecases` | string[] | Recommended use cases (e.g., `["conversational"]`, `["narration"]`). |
+
+## Identify Pro vs Standard Voices
+
+Pro voices are listed in the [Pro model card's voice catalog](/waves/model-cards/text-to-speech/lightning-v-3-1-pro#voice-catalog). All Pro voice IDs (e.g., `meher`, `rhea`, `aviraj`, `cressida`, `willow`, `maverick`) appear in the `get_voices` response alongside standard v3.1 voices. Use them with `"model": "lightning_v3.1_pro"` to route to the Pro pool — see the [Pro model card](/waves/model-cards/text-to-speech/lightning-v-3-1-pro) for usage.
+
+## Supported Languages
+
+For the full language list per model and per-language voice counts, see:
+
+- [Lightning v3.1 supported languages](/waves/model-cards/text-to-speech/lightning-v-3-1#supported-languages) — 12 languages plus auto-detect
+- [Lightning v3.1 Pro supported languages](/waves/model-cards/text-to-speech/lightning-v-3-1-pro#supported-languages) — English (and Hindi on Indian voices)
 
 ## Need Help?
 

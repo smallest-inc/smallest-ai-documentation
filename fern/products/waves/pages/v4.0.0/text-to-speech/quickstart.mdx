@@ -33,10 +33,11 @@ export SMALLEST_API_KEY="your-api-key-here"
 Paste this in your terminal — no install required:
 
 ```bash
-curl -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech" \
+curl -X POST "https://api.smallest.ai/waves/v1/tts" \
   -H "Authorization: Bearer $SMALLEST_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"text": "Hello from Smallest AI. This is Lightning v3.1.", "voice_id": "magnus", "sample_rate": 24000, "output_format": "wav"}' \
+  -H "Accept: audio/wav" \
+  -d '{"text": "Hello from Smallest AI. This is Lightning v3.1 Pro.", "voice_id": "meher", "model": "lightning_v3.1_pro", "sample_rate": 24000, "output_format": "wav"}' \
   --output hello.wav
 ```
 
@@ -49,17 +50,23 @@ Play `hello.wav` — it should sound like this:
 
 That's broadcast-quality TTS with ~200ms TTFB.
 
+<Tip>
+The `model` field selects which Lightning pool serves the request — `lightning_v3.1_pro` is the new premium pool with a curated voice catalog. Omit the field or pass `"model": "lightning_v3.1"` to use the standard pool (more voices, plus voice cloning).
+</Tip>
+
 ## Step 3: Build It Into Your App
 
 <CodeGroup>
 
 ```bash cURL
-curl -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech" \
+curl -X POST "https://api.smallest.ai/waves/v1/tts" \
   -H "Authorization: Bearer $SMALLEST_API_KEY" \
   -H "Content-Type: application/json" \
+  -H "Accept: audio/wav" \
   -d '{
     "text": "Modern problems require modern solutions.",
-    "voice_id": "magnus",
+    "voice_id": "meher",
+    "model": "lightning_v3.1_pro",
     "sample_rate": 24000,
     "speed": 1.0,
     "language": "en",
@@ -74,14 +81,16 @@ import requests
 API_KEY = os.environ["SMALLEST_API_KEY"]
 
 response = requests.post(
-    "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech",
+    "https://api.smallest.ai/waves/v1/tts",
     headers={
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json",
+        "Accept": "audio/wav",
     },
     json={
         "text": "Modern problems require modern solutions.",
-        "voice_id": "magnus",
+        "voice_id": "meher",
+        "model": "lightning_v3.1_pro",
         "sample_rate": 24000,
         "speed": 1.0,
         "language": "en",
@@ -100,16 +109,18 @@ const fs = require("fs");
 const API_KEY = process.env.SMALLEST_API_KEY;
 
 const response = await fetch(
-  "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech",
+  "https://api.smallest.ai/waves/v1/tts",
   {
     method: "POST",
     headers: {
       Authorization: `Bearer ${API_KEY}`,
       "Content-Type": "application/json",
+      Accept: "audio/wav",
     },
     body: JSON.stringify({
       text: "Modern problems require modern solutions.",
-      voice_id: "magnus",
+      voice_id: "meher",
+      model: "lightning_v3.1_pro",
       sample_rate: 24000,
       speed: 1.0,
       language: "en",
@@ -136,17 +147,17 @@ The `smallestai` Python SDK's synchronous `WavesClient.synthesize()` is being up
 ## Step 4: Explore More
 
 <CardGroup cols={2}>
+  <Card title="Lightning v3.1 Pro" icon="sparkles" href="/waves/model-cards/text-to-speech/lightning-v-3-1-pro">
+    Premium voice catalog across American, British, and Indian accents. Pass `model: lightning_v3.1_pro` to use.
+  </Card>
   <Card title="Voices & Languages" icon="users" href="/waves/documentation/text-to-speech-lightning/voices-languages">
-    Browse 217 voices across 12 languages — English, Hindi, Spanish, and 9 Indian languages.
+    Browse 217 voices across 12 languages on the standard pool — English, Hindi, Spanish, and 9 Indian languages.
   </Card>
   <Card title="Streaming TTS" icon="broadcast-tower" href="/waves/documentation/text-to-speech-lightning/streaming">
     Real-time audio streaming via WebSocket for voice assistants.
   </Card>
   <Card title="Voice Cloning" icon="microphone" href="/waves/documentation/voice-cloning/instant-clone-ui">
-    Clone any voice from just 5-15 seconds of audio.
-  </Card>
-  <Card title="Pronunciation Dicts" icon="spell-check" href="/waves/documentation/text-to-speech-lightning/pronunciation-dictionaries">
-    Custom pronunciations for brand names and technical terms.
+    Clone any voice from just 5-15 seconds of audio (standard pool only).
   </Card>
 </CardGroup>
 
@@ -155,10 +166,11 @@ The `smallestai` Python SDK's synchronous `WavesClient.synthesize()` is being up
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `text` | string | *required* | Text to synthesize (max ~250 chars recommended) |
-| `voice_id` | string | *required* | Voice to use (e.g., `magnus`, `olivia`) |
+| `voice_id` | string | *required* | Voice to use (e.g., `meher`, `magnus`) |
+| `model` | string | `lightning_v3.1` | TTS pool: `lightning_v3.1` (standard) or `lightning_v3.1_pro` |
 | `sample_rate` | int | `44100` | `8000`, `16000`, `24000`, or `44100` Hz |
 | `speed` | float | `1.0` | Speech rate: `0.5` to `2.0` |
-| `language` | string | `auto` | `en`, `hi`, `es`, `ta`, or `auto` |
+| `language` | string | `en` | `en`, `hi`, `es`, `ta`, or `auto` (per voice; see voice tags via `GET /waves/v1/lightning-v3.1/get_voices`) |
 | `output_format` | string | `pcm` | `pcm`, `wav`, `mp3`, `ulaw`, or `alaw` |
 
 ## Need Help?

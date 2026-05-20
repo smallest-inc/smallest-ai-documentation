@@ -1,0 +1,30 @@
+# Override file for tts-ws.yaml
+# Adds unique type names to prevent collisions with other AsyncAPI files
+# Maps server reference to match generators.yml environment URLs
+
+servers:
+  waves-ws:
+    host: api.smallest.ai
+    pathname: /waves/v1/tts/live
+    protocol: wss
+  production:
+    x-fern-server-name: waves
+
+channels:
+  ttsStream:
+    x-fern-sdk-group-name: TTS
+    servers:
+      - $ref: "#/servers/waves-ws"
+    messages:
+      ttsRequest.message:
+        name: TtsRequest
+      ttsResponse.message:
+        name: TtsResponse
+
+operations:
+  TtsRequest:
+    action: send
+    x-fern-sdk-method-name: synthesize_streaming_tts
+  TtsResponse:
+    action: receive
+    x-fern-sdk-method-name: receive_synthesize_streaming_tts

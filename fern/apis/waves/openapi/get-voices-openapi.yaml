@@ -1,9 +1,7 @@
 openapi: 3.0.1
 info:
   title: Get Voices
-  description: 'API Endpoint to get voices supported by our models.
-
-    Currently featuring our two models, Lightning & Lightning Large, with more models coming soon.
+  description: 'API Endpoint to get voices supported by our TTS models.
 
     '
   version: 1.0.0
@@ -16,7 +14,8 @@ paths:
       tags:
       - Voices
       summary: Get Voices
-      description: Get voices supported for a given model using the new Waves API.
+      description: |
+        List voices available for Lightning v3.1. The response is the union of the standard and Pro voice catalogs — the API does not return a per-voice "is Pro" flag, so consult the [Lightning v3.1 Pro](/waves/model-cards/text-to-speech/lightning-v-3-1-pro) and [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1) model cards for the canonical per-pool voice lists. Use the `voice_id` from this response together with `"model": "lightning_v3.1"` (default) or `"model": "lightning_v3.1_pro"` on the unified `/waves/v1/tts` route to pick the pool.
       operationId: getWavesVoices
       parameters:
       - in: path
@@ -25,12 +24,10 @@ paths:
         schema:
           type: string
           enum:
-          - lightning
-          - lightning-large
-          - lightning-v2
           - lightning-v3.1
           default: lightning-v3.1
-        description: The model to use for speech synthesis.
+        description: |
+          The catalog to query. Currently only `lightning-v3.1` is supported — the response returns the union of standard Lightning v3.1 voices and Lightning v3.1 Pro voices. The API does not include a per-voice Pro flag; consult the model cards for the canonical per-pool catalogs.
       responses:
         '200':
           description: Voices retrieved successfully.
@@ -56,19 +53,32 @@ paths:
                           description: Display name for the voice.
                         tags:
                           type: object
-                          description: List of tags associated with the voice.
+                          description: Tag metadata used to identify the voice's characteristics. Filter on these fields to find voices for a target language, accent, or use case.
                           properties:
                             language:
                               type: array
-                              description: Language of the voice.
+                              description: Languages the voice was trained on (e.g., `["english"]`, `["english", "hindi"]`).
                               items:
                                 type: string
                             accent:
                               type: string
-                              description: Accent of the voice.
+                              description: Accent of the voice (e.g., `american`, `british`, `indian`).
                             gender:
                               type: string
-                              description: Gender of the voice.
+                              description: Gender of the voice (`male` or `female`).
+                            age:
+                              type: string
+                              description: Age range of the voice (e.g., `young`, `middle-aged`, `senior`).
+                            emotions:
+                              type: array
+                              description: Emotional ranges the voice supports.
+                              items:
+                                type: string
+                            usecases:
+                              type: array
+                              description: Recommended use cases for the voice (e.g., `conversational`, `narration`).
+                              items:
+                                type: string
         '400':
           description: Bad request
           content:
