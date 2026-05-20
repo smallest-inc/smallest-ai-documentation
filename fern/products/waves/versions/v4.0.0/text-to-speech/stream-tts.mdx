@@ -63,8 +63,8 @@ async def stream_tts(text):
     audio_chunks = []
     # Open a non-blocking output stream so each chunk plays as it arrives.
     stream = sd.OutputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16")
-    stream.start()
     try:
+        stream.start()
         async with websockets.connect(
             WS_URL,
             additional_headers={"Authorization": f"Bearer {API_KEY}"},
@@ -209,8 +209,8 @@ response.raise_for_status()
 
 audio_chunks = []
 stream = sd.OutputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16")
-stream.start()
 try:
+    stream.start()
     for line in response.iter_lines():
         if not line:
             continue
@@ -274,8 +274,8 @@ def text_stream():
         yield word + " "
 
 stream = sd.OutputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16")
-stream.start()
 try:
+    stream.start()
     for chunk in streaming_tts.synthesize_streaming(text_stream()):
         # Each chunk is raw 16-bit PCM. Play it immediately.
         stream.write(np.frombuffer(chunk, dtype=np.int16))
