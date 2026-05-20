@@ -237,10 +237,6 @@ Once your files are ready, you have two options:
         SMALLEST_API_KEY=$SMALLEST_API_KEY
         EOF
         ```
-
-        <Warning>
-          **Skip this and the deployed agent boots fine but stays silent on calls.** `OpenAIClient(api_key=None)` only logs a warning to cloud logs (which you can't see), then fails on the first LLM request — no traceback in front of the caller, just silence.
-        </Warning>
       </Step>
 
       <Step title="Deploy">
@@ -282,6 +278,144 @@ Once your files are ready, you have two options:
     </Steps>
   </Tab>
 </Tabs>
+
+## Complete walkthrough — copy-paste and run
+
+Here's the full sequence from zero to a phone ringing. Replace the two placeholder keys at the top, paste the rest as-is.
+
+```bash
+# ---------- 0. KEYS ----------
+export SMALLEST_API_KEY=sk_...   # from https://app.smallest.ai/dashboard/api-keys
+export OPENAI_API_KEY=sk-...     # optional if you use Electron in assistant.py
+
+# ---------- 1. PROJECT SETUP ----------
+mkdir my-agent && cd my-agent
+python3 -m venv .venv && source .venv/bin/activate
+pip install smallestai loguru
+
+# ---------- 2. WRITE THE THREE FILES ----------
+cat > assistant.py <<'PY'
+import os
+from dotenv import load_dotenv
+from smallestai.atoms.crew.nodes import OutputCrewNode
+from smallestai.atoms.crew.clients.openai import OpenAIClient
+
+load_dotenv()
+
+class Assistant(OutputCrewNode):
+    def __init__(self):
+        super().__init__(name="assistant")
+        # Electron (reuses SMALLEST_API_KEY). Swap for OpenAI by changing model + api_key + dropping base_url.
+        self.llm = OpenAIClient(
+            model="electron",
+            api_key=os.getenv("SMALLEST_API_KEY"),
+            base_url="https://api.smallest.ai/waves/v1",
+        )
+
+    async def generate_response(self):
+        response = await self.llm.chat(messages=self.context.messages, stream=True)
+        async for chunk in response:
+            if chunk.content:
+                yield chunk.content
+PY
+
+cat > server.py <<'PY'
+from smallestai.atoms.crew.server import AtomsCrewApp
+from smallestai.atoms.crew.session import CrewSession
+from assistant import Assistant
+
+async def on_start(session: CrewSession):
+    session.add_node(Assistant())
+    await session.start()
+    await session.wait_until_complete()
+
+if __name__ == "__main__":
+    AtomsCrewApp(setup_handler=on_start).run()
+PY
+
+cat > requirements.txt <<'REQ'
+smallestai>=4.4.4
+loguru>=0.7.0
+python-dotenv>=1.0.0
+REQ
+
+# ---------- 3. TEST LOCALLY ----------
+python server.py &           # boots ws://localhost:8080
+SERVER_PID=$!
+sleep 2
+smallestai agent-crew chat   # interactive — type a message, see the reply, Ctrl+C to exit
+kill $SERVER_PID
+
+# ---------- 4. CREATE THE PLATFORM AGENT RECORD ----------
+AGENT_ID=$(python - <<'PY'
+from smallestai import SmallestAI
+import os
+client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
+print(client.atoms.agents.create_a_new_agent(name="my-agent").data)
+PY
+)
+echo "AGENT_ID=$AGENT_ID"
+
+# ---------- 5. LINK LOCAL CODE TO THAT AGENT ----------
+mkdir -p .smallestai
+echo "agent_id = \"$AGENT_ID\"" > .smallestai/config.toml
+
+# ---------- 6. AUTHENTICATE THE CLI ----------
+echo "$SMALLEST_API_KEY" | smallestai auth login
+
+# ---------- 7. SHIP KEYS IN .env (platform-secrets API isn't built yet) ----------
+cat > .env <<EOF
+OPENAI_API_KEY=$OPENAI_API_KEY
+SMALLEST_API_KEY=$SMALLEST_API_KEY
+EOF
+
+# ---------- 8. DEPLOY ----------
+BUILD_ID=$(smallestai agent-crew deploy --entry-point server.py | grep "Build ID:" | awk '{print $3}')
+echo "BUILD_ID=$BUILD_ID"
+
+# ---------- 9. PROMOTE TO LIVE ----------
+curl -s -X PATCH "https://api.smallest.ai/atoms/v1/sdk/agents/$AGENT_ID/builds/$BUILD_ID" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"isLive": true}'
+
+# ---------- 10. (OPTIONAL) TRIGGER AN OUTBOUND CALL ----------
+# Get the phone-number product id you already own:
+FROM_PRODUCT_ID=$(python - <<'PY'
+from smallestai import SmallestAI
+import os
+client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
+numbers = client.atoms.phone_numbers.get_acquired_phone_numbers().data
+print(numbers[0]["_id"] if numbers else "")
+PY
+)
+
+# Dial your target (replace +91XXXXXXXXXX with the number to call):
+CONV_ID=$(python - <<PY
+from smallestai import SmallestAI
+import os
+client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
+r = client.atoms.calls.start_an_outbound_call(
+    agent_id="$AGENT_ID",
+    phone_number="+91XXXXXXXXXX",
+    from_product_id="$FROM_PRODUCT_ID",
+)
+print(r.data.get("conversationId") if hasattr(r.data, "get") else r.data)
+PY
+)
+echo "CONVERSATION_ID=$CONV_ID"
+
+# Poll the transcript (note: poll lives on `logs`, not `calls`):
+python - <<PY
+from smallestai import SmallestAI
+import os, json
+client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
+log = client.atoms.logs.get_conversation_log_by_id(id="$CONV_ID")
+print(json.dumps(log.dict(), indent=2, default=str)[:2000])
+PY
+```
+
+That's the entire flow. Customize `assistant.py` to taste — add tools, swap the LLM, append a system prompt — and re-run from step 8 to redeploy.
 
 ## What's Next?
 
