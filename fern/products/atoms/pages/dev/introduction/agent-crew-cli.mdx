@@ -35,22 +35,36 @@ export OPENAI_API_KEY=sk-...
 
 ## Create Your First Agent Crew
 
-Before the CLI has anything to connect to, you need a Python file that defines a crew and starts a WebSocket server. The fastest path is to copy the [`getting_started`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/getting_started) example from our cookbook — a minimal, single-node crew that streams chat completions from an LLM and greets the caller on join.
+Before the CLI has anything to connect to, you need a Python file that defines a crew and starts a WebSocket server. Pick one of the two patterns below and `curl` the files into an empty directory of your choice — no `requirements.txt` to install, no `.env` file to set up. `smallestai` is the only dependency, and the examples read `OPENAI_API_KEY` straight from your shell.
+
+### Single-node crew
+
+A minimal, single-node crew that streams chat completions from an LLM and greets the caller on join — copied from the cookbook's [`getting_started`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/getting_started).
 
 ```bash
-# Grab the two files into a directory of your choice
 curl -O https://raw.githubusercontent.com/smallest-inc/cookbook/main/voice-agents/getting_started/server.py
 curl -O https://raw.githubusercontent.com/smallest-inc/cookbook/main/voice-agents/getting_started/assistant.py
 ```
 
 `server.py` is the entry point — it boots an `AtomsCrewApp` on `ws://localhost:8080/ws`. `assistant.py` contains the `OutputCrewNode` subclass that streams the LLM response; extend it with your own prompt, tools, and logic.
 
-For a richer example with a background node running sentiment analysis alongside the main agent, see [`background_agent`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/background_agent) in the same cookbook.
+### Multi-node crew with background processing
+
+A two-node example from [`background_agent`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/background_agent) — a support agent talking to the user, and a sentiment analyzer running silently in parallel that flags frustration and triggers auto-escalation.
+
+```bash
+curl -O https://raw.githubusercontent.com/smallest-inc/cookbook/main/voice-agents/background_agent/app.py
+curl -O https://raw.githubusercontent.com/smallest-inc/cookbook/main/voice-agents/background_agent/support_agent.py
+curl -O https://raw.githubusercontent.com/smallest-inc/cookbook/main/voice-agents/background_agent/sentiment_analyzer.py
+```
+
+`app.py` wires both nodes into a single `CrewSession`. `support_agent.py` is the user-facing `OutputCrewNode`; it can query the sibling sentiment node mid-conversation. `sentiment_analyzer.py` is a `BackgroundCrewNode` — it listens to every transcript event, classifies sentiment, and updates state the support agent reads.
 
 <Info>
   **What you're working with:**
-  - `OutputCrewNode` — the base class for nodes that produce user-facing output. Override `generate_response()` to define what the agent says.
-  - `CrewSession` — the runtime that owns the WebSocket connection and runs your nodes for each call.
+  - `OutputCrewNode` — base class for nodes that produce user-facing output. Override `generate_response()` to define what the agent says.
+  - `BackgroundCrewNode` — base class for nodes that observe events silently. Override `process_event()` to react. No audio output, no interrupts.
+  - `CrewSession` — the runtime that owns the WebSocket connection and runs your nodes in parallel for each call.
   - `AtomsCrewApp` — the FastAPI WebSocket server that the CLI's `chat` command, and the production Atoms orchestrator, connect to.
 </Info>
 
@@ -183,3 +197,18 @@ Deployments are not live by default. This gives you a safety buffer.
 1. Run `smallestai agent-crew builds`
 2. Select the **LIVE** build
 3. Choose **Take Down**
+
+---
+
+## More examples
+
+The two crews above are the starting points. The [Smallest AI cookbook](https://github.com/smallest-inc/cookbook/tree/main/voice-agents) ships ~15 ready-to-run voice-agent examples covering tool calling, call control, multi-language support, knowledge-base grounding, real banking / scheduling / IVR flows, observability, and more — each in its own directory with the same `curl`-and-run shape.
+
+<CardGroup cols={2}>
+  <Card title="All voice-agent examples" icon="folder-tree" href="https://github.com/smallest-inc/cookbook/tree/main/voice-agents">
+    Browse the full set of crews on GitHub.
+  </Card>
+  <Card title="Cookbook root" icon="book-open" href="https://github.com/smallest-inc/cookbook">
+    STT, TTS, voice-agents, mobile, integrations — everything Smallest AI in one repo.
+  </Card>
+</CardGroup>
