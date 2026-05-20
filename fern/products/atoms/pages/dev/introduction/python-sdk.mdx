@@ -25,18 +25,23 @@ Use the `SmallestAI` client to do anything the platform dashboard does, from Pyt
 from smallestai import SmallestAI
 import os
 
+# Pass token= explicitly — the client otherwise looks for SMALLEST_AI_TOKEN,
+# not SMALLEST_API_KEY. (Yes, the names diverge. The CLI and helpers use
+# SMALLEST_API_KEY; only this generated REST client uses SMALLEST_AI_TOKEN.)
 client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
 
-# Create an agent
-agent = client.atoms.agents.create_a_new_agent(name="my-test-agent")
-
-# List your agents
-for a in client.atoms.agents.get_all_agents().agents or []:
-    print(a.id, a.name)
+# Create an agent — response.data is the agent id (a string)
+response = client.atoms.agents.create_a_new_agent(name="my-test-agent")
+agent_id = response.data
+print(agent_id)
 
 # Get user details
 print(client.atoms.user.get_user_details())
 ```
+
+<Warning>
+  **Outbound calls live at `client.atoms.calls.start_an_outbound_call(...)`** — not on the `smallestai.atoms.Call` helper (which is analytics-only despite the name). The outbound call API returns `status=True` even when the agent has no phone number attached; the call simply never connects. Always poll `client.atoms.calls.get_call(conversation_id)` after triggering one in production.
+</Warning>
 
 An async variant is exported as `AsyncSmallestAI` with the same surface. See the [SDK reference](https://github.com/fern-demo/smallest-ai-python-sdk/blob/HEAD/reference.md) for the full API.
 
