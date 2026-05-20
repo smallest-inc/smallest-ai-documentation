@@ -1,436 +1,287 @@
 ---
-title: "Quick Start"
-sidebarTitle: "Quick Start"
-description: "Install the SDK, build an agent crew, and run it."
+title: "Quickstart Crew CLI"
+sidebarTitle: "Quickstart Crew CLI"
+description: "Build, test, and deploy agent crews from the terminal."
 ---
 
-Install the SDK, write your first agent crew, and test it — locally or deployed to the cloud.
+The `smallestai agent-crew` CLI is built for rapid iteration. Test your crew locally with a single command, then deploy to the cloud when ready. No configuration files, no Docker, no infrastructure management.
 
-## Prerequisites
+<Info>
+  **Local-first development**: Run and test your agent entirely on your machine. Deploy only when you're satisfied.
+</Info>
 
-<Note>
-  **Smallest API key.** Get one from [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys) and export it:
-  ```bash
-  export SMALLEST_API_KEY=sk_...
-  ```
-  Used by the CLI (`smallestai auth login`) and the SDK helper classes (`Call`, `KB`, `Campaign`, `Audience`).
-</Note>
-
-<Note>
-  **An LLM API key.** Pick one — the examples below show both:
-  - **Electron** (Smallest's own LLM, OpenAI-compatible) — reuses your `SMALLEST_API_KEY`. No extra key needed.
-  - **OpenAI** — `export OPENAI_API_KEY=sk-...` if you'd rather use GPT models.
-</Note>
+---
 
 ## Installation
+
+The CLI comes bundled with the SDK:
 
 ```bash
 pip install smallestai
 ```
 
-## Write Your First Agent Crew
+Verify the installation:
 
-Create two files: one for the crew node logic, and one to run the server.
+```bash
+smallestai --help
+```
+
+You'll need a Smallest API key (from [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys)) for the CLI and SDK helpers. Export it:
+
+```bash
+export SMALLEST_API_KEY=sk_...
+```
+
+Plus an LLM API key for the example below — pick one:
+
+- **Electron** (Smallest's own LLM, OpenAI-compatible) — reuses `SMALLEST_API_KEY`. Set `base_url="https://api.smallest.ai/waves/v1"` and `model="electron"` in `OpenAIClient`. No extra key needed.
+- **OpenAI** — `export OPENAI_API_KEY=sk-...` if you'd rather use GPT models.
+
+---
+
+## Create Your First Agent Crew
+
+Before the CLI has anything to connect to, you need a Python file that defines a crew and starts a WebSocket server. Pick one of the two patterns below and pull the example folder straight from the cookbook — the `tar` command drops a `getting_started/` or `background_agent/` directory into your cwd, ready to `cd` into. For **local development**, no `.env` is needed — the examples read `SMALLEST_API_KEY` (and optionally `OPENAI_API_KEY`) straight from your shell. For **cloud deployment**, you'll need a `.env` file (see the *Ship env vars in a .env* step further down). Each folder ships a one-line `requirements.txt` pinning `smallestai`, which the cloud build also uses when you `deploy`.
+
+### Single-node crew
+
+A minimal, single-node crew that streams chat completions from an LLM and greets the caller on join — copied from the cookbook's [`getting_started`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/getting_started).
+
+```bash
+curl -sL https://github.com/smallest-inc/cookbook/archive/refs/heads/main.tar.gz \
+  | tar -xz --strip-components=2 cookbook-main/voice-agents/getting_started
+cd getting_started
+```
+
+`server.py` is the entry point — it boots an `AtomsCrewApp` on `ws://localhost:8080/ws`. `assistant.py` contains the `OutputCrewNode` subclass that streams the LLM response; extend it with your own prompt, tools, and logic.
+
+### Multi-node crew with background processing
+
+A two-node example from [`background_agent`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/background_agent) — a support agent talking to the user, and a sentiment analyzer running silently in parallel that flags frustration and triggers auto-escalation.
+
+```bash
+curl -sL https://github.com/smallest-inc/cookbook/archive/refs/heads/main.tar.gz \
+  | tar -xz --strip-components=2 cookbook-main/voice-agents/background_agent
+cd background_agent
+```
+
+`app.py` wires both nodes into a single `CrewSession`. `support_agent.py` is the user-facing `OutputCrewNode`; it can query the sibling sentiment node mid-conversation. `sentiment_analyzer.py` is a `BackgroundCrewNode` — it listens to every transcript event, classifies sentiment, and updates state the support agent reads.
+
+<Info>
+  **What you're working with:**
+  - `OutputCrewNode` — base class for nodes that produce user-facing output. Override `generate_response()` to define what the agent says.
+  - `BackgroundCrewNode` — base class for nodes that observe events silently. Override `process_event()` to react. No audio output, no interrupts.
+  - `CrewSession` — the runtime that owns the WebSocket connection and runs your nodes in parallel for each call.
+  - `AtomsCrewApp` — the FastAPI WebSocket server that the CLI's `chat` command, and the production Atoms orchestrator, connect to.
+</Info>
+
+---
+
+## Local Development Workflow
+
+The CLI's best feature is instant local testing. No need to deploy to test changes.
 
 <Steps>
-  <Step title="Create assistant.py">
-    Subclass `OutputCrewNode` and implement `generate_response()` to stream LLM output.
-
-    <Tabs>
-      <Tab title="Electron (Smallest LLM)">
-        Reuses your `SMALLEST_API_KEY` — no extra key needed. `OpenAIClient` takes any OpenAI-compatible endpoint via `base_url`.
-
-        ```python assistant.py
-        import os
-        from dotenv import load_dotenv
-        from smallestai.atoms.crew.nodes import OutputCrewNode
-        from smallestai.atoms.crew.clients.openai import OpenAIClient
-
-        load_dotenv()  # picks up keys from .env locally AND on the cloud
-
-        class Assistant(OutputCrewNode):
-            def __init__(self):
-                super().__init__(name="assistant")
-                self.llm = OpenAIClient(
-                    model="electron",
-                    api_key=os.getenv("SMALLEST_API_KEY"),
-                    base_url="https://api.smallest.ai/waves/v1",
-                )
-
-            async def generate_response(self):
-                response = await self.llm.chat(
-                    messages=self.context.messages,
-                    stream=True
-                )
-                async for chunk in response:
-                    if chunk.content:
-                        yield chunk.content
-        ```
-      </Tab>
-      <Tab title="OpenAI">
-        ```python assistant.py
-        import os
-        from dotenv import load_dotenv
-        from smallestai.atoms.crew.nodes import OutputCrewNode
-        from smallestai.atoms.crew.clients.openai import OpenAIClient
-
-        load_dotenv()  # picks up keys from .env locally AND on the cloud
-
-        class Assistant(OutputCrewNode):
-            def __init__(self):
-                super().__init__(name="assistant")
-                self.llm = OpenAIClient(
-                    model="gpt-4o-mini",
-                    api_key=os.getenv("OPENAI_API_KEY"),
-                )
-
-            async def generate_response(self):
-                response = await self.llm.chat(
-                    messages=self.context.messages,
-                    stream=True
-                )
-                async for chunk in response:
-                    if chunk.content:
-                        yield chunk.content
-        ```
-      </Tab>
-    </Tabs>
-  </Step>
-
-  <Step title="Create server.py">
-    Wire up `AtomsCrewApp` with a `setup_handler` that adds your crew node to the session.
-
-    ```python server.py
-    from smallestai.atoms.crew.server import AtomsCrewApp
-    from smallestai.atoms.crew.session import CrewSession
-    from assistant import Assistant
-
-    async def on_start(session: CrewSession):
-        session.add_node(Assistant())
-        await session.start()
-        await session.wait_until_complete()
-
-    if __name__ == "__main__":
-        app = AtomsCrewApp(setup_handler=on_start)
-        app.run()
-    ```
-
-    <Tip>
-      Your entry point can be named anything (`run.py`, `serve.py`, etc.). When deploying, specify it with `--entry-point your_server.py`.
-    </Tip>
-
-    <Tip>
-      **Want a greeting?** Use `@session.on_event` to speak when the user joins:
-      ```python
-      @session.on_event("on_event_received")
-      async def on_event(_, event):
-          if isinstance(event, SDKSystemUserJoinedEvent):
-              agent.context.add_message({"role": "assistant", "content": "Hello!"})
-              await agent.speak("Hello! How can I help?")
-      ```
-      Adding the greeting to context ensures the LLM knows the conversation has started.
-    </Tip>
-  </Step>
-
-  <Step title="Create requirements.txt">
-    The cloud build installs from this file. Pin `smallestai` and any libs your code imports:
-
-    ```txt requirements.txt
-    smallestai>=4.4.4
-    loguru>=0.7.0
-    ```
-  </Step>
-</Steps>
-
-## Run Your Agent Crew
-
-Once your files are ready, you have two options:
-
-<Tabs>
-  <Tab title="Run Locally">
-    For development and testing, run the file directly:
+  <Step title="Start Your Agent Server">
+    Run the entry point to start a local WebSocket server:
 
     ```bash
     python server.py
     ```
 
-    This starts a WebSocket server on `localhost:8080`. In a separate terminal, connect to it:
+    This spins up a server on `localhost:8080` that mimics the production environment.
+  </Step>
+
+  <Step title="Connect via CLI">
+    In another terminal, start an interactive voice session:
 
     ```bash
     smallestai agent-crew chat
     ```
 
-    No account or deployment needed.
-  </Tab>
+    The CLI connects to your local server and lets you converse with your agent in real-time.
 
-  <Tab title="Deploy to Platform">
-    To have Smallest AI host your agent in the cloud (for production, API access, or phone calls). Deploy has two halves:
+    ![CLI Chat](../../images/cli-chat.png)
+  </Step>
 
-    1. **The agent record** on the platform — name, voice, language, `first_message`, attached phone numbers. Created via SDK or dashboard.
-    2. **The agent code** (your `assistant.py` + `server.py`) — uploaded as a zip and run as your agent's "brain" during calls.
+  <Step title="Iterate Rapidly">
+    Make code changes, restart the server, and reconnect with `chat`. No redeploys needed.
+  </Step>
+</Steps>
 
-    The CLI links them via `agent-crew init` and uploads the code via `agent-crew deploy`.
+---
 
-    <Steps>
-      <Step title="Create the agent record (SDK)">
-        ```python
-        from smallestai import SmallestAI
-        import os
+## Cloud Deployment
 
-        # Pass token= explicitly — the SmallestAI client otherwise looks for
-        # SMALLEST_AI_TOKEN, while the CLI and helpers use SMALLEST_API_KEY.
-        client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
+When you're ready for production, deploy to Smallest AI's managed infrastructure.
 
-        response = client.atoms.agents.create_a_new_agent(name="my-test-agent")
-        agent_id = response.data   # response.data is the agent id, a string
-        print(agent_id)
-        ```
+<Warning>
+  **Prerequisite:** You need an existing agent on the [Atoms platform](https://app.smallest.ai) — `agent-crew init` links your local code to it. Create one from the dashboard, or programmatically via the SDK:
 
-        Save the printed `agent_id` — you'll need it in the next step.
+  ```python
+  from smallestai import SmallestAI
+  import os
 
-        <Note>
-          **The greeting comes from your `server.py` code, not the agent record.** Passing `first_message=...` to `create_a_new_agent` currently does not persist on the platform (verified 2026-05-20). Use the `SDKSystemUserJoinedEvent` hook in `server.py` (shown above in the *Create server.py* step) to make your agent speak first.
-        </Note>
-      </Step>
+  # Pass token= explicitly — the client otherwise looks for SMALLEST_AI_TOKEN,
+  # not SMALLEST_API_KEY.
+  client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
+  response = client.atoms.agents.create_a_new_agent(name="my-test-agent")
+  agent_id = response.data   # the agent id is a string at .data
+  print(agent_id)
+  ```
+</Warning>
 
-      <Step title="Authenticate the CLI">
-        ```bash
-        smallestai auth login
-        ```
-        Paste your `SMALLEST_API_KEY` when prompted, or pipe it in:
-        ```bash
-        echo $SMALLEST_API_KEY | smallestai auth login
-        ```
-        Credentials are stored at `~/.smallestai/credentials.json` (`0600`).
-      </Step>
+<Steps>
+  <Step title="Authenticate">
+    ```bash
+    smallestai auth login
+    ```
 
-      <Step title="Link local code to the agent record">
-        ```bash
-        smallestai agent-crew init
-        ```
+    Prompts for your Smallest API key (paste it from [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys)). The key is stored at `~/.smallestai/credentials.json` with `0600` permissions.
 
-        Interactive picker — choose the agent you just created. It writes one file: `.smallestai/config.toml`.
+    <Tip>
+      Already have `SMALLEST_API_KEY` exported? Pipe it in:
 
-        <Tip>
-          **No TTY?** Write the file yourself:
-          ```toml .smallestai/config.toml
-          agent_id = "<the-id-you-saved>"
-          ```
-        </Tip>
-      </Step>
+      ```bash
+      echo $SMALLEST_API_KEY | smallestai auth login
+      ```
+    </Tip>
+  </Step>
 
-      <Step title="Ship your env vars in a .env">
-        <Warning>
-          Platform-side secrets injection **isn't built yet.** The deploy zip does not carry your shell environment.
-        </Warning>
+  <Step title="Link to Platform Agent">
+    ```bash
+    smallestai agent-crew init
+    ```
 
-        **How `.env` works on the cloud**:
-        - The deploy zip ships every file in your project dir, except for `__pycache__/`, `.venv/`, etc. `.env` is **not** excluded.
-        - The cookbook's `assistant.py` calls `load_dotenv()` at import time → on the cloud, that reads `.env` from the same directory.
-        - End result: keys defined in your local `.env` are available via `os.getenv(...)` inside the running cloud agent.
+    Interactive picker — choose which agent from [app.smallest.ai](https://app.smallest.ai) to link to. Requires a TTY.
 
-        Create one next to `server.py`:
+    <Tip>
+      **No TTY?** `init` just writes one file. Create `.smallestai/config.toml` yourself:
+      ```toml
+      agent_id = "<your-agent-id>"
+      ```
+    </Tip>
+  </Step>
 
-        ```bash
-        cat > .env <<EOF
-        OPENAI_API_KEY=$OPENAI_API_KEY
-        SMALLEST_API_KEY=$SMALLEST_API_KEY
-        EOF
-        ```
-      </Step>
+  <Step title="Ship env vars in a .env (required)">
+    <Warning>
+      Platform-side secrets injection **isn't built yet.** The deploy zip does not carry your shell environment.
+    </Warning>
 
-      <Step title="Deploy">
-        ```bash
-        smallestai agent-crew deploy --entry-point server.py
-        ```
+    **How `.env` works on the cloud**: the zip ships every file in your dir except `__pycache__/`, `.venv/`, etc. — `.env` is **not** excluded. The cookbook's `assistant.py` calls `load_dotenv()` at import time, so on the cloud it reads `.env` from the same directory. Keys defined locally end up available to `os.getenv(...)` in the cloud agent.
 
-        Zips your dir, uploads it, builds, deploys. Takes ~30s. Output ends with a build id.
-      </Step>
+    Create one next to `server.py`:
 
-      <Step title="Make Live">
-        <Warning>
-          Deploys are **not live by default.** Builds land in `SUCCEEDED` with `isLive: null`. Your agent won't answer calls until you promote one.
-        </Warning>
+    ```bash
+    cat > .env <<EOF
+    OPENAI_API_KEY=$OPENAI_API_KEY
+    SMALLEST_API_KEY=$SMALLEST_API_KEY
+    EOF
+    ```
+  </Step>
 
-        ```bash
-        smallestai agent-crew builds
-        ```
+  <Step title="Deploy">
+    ```bash
+    smallestai agent-crew deploy --entry-point server.py
+    ```
 
-        Select your build, choose **Make Live**.
+    Packages your code and pushes it to the cloud. Takes about 30 seconds.
+  </Step>
 
-        <Tip>
-          **No TTY?** `agent-crew builds` needs an interactive terminal. Promote via REST instead:
+  <Step title="Go Live">
+    <Warning>
+      A successful deploy is **not live by default**. Builds land in `SUCCEEDED` with `isLive: null` — your agent will not answer calls until you promote one.
+    </Warning>
 
-          ```bash
-          curl -X PATCH "https://api.smallest.ai/atoms/v1/sdk/agents/$AGENT_ID/builds/$BUILD_ID" \
-            -H "Authorization: Bearer $SMALLEST_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d '{"isLive": true}'
-          ```
+    ```bash
+    smallestai agent-crew builds
+    ```
 
-          Successful response: `{"status": true, "data": {"message": "Build set as live successfully"}}`.
-        </Tip>
-      </Step>
+    Select your build and choose **Make Live** to start serving traffic.
 
-      <Step title="Attach a phone number to take calls">
-        New agents have no phone number. Attach one from the [Atoms dashboard](https://app.smallest.ai) (SIP/Twilio/Telnyx/Vonage) or via `client.atoms.phone_numbers`. See [Phone Numbers](/atoms/developer-guide/build/phone-calling/overview).
-      </Step>
-    </Steps>
-  </Tab>
-</Tabs>
+    <Tip>
+      **No TTY?** The `builds` command needs an interactive terminal. Promote via REST:
 
-## Complete walkthrough — copy-paste and run
+      ```bash
+      curl -X PATCH "https://api.smallest.ai/atoms/v1/sdk/agents/$AGENT_ID/builds/$BUILD_ID" \
+        -H "Authorization: Bearer $SMALLEST_API_KEY" \
+        -H "Content-Type: application/json" \
+        -d '{"isLive": true}'
+      ```
+    </Tip>
+  </Step>
+</Steps>
 
-Here's the full sequence from zero to a phone ringing. Replace the two placeholder keys at the top, paste the rest as-is.
+---
 
-```bash
-# ---------- 0. KEYS ----------
-export SMALLEST_API_KEY=sk_...   # from https://app.smallest.ai/dashboard/api-keys
-export OPENAI_API_KEY=sk-...     # optional if you use Electron in assistant.py
+## Command Reference
 
-# ---------- 1. PROJECT SETUP ----------
-mkdir my-agent && cd my-agent
-python3 -m venv .venv && source .venv/bin/activate
-pip install smallestai loguru
+### Authentication
 
-# ---------- 2. WRITE THE THREE FILES ----------
-cat > assistant.py <<'PY'
-import os
-from dotenv import load_dotenv
-from smallestai.atoms.crew.nodes import OutputCrewNode
-from smallestai.atoms.crew.clients.openai import OpenAIClient
+| Command | Description |
+|---------|-------------|
+| `smallestai auth login` | Prompts for your Smallest API key and stores it at `~/.smallestai/credentials.json`. Accepts the key piped on stdin. |
+| `smallestai auth logout` | Clear stored credentials |
 
-load_dotenv()
+### Agent Management
 
-class Assistant(OutputCrewNode):
-    def __init__(self):
-        super().__init__(name="assistant")
-        # Electron (reuses SMALLEST_API_KEY). Swap for OpenAI by changing model + api_key + dropping base_url.
-        self.llm = OpenAIClient(
-            model="electron",
-            api_key=os.getenv("SMALLEST_API_KEY"),
-            base_url="https://api.smallest.ai/waves/v1",
-        )
+| Command | Description |
+|---------|-------------|
+| `smallestai agent-crew init` | Link local directory to a platform agent |
+| `smallestai agent-crew deploy` | Deploy code to the cloud |
+| `smallestai agent-crew builds` | View and manage deployments |
+| `smallestai agent-crew chat` | Start interactive session with local agent |
 
-    async def generate_response(self):
-        response = await self.llm.chat(messages=self.context.messages, stream=True)
-        async for chunk in response:
-            if chunk.content:
-                yield chunk.content
-PY
+### Common Options
 
-cat > server.py <<'PY'
-from smallestai.atoms.crew.server import AtomsCrewApp
-from smallestai.atoms.crew.session import CrewSession
-from assistant import Assistant
+| Option | Description |
+|--------|-------------|
+| `--entry-point <file>` | Specify the main Python file (default: `server.py`) |
+| `--help` | Show help for any command |
 
-async def on_start(session: CrewSession):
-    session.add_node(Assistant())
-    await session.start()
-    await session.wait_until_complete()
+---
 
-if __name__ == "__main__":
-    AtomsCrewApp(setup_handler=on_start).run()
-PY
+## Build Management
 
-cat > requirements.txt <<'REQ'
-smallestai>=4.4.4
-loguru>=0.7.0
-python-dotenv>=1.0.0
-REQ
+Deployments are not live by default. This gives you a safety buffer.
 
-# ---------- 3. TEST LOCALLY ----------
-python server.py &           # boots ws://localhost:8080
-SERVER_PID=$!
-sleep 2
-smallestai agent-crew chat   # interactive — type a message, see the reply, Ctrl+C to exit
-kill $SERVER_PID
+<Warning>
+  **One Live Build Per Agent**: Making a new build live automatically takes down the previous one.
+</Warning>
 
-# ---------- 4. CREATE THE PLATFORM AGENT RECORD ----------
-AGENT_ID=$(python - <<'PY'
-from smallestai import SmallestAI
-import os
-client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
-print(client.atoms.agents.create_a_new_agent(name="my-agent").data)
-PY
-)
-echo "AGENT_ID=$AGENT_ID"
+**To promote a build:**
+1. Run `smallestai agent-crew builds`
+2. Select the desired build
+3. Choose **Make Live**
 
-# ---------- 5. LINK LOCAL CODE TO THAT AGENT ----------
-mkdir -p .smallestai
-echo "agent_id = \"$AGENT_ID\"" > .smallestai/config.toml
+**To roll back:**
+1. Run `smallestai agent-crew builds`
+2. Select the previous build
+3. Choose **Make Live**
 
-# ---------- 6. AUTHENTICATE THE CLI ----------
-echo "$SMALLEST_API_KEY" | smallestai auth login
+**To take down completely:**
+1. Run `smallestai agent-crew builds`
+2. Select the **LIVE** build
+3. Choose **Take Down**
 
-# ---------- 7. SHIP KEYS IN .env (platform-secrets API isn't built yet) ----------
-cat > .env <<EOF
-OPENAI_API_KEY=$OPENAI_API_KEY
-SMALLEST_API_KEY=$SMALLEST_API_KEY
-EOF
+---
 
-# ---------- 8. DEPLOY ----------
-BUILD_ID=$(smallestai agent-crew deploy --entry-point server.py | grep "Build ID:" | awk '{print $3}')
-echo "BUILD_ID=$BUILD_ID"
+## Error handling
 
-# ---------- 9. PROMOTE TO LIVE ----------
-curl -s -X PATCH "https://api.smallest.ai/atoms/v1/sdk/agents/$AGENT_ID/builds/$BUILD_ID" \
-  -H "Authorization: Bearer $SMALLEST_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"isLive": true}'
+When deployed code raises, the SDK auto-records the error on the call (in `calllog.errors[]`, the Events tab, and webhooks) — you don't need to wire anything up to get this. The `deploy` command also warns about env vars your code references before zip upload, and the pod's `/ready` endpoint blocks traffic until your crew's `__init__` succeeds. See [Error Handling](./agent-crew-error-handling) for severity semantics, graceful-fallback patterns, and how to emit your own application-level errors.
 
-# ---------- 10. (OPTIONAL) TRIGGER AN OUTBOUND CALL ----------
-# Get the phone-number product id you already own:
-FROM_PRODUCT_ID=$(python - <<'PY'
-from smallestai import SmallestAI
-import os
-client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
-numbers = client.atoms.phone_numbers.get_acquired_phone_numbers().data
-print(numbers[0]["_id"] if numbers else "")
-PY
-)
+---
 
-# Dial your target (replace +91XXXXXXXXXX with the number to call):
-CONV_ID=$(python - <<PY
-from smallestai import SmallestAI
-import os
-client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
-r = client.atoms.calls.start_an_outbound_call(
-    agent_id="$AGENT_ID",
-    phone_number="+91XXXXXXXXXX",
-    from_product_id="$FROM_PRODUCT_ID",
-)
-print(r.data.get("conversationId") if hasattr(r.data, "get") else r.data)
-PY
-)
-echo "CONVERSATION_ID=$CONV_ID"
+## More examples
 
-# Poll the transcript (note: poll lives on `logs`, not `calls`):
-python - <<PY
-from smallestai import SmallestAI
-import os, json
-client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
-log = client.atoms.logs.get_conversation_log_by_id(id="$CONV_ID")
-print(json.dumps(log.dict(), indent=2, default=str)[:2000])
-PY
-```
-
-That's the entire flow. Customize `assistant.py` to taste — add tools, swap the LLM, append a system prompt — and re-run from step 8 to redeploy.
-
-## What's Next?
+The two crews above are the starting points. The [Smallest AI cookbook](https://github.com/smallest-inc/cookbook/tree/main/voice-agents) ships ~15 ready-to-run voice-agent examples covering tool calling, call control, multi-language support, knowledge-base grounding, real banking / scheduling / IVR flows, observability, and more — each in its own directory with the same `curl`-and-run shape.
 
 <CardGroup cols={2}>
-  <Card title="Tool Calling" icon="toolbox" href="/atoms/developer-guide/build/agents/tools/defining-tools">
-    Give your agent calculators, search, and APIs.
+  <Card title="All voice-agent examples" icon="folder-tree" href="https://github.com/smallest-inc/cookbook/tree/main/voice-agents">
+    Browse the full set of crews on GitHub.
   </Card>
-  <Card title="Orchestration" icon="diagram-project" href="/atoms/developer-guide/build/agents/patterns/multi-agent-orchestration">
-    Connect multiple agents for complex workflows.
-  </Card>
-  <Card title="Cookbook" icon="book-open" href="https://github.com/smallest-inc/cookbook/tree/main/voice-agents">
-    ~15 ready-to-run voice-agent crews — tool calling, IVR, multi-language, background processing, and more.
-  </Card>
-  <Card title="Agent Crew CLI" icon="terminal" href="/atoms/developer-guide/get-started/agent-crew-cli">
-    Full CLI reference — local testing, deploy, builds management.
+  <Card title="Cookbook root" icon="book-open" href="https://github.com/smallest-inc/cookbook">
+    STT, TTS, voice-agents, mobile, integrations — everything Smallest AI in one repo.
   </Card>
 </CardGroup>
 
