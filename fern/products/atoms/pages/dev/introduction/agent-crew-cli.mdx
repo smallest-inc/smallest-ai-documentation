@@ -35,7 +35,7 @@ export OPENAI_API_KEY=sk-...
 
 ## Create Your First Agent Crew
 
-Before the CLI has anything to connect to, you need a Python file that defines a crew and starts a WebSocket server. Pick one of the two patterns below and pull the example folder straight from the cookbook into an empty directory of your choice — no `.env` file to set up; the examples read `OPENAI_API_KEY` straight from your shell. Each folder ships a one-line `requirements.txt` pinning `smallestai`, which the cloud build also uses when you `deploy`.
+Before the CLI has anything to connect to, you need a Python file that defines a crew and starts a WebSocket server. Pick one of the two patterns below and pull the example folder straight from the cookbook — the `tar` command drops a `getting_started/` or `background_agent/` directory into your cwd, ready to `cd` into. No `.env` file to set up; the examples read `OPENAI_API_KEY` straight from your shell. Each folder ships a one-line `requirements.txt` pinning `smallestai`, which the cloud build also uses when you `deploy`.
 
 ### Single-node crew
 
@@ -43,7 +43,8 @@ A minimal, single-node crew that streams chat completions from an LLM and greets
 
 ```bash
 curl -sL https://github.com/smallest-inc/cookbook/archive/refs/heads/main.tar.gz \
-  | tar -xz --strip-components=3 cookbook-main/voice-agents/getting_started
+  | tar -xz --strip-components=2 cookbook-main/voice-agents/getting_started
+cd getting_started
 ```
 
 `server.py` is the entry point — it boots an `AtomsCrewApp` on `ws://localhost:8080/ws`. `assistant.py` contains the `OutputCrewNode` subclass that streams the LLM response; extend it with your own prompt, tools, and logic.
@@ -54,7 +55,8 @@ A two-node example from [`background_agent`](https://github.com/smallest-inc/coo
 
 ```bash
 curl -sL https://github.com/smallest-inc/cookbook/archive/refs/heads/main.tar.gz \
-  | tar -xz --strip-components=3 cookbook-main/voice-agents/background_agent
+  | tar -xz --strip-components=2 cookbook-main/voice-agents/background_agent
+cd background_agent
 ```
 
 `app.py` wires both nodes into a single `CrewSession`. `support_agent.py` is the user-facing `OutputCrewNode`; it can query the sibling sentiment node mid-conversation. `sentiment_analyzer.py` is a `BackgroundCrewNode` — it listens to every transcript event, classifies sentiment, and updates state the support agent reads.
