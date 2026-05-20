@@ -35,15 +35,16 @@ export OPENAI_API_KEY=sk-...
 
 ## Create Your First Agent Crew
 
-Before the CLI has anything to connect to, you need a Python file that defines a crew and starts a WebSocket server. Pick one of the two patterns below and `curl` the files into an empty directory of your choice — no `requirements.txt` to install, no `.env` file to set up. `smallestai` is the only dependency, and the examples read `OPENAI_API_KEY` straight from your shell.
+Before the CLI has anything to connect to, you need a Python file that defines a crew and starts a WebSocket server. Pick one of the two patterns below and pull the example folder straight from the cookbook — the `tar` command drops a `getting_started/` or `background_agent/` directory into your cwd, ready to `cd` into. No `.env` file to set up; the examples read `OPENAI_API_KEY` straight from your shell. Each folder ships a one-line `requirements.txt` pinning `smallestai`, which the cloud build also uses when you `deploy`.
 
 ### Single-node crew
 
 A minimal, single-node crew that streams chat completions from an LLM and greets the caller on join — copied from the cookbook's [`getting_started`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/getting_started).
 
 ```bash
-curl -O https://raw.githubusercontent.com/smallest-inc/cookbook/main/voice-agents/getting_started/server.py
-curl -O https://raw.githubusercontent.com/smallest-inc/cookbook/main/voice-agents/getting_started/assistant.py
+curl -sL https://github.com/smallest-inc/cookbook/archive/refs/heads/main.tar.gz \
+  | tar -xz --strip-components=2 cookbook-main/voice-agents/getting_started
+cd getting_started
 ```
 
 `server.py` is the entry point — it boots an `AtomsCrewApp` on `ws://localhost:8080/ws`. `assistant.py` contains the `OutputCrewNode` subclass that streams the LLM response; extend it with your own prompt, tools, and logic.
@@ -53,9 +54,9 @@ curl -O https://raw.githubusercontent.com/smallest-inc/cookbook/main/voice-agent
 A two-node example from [`background_agent`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/background_agent) — a support agent talking to the user, and a sentiment analyzer running silently in parallel that flags frustration and triggers auto-escalation.
 
 ```bash
-curl -O https://raw.githubusercontent.com/smallest-inc/cookbook/main/voice-agents/background_agent/app.py
-curl -O https://raw.githubusercontent.com/smallest-inc/cookbook/main/voice-agents/background_agent/support_agent.py
-curl -O https://raw.githubusercontent.com/smallest-inc/cookbook/main/voice-agents/background_agent/sentiment_analyzer.py
+curl -sL https://github.com/smallest-inc/cookbook/archive/refs/heads/main.tar.gz \
+  | tar -xz --strip-components=2 cookbook-main/voice-agents/background_agent
+cd background_agent
 ```
 
 `app.py` wires both nodes into a single `CrewSession`. `support_agent.py` is the user-facing `OutputCrewNode`; it can query the sibling sentiment node mid-conversation. `sentiment_analyzer.py` is a `BackgroundCrewNode` — it listens to every transcript event, classifies sentiment, and updates state the support agent reads.
