@@ -175,15 +175,16 @@ Once your files are ready, you have two options:
         # SMALLEST_AI_TOKEN, while the CLI and helpers use SMALLEST_API_KEY.
         client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
 
-        response = client.atoms.agents.create_a_new_agent(
-            name="my-test-agent",
-            first_message="Hello! I'm your test agent. What can I help with?",
-        )
+        response = client.atoms.agents.create_a_new_agent(name="my-test-agent")
         agent_id = response.data   # response.data is the agent id, a string
         print(agent_id)
         ```
 
         Save the printed `agent_id` — you'll need it in the next step.
+
+        <Note>
+          **The greeting comes from your `server.py` code, not the agent record.** Passing `first_message=...` to `create_a_new_agent` currently does not persist on the platform (verified 2026-05-20). Use the `SDKSystemUserJoinedEvent` hook in `server.py` (shown above in the *Create server.py* step) to make your agent speak first.
+        </Note>
       </Step>
 
       <Step title="Authenticate the CLI">
@@ -246,7 +247,7 @@ Once your files are ready, you have two options:
 
       <Step title="Make Live">
         <Warning>
-          Deploys are **not live by default.** Builds land in `SUCCEEDED` with `is_live=null`. Your agent won't answer calls until you promote one.
+          Deploys are **not live by default.** Builds land in `SUCCEEDED` with `isLive: null`. Your agent won't answer calls until you promote one.
         </Warning>
 
         ```bash
@@ -254,6 +255,19 @@ Once your files are ready, you have two options:
         ```
 
         Select your build, choose **Make Live**.
+
+        <Tip>
+          **No TTY?** `agent-crew builds` needs an interactive terminal. Promote via REST instead:
+
+          ```bash
+          curl -X PATCH "https://api.smallest.ai/atoms/v1/sdk/agents/$AGENT_ID/builds/$BUILD_ID" \
+            -H "Authorization: Bearer $SMALLEST_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"isLive": true}'
+          ```
+
+          Successful response: `{"status": true, "data": {"message": "Build set as live successfully"}}`.
+        </Tip>
       </Step>
 
       <Step title="Attach a phone number to take calls">
