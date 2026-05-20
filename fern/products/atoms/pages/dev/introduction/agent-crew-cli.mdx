@@ -162,6 +162,19 @@ When you're ready for production, deploy to Smallest AI's managed infrastructure
     </Tip>
   </Step>
 
+  <Step title="Ship your env vars in a .env">
+    <Warning>
+      The deploy zip does **not** carry your shell environment — platform-side env-var injection isn't built yet. Drop your keys into a `.env` next to `server.py` so `load_dotenv()` finds them on the cloud:
+
+      ```bash
+      echo "OPENAI_API_KEY=$OPENAI_API_KEY" > .env
+      echo "SMALLEST_API_KEY=$SMALLEST_API_KEY" >> .env
+      ```
+
+      Without this, the deployed agent boots but stays silent on calls — the LLM client gets `api_key=None`, logs a warning to logs you can't see, and fails on the first request.
+    </Warning>
+  </Step>
+
   <Step title="Deploy">
     ```bash
     smallestai agent-crew deploy --entry-point server.py

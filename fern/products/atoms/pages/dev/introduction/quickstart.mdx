@@ -180,6 +180,18 @@ Once your files are ready, you have two options:
         smallestai agent-crew init
         ```
       </Step>
+      <Step title="Add a .env (required for keys to reach the cloud)">
+        <Warning>
+          Platform-side env-var injection isn't built yet. **The deploy zip does not carry your shell environment.** If your agent reads keys via `os.getenv(...)`, drop them into a `.env` file next to `server.py` — the zip includes `.env`, and `load_dotenv()` in `assistant.py` picks them up on the cloud:
+
+          ```bash
+          echo "OPENAI_API_KEY=$OPENAI_API_KEY" > .env
+          echo "SMALLEST_API_KEY=$SMALLEST_API_KEY" >> .env
+          ```
+
+          Skip this and the deployed agent boots fine but stays silent on calls — `OpenAIClient(api_key=None)` only logs a warning, then fails on the first LLM request.
+        </Warning>
+      </Step>
       <Step title="Deploy">
         Push your code to the cloud.
         ```bash
