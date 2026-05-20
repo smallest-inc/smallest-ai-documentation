@@ -86,6 +86,34 @@ channels:
       Post-call, the full conversation (transcript + recording) is available
       at `GET /atoms/v1/conversation/{callId}` using the `call_id` from
       `session.created`.
+
+      ## Connection
+
+      Open a WebSocket to `wss://api.smallest.ai/atoms/v1/agent/connect` with your
+      API key as either `Authorization: Bearer <key>` or `?token=<key>`.
+
+      ### Query parameters
+
+      | Parameter | Required | Type | Description |
+      | --- | --- | --- | --- |
+      | `agent_id` | Yes | string | The Atoms agent to connect to. |
+      | `token` | Yes\* | string | API key. Alternative to the `Authorization` header — useful for browser/React Native clients. |
+      | `variables` | No | string | URL-encoded JSON object of per-call prompt variables. Overrides the agent's `defaultVariables` for this session only. Values must be `string`, `number`, or `boolean`. Reserved keys (`call_id`, `conversation_type`, `user_number`, `agent_number`) are stripped server-side. |
+
+      \* `token` or `Authorization: Bearer <key>` — not both.
+
+      ### Example: connect with per-call variables
+
+      ```javascript
+      const variables = { customer_name: "Tanay", account_tier: "gold" };
+      const ws = new WebSocket(
+        "wss://api.smallest.ai/atoms/v1/agent/connect" +
+        `?token=${apiKey}` +
+        `&agent_id=${agentId}` +
+        `&mode=webcall` +
+        `&variables=${encodeURIComponent(JSON.stringify(variables))}`
+      );
+      ```
     messages:
       inputAudioAppend:
         $ref: "#/components/messages/inputAudioAppend"
