@@ -72,10 +72,13 @@ curl -sL https://github.com/smallest-inc/cookbook/archive/refs/heads/main.tar.gz
   | tar -xz --strip-components=2 cookbook-main/voice-agents/background_agent
 cd background_agent
 
-# Pin to a working SDK version (see Installation warning above)
-sed -i.bak 's/smallestai.*/smallestai>=4.4.6,<4.4.7/' requirements.txt
+# Multi-node example needs 4.4.7+ — DON'T pin below it
 pip install -r requirements.txt
 ```
+
+<Warning>
+  **Multi-node uses `smallestai>=4.4.7`** because `sentiment_analyzer.py` imports `SDKAgentLogEvent`, which was added in 4.4.7. On boot you'll see a `Startup validation failed — pod will not accept sessions` ERROR in logs from the SDK's `_validate_startup` hook. **The error is misleading — the pod does accept sessions and the agent works.** Tracked for an SDK fix; safe to ignore in the meantime.
+</Warning>
 
 `app.py` wires both nodes into a single `CrewSession`. `support_agent.py` is the user-facing `OutputCrewNode`; it can query the sibling sentiment node mid-conversation. `sentiment_analyzer.py` is a `BackgroundCrewNode` — it listens to every transcript event, classifies sentiment, and updates state the support agent reads.
 
