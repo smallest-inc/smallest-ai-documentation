@@ -1,0 +1,218 @@
+---
+title: "Error Handling in Agent Crews"
+sidebarTitle: "Error Handling"
+description: "How exceptions in your crew code surface on the call — auto-emission, severity semantics, graceful fallbacks, and pre-deploy validation."
+---
+
+When a deployed crew's code raises an exception, you want to know about it — on the call record, in the dashboard, and in webhooks. Not buried in pod stdout where only `kubectl logs` can find it.
+
+The Agent Crew SDK closes this gap with four cooperating layers, each catching errors earlier than the next:
+
+| Layer | Catches | When |
+|---|---|---|
+| 1. Pre-deploy validation | Missing env var refs in your code | `smallestai agent-crew deploy` |
+| 2. Pod startup health check | `__init__` exceptions (missing API keys, bad imports) | Pod boot, before accepting calls |
+| 3. Auto-emit on user-code exceptions | Runtime errors in `process_event` / `generate_response` | First time the code path runs |
+| 4. Orchestrator routing | All emitted errors | Real-time during the call |
+
+You don't need to opt into any of these — they're on by default. The sections below cover when to interact with each one.
+
+---
+
+## Layer 1 — Pre-deploy env var validation
+
+`smallestai agent-crew deploy` AST-walks every `.py` file in your build directory and warns about every environment variable your code reads:
+
+```bash
+$ smallestai agent-crew deploy --entry-point app.py
+Deploying agent from: /Users/me/projects/my-crew
+Entry point: app.py
+Agent ID: 6931c89118641b32aa6b5818
+
+⚠  Your code references these environment variables:
+    • OPENAI_API_KEY
+    • POSTGRES_URL
+
+The deploy pipeline does not propagate `.env` values into the running
+pod yet. If these aren't set in the runtime image, your code will
+fail at first use (e.g. `openai.OpenAIError: Missing credentials`).
+
+Packaging agent code...
+✓ Package created (0.31 MB)
+Uploading to Atoms platform...
+✓ Deployment successful!
+```
+
+`SMALLEST_API_KEY` is suppressed from this list — the platform always sets it. Anything else is your responsibility to provide.
+
+<Note>
+  The warning is purely informational — the deploy proceeds either way. We list the env vars so you can decide whether to bake them into your Docker image, switch to a credential-free alternative, or accept that the first call will fail.
+</Note>
+
+---
+
+## Layer 2 — Pod startup health check
+
+`AtomsCrewApp` exposes two HTTP endpoints alongside its WebSocket:
+
+| Endpoint | Purpose | Returns |
+|---|---|---|
+| `GET /health` | **Liveness** — the process is up | Always 200 if the pod is running |
+| `GET /ready` | **Readiness** — the crew is initialized and ready to accept calls | 503 with structured reason until `_validate_startup()` passes; 200 after |
+
+The platform's readiness probe polls `/ready`. If your setup handler raises during startup (because, say, `OpenAIClient.__init__` validates the API key and yours is missing), the pod stays not-ready and the build is auto-marked broken. No traffic ever reaches a crew that can't initialize.
+
+### What "ready" means
+
+When the FastAPI server starts, it runs a dry-run of your `setup_handler` against a no-op session. This exercises every node's `__init__`, `add_node()`, and `add_edge()` paths — but doesn't run any session logic. If everything constructs cleanly, the pod flips to ready. If any node raises, the pod stays at 503 and the reason is in the response body:
+
+```bash
+$ curl http://localhost:8080/ready
+{"detail":{"status":"not_ready","reason":"OpenAIError: Missing API key"}}
+```
+
+This means: when you `pip install -r requirements.txt && python app.py` locally, the pod is already exercising the same startup path the platform uses. If `/ready` is 200 locally with the same env vars, it'll be 200 in the cloud.
+
+---
+
+## Layer 3 — Auto-emit on user-code exceptions
+
+Whenever your `process_event()` or `generate_response()` raises an uncaught exception, the SDK automatically:
+
+1. Catches the exception inside the event-handler loop (so one bad event doesn't kill the node).
+2. Emits an `SDKAgentErrorEvent` upstream with the message, full traceback, and the exception's class name.
+3. Logs the exception locally.
+4. Continues processing the next event.
+
+The orchestrator records the error on the call:
+
+- `calllog.errors[]` gets a new entry with `{source, severity, message, payload, timestamp}` — where `payload` carries `node_name`, `error_class`, `traceback`, and any custom keys you added.
+- If severity is `"fatal"`, `calllog.failureReason` is populated and the call is terminated cleanly.
+- The Events tab in the dashboard renders each entry inline on the call timeline.
+- Webhooks (`post-conversation`) include the errors in their payload.
+
+### Severity semantics
+
+`SDKAgentErrorEvent.severity` controls whether the call is failed:
+
+| Value | Default for | Effect |
+|---|---|---|
+| `"warning"` | `BackgroundCrewNode` subclasses | Recorded on the call, **call continues**. Use for non-critical side-channels — sentiment, audit, observability — where the failure doesn't break the conversation. |
+| `"fatal"` | `OutputCrewNode` subclasses | Recorded on the call, **call ends**, `failureReason` is populated. Use when the agent itself fails — no point continuing if the user-facing brain isn't responding. |
+
+You can override the default by setting `severity=` on an event you emit manually (see below), or by overriding `_error_severity()` on your node class.
+
+---
+
+## Layer 4 — Emitting errors explicitly
+
+The auto-emission only fires when your code lets an exception **bubble up** out of `process_event` / `generate_response`. If you catch your own exception for a graceful fallback, the SDK won't see it — you need to emit the error event manually so it's still recorded.
+
+This is the recommended pattern for background nodes that have a sensible fallback:
+
+```python
+from smallestai.atoms.crew.events import SDKAgentErrorEvent
+from smallestai.atoms.crew.nodes import BackgroundCrewNode
+
+class SentimentAnalyzer(BackgroundCrewNode):
+    async def _analyze_sentiment(self, text: str):
+        try:
+            sentiment = await self._call_openai(text)
+        except Exception as e:
+            logger.error(f"[SentimentAnalyzer] {e}")
+            # Fall back to neutral so the conversation continues
+            self.current_sentiment = "neutral"
+            # But still record the error on the call
+            await self.send_event(SDKAgentErrorEvent(
+                message=str(e),
+                severity="warning",
+                payload={
+                    "node_name": self.name,
+                    "error_class": type(e).__name__,
+                },
+            ))
+            return
+        self.current_sentiment = sentiment
+```
+
+For output nodes, the existing wrapper in `OutputCrewNode._handle_llm_request` already auto-emits with `severity="fatal"` — you only need manual emission if you're catching errors yourself.
+
+### Customer-application errors (not exceptions)
+
+You can also emit `SDKAgentErrorEvent` for **business-logic errors** that aren't actually Python exceptions:
+
+```python
+if not customer_consent_recorded:
+    await self.send_event(SDKAgentErrorEvent(
+        message="Cannot process request without recorded consent",
+        severity="fatal",
+        payload={
+            "node_name": self.name,
+            "error_class": "ConsentMissingError",
+            "customer_id": customer_id,   # any custom keys are welcome
+            "request_id": request_id,
+        },
+    ))
+    return
+```
+
+This lets you reuse the same error-record / call-failure pipeline for application-level validation failures without inventing a separate event type.
+
+---
+
+## Complete example
+
+Putting all four layers together — what happens when a customer deploys a crew that references `OPENAI_API_KEY` but the env var isn't set in the pod:
+
+<Steps>
+  <Step title="At deploy">
+    CLI prints the env-var warning. Customer acknowledges and proceeds anyway (to test the platform).
+  </Step>
+
+  <Step title="At pod startup">
+    `OpenAIClient.__init__` raises (it validates the key shape). `/ready` returns 503. The build is auto-marked broken; no calls are routed.
+  </Step>
+
+  <Step title="If the platform somehow routes a call">
+    The first `_analyze_sentiment` raises. SDK auto-emits `SDKAgentErrorEvent(severity="warning", payload={"node_name": "sentiment-analyzer", "error_class": "OpenAIError", "traceback": "..."})`. The call continues with `current_sentiment = "neutral"` (because the customer's try/except handles the fallback).
+  </Step>
+
+  <Step title="In the dashboard">
+    The call's Events tab shows the warning inline. `calllog.errors[]` has the structured entry. The customer fixes the env var without ever opening pod logs.
+  </Step>
+
+  <Step title="If the output agent has the same failure">
+    `severity="fatal"` instead of `"warning"`. The call terminates. `failureReason` is set to `"OpenAIError in support-agent.generate_response: Missing credentials"`. The call detail page surfaces it prominently.
+  </Step>
+</Steps>
+
+---
+
+## Reference
+
+### `SDKAgentErrorEvent` schema
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `message` | `str` | (required) | Human-readable description |
+| `severity` | `"warning"` \| `"fatal"` | `"warning"` | See [Severity semantics](#severity-semantics). Drives whether the call is failed. |
+| `payload` | `Dict[str, Any]` | `{}` | Free-form. Stored as JSON on the call record so any keys are queryable downstream. |
+
+**Conventional payload keys** (auto-populated by the SDK when it emits on your behalf):
+
+| Key | Notes |
+|---|---|
+| `node_name` | Which `CrewNode` raised. Typically `self.name`. |
+| `error_class` | The exception class — e.g. `"OpenAIError"`, `"ConnectionError"` |
+| `traceback` | Full traceback string from `traceback.format_exc()` |
+
+When emitting manually you can include any other keys (`customer_id`, `request_id`, `attempt_number`, etc.) — they're stored alongside the conventional keys and queryable end-to-end.
+
+### Endpoints exposed by `AtomsCrewApp`
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/` | Status snapshot — `{status, ready, active_sessions}` |
+| `GET` | `/health` | Liveness probe — `200` if process up |
+| `GET` | `/ready` | Readiness probe — `200` if startup validation passed, `503` with reason otherwise |
+| `WebSocket` | `/ws` | Agent session connection (used by the platform orchestrator) |
