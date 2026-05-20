@@ -4,32 +4,34 @@ sidebarTitle: "Outbound Calls"
 description: "Make phone calls programmatically with your AI agent."
 ---
 
-Use `start_outbound_call()` to dial any phone number and connect it to your agent.
+Use `start_an_outbound_call()` to dial any phone number and connect it to your agent.
 
 ## Basic Call
 
 ```python
-from smallestai.atoms import AtomsClient
+from smallestai import SmallestAI
 
-client = AtomsClient()
+# Reads SMALLEST_API_KEY from the environment, or pass api_key="sk_..." explicitly
+client = SmallestAI()
 
-response = client.start_outbound_call(
-    conversation_outbound_post_request={
-        "agentId": "your-agent-id",
-        "phoneNumber": "+14155551234"
-    }
+response = client.atoms.calls.start_an_outbound_call(
+    agent_id="your-agent-id",
+    phone_number="+14155551234",
 )
 
-conversation_id = response.data.conversation_id
-print(f"Call started: {conversation_id}")
+print(f"Call started: {response.conversation_id}")
 ```
+
+<Note>
+  Get your API key at [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys) and export it as `SMALLEST_API_KEY`, or pass `SmallestAI(api_key="sk_...")` directly.
+</Note>
 
 ## Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `agentId` | string | Yes | ID of your agent (from dashboard) |
-| `phoneNumber` | string | Yes | E.164 format phone number |
+| `agent_id` | string | Yes | ID of your agent (from the [dashboard](https://app.smallest.ai/dashboard)) |
+| `phone_number` | string | Yes | E.164 format phone number |
 
 <Note>
   Phone numbers must be in E.164 format: `+[country code][number]`
@@ -40,7 +42,7 @@ print(f"Call started: {conversation_id}")
 ## Response
 
 ```python
-# response.data.conversation_id = "CALL-1767900635803-8a3bee"
+# response.conversation_id = "CALL-1767900635803-8a3bee"
 ```
 
 | Field | Type | Description |
@@ -53,17 +55,15 @@ Save this ID to retrieve transcripts and analytics later.
 
 ```python
 try:
-    response = client.start_outbound_call(
-        conversation_outbound_post_request={
-            "agentId": "agent-123",
-            "phoneNumber": "+14155551234"
-        }
+    response = client.atoms.calls.start_an_outbound_call(
+        agent_id="agent-123",
+        phone_number="+14155551234",
     )
-    print(f"Call started: {response.data.conversation_id}")
-    
+    print(f"Call started: {response.conversation_id}")
+
 except Exception as e:
     error = str(e)
-    
+
     if "Invalid agent id" in error:
         print("Error: Agent not found. Check your agent ID.")
     elif "Invalid phone" in error:

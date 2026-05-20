@@ -1,0 +1,27 @@
+---
+title: Python SDK — `SmallestAI(api_key=...)` (was `token=...`) and `SMALLEST_API_KEY` env var
+---
+
+The `SmallestAI` and `AsyncSmallestAI` constructors in the Python SDK now take `api_key=` (was `token=`) and default to reading `SMALLEST_API_KEY` from the environment (was `SMALLEST_AI_TOKEN`). This aligns the auto-generated client with everything else in the ecosystem:
+
+- The hand-written helpers (`smallestai.atoms.helpers.{call,campaign,audience,kb}`) already take `api_key=` and read `SMALLEST_API_KEY`.
+- Every cookbook `.env.sample` exports `SMALLEST_API_KEY`.
+- The dashboard at [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys) calls the value an "API key".
+
+**Before:**
+
+```python
+from smallestai import SmallestAI
+client = SmallestAI(token="sk_…")        # or set SMALLEST_AI_TOKEN
+```
+
+**After:**
+
+```python
+from smallestai import SmallestAI
+client = SmallestAI(api_key="sk_…")      # or set SMALLEST_API_KEY
+```
+
+**Breaking change.** `SmallestAI(token=…)` and `SMALLEST_AI_TOKEN` are no longer accepted. Both names shipped only in 4.4.x and were undocumented in any user-facing page, so they're dropped without a deprecation window. Any in-flight 4.4.x code calling `SmallestAI(token=…)` needs a one-line rename to `api_key=…`.
+
+**Spec update:** `fern/apis/unified/generators.yml` — the `bearer-auth` `token.env` value is now `SMALLEST_API_KEY`, so the next Python SDK regen produces a client with the new kwarg/env var natively (the SDK PR is a hand-patch on top of the Fern-generated `client.py` that lands the change immediately as 4.4.5).
