@@ -125,6 +125,15 @@ Create two files: one for the crew node logic, and one to run the server.
       Adding the greeting to context ensures the LLM knows the conversation has started.
     </Tip>
   </Step>
+
+  <Step title="Create requirements.txt">
+    The cloud build installs from this file. Pin `smallestai` and any libs your code imports:
+
+    ```txt requirements.txt
+    smallestai>=4.4.4
+    loguru>=0.7.0
+    ```
+  </Step>
 </Steps>
 
 ## Run Your Agent Crew
@@ -149,63 +158,106 @@ Once your files are ready, you have two options:
   </Tab>
 
   <Tab title="Deploy to Platform">
-    To have Smallest AI host your agent in the cloud (for production, API access, or phone calls):
+    To have Smallest AI host your agent in the cloud (for production, API access, or phone calls). Deploy has two halves:
 
-    <Warning>
-      **Prerequisite:** You need an existing agent on the [Atoms platform](https://app.smallest.ai?utm_source=documentation&utm_medium=docs) — `agent-crew init` links your local code to it. Create one from the dashboard, or programmatically via the SDK:
+    1. **The agent record** on the platform — name, voice, language, `first_message`, attached phone numbers. Created via SDK or dashboard.
+    2. **The agent code** (your `assistant.py` + `server.py`) — uploaded as a zip and run as your agent's "brain" during calls.
 
-      ```python
-      from smallestai import SmallestAI
-      import os
-
-      # Pass token= explicitly — the client otherwise looks for SMALLEST_AI_TOKEN,
-      # not SMALLEST_API_KEY.
-      client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
-      response = client.atoms.agents.create_a_new_agent(name="my-test-agent")
-      agent_id = response.data   # the agent id is a string at .data
-      print(agent_id)
-      ```
-    </Warning>
+    The CLI links them via `agent-crew init` and uploads the code via `agent-crew deploy`.
 
     <Steps>
-      <Step title="Login">
+      <Step title="Create the agent record (SDK)">
+        ```python
+        from smallestai import SmallestAI
+        import os
+
+        # Pass token= explicitly — the SmallestAI client otherwise looks for
+        # SMALLEST_AI_TOKEN, while the CLI and helpers use SMALLEST_API_KEY.
+        client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
+
+        response = client.atoms.agents.create_a_new_agent(
+            name="my-test-agent",
+            first_message="Hello! I'm your test agent. What can I help with?",
+        )
+        agent_id = response.data   # response.data is the agent id, a string
+        print(agent_id)
+        ```
+
+        Save the printed `agent_id` — you'll need it in the next step.
+      </Step>
+
+      <Step title="Authenticate the CLI">
         ```bash
         smallestai auth login
         ```
-        Paste your `SMALLEST_API_KEY` when prompted, or pipe it in: `echo $SMALLEST_API_KEY | smallestai auth login`. Credentials are stored at `~/.smallestai/credentials.json`.
+        Paste your `SMALLEST_API_KEY` when prompted, or pipe it in:
+        ```bash
+        echo $SMALLEST_API_KEY | smallestai auth login
+        ```
+        Credentials are stored at `~/.smallestai/credentials.json` (`0600`).
       </Step>
-      <Step title="Initialize">
-        Link your directory to an existing agent on the platform.
+
+      <Step title="Link local code to the agent record">
         ```bash
         smallestai agent-crew init
         ```
-      </Step>
-      <Step title="Add a .env (required for keys to reach the cloud)">
-        <Warning>
-          Platform-side env-var injection isn't built yet. **The deploy zip does not carry your shell environment.** If your agent reads keys via `os.getenv(...)`, drop them into a `.env` file next to `server.py` — the zip includes `.env`, and `load_dotenv()` in `assistant.py` picks them up on the cloud:
 
-          ```bash
-          echo "OPENAI_API_KEY=$OPENAI_API_KEY" > .env
-          echo "SMALLEST_API_KEY=$SMALLEST_API_KEY" >> .env
+        Interactive picker — choose the agent you just created. It writes one file: `.smallestai/config.toml`.
+
+        <Tip>
+          **No TTY?** Write the file yourself:
+          ```toml .smallestai/config.toml
+          agent_id = "<the-id-you-saved>"
           ```
+        </Tip>
+      </Step>
 
-          Skip this and the deployed agent boots fine but stays silent on calls — `OpenAIClient(api_key=None)` only logs a warning, then fails on the first LLM request.
+      <Step title="Ship your env vars in a .env">
+        <Warning>
+          Platform-side secrets injection **isn't built yet.** The deploy zip does not carry your shell environment.
+        </Warning>
+
+        **How `.env` works on the cloud**:
+        - The deploy zip ships every file in your project dir, except for `__pycache__/`, `.venv/`, etc. `.env` is **not** excluded.
+        - The cookbook's `assistant.py` calls `load_dotenv()` at import time → on the cloud, that reads `.env` from the same directory.
+        - End result: keys defined in your local `.env` are available via `os.getenv(...)` inside the running cloud agent.
+
+        Create one next to `server.py`:
+
+        ```bash
+        cat > .env <<EOF
+        OPENAI_API_KEY=$OPENAI_API_KEY
+        SMALLEST_API_KEY=$SMALLEST_API_KEY
+        EOF
+        ```
+
+        <Warning>
+          **Skip this and the deployed agent boots fine but stays silent on calls.** `OpenAIClient(api_key=None)` only logs a warning to cloud logs (which you can't see), then fails on the first LLM request — no traceback in front of the caller, just silence.
         </Warning>
       </Step>
+
       <Step title="Deploy">
-        Push your code to the cloud.
         ```bash
         smallestai agent-crew deploy --entry-point server.py
         ```
+
+        Zips your dir, uploads it, builds, deploys. Takes ~30s. Output ends with a build id.
       </Step>
+
       <Step title="Make Live">
         <Warning>
-          A successful deploy is **not live by default**. New builds land in `SUCCEEDED` state with `is_live=null`. Your agent will not answer calls until you promote a build.
+          Deploys are **not live by default.** Builds land in `SUCCEEDED` with `is_live=null`. Your agent won't answer calls until you promote one.
         </Warning>
-        Run `smallestai agent-crew builds`, select your build, and choose **Make Live**.
+
+        ```bash
+        smallestai agent-crew builds
+        ```
+
+        Select your build, choose **Make Live**.
       </Step>
-      <Step title="Attach a Phone Number">
-        New agents have no phone number attached. To take real calls you'll need to attach one — buy a SIP/Twilio/Telnyx/Vonage number from the [Atoms dashboard](https://app.smallest.ai) or via `client.atoms.phone_numbers`. See [Phone Numbers](/atoms/developer-guide/build/phone-calling/overview) for the full setup.
+
+      <Step title="Attach a phone number to take calls">
+        New agents have no phone number. Attach one from the [Atoms dashboard](https://app.smallest.ai) (SIP/Twilio/Telnyx/Vonage) or via `client.atoms.phone_numbers`. See [Phone Numbers](/atoms/developer-guide/build/phone-calling/overview).
       </Step>
     </Steps>
   </Tab>

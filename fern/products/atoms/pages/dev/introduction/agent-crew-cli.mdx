@@ -162,16 +162,24 @@ When you're ready for production, deploy to Smallest AI's managed infrastructure
     </Tip>
   </Step>
 
-  <Step title="Ship your env vars in a .env">
+  <Step title="Ship env vars in a .env (required)">
     <Warning>
-      The deploy zip does **not** carry your shell environment — platform-side env-var injection isn't built yet. Drop your keys into a `.env` next to `server.py` so `load_dotenv()` finds them on the cloud:
+      Platform-side secrets injection **isn't built yet.** The deploy zip does not carry your shell environment.
+    </Warning>
 
-      ```bash
-      echo "OPENAI_API_KEY=$OPENAI_API_KEY" > .env
-      echo "SMALLEST_API_KEY=$SMALLEST_API_KEY" >> .env
-      ```
+    **How `.env` works on the cloud**: the zip ships every file in your dir except `__pycache__/`, `.venv/`, etc. — `.env` is **not** excluded. The cookbook's `assistant.py` calls `load_dotenv()` at import time, so on the cloud it reads `.env` from the same directory. Keys defined locally end up available to `os.getenv(...)` in the cloud agent.
 
-      Without this, the deployed agent boots but stays silent on calls — the LLM client gets `api_key=None`, logs a warning to logs you can't see, and fails on the first request.
+    Create one next to `server.py`:
+
+    ```bash
+    cat > .env <<EOF
+    OPENAI_API_KEY=$OPENAI_API_KEY
+    SMALLEST_API_KEY=$SMALLEST_API_KEY
+    EOF
+    ```
+
+    <Warning>
+      Skip this and the deployed agent boots fine but stays silent on calls — `OpenAIClient(api_key=None)` only logs a warning to cloud logs (which you can't see), then fails on the first LLM request. No traceback in front of the caller, just silence.
     </Warning>
   </Step>
 
