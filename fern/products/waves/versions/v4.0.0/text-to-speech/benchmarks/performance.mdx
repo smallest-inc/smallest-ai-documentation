@@ -3,7 +3,24 @@ title: 'Performance'
 description: 'Lightning v3.1 and Lightning v3.1 Pro head-to-head TTS benchmarks: TTFB latency, EmergentTTS naturalness, expressiveness, delivery, accuracy, and MOS quality versus other production TTS systems.'
 ---
 
-Lightning v3.1 (Standard) and Lightning v3.1 Pro are evaluated on the [EmergentTTS benchmark](https://huggingface.co/datasets/bosonai/EmergentTTS) — 1,088 listener-judged samples spanning English prose, multilingual code-switching, expressive delivery, paralinguistic content, and stress tests for prosody. Scores below come from internal evaluation using the same dataset, scoring rubric, and LLM-as-a-Judge framework across all models. See [Metrics Overview](/waves/documentation/text-to-speech-lightning/benchmarks/metrics-overview) for what each metric measures, and [Evaluation Walkthrough](/waves/documentation/text-to-speech-lightning/benchmarks/evaluation-walkthrough) to reproduce these results in your own environment.
+Lightning v3.1 (Standard) and Lightning v3.1 Pro are evaluated on a 1,088-sample subset of the [EmergentTTS-Eval](https://arxiv.org/abs/2505.23009) benchmark (Manku et al., NeurIPS 2025) — spanning English prose, multilingual code-switching, expressive delivery, paralinguistic content, and stress tests for prosody. Scores below come from internal evaluation using the same dataset, scoring rubric, and Large Audio Language Model-as-Judge framework (judge: **Gemini 2.5 Pro**) across all models. See [Metrics Overview](/waves/documentation/text-to-speech-lightning/benchmarks/metrics-overview) for what each metric measures and where the methodology comes from, and [Evaluation Walkthrough](/waves/documentation/text-to-speech-lightning/benchmarks/evaluation-walkthrough) to reproduce these results in your own environment.
+
+## Pro at a glance — where Pro pulls ahead of Standard
+
+Lightning v3.1 Pro is built on the same underlying acoustic model as Standard with a curated voice catalog and a dedicated inference pool. Quality lifts cluster in expressiveness, delivery, and accuracy:
+
+| Pillar | Standard → Pro lift | Why it matters |
+|---|---|---|
+| **Emotions** | 3.29 → **3.47** | Better at conveying the intended emotional tone on loaded sentences. |
+| **Natural Pace** | 4.47 → **4.72** | More comfortable speaking rate on long-form content. |
+| **Pause Placement** | 4.46 → **4.66** | Cleaner clause-boundary pauses, fewer mid-word breaks. |
+| **CER (Whisper jiwer)** | 0.67% → **0.40%** | Tighter character-level fidelity to the input. |
+| **Hallucination (jiwer)** | 0.03% → **0.00%** | No spurious words or sounds inserted on our test set. |
+| **WV-MOS** | 4.71 → **5.05** | Predicted-MOS ceiling-tier (see [Metrics Overview — WV-MOS](/waves/documentation/text-to-speech-lightning/benchmarks/metrics-overview#wv-mos) for the >5.0 score-range note). |
+| **TTFB** | matches Standard | ~200 ms in both pools; Pro is **not** slower — see Latency below for live numbers. |
+| **Offline RTF** | matches Standard | 3.3× on NVIDIA L40S in both pools. |
+
+Pro does **not** improve every metric — Standard still has the higher Overall Naturalness (3.25 vs 3.16) on the current test set, driven by the wider voice variety in the Standard catalog. Pick Pro when you specifically want premium expressiveness and accuracy on a curated voice set; pick Standard when you need voice cloning, broadest language coverage, or specific catalog voices not in the Pro list. See [When to use which model](#when-to-use-which-model) at the bottom for a one-glance decision table.
 
 ## Latency
 
@@ -35,7 +52,12 @@ TTFB measures the wall-clock delay between sending the synthesis request and the
 
 ### Real-Time Factor (RTF)
 
-`RTF = Audio Duration ÷ Processing Time`. Values above 1.0 mean the model produces audio faster than playback. Both Standard and Pro run at **3.3× real-time** on NVIDIA L40S, so a 10-second utterance is fully synthesized in ~3 seconds.
+`RTF = Audio Duration ÷ Processing Time`. Two flavors — don't conflate them:
+
+- **Offline RTF: 3.3×** on the sync HTTP path (`POST /waves/v1/tts`). The model produces 1 second of audio in ~300 ms of compute. Use this when sizing compute capacity.
+- **Streaming RTF: ~1.0×** on WebSocket / SSE. The server intentionally paces audio chunks at playback rate so client buffers don't bloat. This is back-pressure shaping, not a bottleneck — the underlying model still runs at 3.3×. Use this when designing client buffering.
+
+Both Standard and Pro report the same RTF.
 
 ## Head-to-head listener ratings (Lightning v3.1 Standard)
 

@@ -3,7 +3,11 @@ title: 'Evaluation Walkthrough'
 description: 'Step-by-step guide to evaluate Lightning v3.1 TTS quality and latency on your own dataset'
 ---
 
-This guide walks through a repeatable Lightning v3.1 evaluation: pick a dataset that matches your use case, synthesize audio, score quality with the same metrics reported on the [Performance page](/waves/documentation/text-to-speech-lightning/benchmarks/performance), and measure TTFB latency. Use the [TTS Evaluation Script](/waves/model-cards/text-to-speech/tts-evaluation-script) for a copy-paste TTFB-measurement starter; the steps below extend that pattern to quality measurement.
+This guide walks through a repeatable Lightning v3.1 evaluation: pick a dataset that matches your use case, synthesize audio, score quality with the same metrics reported on the [Performance page](/waves/documentation/text-to-speech-lightning/benchmarks/performance), and measure TTFB latency. The synthesis snippet below was **live-validated against the unified `wss://api.smallest.ai/waves/v1/tts/live` endpoint on 2026-05-21**; reference numbers from that run are in the callout below.
+
+<Note>
+**Validated TTFB (one-shot, cold connection, single request, from a developer laptop):** Lightning v3.1 (`robert`) **239.2 ms**, Lightning v3.1 Pro (`meher`) **208.1 ms**, Pro (`maverick`) **228.0 ms**, Pro (`cressida`) **213.4 ms**. An 80-character test sentence synthesizes in ~4.6 s of audio. Streaming RTF on a single request settles at ~1.0× because the server paces chunk delivery to playback rate — see [Metrics Overview — RTF](/waves/documentation/text-to-speech-lightning/benchmarks/metrics-overview#real-time-factor-rtf).
+</Note>
 
 ## 1. Assemble your test set
 
@@ -41,7 +45,7 @@ pip install smallestai jiwer whisper-normalizer openai-whisper pandas
 
 ## 3. Synthesize + measure TTFB
 
-This block synthesizes each entry over the streaming WebSocket and records TTFB in the same way the [TTS Evaluation Script](/waves/model-cards/text-to-speech/tts-evaluation-script) does.
+This block synthesizes each entry over the streaming WebSocket and records TTFB. The pattern uses `websocket-client`'s blocking `create_connection` (validated live; simpler than the `WebSocketApp` callback API for single-request benchmarking).
 
 ```python
 import os
@@ -49,63 +53,62 @@ import time
 import base64
 import json
 import wave
-import websocket
 from pathlib import Path
+from websocket import create_connection
 
 OUTPUT_DIR = Path("synth_outputs")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 API_KEY = os.environ["SMALLEST_API_KEY"]
-WS_URL = "wss://api.smallest.ai/waves/v1/tts/live"  # unified WS — pick Pro by adding `model` body field
+WS_URL = "wss://api.smallest.ai/waves/v1/tts/live"  # unified WS — pick Pro by setting `model` body field
 
 def synthesize(text: str, voice_id: str = "robert", model: str = "lightning_v3.1") -> dict:
-    """Returns {audio_path, ttfb_ms, total_ms} for a single synthesis."""
-    chunks = []
-    ttfb_ms = None
-    t_start = time.perf_counter()
+    """Returns {audio_path, ttfb_ms, total_ms, audio_seconds, streaming_rtf} for one synthesis."""
+    ws = create_connection(WS_URL, header=[f"Authorization: Bearer {API_KEY}"])
+    req = {
+        "text": text,
+        "voice_id": voice_id,
+        "model": model,
+        "sample_rate": 44100,
+        "language": "auto",
+    }
+    t_send = time.perf_counter()
+    ws.send(json.dumps(req))
 
-    def on_open(ws):
-        ws.send(json.dumps({
-            "text": text,
-            "voice_id": voice_id,
-            "model": model,
-            "sample_rate": 44100,
-            "language": "auto",
-        }))
-
-    def on_message(ws, message):
-        nonlocal ttfb_ms
+    chunks: list[str] = []
+    ttfb_ms: float | None = None
+    while True:
+        msg = ws.recv()
         if ttfb_ms is None:
-            ttfb_ms = (time.perf_counter() - t_start) * 1000
-        data = json.loads(message)
+            ttfb_ms = (time.perf_counter() - t_send) * 1000
+        data = json.loads(msg)
         if data.get("status") == "complete":
-            ws.close()
-            return
+            break
         if "data" in data and "audio" in data["data"]:
             chunks.append(data["data"]["audio"])
+    total_ms = (time.perf_counter() - t_send) * 1000
+    ws.close()
 
-    ws = websocket.WebSocketApp(
-        WS_URL,
-        header={"Authorization": f"Bearer {API_KEY}"},
-        on_open=on_open,
-        on_message=on_message,
-    )
-    ws.run_forever()
-
-    audio_path = OUTPUT_DIR / f"sample_{abs(hash(text))}.wav"
+    # Decode + write WAV
     pcm = b"".join(base64.b64decode(c) for c in chunks)
+    audio_path = OUTPUT_DIR / f"sample_{abs(hash(text))}.wav"
     with wave.open(str(audio_path), "wb") as wf:
         wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(44100)
         wf.writeframes(pcm)
+    audio_seconds = len(pcm) / (44100 * 2)
 
     return {
         "audio_path": audio_path,
         "ttfb_ms": ttfb_ms,
-        "total_ms": (time.perf_counter() - t_start) * 1000,
+        "total_ms": total_ms,
+        "audio_seconds": audio_seconds,
+        "streaming_rtf": audio_seconds / (total_ms / 1000),
     }
 ```
 
-To benchmark Lightning v3.1 Pro, pass `model="lightning_v3.1_pro"` and a Pro voice ID (e.g. `meher`, `maverick`, `cressida`).
+To benchmark Lightning v3.1 Pro, pass `model="lightning_v3.1_pro"` and a Pro voice ID (e.g. `meher`, `maverick`, `cressida`). The same code path serves both models — the only difference is the body's `model` field.
+
+**Wire-format note:** every server message is JSON. Audio chunks arrive as `{"data": {"audio": "<base64>"}}`. The stream terminates with `{"status": "complete"}` — no trailing audio chunk after that envelope. This is the streaming WS shape (distinct from the SSE shape on `POST /waves/v1/tts/live`).
 
 ## 4. Decode synthesized audio + score accuracy
 

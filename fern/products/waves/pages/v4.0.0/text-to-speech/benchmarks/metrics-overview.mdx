@@ -1,57 +1,70 @@
 ---
 title: 'Metrics Overview'
-description: 'Plain-language definitions of every Lightning v3.1 TTS quality and latency metric — Naturalness, Expressiveness, Delivery, Accuracy, MOS, and TTFB.'
+description: 'Plain-language definitions of every Lightning v3.1 and Lightning v3.1 Pro TTS quality and latency metric — Naturalness, Expressiveness, Delivery, Accuracy, MOS variants, TTFB, and RTF.'
 ---
 
 Lightning v3.1 TTS evaluations revolve around four pillars:
 
-1. **Quality** — how natural, expressive, and well-delivered the speech sounds.
+1. **Subjective quality** — how natural, expressive, and well-delivered the speech sounds.
 2. **Accuracy** — how faithfully the synthesized audio matches the input text.
 3. **Latency & throughput** — how quickly audio arrives at the listener and how efficiently the model produces it.
-4. **Aggregate quality scores (MOS)** — a single number that summarizes overall listener-rated quality.
+4. **Predicted MOS** — automated proxies for human listener-rated quality.
 
-The [Performance page](/waves/documentation/text-to-speech-lightning/benchmarks/performance) compares Lightning v3.1 (Standard) and Lightning v3.1 Pro against nine other production TTS systems on these pillars. This page defines what each metric means.
+The [Performance page](/waves/documentation/text-to-speech-lightning/benchmarks/performance) compares Lightning v3.1 (Standard) and Lightning v3.1 Pro against nine production TTS systems on these pillars. This page defines every metric in plain language and cites the underlying methodology where applicable.
 
-## Quality metrics — Naturalness category
+<Note>
+The subjective-quality categories below (Naturalness, Expressiveness, Delivery) follow Smallest's internal evaluation rubric, which **extends** the dimensions from [EmergentTTS-Eval (Manku et al., NeurIPS 2025 — arxiv 2505.23009)](https://arxiv.org/abs/2505.23009). EmergentTTS-Eval defines coarse axes — *expressed emotion, prosodic rendering, intonational patterns, pronunciation accuracy, paralinguistic naturalness* — judged by Gemini 2.5 Pro as a Large Audio Language Model. The fine-grained sub-metrics on our cards (Boundary Consistency, Pause Placement, Breathing Naturalness, etc.) are reductions of those axes into independently-scorable dimensions; they are not literal categories from the paper. Where naming differs from the paper, we use the most common term from the broader TTS-evaluation literature.
+</Note>
+
+## Subjective quality — Naturalness
+
+How human-like the voice sounds.
 
 ### Overall (Naturalness)
-- Holistic listener rating of how natural the voice sounds end-to-end across timbre, pitch, prosody, and pronunciation.
-- Scored 1–5 by human listeners on the EmergentTTS test set.
+- Holistic listener (or LLM-judge) rating of how natural the voice sounds end-to-end across timbre, pitch, prosody, and pronunciation.
+- Scored 1–5 by the model-as-judge on the EmergentTTS-Eval test set.
 - Use this as the single-number proxy when you only want one Naturalness signal.
 
-### Naturalness
+### Naturalness (sub-metric)
 - How human-like the voice sounds, penalizing robotic, synthetic, or vocoder-buzz quality.
-- Decoupled from intonation and pronunciation so a voice can be human-sounding but flat (high naturalness, low intonation).
+- Decoupled from intonation and pronunciation so a voice can be human-sounding but flat (high Naturalness, low Intonation).
 
 ### Intonation
 - Whether pitch rises and falls appropriately for the sentence type (question, statement, exclamation, list).
+- The EmergentTTS-Eval "Questions" subset specifically stresses this dimension.
 - A monotone reading scores low even when timbre is natural; a melodically appropriate reading scores high.
 
 ### Prosody
 - The broader umbrella of rhythm, stress, and melody — how well the voice "reads" the sentence as a human would.
 - Captures both **what** the model emphasizes (which word in the sentence gets the stress) and **when** it pauses.
+- EmergentTTS-Eval flags "natural pitch contours" and "smooth prosodic transitions" as targets.
 
 ### Pronunciation (listener-rated)
 - Whether individual words are phonetically correct, especially proper nouns, loanwords, technical terms, and domain-specific vocabulary.
-- Listener-rated on a 1–5 scale; distinct from the Whisper-judged Pronunciation % under Accuracy below.
+- Listener-rated on a 1–5 scale. Distinct from the Whisper-judged Pronunciation % under [Accuracy](#accuracy) below.
 
 ### Audio Quality
 - Technical cleanliness of the output: absence of artifacts, distortion, clipping, popping, background hiss, or vocoder warble.
 
-## Quality metrics — Expressiveness category
+## Subjective quality — Expressiveness
+
+How well the voice conveys non-verbal cues and emotional tone.
 
 ### Overall (Expressiveness)
-- Holistic listener rating of how expressive the voice sounds given the sentence's context.
+- Holistic rating of how expressive the voice sounds given the sentence's context.
 - A neutral declarative gets a different "right answer" than an exclamation or a question; this metric judges fit, not max-expressiveness.
 
 ### Paralinguistics
 - Non-verbal vocal elements — laughter, sighs, gasps, filler sounds ("um", "uh", "hmm") — and whether they're rendered with realistic timing and amplitude.
+- EmergentTTS-Eval has a dedicated "Paralinguistics" subset of test cases for this dimension.
 
 ### Emotions
 - How accurately the voice conveys the intended emotional tone: neutral, warm, urgent, apologetic, excited, somber.
-- Measured on emotionally-loaded test sentences from the EmergentTTS benchmark.
+- Measured on emotionally-loaded test sentences from EmergentTTS-Eval's "Emotions" subset.
 
-## Quality metrics — Delivery category
+## Subjective quality — Delivery
+
+Whether the voice paces, breathes, and pauses like a human reader. These sub-metrics are Smallest's internal decomposition of EmergentTTS-Eval's "prosodic rendering" axis.
 
 ### Boundary Consistency
 - Whether phrase and sentence boundaries are marked consistently with pauses or pitch shifts, without arbitrary breaks mid-phrase.
@@ -68,12 +81,14 @@ The [Performance page](/waves/documentation/text-to-speech-lightning/benchmarks/
 ### Breathing Naturalness
 - Whether breath sounds occur at realistic points and with realistic frequency — not absent entirely, not inserted randomly, not in the middle of a word.
 
-## Accuracy metrics
+## Accuracy
+
+Mixed direction — WER, CER, Hallucination, and Deletion are *lower is better*; Pronunciation % is *higher is better*.
 
 ### Word Error Rate (WER)
 - `WER = (Substitutions + Deletions + Insertions) ÷ Total Words`.
-- Measures how faithfully the TTS renders the input text. The TTS audio is decoded with Whisper and compared back to the original input.
-- **Lower is better.** Direction matters because input → audio → input round-trip is what we're scoring.
+- Measures how faithfully the TTS renders the input text. The TTS audio is decoded by a reference ASR (Whisper-v3-large in our evaluations; EmergentTTS-Eval uses the same model per the published paper) and the transcript compared back to the original input.
+- **Lower is better.** The closer to zero, the more faithful the model is to the input.
 
 ### Character Error Rate (CER)
 - Like WER but at the character level. Useful for languages with compact scripts or heavy compounding.
@@ -84,68 +99,87 @@ The [Performance page](/waves/documentation/text-to-speech-lightning/benchmarks/
 - **Lower is better.**
 
 ### Deletion
-- Words from the input text that the TTS dropped entirely.
+- Words from the input text that the TTS dropped entirely from the synthesized audio.
 - **Lower is better.**
 
 ### Pronunciation %
-- The proportion of words pronounced correctly out of total words (Whisper recoverable from the audio).
+- The proportion of words pronounced correctly out of total words (i.e., the share Whisper successfully recovered from the audio).
 - **Higher is better.**
 
 ### Whisper jiwer vs Whisper LLM
-- Two scoring methodologies for the same metric family:
-  - **Whisper jiwer** — raw Whisper-decoded transcripts compared to input via the `jiwer` library. Penalizes any character difference.
-  - **Whisper LLM** — Whisper transcripts post-processed by an LLM to normalize punctuation, casing, and Whisper's own transcription noise. Tends to give lower error rates by reducing false positives.
-- Both methodologies are reported on the [Performance page](/waves/documentation/text-to-speech-lightning/benchmarks/performance) where available.
+Two scoring methodologies for the same Accuracy metric family:
 
-## Latency & throughput metrics
+- **Whisper jiwer** — raw Whisper-decoded transcripts compared to input via the `jiwer` library. Penalizes any character difference, including those caused by Whisper's own transcription noise.
+- **Whisper LLM** — Whisper transcripts post-processed by an LLM to normalize punctuation, casing, and Whisper's own transcription errors before scoring. Tends to give lower error rates by reducing false positives.
+
+Both methodologies are reported on the [Performance page](/waves/documentation/text-to-speech-lightning/benchmarks/performance) where available.
+
+## Latency & throughput
 
 ### Time-to-First-Byte (TTFB)
-- Wall-clock delay between sending the synthesis request and the first audio byte arriving.
+- Wall-clock delay between sending the synthesis request and the first audio byte arriving on the client.
 - For real-time agents, target **< 250 ms** to maintain natural turn-taking.
-- Lightning v3.1 (both Standard and Pro) hits ~200 ms TTFB at 40 concurrent WebSocket connections.
+- Lightning v3.1 (both Standard and Pro) hits ~200 ms TTFB at 40 concurrent WebSocket connections. Live single-request measurements from a developer laptop: Standard 239 ms, Pro 208–228 ms across `meher` / `maverick` / `cressida` — see the validation block in [Evaluation Walkthrough](/waves/documentation/text-to-speech-lightning/benchmarks/evaluation-walkthrough).
 
 ### End-to-end latency
 - Total wall-clock time from request submission to the last audio byte arriving.
-- For sync HTTP, this equals "time to complete clip"; for streaming, it's set by the playback rate.
+- For sync HTTP, this equals "time to complete clip"; for streaming, the server paces delivery, so this approximates audio duration.
 - Report p50/p90/p95 to capture outliers from long inputs.
 
 ### Real-Time Factor (RTF)
-- `RTF = Audio Duration ÷ Processing Time`.
-- Values above 1.0 mean the model produces audio faster than playback (i.e., it can sustain real-time streaming).
-- Lightning v3.1 runs at **3.3× RTF** on NVIDIA L40S.
+
+`RTF = Audio Duration ÷ Processing Time`.
+
+RTF has two meaningful flavors and they report different things — don't conflate them:
+
+- **Offline (batch) RTF — 3.3× on Lightning v3.1.** This is the model's GPU throughput: how fast it produces audio when no streaming back-pressure exists. Measure it from the sync HTTP endpoint (`POST /waves/v1/tts`) where the full clip is returned at once. 3.3× means a 10-second utterance is synthesized in ~3 seconds on the inference pod's NVIDIA L40S.
+- **Streaming RTF — ~1.0× on Lightning v3.1.** This is what you observe on the WebSocket or SSE endpoints. The server intentionally **paces** audio chunks at roughly playback rate so client buffers don't bloat. It is not a bottleneck; it is back-pressure shaping. If your client could consume faster, the server could supply faster up to the 3.3× ceiling.
+
+Use offline RTF when planning compute capacity. Use streaming RTF when designing client buffering and audio queuing logic.
 
 ### Concurrency
 - Number of simultaneous synthesis requests a single deployment can sustain while meeting the published TTFB/RTF targets.
 - Quoted at 40 concurrent requests for the Lightning v3.1 production deployment.
 
-## Aggregate quality scores (MOS v2)
+## Predicted MOS
 
-### Mean MOS
-- **M**ean **O**pinion **S**core: average listener rating on a 1–5 scale across the test set.
-- The canonical aggregate quality metric in TTS literature.
+Predictive MOS models are automated proxies for human listener evaluation. They're useful for CI gating and rapid iteration where human evaluation is too slow or expensive.
+
+### Mean MOS (human-rated)
+- **M**ean **O**pinion **S**core: average human-listener rating on a 1–5 scale across the test set.
+- The canonical aggregate quality metric in TTS literature. EmergentTTS-Eval reports MOS via fine-tuned wav2vec 2.0 alongside its LALM-judged dimensions.
 - **Higher is better.**
 
 ### UTMOS
-- A predicted MOS from the UTMOS reference model — an automated proxy for subjective quality.
-- Useful for CI gating where human evaluation is too slow or expensive.
+- A predicted MOS from the **UTokyo-SaruLab MOS** system ([Saeki et al., 2022 — arxiv 2204.02152](https://arxiv.org/abs/2204.02152)). Ensemble of strong learners (fine-tuned wav2vec 2.0 frontend + BLSTM + linear head) and weak learners (ridge regression, SVR, decision trees, LightGBM) over mean-pooled SSL features. Trained with listener-dependent embeddings and contrastive loss. SOTA on VoiceMOS Challenge 2022 main and OOD tracks.
+- Output range nominally 1–5 (matches human MOS scale).
 - **Higher is better.**
 
 ### WV-MOS
-- A predicted MOS from the WavLM-based WV-MOS reference model.
+- A predicted MOS from a fine-tuned wav2vec 2.0 Base (95M params) regression head, originally trained for the [VoiceMOS Challenge baseline](https://github.com/AndreevP/wvmos) (Andreev et al., Skoltech).
 - Reported alongside UTMOS for cross-validation; predictive MOS models can disagree on edge cases so reporting both reduces noise.
+- **Score-range note.** WV-MOS is a regression head with no hard ceiling — on clean, high-fidelity TTS output it can produce values **above 5.0** even though human MOS tops out at 5. Our Pro WV-MOS of 5.05 sits in that regime and is consistent with how Pro audio reads to the model; treat the gap above 5.0 as "ceiling-tier" rather than as a literal MOS score.
 - **Higher is better.**
 
 ## What's not in the published numbers
 
-The Performance page reports aggregate results across the full 1,088-sample EmergentTTS test set. It does **not** report:
+The Performance page reports aggregate results across the 1,088-sample EmergentTTS-Eval subset Smallest evaluated on (the full public dataset has 1,645 cases — we publish on the curated subset used for our internal regression-prevention runs). It does **not** report:
 
-- **Per-voice** breakdowns. Voice-level scores vary because the listener-rated dimensions (Naturalness, Intonation, etc.) are partly a function of the specific voice's timbre and style.
-- **Per-language** breakdowns. EmergentTTS is predominantly English with multilingual code-switching subsets; for evaluating a specific non-English language, run the [Evaluation Walkthrough](/waves/documentation/text-to-speech-lightning/benchmarks/evaluation-walkthrough) on your own dataset.
+- **Per-voice** breakdowns. Voice-level scores vary because the listener-rated dimensions are partly a function of the specific voice's timbre and style.
+- **Per-language** breakdowns. EmergentTTS-Eval is predominantly English with multilingual code-switching subsets; for evaluating a specific non-English language, run the [Evaluation Walkthrough](/waves/documentation/text-to-speech-lightning/benchmarks/evaluation-walkthrough) on your own dataset.
 - **Output format / sample rate** breakdowns. All scores assume the model's native 44.1 kHz output. Lower sample rates (24 kHz, 16 kHz, 8 kHz) and lossy encodings (`mp3`, `mulaw`, `alaw`) introduce additional quality loss not reflected in these numbers.
+
+## Sources
+
+- **EmergentTTS-Eval** (test set + LALM-as-Judge framework): Manku et al., NeurIPS 2025 — [arxiv 2505.23009](https://arxiv.org/abs/2505.23009), [boson-ai/EmergentTTS-Eval-public](https://github.com/boson-ai/EmergentTTS-Eval-public).
+- **UTMOS** (predicted MOS): Saeki et al., 2022 — [arxiv 2204.02152](https://arxiv.org/abs/2204.02152), [sarulab-speech/UTMOS22](https://github.com/sarulab-speech/UTMOS22).
+- **WV-MOS** (predicted MOS): Andreev et al., Skoltech — [AndreevP/wvmos](https://github.com/AndreevP/wvmos).
+- **Whisper** (reference ASR for WER/CER): [openai/whisper](https://github.com/openai/whisper) (model size `large-v3` matches EmergentTTS-Eval's published methodology).
+- **jiwer** (WER/CER computation): [jitsi/jiwer](https://github.com/jitsi/jiwer).
 
 ## Next Steps
 
-- [Performance](/waves/documentation/text-to-speech-lightning/benchmarks/performance) — head-to-head comparison tables for every metric defined above
-- [Evaluation Walkthrough](/waves/documentation/text-to-speech-lightning/benchmarks/evaluation-walkthrough) — reproduce these numbers in your own environment
-- [Lightning v3.1 model card](/waves/model-cards/text-to-speech/lightning-v-3-1) — full Standard catalog + capabilities
-- [Lightning v3.1 Pro model card](/waves/model-cards/text-to-speech/lightning-v-3-1-pro) — full Pro catalog + capabilities
+- [Performance](/waves/documentation/text-to-speech-lightning/benchmarks/performance) — head-to-head comparison tables for every metric defined above.
+- [Evaluation Walkthrough](/waves/documentation/text-to-speech-lightning/benchmarks/evaluation-walkthrough) — reproduce these numbers in your own environment with a validated copy-paste pipeline.
+- [Lightning v3.1 model card](/waves/model-cards/text-to-speech/lightning-v-3-1) — full Standard catalog + capabilities.
+- [Lightning v3.1 Pro model card](/waves/model-cards/text-to-speech/lightning-v-3-1-pro) — full Pro catalog + capabilities.
