@@ -1,0 +1,162 @@
+---
+title: 'Performance'
+description: 'Lightning v3.1 and Lightning v3.1 Pro head-to-head TTS benchmarks: TTFB latency, EmergentTTS naturalness, expressiveness, delivery, accuracy, and MOS quality versus other production TTS systems.'
+---
+
+Head-to-head listener evaluation against production TTS systems on the EmergentTTS benchmark, 1,088 samples scored by the LLM-as-a-Judge framework. Tables below pair **Lightning v3.1 (Standard)** and **Lightning v3.1 Pro** with the same competitor set across Naturalness, Expressiveness, Delivery, Accuracy, and MOS v2 categories. Open the accordion under each one to see what each metric measures, or read the full [Metrics Overview](/waves/documentation/text-to-speech-lightning/benchmarks/metrics-overview).
+
+## Latency
+
+### Time-to-First-Byte (TTFB)
+
+TTFB measures the wall-clock delay between sending the synthesis request and the first audio byte arriving on the wire. Lower is better for real-time and conversational use cases.
+
+<table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', borderRadius: '8px', overflow: 'hidden' }}>
+  <thead>
+    <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)' }}>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopLeftRadius: '8px' }}>Model</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>TTFB</th>
+      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopRightRadius: '8px' }}>Conditions</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Lightning v3.1 (Standard)</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>~200 ms</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>40 concurrent requests, WebSocket streaming</td>
+    </tr>
+    <tr>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomLeftRadius: '8px' }}>Lightning v3.1 Pro</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>~200 ms</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomRightRadius: '8px' }}>40 concurrent requests, WebSocket streaming, dedicated Pro pool</td>
+    </tr>
+  </tbody>
+</table>
+
+### Real-Time Factor (RTF)
+
+`RTF = Audio Duration ÷ Processing Time`. Values above 1.0 mean the model produces audio faster than playback. Both Standard and Pro run at **3.3× real-time** on NVIDIA L40S, so a 10-second utterance is fully synthesized in ~3 seconds.
+
+## Head-to-head listener ratings (Lightning v3.1 Standard)
+
+Direct head-to-head ratings on the EmergentTTS benchmark. **Lightning Wins %** is the share of samples where listeners preferred Lightning v3.1 over the competitor; **Ties %** is the share where both were rated equal; **Competitor Wins %** is the inverse. Each competitor column sums to 100%.
+
+| EmergentTTS | GPT-4o-mini<br/><sub>OpenAI</sub> | Turbo v2.5<br/><sub>ElevenLabs</sub> | Multilingual v2<br/><sub>ElevenLabs</sub> | Sonic-3<br/><sub>Cartesia</sub> | Gemini 2.5 Pro<br/><sub>Google</sub> | MAI-Voice-1<br/><sub>Microsoft</sub> | Inworld 1.5<br/><sub>Inworld</sub> | S2 Pro<br/><sub>Fish Audio</sub> |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| **Lightning Wins %** *(higher better)* | **40.26%** | **50.28%** | **54.41%** | **68.29%** | **58.43%** | **57.17%** | **54.41%** | **64.25%** |
+| **Ties %** | 24.17% | 25.00% | 23.81% | 17.00% |  8.29% | 17.00% | 18.11% | 13.60% |
+| **Competitor Wins %** *(lower better)* | 35.57% | 24.72% | 21.78% | 14.71% | 33.27% | 25.83% | 27.48% | 22.15% |
+
+## Naturalness — higher is better
+
+| Metric | Lightning v3.1 | Lightning v3.1 Pro | GPT-4o-mini | ElevenLabs Turbo v2.5 | ElevenLabs Multilingual v2 | Sonic-3 | Gemini 2.5 Pro | Gemini 2.5 Flash | MAI-Voice-1 | Inworld 1.5 | S2 Pro |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Overall | 3.25 | 3.16 | 3.13 | 3.16 | 3.17 | 3.20 | 3.07 | 3.28 | 3.17 | 3.06 | 3.02 |
+| Naturalness | **2.61** | 2.55 | 2.41 | 2.52 | 2.55 | 2.57 | 2.42 | 2.58 | 2.57 | 2.41 | 2.37 |
+| Intonation | 3.22 | 3.06 | 3.06 | 3.07 | 3.06 | 3.12 | 2.90 | 3.28 | 3.04 | 2.91 | 2.86 |
+| Prosody | 3.01 | 2.81 | 2.73 | 2.82 | 2.86 | 2.83 | 2.65 | 3.09 | 2.76 | 2.61 | 2.58 |
+| Pronunciation\* | 3.63 | NA | 3.67 | 3.64 | 3.65 | 3.67 | 3.67 | NA | 3.68 | 3.68 | 3.57 |
+| Audio Quality | 3.76 | NA | 3.78 | 3.77 | 3.75 | 3.81 | 3.73 | NA | 3.79 | 3.70 | 3.75 |
+
+<Accordion title="What each Naturalness metric measures">
+- **Overall** — Holistic listener rating of how natural the voice sounds end-to-end.
+- **Naturalness** — How human-like the voice sounds; penalizes robotic or synthetic quality.
+- **Intonation** — Whether pitch rises and falls appropriately for the sentence type (question, statement, exclamation).
+- **Prosody** — The broader umbrella of rhythm, stress, and melody, how well the voice "reads" the sentence as a human would.
+- **Pronunciation** — Whether individual words are phonetically correct, especially names, loanwords, and domain-specific terms.
+- **Audio Quality** — Technical cleanliness of the output; absence of artifacts, distortion, clipping, or background noise.
+</Accordion>
+
+<sub>\*Listener-rated Pronunciation and Audio Quality columns were measured only on the Standard evaluation; Pro's Whisper-judged Pronunciation % appears under [Accuracy](#accuracy) below.</sub>
+
+## Expressiveness — higher is better
+
+| Metric | Lightning v3.1 | Lightning v3.1 Pro | GPT-4o-mini | ElevenLabs Turbo v2.5 | ElevenLabs Multilingual v2 | Sonic-3 | Gemini 2.5 Pro | Gemini 2.5 Flash | MAI-Voice-1 | Inworld 1.5 | S2 Pro |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Overall | 3.45 | **3.55** | 3.45 | 3.44 | 3.46 | 3.38 | 3.49 | 3.54 | 3.50 | 3.37 | 3.41 |
+| Paralinguistics | 3.61 | **3.64** | 3.60 | 3.59 | 3.61 | 3.56 | 3.60 | 3.64 | 3.58 | 3.55 | 3.58 |
+| Emotions | 3.29 | **3.47** | 3.30 | 3.28 | 3.31 | 3.19 | 3.38 | 3.44 | 3.41 | 3.19 | 3.23 |
+
+<Accordion title="What each Expressiveness metric measures">
+- **Overall** — Holistic listener rating of how expressive the voice sounds given the context of the sentence.
+- **Paralinguistics** — Non-verbal vocal elements like laughter, sighs, or filler sounds ("um", "uh") and whether they're rendered appropriately.
+- **Emotions** — How accurately the voice conveys the intended emotional tone (neutral, warm, urgent, etc.).
+</Accordion>
+
+## Delivery — higher is better
+
+| Metric | Lightning v3.1 | Lightning v3.1 Pro | GPT-4o-mini | ElevenLabs Turbo v2.5 | ElevenLabs Multilingual v2 | Sonic-3 | Gemini 2.5 Pro | Gemini 2.5 Flash | MAI-Voice-1 | Inworld 1.5 | S2 Pro |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Boundary Consistency | 4.94 | 4.96 | 4.94 | 4.93 | 4.95 | 4.93 | 4.88 | 4.99 | 4.77 | 4.90 | 4.88 |
+| Pronunciation Style | 4.94 | 4.98 | 4.96 | 4.95 | 4.96 | 4.96 | 4.93 | 4.99 | 4.91 | 4.94 | 4.89 |
+| Natural Pace | 4.47 | **4.72** | 4.57 | 4.51 | 4.51 | 4.01 | 4.23 | 4.66 | 4.47 | 4.33 | 3.74 |
+| Pause Placement | 4.46 | **4.66** | 4.54 | 4.49 | 4.51 | 4.28 | 4.34 | 4.59 | 4.41 | 4.38 | 4.09 |
+| Breathing Naturalness | 3.82 | **3.82** | 3.06 | 3.14 | 3.14 | 2.79 | 2.88 | 3.43 | 3.28 | 2.77 | 2.42 |
+
+<Accordion title="What each Delivery metric measures">
+- **Boundary Consistency** — Whether phrase and sentence boundaries are marked consistently with pauses or pitch shifts, without arbitrary breaks mid-phrase.
+- **Pronunciation Style** — Not just correctness, but stylistic choices i.e., formal vs. casual register, regional accent consistency, honorific handling.
+- **Natural Pace** — Whether the speaking rate feels comfortable and appropriate for the content type, neither rushed nor dragging.
+- **Pause Placement** — Whether silences appear at semantically correct points (after commas, between clauses) rather than mid-word or mid-phrase.
+- **Breathing Naturalness** — Whether breath sounds occur at realistic points and with realistic frequency, not absent entirely or inserted randomly.
+</Accordion>
+
+## Accuracy
+
+Mixed direction — WER, CER, Hallucination, and Deletion are *lower is better*; Pronunciation % is *higher is better*.
+
+### Whisper jiwer
+
+| Metric | Direction | Lightning v3.1 | Lightning v3.1 Pro | GPT-4o-mini | ElevenLabs Turbo v2.5 | ElevenLabs Multilingual v2 | Sonic-3 | Gemini 2.5 Pro | Gemini 2.5 Flash | MAI-Voice-1 | Inworld 1.5 | S2 Pro |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| WER | lower | 1.57% | 1.36% | 1.26% | 1.35% | 1.33% | 1.43% | 1.26% | 1.37% | 1.25% | 1.10% | 2.83% |
+| CER | lower | 0.67% | **0.40%** | 0.52% | 0.60% | 0.54% | 0.59% | 0.62% | 0.61% | 0.50% | 0.47% | 1.16% |
+| Hallucination | lower | 0.03% | **0.00%** | 0.07% | 0.08% | 0.01% | 0.06% | 0.04% | 0.01% | 0.06% | 0.00% | 0.22% |
+| Deletion | lower | NA | **0.00%** | 0.14% | 0.17% | 0.18% | 0.16% | 0.24% | 0.18% | 0.15% | 0.12% | 0.33% |
+| Pronunciation %<br/><sub>Whisper jiwer</sub> | higher | 98.61% | 98.68% | 98.94% | 98.90% | 98.87% | 98.79% | 99.02% | 98.82% | 98.95% | 99.02% | 97.72% |
+
+### Whisper LLM (Pro evaluation only)
+
+LLM-judged Whisper transcripts, applied during the Pro benchmark run. The follow-on LLM normalizes punctuation, casing, and Whisper's own transcription noise — typically reducing false-positive errors compared to `jiwer`. Standard Lightning v3.1 was not evaluated with this methodology.
+
+| Metric | Direction | Lightning v3.1 Pro | GPT-4o-mini | ElevenLabs Turbo v2.5 | ElevenLabs Multilingual v2 | Sonic-3 | Gemini 2.5 Pro | Gemini 2.5 Flash | MAI-Voice-1 | Inworld 1.5 | S2 Pro |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| WER | lower | 0.96% | 0.82% | 0.72% | 0.57% | 0.88% | 0.70% | 0.72% | 0.60% | 0.55% | 2.15% |
+| CER | lower | 0.34% | 0.30% | 0.28% | 0.21% | 0.30% | 0.35% | 0.33% | 0.23% | 0.18% | 1.03% |
+| Hallucination | lower | **0.00%** | 0.07% | 0.07% | 0.00% | 0.02% | 0.02% | 0.01% | 0.03% | 0.00% | 0.10% |
+| Pronunciation %<br/><sub>Whisper LLM</sub> | higher | 99.04% | 99.25% | 99.35% | 99.43% | 99.14% | 99.32% | 99.29% | 99.43% | 99.45% | 97.95% |
+
+<Accordion title="What each Accuracy metric measures">
+- **WER (Word Error Rate)** — Percentage of words in the transcript that differ from the reference; measures how faithfully the TTS renders the input text.
+- **CER (Character Error Rate)** — Like WER but at the character level.
+- **Hallucination** — Words or sounds the TTS generates that have no basis in the input text. Insertions, substitutions, or fabricated content.
+- **Deletion** — Words from the reference text that the TTS dropped entirely.
+- **Pronunciation %** — The proportion of words pronounced correctly out of total words.
+- **Whisper jiwer vs Whisper LLM** — Two judging methodologies. `jiwer` uses raw Whisper-decoded transcripts; LLM-judged uses a follow-on LLM to normalize transcription noise. Both report the same metric family; LLM-judged tends to give lower error rates by reducing false positives from punctuation/casing.
+</Accordion>
+
+<Note>
+For Pronunciation and WER, the residual gap on Lightning v3.1 (Standard) is concentrated in proper-noun rendering. Use a [pronunciation dictionary](/waves/documentation/text-to-speech-lightning/pronunciation-dictionaries) to pin names, brands, and acronyms; with the dictionary applied, both metrics close to parity.
+</Note>
+
+## MOS v2 — higher is better
+
+| Metric | Lightning v3.1 | Lightning v3.1 Pro | GPT-4o-mini | ElevenLabs Turbo v2.5 | ElevenLabs Multilingual v2 | Sonic-3 | Gemini 2.5 Pro | Gemini 2.5 Flash | MAI-Voice-1 | Inworld 1.5 | S2 Pro |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Mean MOS | NA | 4.22 | 4.16 | 3.98 | 4.02 | 3.76 | 4.11 | 4.24 | 3.97 | 3.73 | 3.99 |
+| UTMOS | NA | **3.76** | 3.76 | 3.37 | 3.41 | 2.77 | 3.57 | 3.71 | 3.33 | 2.54 | 3.50 |
+| WV-MOS | 4.71 | **5.05** | 4.55 | 4.60 | 4.63 | 4.76 | 4.65 | 4.76 | 4.62 | 4.91 | 4.48 |
+
+<Accordion title="What each MOS metric measures">
+- **Mean MOS** — Mean Opinion Score: average listener rating on a 1–5 scale across the test set; the canonical aggregate quality metric in TTS evaluation.
+- **UTMOS** — A predicted MOS from the UTMOS reference model — an automated proxy for subjective quality.
+- **WV-MOS** — A predicted MOS from the WavLM-based WV-MOS reference model — another automated proxy commonly reported alongside UTMOS for cross-validation.
+</Accordion>
+
+Want to reproduce these results? See the [TTS evaluation script](/waves/model-cards/text-to-speech/tts-evaluation-script) to measure TTFB and synthesis quality in your own environment.
+
+## Next Steps
+
+- [Metrics Overview](/waves/documentation/text-to-speech-lightning/benchmarks/metrics-overview)
+- [Lightning v3.1 model card](/waves/model-cards/text-to-speech/lightning-v-3-1)
+- [Lightning v3.1 Pro model card](/waves/model-cards/text-to-speech/lightning-v-3-1-pro)
