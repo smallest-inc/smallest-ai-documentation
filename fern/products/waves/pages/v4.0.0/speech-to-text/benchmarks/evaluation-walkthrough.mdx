@@ -38,7 +38,7 @@ The Python standard library (`wave`, `time`) covers audio-duration and latency m
 
 ## 3. Transcribe + normalize
 
-The Pulse pre-recorded endpoint accepts the raw audio bytes as `application/octet-stream` and returns JSON with `transcription`, `words[]`, `utterances[]`, and `metadata`. Latency is measured client-side; Real-Time Factor (RTF) is `audio_duration ÷ wall_time`.
+The Pulse pre-recorded endpoint accepts the raw audio bytes as `application/octet-stream` and returns JSON with `transcription`, `words[]`, `utterances[]`, and `metadata`. Latency is measured client-side; Real-Time Factor (RTF) is `wall_time ÷ audio_duration` — values **below 1.0** indicate faster-than-real-time processing.
 
 ```python
 import os
@@ -68,8 +68,8 @@ def run_sample(sample: dict) -> dict:
         PULSE_URL,
         params={
             "language": sample["language"],
-            "word_timestamps": "true",
-            "diarize": "true",
+            "word_timestamps": str(sample.get("word_timestamps", True)).lower(),
+            "diarize": str(sample.get("diarize", False)).lower(),
         },
         headers={
             "Authorization": f"Bearer {API_KEY}",
@@ -157,7 +157,8 @@ configs = [
 ]
 
 def evaluate_config(config: dict, dataset: list) -> pd.DataFrame:
-    overridden = [{**s, **{k: v for k, v in config.items() if k in {"language"}}} for s in dataset]
+    forwardable = {"language", "word_timestamps", "diarize"}
+    overridden = [{**s, **{k: v for k, v in config.items() if k in forwardable}} for s in dataset]
     return pd.DataFrame([run_sample(s) for s in overridden])
 
 for config in configs:
