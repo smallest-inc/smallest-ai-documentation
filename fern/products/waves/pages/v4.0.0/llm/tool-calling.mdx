@@ -1,0 +1,207 @@
+---
+title: "Tool / Function Calling"
+description: "Standard OpenAI tools API on Electron, with voice-agent-optimized filler-phrase behavior. Reduces perceived latency on tool calls in conversational pipelines."
+icon: "screwdriver-wrench"
+---
+
+Electron implements the standard OpenAI function-calling API. Define tools in the request, and the model returns `tool_calls` in the response when it decides to invoke one.
+
+What makes Electron's tool calling distinctive: **the model is trained to speak a short filler phrase before tool calls**, so voice agents can mask tool-call latency by speaking the filler while the tool runs.
+
+## Basic usage
+
+<CodeGroup>
+
+```python Python
+from openai import OpenAI
+import json
+
+client = OpenAI(
+    base_url="https://api.smallest.ai/waves/v1",
+    api_key=os.environ["SMALLEST_API_KEY"],
+)
+
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "Get current weather for a city.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "city": {"type": "string", "description": "City name"},
+                },
+                "required": ["city"],
+            },
+        },
+    }
+]
+
+resp = client.chat.completions.create(
+    model="electron",
+    messages=[{"role": "user", "content": "What's the weather in Mumbai?"}],
+    tools=tools,
+)
+
+msg = resp.choices[0].message
+print("filler:", msg.content)         # e.g. "Let me check that for you…"
+print("calls:", msg.tool_calls)        # list of tool calls
+```
+
+```javascript JavaScript
+const tools = [
+  {
+    type: "function",
+    function: {
+      name: "get_weather",
+      description: "Get current weather for a city.",
+      parameters: {
+        type: "object",
+        properties: { city: { type: "string", description: "City name" } },
+        required: ["city"],
+      },
+    },
+  },
+];
+
+const resp = await client.chat.completions.create({
+  model: "electron",
+  messages: [{ role: "user", content: "What's the weather in Mumbai?" }],
+  tools,
+});
+
+const msg = resp.choices[0].message;
+console.log("filler:", msg.content);
+console.log("calls:", msg.tool_calls);
+```
+
+</CodeGroup>
+
+## Response shape: the filler-phrase pattern
+
+When Electron decides to call a tool, the assistant message returns **both** a conversational `content` filler **and** the structured `tool_calls`:
+
+```json
+{
+  "role": "assistant",
+  "content": "Let me check that for you…",
+  "tool_calls": [
+    {
+      "id": "call_abc",
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "arguments": "{\"city\": \"Mumbai\"}"
+      }
+    }
+  ]
+}
+```
+
+In strict OpenAI shape, `content` is usually `null` when `tool_calls` is set. Electron emits a short natural-language sentence — designed so a downstream voice agent can speak it while the tool resolves in the background.
+
+<Note>
+Electron *may* generate a filler in `content` whenever it makes a tool call. It does this **almost always**, but treat the field defensively: handle the case where `content` is `null` as well as the case where it's a string.
+</Note>
+
+`finish_reason` will be `"tool_calls"` on this turn.
+
+## Voice-agent pattern (the reason this exists)
+
+For voice agents, tool calls add visible latency — the user hears silence while you call a database, hit a webhook, etc. The standard mitigation is to play a "thinking" sound or filler phrase yourself. Electron handles this for you naturally.
+
+**Recommended pipeline:**
+
+1. Stream the chat completion.
+2. As soon as `delta.content` tokens arrive, **send them to your TTS engine in parallel** — don't wait for the tool call to complete.
+3. When you receive `delta.tool_calls`, kick off the actual tool execution **in parallel** with TTS.
+4. Once the tool returns, append the `tool` role message and continue the conversation.
+
+The user hears *"Let me check the weather in Mumbai for you…"* spoken naturally while your weather API call resolves in the background. End-to-end perceived latency drops by hundreds of milliseconds.
+
+## Multi-turn with tool results
+
+After the model returns `tool_calls`, run the tools and add `tool` role messages to the conversation, then make a follow-up call:
+
+```python
+# turn 1: model emits filler + tool_calls
+resp1 = client.chat.completions.create(
+    model="electron",
+    messages=[{"role": "user", "content": "What's the weather in Mumbai?"}],
+    tools=tools,
+)
+msg1 = resp1.choices[0].message
+
+# execute the tool
+call = msg1.tool_calls[0]
+args = json.loads(call.function.arguments)
+result = get_weather_impl(**args)   # your implementation
+
+# turn 2: feed tool result back
+resp2 = client.chat.completions.create(
+    model="electron",
+    messages=[
+        {"role": "user", "content": "What's the weather in Mumbai?"},
+        {
+            "role": "assistant",
+            "content": msg1.content,
+            "tool_calls": [call.model_dump()],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": call.id,
+            "content": json.dumps(result),
+        },
+    ],
+    tools=tools,
+)
+print(resp2.choices[0].message.content)
+# "It's 31 °C and humid in Mumbai right now."
+```
+
+## Chained tool calls
+
+Electron can chain multiple tool calls within a conversation. The pattern interleaves:
+
+```
+filler → tool_call → tool_result → filler → tool_call → tool_result → final response
+```
+
+Each filler is short and natural ("Let me also check…", "One moment…"). Handle each `tool_calls` turn the same way: execute, append `tool` message, call again.
+
+## Streaming with tool calls
+
+When `stream: true` and tools are involved, Electron streams in this order:
+
+1. **Filler content first** — `delta.content` chunks arrive as the filler is generated.
+2. **Tool calls next** — `delta.tool_calls` chunks follow, building up the function name and arguments incrementally.
+
+For chained calls, the pattern repeats: filler → tool_call → (your tool runs) → next filler → next tool_call → … → final response.
+
+Tool-call deltas use the standard OpenAI streaming shape:
+
+```
+data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_abc","type":"function","function":{"name":"get_weather","arguments":""}}]}}]}
+data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"city\":"}}]}}]}
+data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"Mumbai\"}"}}]}}]}
+data: {"choices":[{"index":0,"finish_reason":"tool_calls"}]}
+data: [DONE]
+```
+
+Concatenate the `arguments` deltas to reconstruct the final argument JSON.
+
+## Limits
+
+| | |
+|---|---|
+| Max tools per request | 64 |
+| Tool name length | Standard OpenAI naming rules apply |
+| Parallel tool calls in one turn | Supported — multiple entries in `tool_calls` |
+
+## Tips
+
+- **Keep tool descriptions tight.** They're billed as input tokens on every turn. Aim for one sentence of intent + a clear list of parameters.
+- **Use `tool_choice: "required"`** if you want to force the model to call exactly one tool.
+- **Use `tool_choice: {"type":"function","function":{"name":"…"}}`** to force a specific tool.
+- **Don't pass empty `tools: []`** — omit the field entirely if no tools are available this turn.

@@ -1,0 +1,201 @@
+---
+title: "Electron"
+description: "Model card for Electron — Smallest AI's in-house language model. OpenAI-compatible chat completions, 70 languages with first-class Indic support, voice-agent-optimized tool calling, prefix caching."
+icon: "wand-magic-sparkles"
+---
+
+Electron is Smallest AI's in-house language model, optimized for voice agents and built as a drop-in replacement for the OpenAI Chat Completions API. Stronger benchmark scores than GPT-4.1, meaningfully lower latency, and a price point built for production workloads.
+
+<CardGroup cols={4}>
+  <Card title="< 300 ms TTFT" icon="bolt">
+    Time-to-first-token tuned for real-time UX.
+  </Card>
+  <Card title="32K context" icon="window-maximize">
+    Combined input + output context.
+  </Card>
+  <Card title="70 Languages" icon="globe">
+    First-class Indic support.
+  </Card>
+  <Card title="OpenAI-Compatible" icon="plug">
+    Drop-in replacement for `/v1/chat/completions`.
+  </Card>
+</CardGroup>
+
+## Model Overview
+
+| | |
+|---|---|
+| **Developed by** | Smallest AI |
+| **Model type** | Causal language model — chat completions |
+| **API surface** | OpenAI-compatible (`POST /waves/v1/chat/completions`) |
+| **Model ID (request body)** | `"electron"` |
+| **Context window** | 32,768 tokens (combined input + output) |
+| **License** | Proprietary, hosted API |
+
+### Key capabilities
+
+<CardGroup cols={3}>
+  <Card title="OpenAI Wire Format" icon="plug">
+    Same request/response shape as OpenAI Chat Completions. Use the official OpenAI SDKs by swapping `base_url` and `api_key`.
+  </Card>
+  <Card title="Streaming" icon="bars-staggered">
+    Standard Server-Sent Events. Optional final `usage` chunk for accurate billing on client disconnect.
+  </Card>
+  <Card title="Tool / Function Calling" icon="screwdriver-wrench">
+    Standard OpenAI tools API, with voice-agent-optimized filler-phrase behavior before tool calls.
+  </Card>
+  <Card title="Prefix Caching" icon="bolt">
+    Cached input tokens billed at $0.10 / 1M (75% off). Automatic — no flag needed.
+  </Card>
+  <Card title="70 Languages" icon="globe">
+    Wide multilingual coverage, with particularly strong Indic-language performance.
+  </Card>
+  <Card title="JSON Mode" icon="brackets-curly">
+    `response_format: {type: "json_object"}` for structured output.
+  </Card>
+</CardGroup>
+
+---
+
+## Performance
+
+| Metric | Value |
+|---|---|
+| **Time to first token (TTFT)** | < 300 ms (typical, warm connection) |
+| **End-to-end roundtrip overhead vs direct model** | ~20 ms with persistent HTTPS connection |
+| **Quality tier** | Stronger than GPT-4.1 on internal benchmarks |
+
+<Note>
+Detailed public evaluation scores (MMLU, IFEval, etc.) will be published as part of Electron's research-disclosure track. In the meantime, the model has been benchmarked internally against frontier alternatives across reasoning, instruction following, multilingual, and tool-use tasks.
+</Note>
+
+---
+
+## Pricing
+
+| Type | Rate |
+|---|---:|
+| Input tokens | **$0.40** / 1M |
+| Cached input tokens (prefix-cached) | **$0.10** / 1M |
+| Output tokens | **$1.60** / 1M |
+
+Prefix-cache pricing applies automatically — see [Prefix Caching](/waves/documentation/llm-electron/prefix-caching). Every response reports `usage.prompt_tokens_details.cached_tokens` so you can audit savings.
+
+## Rate limits
+
+| Plan | Requests per minute (RPM) | Concurrent in-flight requests |
+|---|---:|---:|
+| Standard | 10 | 3 |
+| Enterprise | 200 | 20 |
+
+Both limits enforce strictly — over either cap returns `HTTP 429`. See [Concurrency and Limits](/waves/api-reference/concurrency-and-limits).
+
+---
+
+## Supported languages
+
+Electron is multilingual with strong out-of-the-box quality across the following 70 languages. Particularly strong on Indic languages including lower-resource ones.
+
+### Western Europe (8)
+English · Spanish · French · German · Italian · Portuguese · Dutch · Catalan
+
+### Indic (11)
+Hindi · Bengali · Tamil · Telugu · Marathi · Gujarati · Kannada · Malayalam · Punjabi · Odia · Urdu
+
+### Central / Eastern Europe (14)
+Polish · Russian · Ukrainian · Belarusian · Czech · Slovak · Romanian · Hungarian · Bulgarian · Croatian · Serbian · Slovenian · Macedonian · Albanian
+
+### Baltic (3)
+Estonian · Latvian · Lithuanian
+
+### Nordic (5)
+Swedish · Norwegian · Danish · Finnish · Icelandic
+
+### Other Europe (2)
+Greek · Turkish
+
+### Middle East (4)
+Arabic · Hebrew · Persian (Farsi) · Kurdish
+
+### East Asia (5)
+Chinese (Simplified) · Chinese (Traditional) · Japanese · Korean · Mongolian
+
+### Southeast Asia (8)
+Vietnamese · Thai · Indonesian · Malay · Filipino · Burmese · Khmer · Lao
+
+### South Asia (2)
+Nepali · Sinhala
+
+### Central Asia (2)
+Kazakh · Uzbek
+
+### Africa (6)
+Swahili · Amharic · Afrikaans · Yoruba · Hausa · Zulu
+
+---
+
+## Capabilities
+
+| Capability | Status |
+|---|---|
+| Chat completions (text in / text out) | ✅ |
+| Streaming (SSE) | ✅ |
+| Tool / function calling | ✅ |
+| Parallel tool calls | ✅ |
+| Voice-agent filler-phrase before tool calls | ✅ Electron-specific |
+| JSON object mode (`response_format`) | ✅ |
+| Prefix caching | ✅ Automatic |
+| System messages | ✅ |
+| Multi-turn conversation | ✅ |
+| `seed` for best-effort determinism | ✅ |
+| Multilingual generation (70 languages) | ✅ |
+
+---
+
+## Known limitations
+
+- **No vision / no audio in or out.** Electron is text-only on the public API.
+- **`n > 1` not supported.** Each request returns exactly one completion. Make multiple requests if you need multiple completions.
+- **`prompt_logprobs` not supported.**
+- **Context cap of 32,768 tokens** combined input + output. Inputs that exceed this are rejected with a clean `400`.
+
+---
+
+## API surface
+
+| | |
+|---|---|
+| Endpoint | `POST https://api.smallest.ai/waves/v1/chat/completions` |
+| Auth | `Authorization: Bearer $SMALLEST_API_KEY` |
+| Request shape | OpenAI Chat Completions wire format |
+| Response shape | OpenAI `chat.completion` (non-streaming) or SSE `chat.completion.chunk` (streaming) |
+| Error envelope | `{"error": {"message", "type", "param", "request_id"}}` |
+
+See [Chat Completions](/waves/documentation/llm-electron/chat-completions) for full request/response reference and [Supported Parameters](/waves/documentation/llm-electron/supported-parameters) for the passthrough table.
+
+---
+
+## Safety & responsible use
+
+Electron is intended for general-purpose conversational and agentic workloads. Customers building user-facing applications should layer their own content moderation, prompt-injection defenses, and PII handling appropriate to their domain. Electron does not currently apply content moderation server-side — outputs reflect the model's training and the prompts you provide.
+
+For voice-agent applications handling regulated content (financial, healthcare), use the standard pattern: keep PII out of prompts where practical, apply post-processing redaction on outputs, and use Smallest AI's [Pulse PII redaction features](/waves/documentation/speech-to-text-pulse/features/redaction) on the transcription side.
+
+---
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Pulse — STT" icon="microphone" href="/waves/model-cards/speech-to-text/pulse">
+    Pair Electron with Pulse for speech-to-text input.
+  </Card>
+  <Card title="Lightning v3.1 — TTS" icon="waveform-lines" href="/waves/model-cards/text-to-speech/lightning-v-3-1">
+    Pair Electron with Lightning for speech output.
+  </Card>
+  <Card title="Voice Agent cookbook" icon="phone" href="/waves/documentation/cookbooks/voice-agent-electron-pulse-lightning">
+    End-to-end pipeline: Pulse → Electron → Lightning.
+  </Card>
+  <Card title="Chat Completions API" icon="code" href="/waves/documentation/llm-electron/chat-completions">
+    Full request/response reference.
+  </Card>
+</CardGroup>

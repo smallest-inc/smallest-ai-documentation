@@ -1,0 +1,154 @@
+---
+title: "Prefix Caching"
+description: "Cached input tokens are billed at $0.10/M (75% off). Structure your prompts to reuse stable prefixes — system prompts, RAG context, conversation history — and pay less."
+icon: "bolt"
+---
+
+Electron caches stable prompt prefixes across requests. When a new request shares a prefix with a recent one, those tokens are served from cache:
+
+- **Faster** — fewer tokens to process means lower time-to-first-token.
+- **Cheaper** — cached input tokens are billed at `$0.10 / 1M` vs `$0.40 / 1M` for normal input. A **75% discount**.
+
+No flag or knob — caching is automatic. Your job is to **structure prompts so the prefix is stable across requests**.
+
+## How to tell what got cached
+
+Every response includes `usage.prompt_tokens_details.cached_tokens`:
+
+```json
+{
+  "usage": {
+    "prompt_tokens": 1200,
+    "completion_tokens": 80,
+    "total_tokens": 1280,
+    "prompt_tokens_details": {
+      "cached_tokens": 1024
+    }
+  }
+}
+```
+
+In this example, 1024 of 1200 input tokens were served from cache. You're billed for 176 fresh tokens at the normal rate plus 1024 cached tokens at the discounted rate.
+
+## How to maximize cache hits
+
+The cache matches **identical prefixes** — same tokens in the same order. The principle: **put stable content first, variable content last.**
+
+### ✅ Do this
+
+```python
+messages = [
+    {"role": "system", "content": LONG_SYSTEM_PROMPT},     # stable — caches
+    {"role": "user", "content": LONG_RAG_CONTEXT_BLOCK},   # stable per session
+    {"role": "user", "content": user_question},            # varies — last
+]
+```
+
+### ❌ Avoid this
+
+```python
+messages = [
+    {"role": "system", "content": f"You are helping {user_name}. {SYSTEM_PROMPT}"},
+    #                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ varies per user
+    #                              breaks the cache for everyone
+]
+```
+
+Putting per-request variability **before** stable content prevents the cache from matching anything past that point.
+
+## Practical patterns
+
+### Pattern 1: shared system prompt across users
+
+If many requests share the same system prompt, place it first verbatim — including whitespace and punctuation. The first request warms the cache; subsequent requests benefit.
+
+```python
+SYSTEM_PROMPT = """You are a customer-support agent for Acme Corp. ...
+[800 tokens of policies, tone guidelines, escalation rules]
+"""
+
+# Every request:
+messages = [
+    {"role": "system", "content": SYSTEM_PROMPT},
+    {"role": "user", "content": user_input},
+]
+```
+
+Result: ~800 of `prompt_tokens` show up as `cached_tokens` on every call after the first.
+
+### Pattern 2: RAG with stable retrieved context
+
+For a chat session where the user is asking follow-up questions over the same retrieved documents, keep the context block fixed across turns:
+
+```python
+context_block = "\n\n".join(retrieved_chunks)   # stable for the session
+
+messages = [
+    {"role": "system", "content": SYSTEM_PROMPT},
+    {"role": "system", "content": f"Context:\n{context_block}"},
+    *conversation_history,                         # grows but doesn't shrink — cache hits the prefix
+    {"role": "user", "content": current_question},
+]
+```
+
+The system prompt + context block + earlier conversation history all hit the cache as the conversation grows.
+
+### Pattern 3: conversation history
+
+In a multi-turn chat, each new turn's prefix (system + all previous messages) is identical to the previous turn's full message list. Sending the full history every turn benefits from caching of all the older turns.
+
+```python
+# Turn 5:
+messages = [
+    {"role": "system", "content": SYSTEM_PROMPT},
+    # turns 1-4 (already cached after turn 4 was sent)
+    *history,
+    # turn 5 user message (the only new bit)
+    {"role": "user", "content": "..."},
+]
+```
+
+## Cost math
+
+Assume a typical agent turn with a 1000-token system prompt, 500 tokens of conversation history, and a 50-token user question — 1550 input tokens, 200 output tokens.
+
+| | Tokens | Rate | Cost |
+|---|---:|---:|---:|
+| **No cache hit (first turn)** | | | |
+| Input | 1,550 | $0.40/M | $0.00062 |
+| Output | 200 | $1.60/M | $0.00032 |
+| | | **Total** | **$0.00094** |
+| **Cache hit on the prefix (subsequent turns)** | | | |
+| Cached input | 1,500 | $0.10/M | $0.00015 |
+| Fresh input | 50 | $0.40/M | $0.00002 |
+| Output | 200 | $1.60/M | $0.00032 |
+| | | **Total** | **$0.00049** |
+
+**~48% cheaper per turn** on a typical chat workload. The savings get more pronounced as your system prompt + history grows.
+
+## What invalidates the cache
+
+- Any change in the prefix tokens — including whitespace, punctuation, capitalization.
+- Changes in the order of messages.
+- Cache entries expire after a period of inactivity. Hot prompts stay cached; cold prompts drop out.
+
+If you see `cached_tokens` lower than expected, check that your system prompt template doesn't have variable substitutions — even invisible ones like timestamps.
+
+## Verifying savings
+
+The simplest verification: send the same request twice in a row and inspect `cached_tokens` on the second response.
+
+```python
+for i in range(2):
+    resp = client.chat.completions.create(
+        model="electron",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "What is 2+2?"},
+        ],
+    )
+    cached = resp.usage.prompt_tokens_details.cached_tokens
+    print(f"call {i+1}: cached_tokens={cached}, prompt_tokens={resp.usage.prompt_tokens}")
+```
+
+You'll see `cached_tokens=0` on the first call and a non-zero value on the second.

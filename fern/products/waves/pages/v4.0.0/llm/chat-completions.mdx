@@ -1,0 +1,220 @@
+---
+title: "Chat Completions"
+description: "POST /waves/v1/chat/completions — OpenAI-compatible chat completion API. Full request and response reference."
+icon: "comments"
+---
+
+`POST https://api.smallest.ai/waves/v1/chat/completions`
+
+OpenAI-compatible chat completion endpoint. Most OpenAI Chat Completions request fields are accepted and passed through to Electron verbatim. The response shape matches OpenAI's `chat.completion` object.
+
+## Request
+
+### Authentication
+
+```http
+Authorization: Bearer $SMALLEST_API_KEY
+```
+
+### Required fields
+
+| Field | Type | Description |
+|---|---|---|
+| `model` | string | Always `"electron"`. |
+| `messages` | array | Standard OpenAI message array. Max 200 messages. Each message: `{role, content, tool_calls?, tool_call_id?}` where `role` is `"system"`, `"user"`, `"assistant"`, or `"tool"`. |
+
+### Common optional fields
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `temperature` | number ≥ 0 | `1.0` | Sampling temperature. |
+| `top_p` | number 0–1 | `1.0` | Nucleus sampling. |
+| `max_tokens` | int | model max | Cap on output tokens. Hard ceiling: 32,768 (combined input + output context). |
+| `stream` | bool | `false` | When `true`, response is Server-Sent Events. See [Streaming](/waves/documentation/llm-electron/streaming). |
+| `stream_options.include_usage` | bool | `false` | When `true` (with `stream: true`), final SSE chunk carries the `usage` block. |
+| `stop` | string \| array of strings | — | Up to 4 stop sequences. |
+| `seed` | int | random | Best-effort determinism. |
+| `response_format` | object | — | `{"type":"text"}` (default) or `{"type":"json_object"}`. |
+| `tools` | array | — | Standard OpenAI function-calling tools array. Max 64 entries. See [Tool Calling](/waves/documentation/llm-electron/tool-calling). |
+| `tool_choice` | string \| object | `"auto"` | `"auto"`, `"required"`, `"none"`, or `{"type":"function","function":{"name":"…"}}`. |
+| `logit_bias` | object | — | Per-token id biases. |
+| `logprobs` | bool | `false` | Return log-probabilities. |
+| `top_logprobs` | int 0–20 | — | Top-N log-probs (requires `logprobs: true`). |
+| `presence_penalty`, `frequency_penalty` | number −2 to 2 | `0` | Standard OpenAI knobs. |
+
+Unrecognized parameters not in the supported set are accepted by the schema but may be ignored by the model. See [Supported Parameters](/waves/documentation/llm-electron/supported-parameters) for the full passthrough table.
+
+### Explicitly rejected fields
+
+| Field | Why |
+|---|---|
+| `n > 1` | Cost amplification with no use case in v1. |
+| `prompt_logprobs` | Response-size amplification with no billing impact. |
+
+Sending either returns `HTTP 400` with `invalid_request_error`.
+
+## Response
+
+### Non-streaming (default)
+
+Standard OpenAI `chat.completion` object:
+
+```json
+{
+  "id": "chatcmpl-a670053f3ab2ed8f",
+  "object": "chat.completion",
+  "created": 1740000000,
+  "model": "electron",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Hi! How can I help you today?",
+        "tool_calls": null
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 20,
+    "completion_tokens": 9,
+    "total_tokens": 29,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  }
+}
+```
+
+### `usage` block
+
+| Field | Description |
+|---|---|
+| `prompt_tokens` | Total input tokens (cached + uncached). |
+| `prompt_tokens_details.cached_tokens` | Subset of `prompt_tokens` served from prefix cache. Billed at the discounted rate. See [Prefix Caching](/waves/documentation/llm-electron/prefix-caching). |
+| `completion_tokens` | Generated output tokens. |
+| `total_tokens` | `prompt_tokens + completion_tokens`. |
+
+### `finish_reason`
+
+| Value | Meaning |
+|---|---|
+| `"stop"` | Natural stop (end token or `stop` sequence hit). |
+| `"length"` | `max_tokens` reached. |
+| `"tool_calls"` | The model returned function calls; act on them and continue the conversation. |
+| `"content_filter"` | Content blocked. |
+
+### Streaming
+
+When `stream: true`, the response is `text/event-stream` SSE. See [Streaming](/waves/documentation/llm-electron/streaming) for chunk format and example consumer code.
+
+## Errors
+
+All errors follow OpenAI's envelope shape:
+
+```json
+{
+  "error": {
+    "message": "human-readable message",
+    "type": "invalid_request_error",
+    "param": "max_tokens",
+    "request_id": "01H..."
+  }
+}
+```
+
+Always include `request_id` in support tickets.
+
+| Status | When |
+|---|---|
+| 400 | Bad request (validation, model rejected the body, context length exceeded). |
+| 401 | Missing or invalid API key. |
+| 403 | API key valid but no access to Electron on this plan. |
+| 429 | Rate limit (RPM) or concurrency cap hit. See [Concurrency and Limits](/waves/api-reference/concurrency-and-limits). |
+| 503 | Endpoint temporarily disabled, or upstream model overloaded. |
+| 502 | Upstream model unavailable. Retry after a short backoff. |
+
+## Examples
+
+### Minimal
+
+<CodeGroup>
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.smallest.ai/waves/v1",
+    api_key=os.environ["SMALLEST_API_KEY"],
+)
+
+resp = client.chat.completions.create(
+    model="electron",
+    messages=[
+        {"role": "system", "content": "You are a concise assistant."},
+        {"role": "user", "content": "Explain prefix caching in one sentence."},
+    ],
+)
+print(resp.choices[0].message.content)
+```
+
+```javascript JavaScript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "https://api.smallest.ai/waves/v1",
+  apiKey: process.env.SMALLEST_API_KEY,
+});
+
+const resp = await client.chat.completions.create({
+  model: "electron",
+  messages: [
+    { role: "system", content: "You are a concise assistant." },
+    { role: "user", content: "Explain prefix caching in one sentence." },
+  ],
+});
+console.log(resp.choices[0].message.content);
+```
+
+```bash cURL
+curl -X POST "https://api.smallest.ai/waves/v1/chat/completions" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "electron",
+    "messages": [
+      {"role": "system", "content": "You are a concise assistant."},
+      {"role": "user", "content": "Explain prefix caching in one sentence."}
+    ]
+  }'
+```
+
+</CodeGroup>
+
+### Multi-turn
+
+```python
+messages = [
+    {"role": "system", "content": "You are a customer-support agent."},
+    {"role": "user", "content": "I want to change my plan."},
+    {"role": "assistant", "content": "Sure — which plan are you on right now?"},
+    {"role": "user", "content": "Standard, and I want to upgrade to Enterprise."},
+]
+
+resp = client.chat.completions.create(model="electron", messages=messages)
+```
+
+### JSON object output
+
+```python
+resp = client.chat.completions.create(
+    model="electron",
+    messages=[
+        {"role": "system", "content": "Reply with strict JSON."},
+        {"role": "user", "content": "List three Indian state capitals as {\"capitals\": [...]}"},
+    ],
+    response_format={"type": "json_object"},
+    temperature=0,
+)
+```

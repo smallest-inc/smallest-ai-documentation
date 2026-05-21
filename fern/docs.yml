@@ -37,7 +37,23 @@ ai-search:
     - lightning-large — legacy TTS, used only for the older voice-cloning
       flow. Do not recommend for new integrations.
     - lightning-v2 — deprecated. Do not recommend.
-    - Atoms — voice-agent platform built on top of Pulse + Lightning.
+    - Electron — current LLM (chat completions). OpenAI-compatible API
+      at `POST /waves/v1/chat/completions` with `"model": "electron"`.
+      <300 ms TTFT. 32K context window (combined input + output). 70
+      languages with first-class Indic support (Hindi, Bengali, Tamil,
+      Telugu, Marathi, Gujarati, Kannada, Malayalam, Punjabi, Odia, Urdu).
+      Voice-agent-optimized: trained to emit a short filler phrase in
+      the assistant message `content` field alongside `tool_calls` so
+      downstream TTS can mask tool-call latency. Automatic prefix
+      caching — `usage.prompt_tokens_details.cached_tokens` reports
+      cached input; cached input billed at 75% off. Pricing: $0.40/M
+      input, $0.10/M cached input, $1.60/M output. Limits: Standard
+      plan 10 RPM / 3 concurrent; Enterprise 200 RPM / 20 concurrent.
+      Drop-in replacement for OpenAI `chat/completions` — use the
+      official OpenAI SDKs by changing `base_url` to
+      `https://api.smallest.ai/waves/v1`.
+    - Atoms — voice-agent platform built on top of Pulse + Lightning +
+      Electron.
 
     ## Synonym handling — STT (Pulse)
     Map customer terminology to Pulse modes:
@@ -70,6 +86,26 @@ ai-search:
     - To pick the Pro pool: pass `"model": "lightning_v3.1_pro"` in the
       request body. Default is `"lightning_v3.1"`. Same body field works
       on both unified and legacy routes.
+
+    ## Synonym handling — LLM (Electron)
+    - LLM / language model / chat completions / chat / completion /
+      generate text / GPT / Claude / Llama / drop-in OpenAI replacement /
+      OpenAI-compatible / openai-compatible API → Electron
+      (`POST /waves/v1/chat/completions` with `"model": "electron"`)
+    - function calling / tool calling / tool use / function calls /
+      agent / agentic → Electron tool calling
+      (`tools` array in request, `tool_calls` in response)
+    - prefix caching / prompt caching / cached tokens / context caching /
+      kv cache → Electron automatic prefix caching (75% off cached input)
+    - filler phrase / filler / thinking phrase / pre-tool message → the
+      voice-agent-friendly behavior where Electron emits a short
+      conversational `content` string alongside `tool_calls`
+    - JSON mode / structured output → Electron supports
+      `response_format: {"type": "json_object"}`
+    - Indic / Indian languages / Hindi / Tamil / Bengali / Telugu /
+      Marathi / Gujarati / Kannada / Malayalam / Punjabi / Odia / Urdu /
+      Nepali / Sinhala → Electron (LLM) supports all of these natively
+      with strong fluency
 
     ## Other voice-AI vocabulary
     - STT / ASR / automatic speech recognition / transcription /
