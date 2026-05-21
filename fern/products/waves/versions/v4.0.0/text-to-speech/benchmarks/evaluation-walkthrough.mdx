@@ -1,0 +1,208 @@
+---
+title: 'Evaluation Walkthrough'
+description: 'Step-by-step guide to evaluate Lightning v3.1 TTS quality and latency on your own dataset'
+---
+
+This guide walks through a repeatable Lightning v3.1 evaluation: pick a dataset that matches your use case, synthesize audio, score quality with the same metrics reported on the [Performance page](/waves/documentation/text-to-speech-lightning/benchmarks/performance), and measure TTFB latency. Use the [TTS Evaluation Script](/waves/model-cards/text-to-speech/tts-evaluation-script) for a copy-paste TTFB-measurement starter; the steps below extend that pattern to quality measurement.
+
+## 1. Assemble your test set
+
+Pick 50–200 input strings representative of your production traffic. A balanced set looks like:
+
+- 20% short conversational ("Yeah I think so.", "Let me check.") — exercises naturalness and intonation
+- 20% medium informational ("Your order has been shipped and will arrive on the 15th.") — exercises pace and pause placement
+- 20% long-form narrative (3–5 sentences) — exercises prosody and breathing
+- 20% domain-specific (your product names, jargon, technical terms) — exercises pronunciation
+- 20% expressive (questions, exclamations, multi-clause) — exercises emotion and paralinguistics
+
+For multilingual evaluation, repeat the structure in each language and tag entries with `language` so you can pivot results later.
+
+```python
+dataset = [
+    {"text": "Yeah I think so.",                              "language": "en", "category": "conversational"},
+    {"text": "Your order will arrive on the 15th.",           "language": "en", "category": "informational"},
+    {"text": "क्या आप मेरा ऑर्डर ट्रैक कर सकते हैं?",                  "language": "hi", "category": "conversational"},
+    {"text": "Activate the NVIDIA L40S GPU pipeline.",        "language": "en", "category": "domain"},
+    # ... 50–200 entries
+]
+```
+
+## 2. Install the evaluation toolkit
+
+```bash
+pip install smallestai jiwer whisper-normalizer openai-whisper pandas
+```
+
+- `smallestai` — Lightning v3.1 TTS client
+- `openai-whisper` — for decoding synthesized audio back to text (the basis for WER/CER/Hallucination scoring)
+- `jiwer` — WER/CER computation
+- `whisper-normalizer` — text normalization that matches the EmergentTTS scoring rubric
+- `pandas` — aggregating results
+
+## 3. Synthesize + measure TTFB
+
+This block synthesizes each entry over the streaming WebSocket and records TTFB in the same way the [TTS Evaluation Script](/waves/model-cards/text-to-speech/tts-evaluation-script) does.
+
+```python
+import os
+import time
+import base64
+import json
+import wave
+import websocket
+from pathlib import Path
+
+OUTPUT_DIR = Path("synth_outputs")
+OUTPUT_DIR.mkdir(exist_ok=True)
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+WS_URL = "wss://api.smallest.ai/waves/v1/tts/live"  # unified WS — pick Pro by adding `model` body field
+
+def synthesize(text: str, voice_id: str = "robert", model: str = "lightning_v3.1") -> dict:
+    """Returns {audio_path, ttfb_ms, total_ms} for a single synthesis."""
+    chunks = []
+    ttfb_ms = None
+    t_start = time.perf_counter()
+
+    def on_open(ws):
+        ws.send(json.dumps({
+            "text": text,
+            "voice_id": voice_id,
+            "model": model,
+            "sample_rate": 44100,
+            "language": "auto",
+        }))
+
+    def on_message(ws, message):
+        nonlocal ttfb_ms
+        if ttfb_ms is None:
+            ttfb_ms = (time.perf_counter() - t_start) * 1000
+        data = json.loads(message)
+        if data.get("status") == "complete":
+            ws.close()
+            return
+        if "data" in data and "audio" in data["data"]:
+            chunks.append(data["data"]["audio"])
+
+    ws = websocket.WebSocketApp(
+        WS_URL,
+        header={"Authorization": f"Bearer {API_KEY}"},
+        on_open=on_open,
+        on_message=on_message,
+    )
+    ws.run_forever()
+
+    audio_path = OUTPUT_DIR / f"sample_{abs(hash(text))}.wav"
+    pcm = b"".join(base64.b64decode(c) for c in chunks)
+    with wave.open(str(audio_path), "wb") as wf:
+        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(44100)
+        wf.writeframes(pcm)
+
+    return {
+        "audio_path": audio_path,
+        "ttfb_ms": ttfb_ms,
+        "total_ms": (time.perf_counter() - t_start) * 1000,
+    }
+```
+
+To benchmark Lightning v3.1 Pro, pass `model="lightning_v3.1_pro"` and a Pro voice ID (e.g. `meher`, `maverick`, `cressida`).
+
+## 4. Decode synthesized audio + score accuracy
+
+```python
+import whisper
+from jiwer import wer, cer
+from whisper_normalizer.english import EnglishTextNormalizer
+
+asr = whisper.load_model("large-v3")
+normalizer = EnglishTextNormalizer()
+
+def score_sample(sample: dict, synth_result: dict) -> dict:
+    decoded = asr.transcribe(str(synth_result["audio_path"]))["text"]
+    ref = normalizer(sample["text"])
+    hyp = normalizer(decoded)
+    return {
+        "text": sample["text"],
+        "language": sample["language"],
+        "category": sample["category"],
+        "ttfb_ms": synth_result["ttfb_ms"],
+        "wer": wer(ref, hyp),
+        "cer": cer(ref, hyp),
+        "ref": ref,
+        "hyp": hyp,
+    }
+```
+
+For non-English datasets, swap the normalizer for the appropriate language:
+
+```python
+from whisper_normalizer.basic import BasicTextNormalizer
+normalizer = BasicTextNormalizer()  # locale-agnostic; works for Hindi, Spanish, French, etc.
+```
+
+## 5. Aggregate + report
+
+```python
+import pandas as pd
+
+results = []
+for sample in dataset:
+    synth = synthesize(sample["text"], voice_id="robert")
+    results.append(score_sample(sample, synth))
+
+df = pd.DataFrame(results)
+print("WER by category:")
+print(df.groupby("category")["wer"].agg(["mean", "median"]))
+print()
+print("TTFB by language (ms):")
+print(df.groupby("language")["ttfb_ms"].agg(["mean", "median", lambda x: x.quantile(0.95)]))
+print()
+print(f"Overall mean WER: {df['wer'].mean():.4f}")
+print(f"Overall mean CER: {df['cer'].mean():.4f}")
+print(f"Overall mean TTFB: {df['ttfb_ms'].mean():.1f} ms")
+```
+
+## 6. Compare Standard vs Pro on the same set
+
+Re-run steps 3–4 with `model="lightning_v3.1_pro"` and a Pro voice ID. Then diff the result frames:
+
+```python
+standard_df = run_eval(model="lightning_v3.1", voice_id="robert")
+pro_df      = run_eval(model="lightning_v3.1_pro", voice_id="maverick")
+
+print(pd.DataFrame({
+    "WER (Standard)": standard_df["wer"].mean(),
+    "WER (Pro)":      pro_df["wer"].mean(),
+    "CER (Standard)": standard_df["cer"].mean(),
+    "CER (Pro)":      pro_df["cer"].mean(),
+    "TTFB (Standard, ms)": standard_df["ttfb_ms"].mean(),
+    "TTFB (Pro, ms)":      pro_df["ttfb_ms"].mean(),
+}, index=["overall"]))
+```
+
+## 7. Subjective quality (Naturalness, Expressiveness, Delivery)
+
+The Naturalness, Expressiveness, and Delivery categories on the [Performance page](/waves/documentation/text-to-speech-lightning/benchmarks/performance) are **listener-judged**, not computed. To reproduce them on your set:
+
+- Synthesize the same input with each model you want to compare (Lightning v3.1, Lightning v3.1 Pro, competitor X).
+- Run a blinded A/B/C listening test with at least 5 listeners per sample.
+- Use the EmergentTTS rubric (1–5 scale per metric) or a comparable in-house rubric.
+- LLM-as-a-Judge with a frontier model is a usable proxy if human listeners aren't available, but report it as automated-judged rather than human-listener-judged.
+
+## 8. Document findings
+
+Keep results reproducible by recording:
+
+- Dataset SHA, audio file count, language mix
+- TTS model + voice IDs used
+- Whisper model version used for decoding
+- Date of run + smallestai SDK version
+- Aggregate WER/CER/TTFB tables broken down by category and language
+- Notable failure modes (e.g., "WER spike on samples containing 'NVIDIA L40S' — fixed by pronunciation dict")
+
+## Next Steps
+
+- [Performance](/waves/documentation/text-to-speech-lightning/benchmarks/performance) — published numbers to compare against
+- [Metrics Overview](/waves/documentation/text-to-speech-lightning/benchmarks/metrics-overview) — what each metric means
+- [TTS Evaluation Script](/waves/model-cards/text-to-speech/tts-evaluation-script) — standalone Python script for TTFB only
+- [Pronunciation Dictionaries](/waves/documentation/text-to-speech-lightning/pronunciation-dictionaries) — close residual WER gaps on proper nouns
