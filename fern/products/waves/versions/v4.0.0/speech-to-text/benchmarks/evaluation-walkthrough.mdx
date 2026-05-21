@@ -83,7 +83,7 @@ def run_sample(sample: dict) -> dict:
     data = resp.json()
 
     duration_s = audio_duration_seconds(sample["audio"])
-    rtf = duration_s / (latency_ms / 1000)
+    rtf = (latency_ms / 1000) / duration_s  # processing time ÷ audio duration; lower is better
 
     ref = normalizer(sample["reference"])
     hyp = normalizer(data["transcription"])
@@ -131,7 +131,7 @@ print(summary)
 
 - **WER / CER** per use case and language.
 - **End-to-end latency** (p50 / p90 / p95) from `latency_ms`.
-- **RTF** from `rtf` — values above 1.0 mean Pulse processed audio faster than real-time.
+- **RTF** from `rtf` — values **below 1.0** mean Pulse processed audio faster than real-time. Pulse STT typically runs near 0.4 on clean inputs (see [Metrics Overview](/waves/documentation/speech-to-text-pulse/benchmarks/metrics-overview#real-time-factor-rtf)).
 - **Diarization coverage**: share of `utterances` entries that include a `speaker` field.
 
 ## 5. Error analysis
@@ -185,11 +185,15 @@ Include:
   "samples": 120,
   "average_wer": 0.064,
   "average_cer": 0.028,
-  "average_latency_ms": 850.0,
-  "p95_latency_ms": 1320.0,
-  "average_rtf": 17.6,
+  "average_latency_ms": 61.3,
+  "p95_latency_ms": 88.2,
+  "average_rtf": 0.41,
   "timestamp": "2026-05-22T10:00:00Z"
 }
 ```
+
+<Note>
+The `latency_ms` you measure with `time.perf_counter()` includes network round-trip from your client to `api.smallest.ai`, so numbers vary with client region. Pulse's published **server-side TTFT of ~64 ms** is measured at the inference pod (see the [Pulse model card](/waves/model-cards/speech-to-text/pulse#time-to-first-transcript-ttft)) — your wall-clock measurement is typically higher because of network. RTF stays meaningful either way: it's `processing_time / audio_duration`, so longer audio dilutes per-request overhead.
+</Note>
 
 This completes the process of self-metric evaluation. With these steps, you can identify strengths and weaknesses of Pulse STT — or compare it against any other ASR system that returns a similar response shape — on workloads representative of your production traffic.
