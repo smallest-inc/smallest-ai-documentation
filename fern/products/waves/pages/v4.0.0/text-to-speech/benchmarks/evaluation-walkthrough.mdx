@@ -6,7 +6,17 @@ description: 'Step-by-step guide to evaluate Lightning v3.1 TTS quality and late
 This guide walks through a repeatable Lightning v3.1 evaluation: pick a dataset that matches your use case, synthesize audio, score quality with the same metrics reported on the [Performance page](/waves/documentation/text-to-speech-lightning/benchmarks/performance), and measure TTFB latency. The synthesis snippet below was **live-validated against the unified `wss://api.smallest.ai/waves/v1/tts/live` endpoint on 2026-05-21**; reference numbers from that run are in the callout below.
 
 <Note>
-**Validated TTFB (one-shot, cold connection, single request, from a developer laptop):** Lightning v3.1 (`robert`) **239.2 ms**, Lightning v3.1 Pro (`meher`) **208.1 ms**, Pro (`maverick`) **228.0 ms**, Pro (`cressida`) **213.4 ms**. An 80-character test sentence synthesizes in ~4.6 s of audio. Streaming RTF on a single request settles at ~1.0× because the server paces chunk delivery to playback rate — see [Metrics Overview — RTF](/waves/documentation/text-to-speech-lightning/benchmarks/metrics-overview#real-time-factor-rtf).
+**Validation results (Lightning v3.1 Standard, `robert`, 80-char English sentence):**
+
+| Stage | Result |
+|---|---|
+| **TTFB** (cold conn, single request) | Standard `robert` **239 ms** • Pro `meher` **208 ms** • Pro `maverick` **228 ms** • Pro `cressida` **213 ms** |
+| **Streaming RTF** | ~1.0× — server paces chunks at playback rate ([why](/waves/documentation/text-to-speech-lightning/benchmarks/metrics-overview#real-time-factor-rtf)) |
+| **Synth → WAV** | 4.6 s of 44.1 kHz mono audio written to disk |
+| **Whisper-small decode** | Perfect match to the input text after normalization |
+| **WER / CER** | **0.0% / 0.0%** |
+
+The whole loop — synth on WebSocket → audio chunks decoded → WAV written → Whisper transcribes → `jiwer` scores — runs end-to-end with the snippet below.
 </Note>
 
 ## 1. Assemble your test set
