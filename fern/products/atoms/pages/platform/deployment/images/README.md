@@ -10,6 +10,7 @@ Drop screenshots here. Name them exactly as listed below.
 |----------|-----------------|
 | `phone-numbers.png` | Main Phone Numbers page with list of numbers and details panel |
 | `rent-number.png` | Rent Number modal |
+| `number-compliance.png` | Compliance review form shown when renting Indian phone numbers |
 | `import-sip.png` | Import SIP Number modal |
 
 ---
