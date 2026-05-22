@@ -1,0 +1,433 @@
+openapi: 3.0.3
+info:
+  title: Electron — Chat Completions (LLM)
+  version: 1.0.0
+  description: |
+    OpenAI-compatible chat completion endpoint for Electron, Smallest AI's
+    in-house language model. Generates a model response for a given chat
+    conversation.
+
+    Electron implements the standard OpenAI Chat Completions wire format —
+    the official OpenAI SDKs work by changing `base_url` to
+    `https://api.smallest.ai/waves/v1`.
+
+servers:
+- url: https://api.smallest.ai
+  description: Waves API server
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: LLM
+    description: Chat completions powered by Electron.
+
+paths:
+  /waves/v1/chat/completions:
+    post:
+      operationId: electronChatCompletions
+      summary: Chat Completions (Electron)
+      description: |
+        Generate a chat completion with Electron. OpenAI-compatible
+        request/response shape.
+
+        Set `stream: true` to receive tokens via Server-Sent Events. With
+        `stream_options: { include_usage: true }`, the final SSE chunk
+        carries the `usage` block so token accounting is exact even on
+        client disconnects.
+
+        Tool calling follows OpenAI's `tools` array convention. When you
+        provide a voice-agent-style system prompt, Electron emits a short
+        filler phrase in the assistant message `content` field alongside
+        `tool_calls` — see the [Tool Calling guide](/waves/documentation/llm-electron/tool-calling)
+        for the voice-agent pattern.
+      tags:
+        - LLM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatCompletionRequest"
+            examples:
+              minimal:
+                summary: Minimal request
+                value:
+                  model: electron
+                  messages:
+                    - role: user
+                      content: "Hello!"
+              streaming_with_usage:
+                summary: Streaming with final usage chunk
+                value:
+                  model: electron
+                  messages:
+                    - role: user
+                      content: "Tell me a one-sentence fun fact."
+                  stream: true
+                  stream_options:
+                    include_usage: true
+              tools:
+                summary: Tool / function calling
+                value:
+                  model: electron
+                  messages:
+                    - role: system
+                      content: "You are a friendly phone agent. Briefly acknowledge out loud before using any tool."
+                    - role: user
+                      content: "What's the weather in Mumbai?"
+                  tools:
+                    - type: function
+                      function:
+                        name: get_weather
+                        description: "Get current weather for a city."
+                        parameters:
+                          type: object
+                          properties:
+                            city:
+                              type: string
+                              description: "City name"
+                          required: [city]
+              json_object:
+                summary: JSON object output
+                value:
+                  model: electron
+                  messages:
+                    - role: system
+                      content: "Reply with strict JSON."
+                    - role: user
+                      content: 'List three Indian state capitals as {"capitals": [...]}'
+                  response_format:
+                    type: json_object
+                  temperature: 0
+      responses:
+        "200":
+          description: |
+            Non-streaming: standard OpenAI `chat.completion` object.
+
+            Streaming (`stream: true`): `text/event-stream` SSE — each
+            event is a `chat.completion.chunk` delta, terminated by
+            `data: [DONE]`.
+          headers:
+            X-Request-Id:
+              schema:
+                type: string
+              description: Unique request identifier. Include in support tickets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatCompletion"
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE stream of `chat.completion.chunk` events
+        "400":
+          description: |
+            Bad request — schema validation, unsupported parameter
+            (`n > 1`, `prompt_logprobs`), context length exceeded, or
+            invalid field value forwarded by the model.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid API key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: API key valid but no access to Electron on this plan.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: |
+            Rate limit (RPM) or concurrency cap hit. See
+            [Concurrency and Limits](/waves/api-reference/api-references/concurrency-and-limits).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Upstream model unavailable. Retry with backoff.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Endpoint temporarily disabled, or upstream model overloaded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      x-fern-audiences:
+        - v4docs
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        `Authorization: Bearer $SMALLEST_API_KEY`. Get your key from the
+        [Smallest AI Console](https://app.smallest.ai/dashboard/api-keys).
+
+  schemas:
+    ChatCompletionRequest:
+      type: object
+      required: [model, messages]
+      properties:
+        model:
+          type: string
+          description: Model ID. Currently only `"electron"`.
+          example: electron
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 200
+          description: Chat history. Standard OpenAI message array.
+          items:
+            $ref: "#/components/schemas/ElectronMessage"
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+          default: 1
+          description: Sampling temperature.
+        top_p:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 1
+          description: Nucleus sampling.
+        max_tokens:
+          type: integer
+          minimum: 1
+          description: |
+            Maximum output tokens. Combined input + output context ceiling
+            is 32,768.
+        stream:
+          type: boolean
+          default: false
+          description: |
+            When true, response is `text/event-stream`. See the
+            [Streaming guide](/waves/documentation/llm-electron/streaming).
+        stream_options:
+          type: object
+          properties:
+            include_usage:
+              type: boolean
+              description: |
+                Append a final SSE chunk with the `usage` block. Strongly
+                recommended for any caller that tracks token consumption.
+        tools:
+          type: array
+          maxItems: 64
+          description: |
+            Tool / function calling definitions. Standard OpenAI shape.
+            See [Tool Calling](/waves/documentation/llm-electron/tool-calling).
+          items:
+            $ref: "#/components/schemas/Tool"
+        tool_choice:
+          oneOf:
+            - type: string
+              enum: [auto, required, none]
+            - type: object
+              required: [type, function]
+              properties:
+                type:
+                  type: string
+                  enum: [function]
+                function:
+                  type: object
+                  required: [name]
+                  properties:
+                    name:
+                      type: string
+        response_format:
+          type: object
+          description: |
+            Output shape. `{type: "text"}` (default) or `{type: "json_object"}`.
+          properties:
+            type:
+              type: string
+              enum: [text, json_object]
+        stop:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+              maxItems: 4
+        seed:
+          type: integer
+          description: Best-effort determinism.
+        logit_bias:
+          type: object
+          additionalProperties:
+            type: number
+        logprobs:
+          type: boolean
+          default: false
+        top_logprobs:
+          type: integer
+          minimum: 0
+          maximum: 20
+        presence_penalty:
+          type: number
+          minimum: -2
+          maximum: 2
+          default: 0
+        frequency_penalty:
+          type: number
+          minimum: -2
+          maximum: 2
+          default: 0
+        user:
+          type: string
+          description: Opaque end-user identifier. Not interpreted by Electron.
+      description: |
+        Most OpenAI Chat Completions request fields are accepted as
+        passthrough. Explicitly rejected: `n > 1`, `prompt_logprobs`.
+
+    ElectronMessage:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          description: |
+            Message role — one of `system`, `user`, `assistant`, or `tool`.
+            `tool` is used to feed a function-call result back to the model on the next turn.
+          example: user
+        content:
+          type: string
+          nullable: true
+          description: Text content for the message. `null` is permitted on assistant messages that carry only `tool_calls`.
+        tool_calls:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolCall"
+        tool_call_id:
+          type: string
+          description: Required when `role` is `"tool"`.
+
+    Tool:
+      type: object
+      required: [type, function]
+      properties:
+        type:
+          type: string
+          enum: [function]
+        function:
+          type: object
+          required: [name]
+          properties:
+            name:
+              type: string
+            description:
+              type: string
+            parameters:
+              type: object
+              description: JSON Schema for the tool's parameters.
+
+    ToolCall:
+      type: object
+      required: [id, type, function]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [function]
+        function:
+          type: object
+          required: [name, arguments]
+          properties:
+            name:
+              type: string
+            arguments:
+              type: string
+              description: JSON-encoded argument object.
+
+    ChatCompletion:
+      type: object
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+          enum: [chat.completion]
+        created:
+          type: integer
+        model:
+          type: string
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              message:
+                $ref: "#/components/schemas/ElectronMessage"
+              finish_reason:
+                type: string
+                enum: [stop, length, tool_calls, content_filter]
+        usage:
+          $ref: "#/components/schemas/Usage"
+
+    Usage:
+      type: object
+      properties:
+        prompt_tokens:
+          type: integer
+          description: Total input tokens (cached + uncached).
+        completion_tokens:
+          type: integer
+        total_tokens:
+          type: integer
+        prompt_tokens_details:
+          type: object
+          properties:
+            cached_tokens:
+              type: integer
+              description: |
+                Subset of `prompt_tokens` served from prefix cache. Billed at
+                the discounted rate ($0.10 / 1M vs $0.40 / 1M for fresh input).
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+              description: Human-readable error message.
+              example: Invalid input data
+            type:
+              type: string
+              example: invalid_request_error
+            details:
+              type: array
+              description: |
+                Validation issues, when applicable. Each entry includes the JSON
+                path to the offending field plus a short reason. Present on
+                schema-validation failures (e.g. `n > 1`, `prompt_logprobs`).
+              items:
+                type: object
+                properties:
+                  code:
+                    type: string
+                  message:
+                    type: string
+                  path:
+                    type: array
+                    items:
+                      type: string
+            request_id:
+              type: string
+              description: Echo in support tickets so the request can be traced.
