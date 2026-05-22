@@ -145,7 +145,7 @@ paths:
         "429":
           description: |
             Rate limit (RPM) or concurrency cap hit. See
-            [Concurrency and Limits](/waves/api-reference/concurrency-and-limits).
+            [Concurrency and Limits](/waves/api-reference/api-references/concurrency-and-limits).
           content:
             application/json:
               schema:
@@ -297,11 +297,13 @@ components:
       required: [role]
       properties:
         role:
-          $ref: "#/components/schemas/ChatMessageRole"
+          type: string
+          enum: [system, user, assistant, tool]
+          description: Message role. `tool` is used to feed a function-call result back to the model on the next turn.
         content:
-          oneOf:
-            - type: string
-            - type: "null"
+          type: string
+          nullable: true
+          description: Text content for the message. `null` is permitted on assistant messages that carry only `tool_calls`.
         tool_calls:
           type: array
           items:
@@ -309,11 +311,6 @@ components:
         tool_call_id:
           type: string
           description: Required when `role` is `"tool"`.
-
-    ChatMessageRole:
-      type: string
-      enum: [system, user, assistant, tool]
-      description: Message role. `tool` is used to feed a function-call result back to the model on the next turn.
 
     Tool:
       type: object

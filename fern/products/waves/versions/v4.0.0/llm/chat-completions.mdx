@@ -29,7 +29,7 @@ Authorization: Bearer $SMALLEST_API_KEY
 |---|---|---|---|
 | `temperature` | number ≥ 0 | `1.0` | Sampling temperature. |
 | `top_p` | number 0–1 | `1.0` | Nucleus sampling. |
-| `max_tokens` | int | model max | Cap on output tokens. Hard ceiling: 32,768 (combined input + output context). |
+| `max_tokens` | int | model max | Cap on **output** tokens for this completion. The 32,768-token model ceiling is on **combined input + output**, so `max_tokens` is effectively `32,768 − prompt_tokens`. |
 | `stream` | bool | `false` | When `true`, response is Server-Sent Events. See [Streaming](/waves/documentation/llm-electron/streaming). |
 | `stream_options.include_usage` | bool | `false` | When `true` (with `stream: true`), final SSE chunk carries the `usage` block. |
 | `stop` | string \| array of strings | — | Up to 4 stop sequences. |
@@ -138,7 +138,7 @@ All errors follow the OpenAI-style envelope. Validation failures additionally in
 | 400 | Bad request (validation, model rejected the body, context length exceeded). |
 | 401 | Missing or invalid API key. |
 | 403 | API key valid but no access to Electron on this plan. |
-| 429 | Rate limit (RPM) or concurrency cap hit. See [Concurrency and Limits](/waves/api-reference/concurrency-and-limits). |
+| 429 | Rate limit (RPM) or concurrency cap hit. See [Concurrency and Limits](/waves/api-reference/api-references/concurrency-and-limits). |
 | 503 | Endpoint temporarily disabled, or upstream model overloaded. |
 | 502 | Upstream model unavailable. Retry after a short backoff. |
 
