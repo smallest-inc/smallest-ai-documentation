@@ -111,20 +111,27 @@ When `stream: true`, the response is `text/event-stream` SSE. See [Streaming](/w
 
 ## Errors
 
-All errors follow OpenAI's envelope shape:
+All errors follow the OpenAI-style envelope. Validation failures additionally include a `details` array with per-field reasons:
 
 ```json
 {
   "error": {
-    "message": "human-readable message",
+    "message": "Invalid input data",
     "type": "invalid_request_error",
-    "param": "max_tokens",
-    "request_id": "01H..."
+    "details": [
+      { "code": "custom", "message": "n > 1 is not supported", "path": ["n"] }
+    ],
+    "request_id": "9db74058-2421-4793-8796-b2629ff3eb1c"
   }
 }
 ```
 
-Always include `request_id` in support tickets.
+| Field | Description |
+|---|---|
+| `error.message` | Human-readable summary. |
+| `error.type` | Error class — e.g. `invalid_request_error`, `authentication_error`, `rate_limit_error`. |
+| `error.details` | Present on schema-validation failures. Array of `{code, message, path}` entries naming the offending fields. Use the `path` array to highlight the bad field in your client. |
+| `error.request_id` | Unique trace ID. Always include in support tickets. Also returned as the `X-Request-Id` response header. |
 
 | Status | When |
 |---|---|

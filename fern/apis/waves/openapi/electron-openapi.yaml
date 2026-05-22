@@ -297,8 +297,7 @@ components:
       required: [role]
       properties:
         role:
-          type: string
-          enum: [system, user, assistant, tool]
+          $ref: "#/components/schemas/ChatMessageRole"
         content:
           oneOf:
             - type: string
@@ -310,6 +309,11 @@ components:
         tool_call_id:
           type: string
           description: Required when `role` is `"tool"`.
+
+    ChatMessageRole:
+      type: string
+      enum: [system, user, assistant, tool]
+      description: Message role. `tool` is used to feed a function-call result back to the model on the next turn.
 
     Tool:
       type: object
@@ -403,11 +407,28 @@ components:
           properties:
             message:
               type: string
+              description: Human-readable error message.
+              example: Invalid input data
             type:
               type: string
               example: invalid_request_error
-            param:
-              type: string
+            details:
+              type: array
+              description: |
+                Validation issues, when applicable. Each entry includes the JSON
+                path to the offending field plus a short reason. Present on
+                schema-validation failures (e.g. `n > 1`, `prompt_logprobs`).
+              items:
+                type: object
+                properties:
+                  code:
+                    type: string
+                  message:
+                    type: string
+                  path:
+                    type: array
+                    items:
+                      type: string
             request_id:
               type: string
               description: Echo in support tickets so the request can be traced.
