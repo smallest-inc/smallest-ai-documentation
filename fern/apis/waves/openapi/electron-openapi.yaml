@@ -1,52 +1,48 @@
-# =============================================================================
-# OpenAPI snippet for Electron — Chat Completions
-# =============================================================================
-# This is a reference snippet for DevRel to merge into
-#   fern/apis/waves-v4/openapi/<the live spec file>
-# under the appropriate `paths:` / `components:` sections.
-#
-# Fern auto-generates the "API Reference" tab page from the OpenAPI spec.
-# The navigation entry already exists in v4.0.0.yml as:
-#
-#   - section: LLM (Chat Completions)
-#     contents:
-#       - endpoint: POST /waves/v1/chat/completions
-#         title: "Electron — Chat Completions"
-#
-# Once this snippet is merged into the spec, the rendered API page picks it up
-# automatically. The audience and snippet languages match the surrounding
-# entries (python: smallest-ai, typescript: smallest-ai, v4docs audience).
-# =============================================================================
+openapi: 3.0.3
+info:
+  title: Electron — Chat Completions (LLM)
+  version: 1.0.0
+  description: |
+    OpenAI-compatible chat completion endpoint for Electron, Smallest AI's
+    in-house language model. Generates a model response for a given chat
+    conversation.
+
+    Electron implements the standard OpenAI Chat Completions wire format —
+    the official OpenAI SDKs work by changing `base_url` to
+    `https://api.smallest.ai/waves/v1`.
+
+servers:
+  - url: https://api.smallest.ai
+    description: Production
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: LLM
+    description: Chat completions powered by Electron.
 
 paths:
   /waves/v1/chat/completions:
     post:
-      operationId: electron_chat_completions
+      operationId: electronChatCompletions
       summary: Chat Completions (Electron)
       description: |
-        OpenAI-compatible chat completion endpoint. Generates a model
-        response for the given chat conversation.
+        Generate a chat completion with Electron. OpenAI-compatible
+        request/response shape.
 
-        Electron implements the standard OpenAI Chat Completions wire format
-        — the official OpenAI SDKs work by changing `base_url` to
-        `https://api.smallest.ai/waves/v1`. See the
-        [Migrate from OpenAI](/waves/documentation/llm-electron/migrate-from-openai)
-        guide.
-
-        Set `stream: true` to receive tokens as Server-Sent Events. With
+        Set `stream: true` to receive tokens via Server-Sent Events. With
         `stream_options: { include_usage: true }`, the final SSE chunk
-        carries the `usage` block so accounting is exact even on client
-        disconnects.
+        carries the `usage` block so token accounting is exact even on
+        client disconnects.
 
-        Tool calling follows OpenAI's `tools` array convention. Electron
-        is additionally trained to emit a short filler phrase in the
-        assistant message `content` field alongside `tool_calls` — see
-        the [Tool Calling](/waves/documentation/llm-electron/tool-calling)
-        guide for the voice-agent pattern.
+        Tool calling follows OpenAI's `tools` array convention. When you
+        provide a voice-agent-style system prompt, Electron emits a short
+        filler phrase in the assistant message `content` field alongside
+        `tool_calls` — see the [Tool Calling guide](/waves/documentation/llm-electron/tool-calling)
+        for the voice-agent pattern.
       tags:
         - LLM
-      security:
-        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -62,7 +58,7 @@ paths:
                     - role: user
                       content: "Hello!"
               streaming_with_usage:
-                summary: Streaming with usage chunk
+                summary: Streaming with final usage chunk
                 value:
                   model: electron
                   messages:
@@ -76,6 +72,8 @@ paths:
                 value:
                   model: electron
                   messages:
+                    - role: system
+                      content: "You are a friendly phone agent. Briefly acknowledge out loud before using any tool."
                     - role: user
                       content: "What's the weather in Mumbai?"
                   tools:
@@ -98,7 +96,7 @@ paths:
                     - role: system
                       content: "Reply with strict JSON."
                     - role: user
-                      content: "List three Indian state capitals as {\"capitals\": [...]}"
+                      content: 'List three Indian state capitals as {"capitals": [...]}'
                   response_format:
                     type: json_object
                   temperature: 0
@@ -112,7 +110,8 @@ paths:
             `data: [DONE]`.
           headers:
             X-Request-Id:
-              schema: { type: string }
+              schema:
+                type: string
               description: Unique request identifier. Include in support tickets.
           content:
             application/json:
@@ -165,44 +164,17 @@ paths:
                 $ref: "#/components/schemas/Error"
       x-fern-audiences:
         - v4docs
-      x-fern-examples:
-        - name: minimal
-          code-samples:
-            - sdk: python
-              code: |
-                from openai import OpenAI
-
-                client = OpenAI(
-                    base_url="https://api.smallest.ai/waves/v1",
-                    api_key=os.environ["SMALLEST_API_KEY"],
-                )
-
-                resp = client.chat.completions.create(
-                    model="electron",
-                    messages=[{"role": "user", "content": "Hello!"}],
-                )
-                print(resp.choices[0].message.content)
-            - sdk: typescript
-              code: |
-                import OpenAI from "openai";
-
-                const client = new OpenAI({
-                  baseURL: "https://api.smallest.ai/waves/v1",
-                  apiKey: process.env.SMALLEST_API_KEY,
-                });
-
-                const resp = await client.chat.completions.create({
-                  model: "electron",
-                  messages: [{ role: "user", content: "Hello!" }],
-                });
-                console.log(resp.choices[0].message.content);
 
 components:
-  schemas:
-    # Note: Many of these will already exist in the spec — DevRel: only
-    # add the ones that aren't already present. Match style with existing
-    # waves-v4 components.
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        `Authorization: Bearer $SMALLEST_API_KEY`. Get your key from the
+        [Smallest AI Console](https://app.smallest.ai/dashboard/api-keys).
 
+  schemas:
     ChatCompletionRequest:
       type: object
       required: [model, messages]
@@ -234,8 +206,8 @@ components:
           type: integer
           minimum: 1
           description: |
-            Maximum output tokens. Combined input + output context
-            ceiling is 32,768.
+            Maximum output tokens. Combined input + output context ceiling
+            is 32,768.
         stream:
           type: boolean
           default: false
@@ -265,12 +237,15 @@ components:
             - type: object
               required: [type, function]
               properties:
-                type: { type: string, enum: [function] }
+                type:
+                  type: string
+                  enum: [function]
                 function:
                   type: object
                   required: [name]
                   properties:
-                    name: { type: string }
+                    name:
+                      type: string
         response_format:
           type: object
           description: |
@@ -283,14 +258,16 @@ components:
           oneOf:
             - type: string
             - type: array
-              items: { type: string }
+              items:
+                type: string
               maxItems: 4
         seed:
           type: integer
           description: Best-effort determinism.
         logit_bias:
           type: object
-          additionalProperties: { type: number }
+          additionalProperties:
+            type: number
         logprobs:
           type: boolean
           default: false
@@ -338,13 +315,17 @@ components:
       type: object
       required: [type, function]
       properties:
-        type: { type: string, enum: [function] }
+        type:
+          type: string
+          enum: [function]
         function:
           type: object
           required: [name]
           properties:
-            name: { type: string }
-            description: { type: string }
+            name:
+              type: string
+            description:
+              type: string
             parameters:
               type: object
               description: JSON Schema for the tool's parameters.
@@ -353,13 +334,17 @@ components:
       type: object
       required: [id, type, function]
       properties:
-        id: { type: string }
-        type: { type: string, enum: [function] }
+        id:
+          type: string
+        type:
+          type: string
+          enum: [function]
         function:
           type: object
           required: [name, arguments]
           properties:
-            name: { type: string }
+            name:
+              type: string
             arguments:
               type: string
               description: JSON-encoded argument object.
@@ -367,16 +352,22 @@ components:
     ChatCompletion:
       type: object
       properties:
-        id: { type: string }
-        object: { type: string, enum: [chat.completion] }
-        created: { type: integer }
-        model: { type: string }
+        id:
+          type: string
+        object:
+          type: string
+          enum: [chat.completion]
+        created:
+          type: integer
+        model:
+          type: string
         choices:
           type: array
           items:
             type: object
             properties:
-              index: { type: integer }
+              index:
+                type: integer
               message:
                 $ref: "#/components/schemas/ChatMessage"
               finish_reason:
@@ -410,17 +401,13 @@ components:
         error:
           type: object
           properties:
-            message: { type: string }
-            type: { type: string, example: invalid_request_error }
-            param: { type: string }
+            message:
+              type: string
+            type:
+              type: string
+              example: invalid_request_error
+            param:
+              type: string
             request_id:
               type: string
               description: Echo in support tickets so the request can be traced.
-
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      description: |
-        `Authorization: Bearer $SMALLEST_API_KEY`. Get your key from the
-        [Smallest AI Console](https://app.smallest.ai/dashboard/api-keys).
