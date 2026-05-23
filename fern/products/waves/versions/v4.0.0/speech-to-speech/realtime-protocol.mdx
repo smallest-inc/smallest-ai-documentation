@@ -255,6 +255,16 @@ server: response.done
 ### Implementation
 
 ```python
+# Debounce response.create so that parallel tool calls in a single turn
+# don't trigger narration before every tool output has been posted.
+pending_response_create: asyncio.Task | None = None
+DEBOUNCE_MS = 200
+
+async def schedule_response_create():
+    """Send one response.create per turn, ~200 ms after the last tool output."""
+    await asyncio.sleep(DEBOUNCE_MS / 1000)
+    await ws.send(json.dumps({"type": "response.create"}))
+
 async for raw in ws:
     evt = json.loads(raw)
     if evt["type"] == "response.function_call_arguments.done":
@@ -268,10 +278,18 @@ async for raw in ws:
                 "output": result if isinstance(result, str) else json.dumps(result),
             },
         }))
-        await ws.send(json.dumps({"type": "response.create"}))
+        # (Re-)schedule a single response.create after the last tool output.
+        # If more tool outputs arrive within DEBOUNCE_MS, the previous task
+        # is cancelled and replaced — only the final one fires.
+        if pending_response_create and not pending_response_create.done():
+            pending_response_create.cancel()
+        pending_response_create = asyncio.create_task(schedule_response_create())
+    elif evt["type"] == "response.created":
+        # New turn started — the previous turn's narration is in flight.
+        pending_response_create = None
 ```
 
-If the model calls multiple tools in a single turn, the server emits one `response.function_call_arguments.done` per call. Post one `conversation.item.create` per tool output, then send a single `response.create` to trigger narration. Debouncing `response.create` by ~200 ms is a clean way to batch parallel tool calls.
+If the model calls multiple tools in a single turn, the server emits one `response.function_call_arguments.done` per call. Post one `conversation.item.create` per tool output, then send **a single** `response.create` to trigger narration — sending `response.create` after every tool output causes the server to start narrating before all results are in. The debounce above (`~200 ms`) batches parallel tool calls into one narration request. For single-tool turns the debounce adds 200 ms of latency, which is well below the model's own time-to-first-audio.
 
 If the tool output is not posted within the server's timeout window, an `error` with `code: "tool_response_timeout"` is emitted and the turn is abandoned.
 
