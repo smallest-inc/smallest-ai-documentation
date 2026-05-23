@@ -1,96 +1,215 @@
 ---
 title: "Quickstart"
-description: "Stream a WAV through Hydra and play back the spoken reply — under 50 lines of Python."
+description: "Talk to Hydra in your browser, or stream a WAV from Python — two paste-and-run paths to your first reply."
 icon: "rocket"
 ---
 
-This page gets you to your first Hydra reply in three steps. For the full event reference, see [Managing sessions](/waves/documentation/speech-to-speech-hydra/managing-sessions).
+Two paths to your first Hydra reply. Pick the **browser** path for the fastest aha moment (no install, talk into your laptop mic), or **Python** if you want a scriptable, automation-friendly path.
 
 ## 1. Get an API key
 
-```bash
-export SMALLEST_API_KEY="..."   # from app.smallest.ai/dashboard/api-keys
-```
-
-## 2. Install the WebSocket client
+In the [Smallest AI Console](https://app.smallest.ai/dashboard/api-keys), create an API key and copy it.
 
 ```bash
-pip install websockets
+export SMALLEST_API_KEY="..."
 ```
 
-## 3. Run the script
+## 2. Pick your path
 
-This streams a 16 kHz mono PCM16 WAV to Hydra and writes the spoken reply to `reply.wav`.
+<Tabs>
+  <Tab title="Browser (talk to it now)">
+    Save the file below as `hydra.html`, open it in Chrome / Edge / Firefox, paste your key, click **Connect**, and talk. No install. No build step. ~120 lines, one file.
 
-```python
-import asyncio, base64, json, os, wave
-import websockets
+    <Tip>
+    Most browsers will let `getUserMedia` work from a `file://` URL after you grant mic permission. If yours doesn't, serve the file locally: `python3 -m http.server 8000` and open `http://localhost:8000/hydra.html`.
+    </Tip>
 
-URL = f"wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key={os.environ['SMALLEST_API_KEY']}"
-WAV_IN, WAV_OUT = "input_16khz_mono.wav", "reply.wav"
+    ```html
+    <!doctype html>
+    <html><head><meta charset="utf-8"><title>Hydra browser demo</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 32px auto; padding: 0 16px; }
+      input, textarea, select { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font: inherit; width: 100%; box-sizing: border-box; margin: 4px 0 12px; }
+      button { padding: 8px 16px; border: 0; border-radius: 6px; background: #111; color: #fff; cursor: pointer; }
+      button:disabled { background: #aaa; cursor: not-allowed; }
+      .status { padding: 8px 12px; border-radius: 6px; margin: 12px 0; font-size: 14px; }
+      .idle { background: #f4f4f4; } .live { background: #e7f5ee; color: #1e7e3f; } .err { background: #fbeaea; color: #c0392b; }
+      .log { background: #0f1115; color: #d6deeb; font-family: ui-monospace, monospace; font-size: 12px; padding: 12px; border-radius: 6px; height: 220px; overflow-y: auto; white-space: pre-wrap; }
+    </style></head>
+    <body>
+      <h2>Hydra — browser demo</h2>
+      <label>API key</label>
+      <input id="key" type="password" placeholder="paste SMALLEST_API_KEY">
+      <label>Voice</label>
+      <select id="voice"><option>leda</option><option>aoede</option><option>autonoe</option><option>charon</option><option>fenrir</option><option>zephyr</option></select>
+      <label>Persona / system prompt</label>
+      <textarea id="persona" rows="3">You are a warm, concise voice assistant. Reply in one or two short sentences.</textarea>
+      <button id="connect">Connect</button>
+      <div id="status" class="status idle">Idle</div>
+      <div id="log" class="log"></div>
+    <script>
+    const $ = (id) => document.getElementById(id);
+    const setStatus = (txt, cls) => { $("status").className = "status " + cls; $("status").textContent = txt; };
+    const log = (dir, msg) => { const el = document.createElement("div"); el.textContent = `${new Date().toISOString().slice(11,19)} ${dir} ${msg}`; $("log").appendChild(el); $("log").scrollTop = $("log").scrollHeight; };
 
-async def main():
-    chunks, out_rate = [], 48000
-    configured = asyncio.Event()         # gate audio streaming on session.configured
-    done = asyncio.Event()               # set by reader when response.done arrives
+    let ws, micCtx, micStream, playCtx, playCursor = 0, ttsRate = 48000;
 
-    async with websockets.connect(URL, max_size=None) as ws:
-        async def reader():
-            nonlocal out_rate
-            async for raw in ws:
-                evt = json.loads(raw)
-                t = evt["type"]
-                if t == "session.created":
+    $("connect").onclick = async () => {
+      const key = $("key").value.trim();
+      if (!key) return setStatus("Paste your SMALLEST_API_KEY first.", "err");
+      $("connect").disabled = true; setStatus("Connecting…", "idle"); $("log").textContent = "";
+      ws = new WebSocket(`wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=${encodeURIComponent(key)}`);
+      ws.onerror = () => setStatus("WebSocket error (bad key, network, or server full)", "err");
+      ws.onclose = (e) => { setStatus(`Closed (code ${e.code})`, e.code === 1000 ? "idle" : "err"); stopAudio(); $("connect").disabled = false; };
+      ws.onmessage = async (ev) => {
+        const evt = JSON.parse(ev.data), t = evt.type;
+        if (t === "session.created") {
+          ws.send(JSON.stringify({ type: "session.configure", session: { instructions: $("persona").value, voice: $("voice").value }}));
+          log("→", `session.configure voice=${$("voice").value}`);
+        } else if (t === "session.configured") {
+          ttsRate = evt.session.output_audio_sample_rate || 48000;
+          playCtx = new AudioContext({ sampleRate: ttsRate }); playCursor = playCtx.currentTime;
+          await startMic(); setStatus("Live — talk into your mic. Speak over Hydra to interrupt.", "live");
+        } else if (t === "input_audio_buffer.speech_started") {
+          playCursor = playCtx.currentTime;                 // barge-in: drop scheduled audio
+          log("←", "speech_started (barge-in)");
+        } else if (t === "response.created") {
+          playCursor = playCtx.currentTime; log("←", "response.created");
+        } else if (t === "response.output_audio.delta") {
+          playPCM16(b64ToInt16(evt.delta));
+        } else if (t === "response.done") {
+          log("←", `response.done [${evt.response.status}]`);
+        } else if (t === "error") {
+          log("←", `error: ${JSON.stringify(evt.error)}`);
+        }
+      };
+    };
+
+    async function startMic() {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000 }});
+      micCtx = new AudioContext({ sampleRate: 16000 });
+      const workletSrc = `class W extends AudioWorkletProcessor{constructor(){super();this.b=[];this.f=0;}process(i){const c=i[0]?.[0];if(!c)return true;this.b.push(new Float32Array(c));this.f+=c.length;if(this.f>=320){const o=new Float32Array(this.f);let p=0;for(const x of this.b){o.set(x,p);p+=x.length}this.port.postMessage(o);this.b=[];this.f=0}return true}}registerProcessor("w",W)`;
+      await micCtx.audioWorklet.addModule(URL.createObjectURL(new Blob([workletSrc], { type: "application/javascript" })));
+      const src = micCtx.createMediaStreamSource(micStream);
+      const node = new AudioWorkletNode(micCtx, "w");
+      node.port.onmessage = (e) => {
+        if (ws?.readyState !== 1) return;
+        const f32 = e.data, i16 = new Int16Array(f32.length);
+        for (let i = 0; i < f32.length; i++) { const s = Math.max(-1, Math.min(1, f32[i])); i16[i] = s < 0 ? s * 0x8000 : s * 0x7fff; }
+        let bin = ""; const b = new Uint8Array(i16.buffer);
+        for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+        ws.send(JSON.stringify({ type: "input_audio_buffer.append", audio: btoa(bin) }));
+      };
+      src.connect(node);
+    }
+
+    function playPCM16(int16) {
+      const buf = playCtx.createBuffer(1, int16.length, ttsRate);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < int16.length; i++) ch[i] = int16[i] / 0x8000;
+      const src = playCtx.createBufferSource();
+      src.buffer = buf; src.connect(playCtx.destination);
+      const start = Math.max(playCtx.currentTime, playCursor);
+      src.start(start); playCursor = start + buf.duration;
+    }
+
+    function b64ToInt16(b64) {
+      const bin = atob(b64), buf = new ArrayBuffer(bin.length), view = new DataView(buf);
+      for (let i = 0; i < bin.length; i++) view.setUint8(i, bin.charCodeAt(i));
+      const out = new Int16Array(bin.length / 2);
+      for (let i = 0; i < out.length; i++) out[i] = view.getInt16(i * 2, true);
+      return out;
+    }
+
+    function stopAudio() {
+      if (micStream) micStream.getTracks().forEach(t => t.stop());
+      if (micCtx) micCtx.close(); if (playCtx) playCtx.close();
+      micStream = micCtx = playCtx = null;
+    }
+    </script></body></html>
+    ```
+
+    The single file does everything: `AudioWorklet` mic capture at 16 kHz, gapless playback at the rate Hydra negotiates, automatic barge-in (queued audio is dropped on every fresh `response.created`), live event log.
+  </Tab>
+
+  <Tab title="Python (stream a WAV)">
+    Best when you want a scriptable, automation-friendly path. Reads a 16 kHz mono PCM16 WAV, streams it to Hydra, writes the reply to disk.
+
+    ```bash
+    pip install websockets
+    ```
+
+    ```python
+    import asyncio, base64, json, os, wave
+    import websockets
+
+    URL = f"wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key={os.environ['SMALLEST_API_KEY']}"
+    WAV_IN, WAV_OUT = "input_16khz_mono.wav", "reply.wav"
+
+    async def main():
+        chunks, out_rate = [], 48000
+        configured = asyncio.Event()         # gate audio streaming on session.configured
+        done = asyncio.Event()               # set by reader when response.done arrives
+
+        async with websockets.connect(URL, max_size=None) as ws:
+            async def reader():
+                nonlocal out_rate
+                async for raw in ws:
+                    evt = json.loads(raw)
+                    t = evt["type"]
+                    if t == "session.created":
+                        await ws.send(json.dumps({
+                            "type": "session.configure",
+                            "session": {"instructions": "Reply briefly.", "voice": "leda"},
+                        }))
+                    elif t == "session.configured":
+                        out_rate = evt["session"].get("output_audio_sample_rate", 48000)
+                        configured.set()
+                    elif t == "response.output_audio.delta":
+                        chunks.append(base64.b64decode(evt["delta"]))
+                    elif t == "response.done":
+                        print(f"[{evt['response']['status']}]")
+                        done.set()
+                    elif t == "error":
+                        print("ERROR:", evt["error"])
+
+            recv_task = asyncio.create_task(reader())
+            await configured.wait()           # don't stream audio before the server is ready
+
+            with wave.open(WAV_IN, "rb") as w:
+                assert w.getframerate() == 16000 and w.getnchannels() == 1
+                while pcm := w.readframes(320):       # 20 ms at 16 kHz
+                    if done.is_set():                  # response finished — stop streaming
+                        break
                     await ws.send(json.dumps({
-                        "type": "session.configure",
-                        "session": {"instructions": "Reply briefly.", "voice": "leda"},
+                        "type": "input_audio_buffer.append",
+                        "audio": base64.b64encode(pcm).decode(),
                     }))
-                elif t == "session.configured":
-                    out_rate = evt["session"].get("output_audio_sample_rate", 48000)
-                    configured.set()
-                elif t == "response.output_audio.delta":
-                    chunks.append(base64.b64decode(evt["delta"]))
-                elif t == "response.done":
-                    print(f"[{evt['response']['status']}]")
-                    done.set()
-                elif t == "error":
-                    print("ERROR:", evt["error"])
+                    await asyncio.sleep(0.02)          # pace at real-time
 
-        recv_task = asyncio.create_task(reader())
-        await configured.wait()           # don't stream audio before the server is ready
+            try:
+                await asyncio.wait_for(done.wait(), timeout=15)
+            except asyncio.TimeoutError:
+                pass
+            recv_task.cancel()
 
-        with wave.open(WAV_IN, "rb") as w:
-            assert w.getframerate() == 16000 and w.getnchannels() == 1
-            while pcm := w.readframes(320):       # 20 ms at 16 kHz
-                if done.is_set():                  # response finished — stop streaming
-                    break
-                await ws.send(json.dumps({
-                    "type": "input_audio_buffer.append",
-                    "audio": base64.b64encode(pcm).decode(),
-                }))
-                await asyncio.sleep(0.02)          # pace at real-time
+        with wave.open(WAV_OUT, "wb") as w:
+            w.setnchannels(1); w.setsampwidth(2); w.setframerate(out_rate)
+            w.writeframes(b"".join(chunks))
+        print(f"wrote {WAV_OUT} ({out_rate} Hz)")
 
-        try:
-            await asyncio.wait_for(done.wait(), timeout=15)
-        except asyncio.TimeoutError:
-            pass
-        recv_task.cancel()
+    asyncio.run(main())
+    ```
 
-    with wave.open(WAV_OUT, "wb") as w:
-        w.setnchannels(1); w.setsampwidth(2); w.setframerate(out_rate)
-        w.writeframes(b"".join(chunks))
-    print(f"wrote {WAV_OUT} ({out_rate} Hz)")
+    <Tip>
+    **Don't have a 16 kHz mono WAV?** Convert with `ffmpeg`:
 
-asyncio.run(main())
-```
-
-<Tip>
-**Don't have a 16 kHz mono WAV?** Convert with `ffmpeg`:
-
-```bash
-ffmpeg -i any-input.wav -ac 1 -ar 16000 -sample_fmt s16 input_16khz_mono.wav
-```
-</Tip>
+    ```bash
+    ffmpeg -i any-input.wav -ac 1 -ar 16000 -sample_fmt s16 input_16khz_mono.wav
+    ```
+    </Tip>
+  </Tab>
+</Tabs>
 
 ## What just happened
 
