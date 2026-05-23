@@ -179,6 +179,84 @@ For barge-in, you reset `playCursor = playCtx.currentTime` when a fresh `respons
 - **Stereo input** — Hydra expects mono. If you have stereo, downmix before encoding.
 - **Hardcoding the output rate** — see the warning above. Always read it from `session.configured`.
 
+## Streaming a WAV file (for CI / regression tests)
+
+<Accordion title="Replay a known utterance through Hydra and capture the reply to disk">
+
+Hydra is built for live mic streams. For test fixtures, regression tests, or batch jobs you sometimes want to replay a known WAV instead. The pattern paces a 16 kHz mono PCM16 WAV at real-time speed, then collects the response audio to disk.
+
+```python
+import asyncio, base64, json, os, wave
+import websockets
+
+URL = f"wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key={os.environ['SMALLEST_API_KEY']}"
+WAV_IN, WAV_OUT = "input_16khz_mono.wav", "reply.wav"
+
+async def main():
+    chunks, out_rate = [], 48000
+    configured = asyncio.Event()         # gate audio streaming on session.configured
+    done = asyncio.Event()               # set by reader when response.done arrives
+
+    async with websockets.connect(URL, max_size=None) as ws:
+        async def reader():
+            nonlocal out_rate
+            async for raw in ws:
+                evt = json.loads(raw)
+                t = evt["type"]
+                if t == "session.created":
+                    await ws.send(json.dumps({
+                        "type": "session.configure",
+                        "session": {"instructions": "Reply briefly.", "voice": "leda"},
+                    }))
+                elif t == "session.configured":
+                    out_rate = evt["session"].get("output_audio_sample_rate", 48000)
+                    configured.set()
+                elif t == "response.output_audio.delta":
+                    chunks.append(base64.b64decode(evt["delta"]))
+                elif t == "response.done":
+                    print(f"[{evt['response']['status']}]")
+                    done.set()
+                elif t == "error":
+                    print("ERROR:", evt["error"])
+
+        recv_task = asyncio.create_task(reader())
+        await configured.wait()           # don't stream audio before the server is ready
+
+        with wave.open(WAV_IN, "rb") as w:
+            assert w.getframerate() == 16000 and w.getnchannels() == 1
+            while pcm := w.readframes(320):       # 20 ms at 16 kHz
+                if done.is_set():
+                    break
+                await ws.send(json.dumps({
+                    "type": "input_audio_buffer.append",
+                    "audio": base64.b64encode(pcm).decode(),
+                }))
+                await asyncio.sleep(0.02)          # pace at real-time
+
+        try:
+            await asyncio.wait_for(done.wait(), timeout=15)
+        except asyncio.TimeoutError:
+            pass
+        recv_task.cancel()
+
+    with wave.open(WAV_OUT, "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(out_rate)
+        w.writeframes(b"".join(chunks))
+    print(f"wrote {WAV_OUT} ({out_rate} Hz)")
+
+asyncio.run(main())
+```
+
+Don't have a 16 kHz mono WAV? Convert with `ffmpeg`:
+
+```bash
+ffmpeg -i any-input.wav -ac 1 -ar 16000 -sample_fmt s16 input_16khz_mono.wav
+```
+
+This pattern is for testing only — it doesn't exercise full-duplex behaviour (no overlap, no barge-in). For interactive use, see the [quickstart](/waves/documentation/speech-to-speech-hydra/quickstart).
+
+</Accordion>
+
 ## Next
 
 - [Turn detection & barge-in](/waves/documentation/speech-to-speech-hydra/turn-detection) — VAD events and how to flush scheduled audio

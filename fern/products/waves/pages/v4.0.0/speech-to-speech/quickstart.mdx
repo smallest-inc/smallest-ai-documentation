@@ -1,246 +1,174 @@
 ---
 title: "Quickstart"
-description: "Talk to Hydra from your terminal, or stream a WAV from Python — two paste-and-run paths to your first reply."
+description: "Talk to Hydra in under a minute — a single-file Python CLI with live status and a wire log, plus a one-clone browser client for full-fidelity UX."
 icon: "rocket"
 ---
 
-Two paste-and-run paths to your first Hydra reply. Pick the **interactive CLI** if you want to talk into your laptop mic now, or **WAV stream** for a scriptable, automation-friendly path. For a full browser experience, see the [reference client](https://github.com/smallest-inc/hydra_agents).
+Hydra is realtime, full-duplex, speech-to-speech. The fastest way to feel that is to **talk to it**. Two paths below — both single-file, both copy-paste-and-run.
 
 ## 1. Get an API key
 
-In the [Smallest AI Console](https://app.smallest.ai/dashboard/api-keys), create an API key and copy it.
+In the [Smallest AI Console](https://app.smallest.ai/dashboard/api-keys), create an API key.
 
 ```bash
 export SMALLEST_API_KEY="..."
 ```
 
-## 2. Pick your path
+## 2. Talk to it now
 
-<Tabs>
-  <Tab title="Interactive CLI (talk to it now)">
-    Save as `hydra_chat.py`, install the deps, set your key, and run. Talk into your laptop mic, hear Hydra reply through your speakers, see a live status panel + wire log. Speak over Hydra to interrupt it.
+A single Python file, a live status panel, a wire log of every event. Talk into your laptop mic, hear Hydra reply through your speakers. Speak over Hydra to interrupt — barge-in is automatic.
 
-    ```bash
-    pip install websockets sounddevice numpy rich
-    export SMALLEST_API_KEY="..."
-    python3 hydra_chat.py
-    ```
+```bash
+pip install websockets sounddevice numpy rich
+python3 hydra_chat.py
+```
 
-    ```python
-    import asyncio, base64, json, os, time
-    from collections import deque
+```python
+import asyncio, base64, json, os, time
+from collections import deque
 
-    import numpy as np
-    import sounddevice as sd
-    import websockets
-    from rich.console import Console
-    from rich.layout import Layout
-    from rich.live import Live
-    from rich.panel import Panel
-    from rich.table import Table
-    from rich.text import Text
+import numpy as np
+import sounddevice as sd
+import websockets
+from rich.console import Console
+from rich.layout import Layout
+from rich.live import Live
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 
-    URL = f"wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key={os.environ['SMALLEST_API_KEY']}"
-    IN_RATE, MIC_FRAMES = 16000, 320     # 20 ms chunks of 16 kHz mono PCM16
-    VOICE = "leda"                        # leda · aoede · autonoe · charon · fenrir · zephyr
-    PERSONA = (
-        "You are a warm, concise voice assistant. Reply in one or two short sentences. "
-        "If the user is mid-sentence, wait for them to finish."
+URL = f"wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key={os.environ['SMALLEST_API_KEY']}"
+IN_RATE, MIC_FRAMES = 16000, 320     # 20 ms chunks of 16 kHz mono PCM16
+VOICE = "leda"                        # leda · aoede · autonoe · charon · fenrir · zephyr
+PERSONA = (
+    "You are a warm, concise voice assistant. Reply in one or two short sentences. "
+    "If the user is mid-sentence, wait for them to finish."
+)
+
+console = Console()
+events = deque(maxlen=20)
+state = {"status": "Connecting…", "session_id": "", "voice": VOICE,
+         "out_rate": 48000, "turns": 0}
+
+def render():
+    color = {"Listening": "green", "Hydra is speaking": "cyan",
+             "User speaking": "magenta", "Barge-in": "bold red",
+             "Connecting…": "yellow", "Closed": "red"}.get(state["status"], "white")
+    head = Table.grid(expand=True)
+    head.add_column(); head.add_column(justify="right")
+    head.add_row(Text.assemble(("Hydra ", "bold"), ("speech-to-speech", "dim")),
+                 Text(state["status"], style=color))
+    meta = Table.grid(padding=(0, 2))
+    meta.add_column(style="dim"); meta.add_column()
+    meta.add_row("voice", state["voice"])
+    meta.add_row("session", state["session_id"][:16] + ("…" if len(state["session_id"]) > 16 else ""))
+    meta.add_row("output rate", f"{state['out_rate']} Hz")
+    meta.add_row("turns", str(state["turns"]))
+    log = Text()
+    for ts, d, m in list(events)[-15:]:
+        log.append(f"{ts}  ", style="dim")
+        log.append("→ " if d == "out" else "← ", style="blue" if d == "out" else "green")
+        log.append(m + "\n")
+    layout = Layout()
+    layout.split_column(
+        Layout(Panel(head, border_style="white"), size=3),
+        Layout(Panel(meta, title="Session", border_style="cyan"), size=8),
+        Layout(Panel(log, title="Wire log", border_style="dim")),
     )
+    return layout
 
-    console = Console()
-    events = deque(maxlen=20)
-    state = {"status": "Connecting…", "session_id": "", "voice": VOICE,
-             "out_rate": 48000, "turns": 0}
+def evt(direction, msg):
+    events.append((time.strftime("%H:%M:%S"), direction, msg))
 
-    def render():
-        color = {"Listening": "green", "Hydra is speaking": "cyan",
-                 "User speaking": "magenta", "Barge-in": "bold red",
-                 "Connecting…": "yellow", "Closed": "red"}.get(state["status"], "white")
-        head = Table.grid(expand=True)
-        head.add_column(); head.add_column(justify="right")
-        head.add_row(Text.assemble(("Hydra ", "bold"), ("speech-to-speech", "dim")),
-                     Text(state["status"], style=color))
-        meta = Table.grid(padding=(0, 2))
-        meta.add_column(style="dim"); meta.add_column()
-        meta.add_row("voice", state["voice"])
-        meta.add_row("session", state["session_id"][:16] + ("…" if len(state["session_id"]) > 16 else ""))
-        meta.add_row("output rate", f"{state['out_rate']} Hz")
-        meta.add_row("turns", str(state["turns"]))
-        log = Text()
-        for ts, d, m in list(events)[-15:]:
-            log.append(f"{ts}  ", style="dim")
-            log.append("→ " if d == "out" else "← ", style="blue" if d == "out" else "green")
-            log.append(m + "\n")
-        layout = Layout()
-        layout.split_column(
-            Layout(Panel(head, border_style="white"), size=3),
-            Layout(Panel(meta, title="Session", border_style="cyan"), size=8),
-            Layout(Panel(log, title="Wire log", border_style="dim")),
-        )
-        return layout
+async def main():
+    play_q: asyncio.Queue[bytes] = asyncio.Queue()
+    mic_q: asyncio.Queue[bytes] = asyncio.Queue(maxsize=200)
+    speaker: sd.RawOutputStream | None = None
 
-    def evt(direction, msg):
-        events.append((time.strftime("%H:%M:%S"), direction, msg))
+    def mic_cb(indata, frames, *_):
+        pcm = (np.clip(indata[:, 0], -1, 1) * 32767).astype(np.int16).tobytes()
+        try: mic_q.put_nowait(pcm)
+        except asyncio.QueueFull: pass
 
-    async def main():
-        play_q: asyncio.Queue[bytes] = asyncio.Queue()
-        mic_q: asyncio.Queue[bytes] = asyncio.Queue(maxsize=200)
-        speaker: sd.RawOutputStream | None = None
+    mic = sd.InputStream(samplerate=IN_RATE, channels=1, dtype="float32",
+                         blocksize=MIC_FRAMES, callback=mic_cb)
 
-        def mic_cb(indata, frames, *_):
-            pcm = (np.clip(indata[:, 0], -1, 1) * 32767).astype(np.int16).tobytes()
-            try: mic_q.put_nowait(pcm)
-            except asyncio.QueueFull: pass
-
-        mic = sd.InputStream(samplerate=IN_RATE, channels=1, dtype="float32",
-                             blocksize=MIC_FRAMES, callback=mic_cb)
-
-        with Live(render(), console=console, refresh_per_second=10) as live:
-            async with websockets.connect(URL, max_size=None, close_timeout=2) as ws:
-                async def reader():
-                    nonlocal speaker
-                    async for raw in ws:
-                        e = json.loads(raw); t = e["type"]
-                        if t == "session.created":
-                            state["session_id"] = e.get("session_id", "")
-                            evt("in", "session.created")
-                            await ws.send(json.dumps({"type": "session.configure",
-                                "session": {"instructions": PERSONA, "voice": VOICE}}))
-                            evt("out", f"session.configure voice={VOICE}")
-                        elif t == "session.configured":
-                            state["out_rate"] = e["session"].get("output_audio_sample_rate", 48000)
-                            state["status"] = "Listening"
-                            evt("in", f"session.configured out_rate={state['out_rate']}")
-                            speaker = sd.RawOutputStream(samplerate=state["out_rate"],
-                                                        channels=1, dtype="int16")
-                            speaker.start(); mic.start()
-                        elif t == "input_audio_buffer.speech_started":
-                            state["status"] = "Barge-in" if state["status"] == "Hydra is speaking" else "User speaking"
-                            while not play_q.empty():
-                                try: play_q.get_nowait()
-                                except asyncio.QueueEmpty: break
-                            evt("in", "speech_started")
-                        elif t == "input_audio_buffer.speech_stopped":
-                            evt("in", "speech_stopped")
-                        elif t == "response.created":
-                            state["status"] = "Hydra is speaking"
-                            evt("in", "response.created")
-                        elif t == "response.output_audio.delta":
-                            await play_q.put(base64.b64decode(e["delta"]))
-                        elif t == "response.done":
-                            state["status"] = "Listening"; state["turns"] += 1
-                            evt("in", f"response.done [{e['response']['status']}]")
-                        elif t == "error":
-                            evt("in", f"error {e['error'].get('code', '?')}")
-
-                async def mic_send():
-                    while True:
-                        pcm = await mic_q.get()
-                        if ws.state.name != "OPEN": return
-                        await ws.send(json.dumps({"type": "input_audio_buffer.append",
-                                                  "audio": base64.b64encode(pcm).decode()}))
-
-                async def speaker_drain():
-                    while True:
-                        pcm = await play_q.get()
-                        if speaker: speaker.write(pcm)
-
-                async def refresh():
-                    while True:
-                        live.update(render())
-                        await asyncio.sleep(0.1)
-
-                await asyncio.gather(reader(), mic_send(), speaker_drain(), refresh())
-
-    if __name__ == "__main__":
-        try:
-            asyncio.run(main())
-        except KeyboardInterrupt:
-            console.print("\n[dim]bye[/dim]")
-    ```
-
-    What you'll see: a live status header (Listening → User speaking → Hydra is speaking → Barge-in), a session-info panel (voice, session id, output rate, turn count), and a wire log of every event the server emits. Ctrl-C to quit.
-  </Tab>
-
-  <Tab title="Python (stream a WAV)">
-    Best when you want a scriptable, automation-friendly path. Reads a 16 kHz mono PCM16 WAV, streams it to Hydra, writes the reply to disk.
-
-    ```bash
-    pip install websockets
-    ```
-
-    ```python
-    import asyncio, base64, json, os, wave
-    import websockets
-
-    URL = f"wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key={os.environ['SMALLEST_API_KEY']}"
-    WAV_IN, WAV_OUT = "input_16khz_mono.wav", "reply.wav"
-
-    async def main():
-        chunks, out_rate = [], 48000
-        configured = asyncio.Event()         # gate audio streaming on session.configured
-        done = asyncio.Event()               # set by reader when response.done arrives
-
-        async with websockets.connect(URL, max_size=None) as ws:
+    with Live(render(), console=console, refresh_per_second=10) as live:
+        async with websockets.connect(URL, max_size=None, close_timeout=2) as ws:
             async def reader():
-                nonlocal out_rate
+                nonlocal speaker
                 async for raw in ws:
-                    evt = json.loads(raw)
-                    t = evt["type"]
+                    e = json.loads(raw); t = e["type"]
                     if t == "session.created":
-                        await ws.send(json.dumps({
-                            "type": "session.configure",
-                            "session": {"instructions": "Reply briefly.", "voice": "leda"},
-                        }))
+                        state["session_id"] = e.get("session_id", "")
+                        evt("in", "session.created")
+                        await ws.send(json.dumps({"type": "session.configure",
+                            "session": {"instructions": PERSONA, "voice": VOICE}}))
+                        evt("out", f"session.configure voice={VOICE}")
                     elif t == "session.configured":
-                        out_rate = evt["session"].get("output_audio_sample_rate", 48000)
-                        configured.set()
+                        state["out_rate"] = e["session"].get("output_audio_sample_rate", 48000)
+                        state["status"] = "Listening"
+                        evt("in", f"session.configured out_rate={state['out_rate']}")
+                        speaker = sd.RawOutputStream(samplerate=state["out_rate"],
+                                                    channels=1, dtype="int16")
+                        speaker.start(); mic.start()
+                    elif t == "input_audio_buffer.speech_started":
+                        state["status"] = "Barge-in" if state["status"] == "Hydra is speaking" else "User speaking"
+                        while not play_q.empty():
+                            try: play_q.get_nowait()
+                            except asyncio.QueueEmpty: break
+                        evt("in", "speech_started")
+                    elif t == "input_audio_buffer.speech_stopped":
+                        evt("in", "speech_stopped")
+                    elif t == "response.created":
+                        state["status"] = "Hydra is speaking"
+                        evt("in", "response.created")
                     elif t == "response.output_audio.delta":
-                        chunks.append(base64.b64decode(evt["delta"]))
+                        await play_q.put(base64.b64decode(e["delta"]))
                     elif t == "response.done":
-                        print(f"[{evt['response']['status']}]")
-                        done.set()
+                        state["status"] = "Listening"; state["turns"] += 1
+                        evt("in", f"response.done [{e['response']['status']}]")
                     elif t == "error":
-                        print("ERROR:", evt["error"])
+                        evt("in", f"error {e['error'].get('code', '?')}")
 
-            recv_task = asyncio.create_task(reader())
-            await configured.wait()           # don't stream audio before the server is ready
+            async def mic_send():
+                while True:
+                    pcm = await mic_q.get()
+                    if ws.state.name != "OPEN": return
+                    await ws.send(json.dumps({"type": "input_audio_buffer.append",
+                                              "audio": base64.b64encode(pcm).decode()}))
 
-            with wave.open(WAV_IN, "rb") as w:
-                assert w.getframerate() == 16000 and w.getnchannels() == 1
-                while pcm := w.readframes(320):       # 20 ms at 16 kHz
-                    if done.is_set():                  # response finished — stop streaming
-                        break
-                    await ws.send(json.dumps({
-                        "type": "input_audio_buffer.append",
-                        "audio": base64.b64encode(pcm).decode(),
-                    }))
-                    await asyncio.sleep(0.02)          # pace at real-time
+            async def speaker_drain():
+                while True:
+                    pcm = await play_q.get()
+                    if speaker: speaker.write(pcm)
 
-            try:
-                await asyncio.wait_for(done.wait(), timeout=15)
-            except asyncio.TimeoutError:
-                pass
-            recv_task.cancel()
+            async def refresh():
+                while True:
+                    live.update(render())
+                    await asyncio.sleep(0.1)
 
-        with wave.open(WAV_OUT, "wb") as w:
-            w.setnchannels(1); w.setsampwidth(2); w.setframerate(out_rate)
-            w.writeframes(b"".join(chunks))
-        print(f"wrote {WAV_OUT} ({out_rate} Hz)")
+            await asyncio.gather(reader(), mic_send(), speaker_drain(), refresh())
 
-    asyncio.run(main())
-    ```
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        console.print("\n[dim]bye[/dim]")
+```
 
-    <Tip>
-    **Don't have a 16 kHz mono WAV?** Convert with `ffmpeg`:
+You'll see a live status header (**Listening → User speaking → Hydra is speaking → Barge-in**), session info, and a wire log of every event the server emits. Ctrl-C to quit.
 
-    ```bash
-    ffmpeg -i any-input.wav -ac 1 -ar 16000 -sample_fmt s16 input_16khz_mono.wav
-    ```
-    </Tip>
-  </Tab>
-</Tabs>
+## 3. Want a full browser experience?
+
+Clone the reference client — a production-grade Next.js app with multi-agent presets, tool execution, and a live wire log.
+
+```bash
+git clone https://github.com/smallest-inc/hydra_agents.git
+cd hydra_agents && npm install && npm run dev
+```
+
+Open `http://localhost:3000`, paste your `SMALLEST_API_KEY`, click **Connect**, and talk.
 
 ## What just happened
 
@@ -250,7 +178,9 @@ export SMALLEST_API_KEY="..."
 | Client configures | Client sends `session.configure` once |
 | Server confirms | Server emits `session.configured` with the negotiated audio sample rate |
 | Client streams audio | Client sends `input_audio_buffer.append` continuously, base64-encoded PCM16 |
+| User speaks / pauses | Server emits `input_audio_buffer.speech_started` / `speech_stopped` |
 | Model replies | Server emits `response.output_audio.delta` chunks until `response.done` |
+| User barges in | In-flight response cancels with `status: "cancelled"`, `reason: "interrupted"` |
 
 ## Next
 
@@ -264,13 +194,13 @@ export SMALLEST_API_KEY="..."
   <Card title="Audio I/O" icon="waveform-lines" href="/waves/documentation/speech-to-speech-hydra/audio-io">
     Input PCM16, output rate negotiation, browser AudioWorklet.
   </Card>
+  <Card title="Turn detection & barge-in" icon="wave-square" href="/waves/documentation/speech-to-speech-hydra/turn-detection">
+    Server-side VAD events and how to flush scheduled audio on the client.
+  </Card>
   <Card title="Tool calling" icon="screwdriver-wrench" href="/waves/documentation/speech-to-speech-hydra/tool-calling">
     Declare tools, run them locally, narrate the result.
   </Card>
   <Card title="Model card" icon="id-card" href="/waves/model-cards/speech-to-speech/hydra">
     Capabilities, voices, performance, pricing.
-  </Card>
-  <Card title="Reference client" icon="github" href="https://github.com/smallest-inc/hydra_agents">
-    Full Next.js client with live wire-log, multi-agent presets, tool execution.
   </Card>
 </CardGroup>
