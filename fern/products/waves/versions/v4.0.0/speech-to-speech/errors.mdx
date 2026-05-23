@@ -24,15 +24,29 @@ Errors arrive as JSON events with `type: "error"`. The connection stays usable u
 
 `error.event_id` (when present) is the `event_id` of the client frame that triggered the error — correlate it with what you sent.
 
-## Code reference
+## Two fields to switch on: `error.type` and `error.code`
 
-| `code` | Meaning | Recovery |
+An error frame has both a `type` (broad category) and a `code` (specific reason). Match on **`error.code`** for actionable handling — `error.type` is `invalid_request_error` for almost every client-induced failure.
+
+```python
+if evt["type"] == "error":
+    code = evt["error"]["code"]
+    if code == "invalid_audio":         ...   # fix audio encoding
+    elif code == "tool_response_timeout": ...  # tool ran long
+    elif code == "server_full":         ...   # back off
+```
+
+## `error.code` reference
+
+| `error.code` | When it fires | Recovery |
 |---|---|---|
 | `invalid_request_error` | Schema validation failure — unknown field, missing `type`, wrong type, malformed JSON, unsupported audio format. | Fix the frame and resend. Session continues. |
 | `invalid_audio` | The `input_audio_buffer.append.audio` payload was not valid base64, or not PCM16. | Stop sending audio, fix encoding, resume. Session continues. |
 | `tool_response_timeout` | You declared tools, the model called one, and you didn't post `function_call_output` + `response.create` within the timeout window. | The turn is abandoned. Next user turn proceeds normally. Investigate why your tool didn't return in time. |
 | `server_full` | The server is at capacity. **Always followed by close code `1013`.** | Back off with jitter, retry. Surface a queue message to the user. |
 | `internal_error` | Unhandled server-side exception. | Reconnect once. If it persists, contact support. |
+
+Note that `invalid_request_error` shows up in *both* fields: it's always the `error.type`, and it's also the `error.code` value when the failure is generic schema validation rather than a more specific bucket like `invalid_audio`.
 
 ## What's NOT an error event
 

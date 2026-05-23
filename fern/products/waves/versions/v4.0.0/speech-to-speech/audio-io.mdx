@@ -15,14 +15,14 @@ Hydra is strict about audio formats. Get this wrong and you'll either see `inval
 | Channels | Mono |
 | Sample rate | **16 000 Hz** |
 | Encoding on the wire | Base64, inside `input_audio_buffer.append.audio` |
-| Recommended chunk size | 20–40 ms (640–1280 samples = 1280–2560 bytes) |
+| Recommended chunk size | 20–40 ms (320–640 samples = 640–1280 bytes) |
 
 Frames smaller than ~20 ms add overhead without helping latency. Frames larger than ~40 ms make barge-in detection feel sluggish.
 
 ### Python
 
 ```python
-import wave, base64, json
+import asyncio, base64, json, wave
 
 with wave.open("input_16khz_mono.wav", "rb") as w:
     assert w.getframerate() == 16000 and w.getnchannels() == 1
@@ -156,6 +156,17 @@ function playPCM16(int16) {
   const start = Math.max(playCtx.currentTime, playCursor);
   src.start(start);
   playCursor = start + buf.duration;
+}
+
+function b64ToInt16(b64) {
+  // base64 → ArrayBuffer → little-endian Int16Array
+  const bin = atob(b64);
+  const buf = new ArrayBuffer(bin.length);
+  const view = new DataView(buf);
+  for (let i = 0; i < bin.length; i++) view.setUint8(i, bin.charCodeAt(i));
+  const out = new Int16Array(bin.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = view.getInt16(i * 2, true);
+  return out;
 }
 ```
 
