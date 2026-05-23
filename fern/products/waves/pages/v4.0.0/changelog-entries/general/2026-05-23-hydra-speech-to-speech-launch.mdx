@@ -1,0 +1,52 @@
+---
+title: Hydra — full-duplex speech-to-speech on the Waves API
+date: 2026-05-23
+description: Launch of Hydra, Smallest AI's in-house speech-to-speech model. Audio in, audio out, over a single WebSocket. Phone-grade latency with full-duplex barge-in, server-side VAD, tool calling, and six voices.
+---
+
+Hydra, Smallest AI's in-house **speech-to-speech model**, is now available on the Waves API. A single WebSocket carries microphone audio from your client to the model and streams synthesised response audio back — no STT → LLM → TTS pipeline in the middle.
+
+```python
+import asyncio, base64, json, os, wave
+import websockets
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+URL = f"wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key={API_KEY}"
+
+async def main():
+    async with websockets.connect(URL, max_size=None) as ws:
+        async for raw in ws:
+            evt = json.loads(raw)
+            if evt["type"] == "session.created":
+                await ws.send(json.dumps({
+                    "type": "session.configure",
+                    "session": {"instructions": "Be brief.", "voice": "leda"},
+                }))
+            elif evt["type"] == "response.output_audio.delta":
+                ...  # decode base64 PCM16 and play
+
+asyncio.run(main())
+```
+
+**What's in this launch:**
+
+- **Single WebSocket endpoint** at `wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=...`. JSON text frames; no binary frames.
+- **Full-duplex with server-side VAD** — stream `input_audio_buffer.append` continuously while the mic is open. Hydra detects turn boundaries on its own. If the user speaks while the model is responding, the in-flight response is cancelled (`response.done` with `reason: "interrupted"`) and a fresh turn begins.
+- **Six voices**: `leda`, `aoede`, `autonoe`, `charon`, `fenrir`, `zephyr`.
+- **Tool calling** — declare JSON-schema tools in `session.configure`, Hydra streams arguments via `response.function_call_arguments.delta`, your client executes the tool and posts the result back via `conversation.item.create` + `response.create`.
+- **Bot speaks first** — set `generate_initial_response: true` on `session.configure` for greetings and concierge openers.
+- **Mid-session updates** — live-patch `tools` via `session.update` without reconnecting.
+- **Style tags** — embed `<style emotion="...">` in `instructions` for prosody control.
+- **Audio formats**: input PCM16 mono 16 kHz; output PCM16 mono at the rate echoed in `session.configured.session.output_audio_sample_rate` (currently 48 kHz — read it from the event rather than hardcoding).
+
+**When to use Hydra vs the three-model stack:**
+
+- **Use Hydra** when latency-to-voice matters above all else — phone agents, kiosks, in-car assistants.
+- **Use Pulse → Electron → Lightning v3.1** when you need explicit text in the middle: analytics, custom retrieval, regulated content moderation, BYOM.
+
+**Docs:**
+
+- [Quickstart](/waves/documentation/speech-to-speech-hydra/quickstart) — 50 lines of Python to your first Hydra reply.
+- [Realtime Protocol](/waves/documentation/speech-to-speech-hydra/realtime-protocol) — full event reference, session config, tool calling, interruption, errors, browser + Python clients.
+- [Model Card](/waves/model-cards/speech-to-speech/hydra) — voices, performance, pricing.
+- [Reference client (Next.js)](https://github.com/smallest-inc/hydra_agents) — production-grade browser client with live wire-log, multi-agent presets, tool execution.

@@ -1,0 +1,131 @@
+---
+title: "Quickstart"
+description: "Open a Hydra WebSocket, stream a 16 kHz mono WAV, and write the spoken reply to disk — under 50 lines of Python."
+icon: "rocket"
+---
+
+Hydra is Smallest AI's full-duplex speech-to-speech model. **Audio in, audio out** — a single WebSocket carries mic audio to the model and streams synthesised response audio back. There is no transcript on the wire.
+
+## Step 1: Get your API key
+
+In the [Smallest AI Console](https://app.smallest.ai/dashboard/api-keys), go to **Settings → API Keys** and click **Create API Key**.
+
+```bash
+export SMALLEST_API_KEY="your-api-key-here"
+```
+
+## Step 2: Open the connection
+
+The Hydra endpoint takes `model` and `api_key` as query parameters on the connect URL:
+
+```
+wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=$SMALLEST_API_KEY
+```
+
+For browser clients, mint a short-lived token server-side rather than shipping a long-lived key.
+
+## Step 3: Stream a WAV and play back the reply
+
+This minimal Python client reads a 16 kHz mono PCM16 WAV, streams it to Hydra in 20 ms chunks, collects the audio reply, and writes it to a WAV file.
+
+```bash
+pip install websockets
+```
+
+```python
+import asyncio, base64, json, os, wave
+import websockets
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+URL = f"wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key={API_KEY}"
+WAV_IN = "input_16khz_mono.wav"
+WAV_OUT = "reply.wav"
+
+async def main():
+    out_chunks: list[bytes] = []
+    out_rate = 48000  # source of truth comes back in session.configured
+
+    async with websockets.connect(URL, max_size=None) as ws:
+        async def reader():
+            nonlocal out_rate
+            async for raw in ws:
+                evt = json.loads(raw)
+                t = evt["type"]
+                if t == "session.created":
+                    await ws.send(json.dumps({
+                        "type": "session.configure",
+                        "session": {
+                            "instructions": "You are a friendly assistant. Reply briefly.",
+                            "voice": "leda",
+                        },
+                    }))
+                elif t == "session.configured":
+                    out_rate = evt["session"].get("output_audio_sample_rate", 48000)
+                elif t == "response.output_audio.delta":
+                    out_chunks.append(base64.b64decode(evt["delta"]))
+                elif t == "response.done":
+                    print(f"[{evt['response']['status']}]")
+                elif t == "error":
+                    print("ERROR:", evt["error"])
+
+        recv_task = asyncio.create_task(reader())
+
+        with wave.open(WAV_IN, "rb") as w:
+            assert w.getframerate() == 16000 and w.getnchannels() == 1
+            chunk_frames = 320  # 20 ms at 16 kHz
+            while True:
+                pcm = w.readframes(chunk_frames)
+                if not pcm:
+                    break
+                await ws.send(json.dumps({
+                    "type": "input_audio_buffer.append",
+                    "audio": base64.b64encode(pcm).decode(),
+                }))
+                await asyncio.sleep(chunk_frames / 16000)  # real-time pacing
+
+        await asyncio.sleep(10)
+        recv_task.cancel()
+
+    with wave.open(WAV_OUT, "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(out_rate)
+        w.writeframes(b"".join(out_chunks))
+    print(f"Wrote {WAV_OUT} ({out_rate} Hz)")
+
+asyncio.run(main())
+```
+
+<Tip>
+**Don't have a 16 kHz mono WAV handy?** Resample with `ffmpeg`:
+
+```bash
+ffmpeg -i any-input.wav -ac 1 -ar 16000 -sample_fmt s16 input_16khz_mono.wav
+```
+</Tip>
+
+## What you just did
+
+| Step | What it does |
+|---|---|
+| `session.created` | Server confirms the WebSocket is open. |
+| `session.configure` | One-shot — declare persona + voice. Audio formats are server-fixed. |
+| `session.configured` | Server echoes the effective config; `output_audio_sample_rate` is the source of truth for playback. |
+| `input_audio_buffer.append` | Stream PCM16 chunks. No manual `commit` or `end-of-turn` — Hydra detects turn boundaries on its own. |
+| `response.output_audio.delta` | Base64 PCM16 chunks. Queue and play in order. |
+| `response.done` | Turn finished. `status` is `completed`, `cancelled`, `incomplete`, or `failed`. |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Realtime Protocol" icon="plug" href="/waves/documentation/speech-to-speech-hydra/realtime-protocol">
+    Full event reference, session config, tool calling, interruption handling, errors.
+  </Card>
+  <Card title="Model Card — Hydra" icon="circle-info" href="/waves/model-cards/speech-to-speech/hydra">
+    Capabilities, voices, performance, pricing.
+  </Card>
+  <Card title="Browser Microphone Example" icon="microphone" href="/waves/documentation/speech-to-speech-hydra/realtime-protocol#browser-microphone-example">
+    Mic capture + gapless playback + barge-in handling in vanilla JS.
+  </Card>
+  <Card title="Reference Client" icon="github" href="https://github.com/smallest-inc/hydra_agents">
+    Full Next.js client with live wire-log, multi-agent presets, tool execution.
+  </Card>
+</CardGroup>
