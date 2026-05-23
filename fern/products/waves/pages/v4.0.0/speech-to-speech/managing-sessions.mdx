@@ -1,0 +1,154 @@
+---
+title: "Managing sessions"
+description: "Hydra session lifecycle — session.configure, voices, persona, generate_initial_response, mid-session updates, and conversation items."
+icon: "diagram-project"
+---
+
+A Hydra session is the stateful interaction between the model and one connected client. One WebSocket = one session.
+
+## Lifecycle
+
+```
+1.  Client opens WebSocket
+2.  Server → session.created              (server-minted session_id)
+3.  Client → session.configure            (one-shot: persona, voice, tools)
+4.  Server → session.configured           (echoes effective config + audio rates)
+5.  Client → input_audio_buffer.append    (streamed continuously)
+…   Server emits speech, conversation, response events
+6.  Either side closes the WebSocket → session ends
+```
+
+The handshake is **one-shot**. After `session.created`, the server waits for exactly one `session.configure` before accepting audio. Subsequent `session.configure` frames are ignored — use `session.update` for mid-session changes.
+
+## `session.configure`
+
+Send this once, immediately after `session.created`. Every field is optional.
+
+```json
+{
+  "type": "session.configure",
+  "session": {
+    "instructions": "You are a warm, concise voice assistant. Reply in one short sentence.",
+    "voice": "leda",
+    "tools": [],
+    "generate_initial_response": false
+  }
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `instructions` | string | System prompt. See [Prompting voice agents](/waves/documentation/speech-to-speech-hydra/prompting). |
+| `voice` | string | One of `leda`, `aoede`, `autonoe`, `charon`, `fenrir`, `zephyr`. Unknown values silently fall back to the default — **validate client-side**. |
+| `tools` | array | Function-calling tool schemas. See [Tool calling](/waves/documentation/speech-to-speech-hydra/tool-calling). |
+| `output_audio_format` | string | Currently only `pcm16`. |
+| `output_audio_sample_rate` | integer | Server selects (currently 48000). The value echoed in `session.configured` is the source of truth — **don't hardcode**. |
+| `generate_initial_response` | boolean | `true` makes the model speak first, before any user audio. Honoured only at handshake. |
+
+## `session.configured` (server echo)
+
+```json
+{
+  "type": "session.configured",
+  "event_id": "sv_df88e2e7ef6145c7",
+  "session": {
+    "instructions": "...",
+    "voice": "leda",
+    "tools": [],
+    "output_audio_format": "pcm16",
+    "output_audio_sample_rate": 48000,
+    "generate_initial_response": false
+  }
+}
+```
+
+Read `output_audio_sample_rate` from this event and configure your audio output stream to match.
+
+## Mid-session updates
+
+Use `session.update` to live-patch the session without reconnecting. **Only the `tools` field is honoured today.** Persona, voice, and audio formats are frozen at handshake; changes to those require a fresh connection.
+
+```json
+{
+  "type": "session.update",
+  "session": {
+    "tools": [
+      { "type": "function", "name": "get_weather", "description": "...", "parameters": { ... } }
+    ]
+  }
+}
+```
+
+The server replies with `session.updated` containing **only** the fields it actually applied. A no-op patch produces no echo.
+
+## Bot speaks first
+
+Setting `generate_initial_response: true` on `session.configure` makes Hydra deliver an opening line before any user audio arrives. Useful for greetings and concierge openers.
+
+```json
+{
+  "type": "session.configure",
+  "session": {
+    "instructions": "You are a hotel concierge. Greet the guest warmly and ask how you can help.",
+    "voice": "leda",
+    "generate_initial_response": true
+  }
+}
+```
+
+Immediately after `session.configured`, the standard `response.created` → audio deltas → `response.done` sequence fires, with **no preceding `input_audio_buffer.speech_started`**.
+
+## Conversation items
+
+Most events carry a `ConversationItem`. The shape is intentionally flat — every field is optional, presence is dictated by `type`.
+
+```json
+{
+  "id": "item_…",
+  "type": "message" | "function_call" | "function_call_output",
+  "role": "user" | "assistant" | "system",
+  "status": "in_progress" | "completed" | "incomplete",
+  "content": [
+    { "type": "input_audio" | "output_audio" | "input_text" | "output_text" }
+  ],
+  "call_id": "call_…",
+  "name": "get_weather",
+  "arguments": "{...json...}",
+  "output": "..."
+}
+```
+
+For audio message items, `content[].text` is **`null`** — audio bytes are the payload. The `text` field exists for `function_call_output` and other text-bearing items.
+
+Discarded user turns (e.g. brief mic noise that didn't trigger a response) arrive as `conversation.item.done` with `status: "incomplete"` and should be ignored.
+
+## `response.done`
+
+Every response ends with `response.done`:
+
+```json
+{
+  "type": "response.done",
+  "response": {
+    "id": "resp_…",
+    "status": "completed" | "cancelled" | "incomplete" | "failed",
+    "status_details": { "reason": "...", "type": "...", "error": { ... } },
+    "output": [ /* ConversationItem */ ],
+    "usage": { "input_tokens": 0, "output_tokens": 0, "total_tokens": 0 }
+  }
+}
+```
+
+| `status` | Meaning |
+|---|---|
+| `completed` | Turn finished normally |
+| `cancelled` • `reason: "interrupted"` | The user barged in — handled automatically |
+| `cancelled` • `reason: "client_cancelled"` | The client sent `response.cancel` |
+| `incomplete` | Stop condition (`max_output_tokens`, `content_filter`) |
+| `failed` | Internal error — see `status_details.error` |
+
+## Next
+
+- [Audio I/O](/waves/documentation/speech-to-speech-hydra/audio-io) — what to put in `input_audio_buffer.append` and how to play `response.output_audio.delta`
+- [Turn detection & barge-in](/waves/documentation/speech-to-speech-hydra/turn-detection) — how speech events fire and how to handle interruption on the client
+- [Tool calling](/waves/documentation/speech-to-speech-hydra/tool-calling) — declare and execute functions during a session
