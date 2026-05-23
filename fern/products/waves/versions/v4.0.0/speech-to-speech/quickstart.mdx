@@ -81,14 +81,21 @@ def evt(direction, msg):
     events.append((time.strftime("%H:%M:%S"), direction, msg))
 
 async def main():
+    loop = asyncio.get_running_loop()
     play_q: asyncio.Queue[bytes] = asyncio.Queue()
     mic_q: asyncio.Queue[bytes] = asyncio.Queue(maxsize=200)
+    stop = asyncio.Event()                                 # signals every loop to exit cleanly
     speaker: sd.RawOutputStream | None = None
 
     def mic_cb(indata, frames, *_):
+        # mic_cb runs on the sounddevice audio thread — bounce queue mutation
+        # back to the event loop via call_soon_threadsafe (asyncio.Queue is
+        # not thread-safe; calling put_nowait directly can drop wake-ups).
         pcm = (np.clip(indata[:, 0], -1, 1) * 32767).astype(np.int16).tobytes()
-        try: mic_q.put_nowait(pcm)
-        except asyncio.QueueFull: pass
+        def _put():
+            try: mic_q.put_nowait(pcm)
+            except asyncio.QueueFull: pass
+        loop.call_soon_threadsafe(_put)
 
     mic = sd.InputStream(samplerate=IN_RATE, channels=1, dtype="float32",
                          blocksize=MIC_FRAMES, callback=mic_cb)
@@ -97,58 +104,72 @@ async def main():
         async with websockets.connect(URL, max_size=None, close_timeout=2) as ws:
             async def reader():
                 nonlocal speaker
-                async for raw in ws:
-                    e = json.loads(raw); t = e["type"]
-                    if t == "session.created":
-                        state["session_id"] = e.get("session_id", "")
-                        evt("in", "session.created")
-                        await ws.send(json.dumps({"type": "session.configure",
-                            "session": {"instructions": PERSONA, "voice": VOICE}}))
-                        evt("out", f"session.configure voice={VOICE}")
-                    elif t == "session.configured":
-                        state["out_rate"] = e["session"].get("output_audio_sample_rate", 48000)
-                        state["status"] = "Listening"
-                        evt("in", f"session.configured out_rate={state['out_rate']}")
-                        speaker = sd.RawOutputStream(samplerate=state["out_rate"],
-                                                    channels=1, dtype="int16")
-                        speaker.start(); mic.start()
-                    elif t == "input_audio_buffer.speech_started":
-                        state["status"] = "Barge-in" if state["status"] == "Hydra is speaking" else "User speaking"
-                        while not play_q.empty():
-                            try: play_q.get_nowait()
-                            except asyncio.QueueEmpty: break
-                        evt("in", "speech_started")
-                    elif t == "input_audio_buffer.speech_stopped":
-                        evt("in", "speech_stopped")
-                    elif t == "response.created":
-                        state["status"] = "Hydra is speaking"
-                        evt("in", "response.created")
-                    elif t == "response.output_audio.delta":
-                        await play_q.put(base64.b64decode(e["delta"]))
-                    elif t == "response.done":
-                        state["status"] = "Listening"; state["turns"] += 1
-                        evt("in", f"response.done [{e['response']['status']}]")
-                    elif t == "error":
-                        evt("in", f"error {e['error'].get('code', '?')}")
+                try:
+                    async for raw in ws:
+                        e = json.loads(raw); t = e["type"]
+                        if t == "session.created":
+                            state["session_id"] = e.get("session_id", "")
+                            evt("in", "session.created")
+                            await ws.send(json.dumps({"type": "session.configure",
+                                "session": {"instructions": PERSONA, "voice": VOICE}}))
+                            evt("out", f"session.configure voice={VOICE}")
+                        elif t == "session.configured":
+                            state["out_rate"] = e["session"].get("output_audio_sample_rate", 48000)
+                            state["status"] = "Listening"
+                            evt("in", f"session.configured out_rate={state['out_rate']}")
+                            speaker = sd.RawOutputStream(samplerate=state["out_rate"],
+                                                        channels=1, dtype="int16")
+                            speaker.start(); mic.start()
+                        elif t == "input_audio_buffer.speech_started":
+                            state["status"] = "Barge-in" if state["status"] == "Hydra is speaking" else "User speaking"
+                            while not play_q.empty():
+                                try: play_q.get_nowait()
+                                except asyncio.QueueEmpty: break
+                            evt("in", "speech_started")
+                        elif t == "input_audio_buffer.speech_stopped":
+                            evt("in", "speech_stopped")
+                        elif t == "response.created":
+                            state["status"] = "Hydra is speaking"
+                            evt("in", "response.created")
+                        elif t == "response.output_audio.delta":
+                            await play_q.put(base64.b64decode(e["delta"]))
+                        elif t == "response.done":
+                            state["status"] = "Listening"; state["turns"] += 1
+                            evt("in", f"response.done [{e['response']['status']}]")
+                        elif t == "error":
+                            evt("in", f"error {e['error'].get('code', '?')}")
+                finally:
+                    state["status"] = "Closed"
+                    stop.set()                              # wake the other coroutines
 
             async def mic_send():
-                while True:
-                    pcm = await mic_q.get()
+                while not stop.is_set():
+                    try:
+                        pcm = await asyncio.wait_for(mic_q.get(), timeout=0.2)
+                    except asyncio.TimeoutError:
+                        continue
                     if ws.state.name != "OPEN": return
                     await ws.send(json.dumps({"type": "input_audio_buffer.append",
                                               "audio": base64.b64encode(pcm).decode()}))
 
             async def speaker_drain():
-                while True:
-                    pcm = await play_q.get()
+                while not stop.is_set():
+                    try:
+                        pcm = await asyncio.wait_for(play_q.get(), timeout=0.2)
+                    except asyncio.TimeoutError:
+                        continue
                     if speaker: speaker.write(pcm)
 
             async def refresh():
-                while True:
+                while not stop.is_set():
                     live.update(render())
                     await asyncio.sleep(0.1)
 
-            await asyncio.gather(reader(), mic_send(), speaker_drain(), refresh())
+            try:
+                await asyncio.gather(reader(), mic_send(), speaker_drain(), refresh())
+            finally:
+                mic.stop(); mic.close()
+                if speaker: speaker.stop(); speaker.close()
 
 if __name__ == "__main__":
     try:
