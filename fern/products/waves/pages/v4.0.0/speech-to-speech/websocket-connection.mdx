@@ -1,0 +1,114 @@
+---
+title: "WebSocket connection"
+description: "Connect to the Hydra speech-to-speech WebSocket — auth, query parameters, idle timeout, close codes. Python, Node, and browser snippets."
+icon: "plug"
+---
+
+A Hydra session is a single WebSocket connection. Open it once, stream audio in real time, close it when the user is done.
+
+## Endpoint
+
+```
+wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=<SMALLEST_API_KEY>
+```
+
+| Parameter | Required | Notes |
+|---|---|---|
+| `model` | yes | Set to `hydra` |
+| `api_key` | yes | Your `SMALLEST_API_KEY`. Treat as a secret. For browser apps, mint a short-lived token server-side rather than shipping a long-lived key. |
+
+All frames are **JSON text frames** (UTF-8). Binary frames are not used.
+
+## Connect
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    import asyncio, os
+    import websockets
+
+    URL = f"wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key={os.environ['SMALLEST_API_KEY']}"
+
+    async def main():
+        async with websockets.connect(URL, max_size=None) as ws:
+            async for raw in ws:
+                print(raw)  # → session.created, then on to session.configure
+
+    asyncio.run(main())
+    ```
+    Requires `pip install websockets`.
+  </Tab>
+  <Tab title="Node.js">
+    ```javascript
+    import WebSocket from "ws";
+
+    const url = `wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=${process.env.SMALLEST_API_KEY}`;
+    const ws = new WebSocket(url);
+
+    ws.on("message", (raw) => console.log(raw.toString()));
+    ws.on("open", () => console.log("connected"));
+    ```
+    Requires `npm install ws`.
+  </Tab>
+  <Tab title="Browser">
+    ```javascript
+    // Don't ship the key directly — fetch a short-lived token from your server first.
+    const apiKey = await fetch("/api/hydra-token").then(r => r.text());
+    const ws = new WebSocket(
+      `wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=${apiKey}`
+    );
+    ws.onmessage = (ev) => console.log(JSON.parse(ev.data));
+    ```
+    The `WebSocket` global is supported in every modern browser. See the [browser client guide](/waves/documentation/speech-to-speech-hydra/quickstart#browser-client) for the full mic-and-playback wiring.
+  </Tab>
+</Tabs>
+
+## Authentication
+
+Auth happens during the WebSocket handshake. If `api_key` is missing or invalid, **the server returns HTTP 401 and the WebSocket never opens** — no event frames, no close code.
+
+```python
+try:
+    async with websockets.connect(URL) as ws:
+        ...
+except websockets.exceptions.InvalidStatus as e:
+    if e.response.status_code == 401:
+        print("Bad API key")
+```
+
+A valid `api_key` gives you ~30 seconds of idle tolerance per session — see [Idle timeout](#idle-timeout) below.
+
+## What you get back
+
+The first frame after connect is always `session.created`:
+
+```json
+{
+  "type": "session.created",
+  "event_id": "sv_588fd416b4a24fe3",
+  "session_id": "4bf1f4f6-5fa4-4de5-aa29-83f5eed96c82"
+}
+```
+
+The server now waits for one `session.configure` from you before accepting audio. Once configured, it echoes `session.configured` and starts accepting `input_audio_buffer.append` frames. See [Managing sessions](/waves/documentation/speech-to-speech-hydra/managing-sessions).
+
+## Idle timeout
+
+If neither side sends a frame for ~**30 seconds**, the server closes with code `1000` (normal close). Reconnect to resume.
+
+To keep a long-lived session open during a pause, keep sending `input_audio_buffer.append` frames with silence — that counts as traffic.
+
+## Close codes
+
+| Code | Meaning | Action |
+|---|---|---|
+| `1000` | Normal close, including idle timeout | Reconnect if the user is still active |
+| `1013` | Server at capacity. Preceded by an `error` event with `code: "server_full"`. | Back off with jitter; surface a queue message |
+
+Auth failures are **not** a close code — they're HTTP 401 at handshake time, as noted above.
+
+## Next
+
+- [Managing sessions](/waves/documentation/speech-to-speech-hydra/managing-sessions) — `session.configure`, voices, persona, mid-session updates
+- [Audio I/O](/waves/documentation/speech-to-speech-hydra/audio-io) — input PCM16, output rate negotiation, browser AudioWorklet
+- [Errors & reconnection](/waves/documentation/speech-to-speech-hydra/errors) — full error catalog

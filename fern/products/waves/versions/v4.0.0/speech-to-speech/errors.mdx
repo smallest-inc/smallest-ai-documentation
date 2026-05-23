@@ -1,0 +1,106 @@
+---
+title: "Errors & reconnection"
+description: "Hydra error frame structure, code reference, and reconnection strategy. Errors are diagnostic — the session stays usable unless a close follows."
+icon: "triangle-exclamation"
+---
+
+Errors arrive as JSON events with `type: "error"`. The connection stays usable unless a close frame follows immediately.
+
+## Error frame
+
+```json
+{
+  "type": "error",
+  "event_id": "sv_…",
+  "error": {
+    "type": "invalid_request_error",
+    "code": "invalid_audio",
+    "message": "audio frame too small (40 bytes, need 320)",
+    "param": "audio",
+    "event_id": "evt_…"
+  }
+}
+```
+
+`error.event_id` (when present) is the `event_id` of the client frame that triggered the error — correlate it with what you sent.
+
+## Code reference
+
+| `code` | Meaning | Recovery |
+|---|---|---|
+| `invalid_request_error` | Schema validation failure — unknown field, missing `type`, wrong type, malformed JSON, unsupported audio format. | Fix the frame and resend. Session continues. |
+| `invalid_audio` | The `input_audio_buffer.append.audio` payload was not valid base64, or not PCM16. | Stop sending audio, fix encoding, resume. Session continues. |
+| `tool_response_timeout` | You declared tools, the model called one, and you didn't post `function_call_output` + `response.create` within the timeout window. | The turn is abandoned. Next user turn proceeds normally. Investigate why your tool didn't return in time. |
+| `server_full` | The server is at capacity. **Always followed by close code `1013`.** | Back off with jitter, retry. Surface a queue message to the user. |
+| `internal_error` | Unhandled server-side exception. | Reconnect once. If it persists, contact support. |
+
+## What's NOT an error event
+
+| Failure mode | What you actually see | Why |
+|---|---|---|
+| Invalid `api_key` | HTTP 401 at WebSocket handshake — connection never opens | Auth is enforced before the WebSocket upgrade completes. There's no socket to send an `error` over. |
+| Idle timeout | Close code `1000` with no preceding `error` | Normal close. Reconnect if the user is still active. |
+| Network drop | Close code (various) or transport error | Treat like any WebSocket disconnect — reconnect logic on the client. |
+
+See [WebSocket connection](/waves/documentation/speech-to-speech-hydra/websocket-connection#close-codes) for the full close-code reference.
+
+## Reconnection strategy
+
+Hydra sessions are stateful — when you reconnect, you get a new `session_id` and a fresh `session.configure` requirement. There's no resume token.
+
+A simple, correct strategy:
+
+```python
+async def run_with_reconnect():
+    backoff = 1.0
+    while True:
+        try:
+            await run_one_session()
+            backoff = 1.0          # success — reset backoff
+        except websockets.exceptions.InvalidStatus as e:
+            if e.response.status_code == 401:
+                raise              # bad key — don't retry
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 30)
+        except websockets.exceptions.ConnectionClosed as e:
+            if e.code == 1013:     # server full
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 60)
+            elif e.code == 1000:   # normal close (idle / user done)
+                return
+            else:
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 30)
+```
+
+Two principles:
+
+- **Cap the backoff.** Don't let a server-full event escalate to an unbounded retry storm.
+- **Don't retry HTTP 401.** It's a credential error — looping won't fix it. Bubble it up.
+
+## Diagnosing in production
+
+`event_id` correlation is the single most useful debugging tool. Always include a client-side `event_id` on outbound frames (UUIDs are fine):
+
+```python
+import uuid
+
+await ws.send(json.dumps({
+    "event_id": f"evt_{uuid.uuid4().hex[:12]}",
+    "type": "session.configure",
+    "session": { ... },
+}))
+```
+
+When an error references your `event_id`, you know exactly which frame caused it.
+
+## Common gotchas
+
+- **Treating every `error` as fatal.** Most aren't. Only act on `error` if a close frame follows.
+- **Reconnecting on `1000`.** Idle close is normal. Reconnect only if the user is still engaged.
+- **No backoff cap.** A burst of `server_full` errors with no jitter is how you turn a transient outage into your own outage.
+
+## Next
+
+- [WebSocket connection](/waves/documentation/speech-to-speech-hydra/websocket-connection) — close codes and idle timeout
+- [Tool calling](/waves/documentation/speech-to-speech-hydra/tool-calling) — `tool_response_timeout` deep dive

@@ -1,0 +1,174 @@
+---
+title: "Audio I/O"
+description: "Audio formats for Hydra — input PCM16 16 kHz, output rate negotiation, chunk sizing, and AudioWorklet patterns for browser clients."
+icon: "waveform-lines"
+---
+
+Hydra is strict about audio formats. Get this wrong and you'll either see `invalid_audio` errors or distorted playback.
+
+## Input (client → server)
+
+| Property | Value |
+|---|---|
+| Codec | PCM16 (16-bit signed integer) |
+| Endianness | Little-endian |
+| Channels | Mono |
+| Sample rate | **16 000 Hz** |
+| Encoding on the wire | Base64, inside `input_audio_buffer.append.audio` |
+| Recommended chunk size | 20–40 ms (640–1280 samples = 1280–2560 bytes) |
+
+Frames smaller than ~20 ms add overhead without helping latency. Frames larger than ~40 ms make barge-in detection feel sluggish.
+
+### Python
+
+```python
+import wave, base64, json
+
+with wave.open("input_16khz_mono.wav", "rb") as w:
+    assert w.getframerate() == 16000 and w.getnchannels() == 1
+    while True:
+        pcm = w.readframes(320)            # 20 ms at 16 kHz
+        if not pcm:
+            break
+        await ws.send(json.dumps({
+            "type": "input_audio_buffer.append",
+            "audio": base64.b64encode(pcm).decode(),
+        }))
+        await asyncio.sleep(0.02)          # pace at real-time
+```
+
+### Browser (AudioWorklet)
+
+The mic delivers float32 samples; you need to (a) convert to int16 and (b) base64-encode each chunk. **Use an `AudioWorklet`** — the deprecated `ScriptProcessorNode` works for a prototype but blocks the main thread under load.
+
+```javascript
+// my-mic-worklet.js
+class MicWorklet extends AudioWorkletProcessor {
+  constructor() { super(); this._buf = []; this._frames = 0; }
+  process(inputs) {
+    const ch = inputs[0]?.[0];
+    if (!ch) return true;
+    this._buf.push(new Float32Array(ch));
+    this._frames += ch.length;
+    if (this._frames >= 320) {            // 20 ms at 16 kHz
+      const out = new Float32Array(this._frames);
+      let o = 0;
+      for (const c of this._buf) { out.set(c, o); o += c.length; }
+      this.port.postMessage(out);
+      this._buf = []; this._frames = 0;
+    }
+    return true;
+  }
+}
+registerProcessor("mic-worklet", MicWorklet);
+```
+
+```javascript
+// main thread
+const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+const ctx = new AudioContext({ sampleRate: 16000 });
+await ctx.audioWorklet.addModule("my-mic-worklet.js");
+const src = ctx.createMediaStreamSource(stream);
+const node = new AudioWorkletNode(ctx, "mic-worklet");
+node.port.onmessage = (e) => {
+  const pcm16 = floatTo16BitPCM(e.data);
+  ws.send(JSON.stringify({
+    type: "input_audio_buffer.append",
+    audio: arrayBufferToBase64(pcm16.buffer),
+  }));
+};
+src.connect(node);
+
+function floatTo16BitPCM(f32) {
+  const out = new Int16Array(f32.length);
+  for (let i = 0; i < f32.length; i++) {
+    const s = Math.max(-1, Math.min(1, f32[i]));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return out;
+}
+function arrayBufferToBase64(buf) {
+  let bin = "";
+  const b = new Uint8Array(buf);
+  for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+  return btoa(bin);
+}
+```
+
+## Output (server → client)
+
+| Property | Value |
+|---|---|
+| Codec | PCM16 |
+| Endianness | Little-endian |
+| Channels | Mono |
+| Sample rate | **Read from `session.configured.session.output_audio_sample_rate`** (currently 48 000 Hz) |
+| Encoding on the wire | Base64, inside `response.output_audio.delta.delta` |
+
+<Warning>
+Don't hardcode `48000`. Read it from the `session.configured` event — Hydra may negotiate other rates in the future, and the field exists exactly so client code keeps working.
+</Warning>
+
+### Python
+
+```python
+out_rate = 48000
+out_chunks = []
+
+async for raw in ws:
+    evt = json.loads(raw)
+    if evt["type"] == "session.configured":
+        out_rate = evt["session"].get("output_audio_sample_rate", 48000)
+    elif evt["type"] == "response.output_audio.delta":
+        out_chunks.append(base64.b64decode(evt["delta"]))
+
+# Later, write to a WAV
+with wave.open("reply.wav", "wb") as w:
+    w.setnchannels(1); w.setsampwidth(2); w.setframerate(out_rate)
+    w.writeframes(b"".join(out_chunks))
+```
+
+### Browser (gapless playback)
+
+Schedule each chunk against a running `playCursor` so chunks play back-to-back with no audible gap. Use the rate from `session.configured`, not a hardcoded one.
+
+```javascript
+let playCtx, playCursor = 0, ttsRate = 48000;
+
+ws.onmessage = (ev) => {
+  const evt = JSON.parse(ev.data);
+  if (evt.type === "session.configured") {
+    ttsRate = evt.session.output_audio_sample_rate || 48000;
+    playCtx = new AudioContext({ sampleRate: ttsRate });
+    playCursor = playCtx.currentTime;
+  } else if (evt.type === "response.output_audio.delta") {
+    playPCM16(b64ToInt16(evt.delta));
+  }
+};
+
+function playPCM16(int16) {
+  const buf = playCtx.createBuffer(1, int16.length, ttsRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < int16.length; i++) ch[i] = int16[i] / 0x8000;
+  const src = playCtx.createBufferSource();
+  src.buffer = buf;
+  src.connect(playCtx.destination);
+  const start = Math.max(playCtx.currentTime, playCursor);
+  src.start(start);
+  playCursor = start + buf.duration;
+}
+```
+
+For barge-in, you reset `playCursor = playCtx.currentTime` when a fresh `response.created` arrives — see [Turn detection & barge-in](/waves/documentation/speech-to-speech-hydra/turn-detection#dropping-scheduled-audio-on-barge-in).
+
+## Common gotchas
+
+- **Sending audio before `session.configured`** — the server queues but may emit `error` codes if the session isn't ready. Wait for the echo before streaming.
+- **Sample-rate mismatch** — sending 24 kHz audio while claiming PCM16 16 kHz produces unintelligible transcription on the model side. Resample explicitly.
+- **Stereo input** — Hydra expects mono. If you have stereo, downmix before encoding.
+- **Hardcoding the output rate** — see the warning above. Always read it from `session.configured`.
+
+## Next
+
+- [Turn detection & barge-in](/waves/documentation/speech-to-speech-hydra/turn-detection) — VAD events and how to flush scheduled audio
+- [Errors & reconnection](/waves/documentation/speech-to-speech-hydra/errors) — `invalid_audio` and friends
