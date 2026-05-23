@@ -1,0 +1,633 @@
+asyncapi: 3.0.0
+info:
+  title: Waves Hydra Speech-to-Speech API
+  version: 1.0.0
+  description: WebSocket-based full-duplex speech-to-speech API. A single connection carries microphone audio from the client to Hydra and streams synthesised response audio back. Hydra does not emit a transcript stream — audio bytes are the payload.
+  contact:
+    name: Waves API Support
+    email: support@smallest.ai
+  license:
+    name: Proprietary
+servers:
+  production:
+    host: api.smallest.ai
+    pathname: /waves/v1/s2s
+    protocol: wss
+    description: Waves API server
+    x-fern-server-name: waves-ws
+    bindings:
+      ws:
+        query:
+          type: object
+          required:
+          - model
+          - api_key
+          properties:
+            model:
+              type: string
+              enum:
+              - hydra
+              description: Speech-to-speech model. Currently only `hydra`.
+            api_key:
+              type: string
+              description: 'Your Smallest AI API key (the same one used for the Waves REST APIs). Treat as a secret; for browser clients mint a short-lived token server-side rather than shipping the key.'
+channels:
+  hydraSession:
+    address: /waves/v1/s2s
+    servers:
+    - $ref: '#/servers/production'
+    messages:
+      sessionCreated:
+        name: SessionCreated
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [session.created]
+            event_id:
+              type: string
+              description: Server-minted event identifier.
+            session_id:
+              type: string
+              description: Server-minted session identifier, stable for the lifetime of the WebSocket.
+        examples:
+        - name: sessionCreated
+          payload:
+            type: session.created
+            event_id: sv_588fd416b4a24fe3
+            session_id: 4bf1f4f6-5fa4-4de5-aa29-83f5eed96c82
+      sessionConfigure:
+        name: SessionConfigure
+        contentType: application/json
+        payload:
+          type: object
+          required: [type, session]
+          properties:
+            type:
+              type: string
+              enum: [session.configure]
+            event_id:
+              type: string
+              description: Optional client-generated event identifier. UUIDs recommended so server errors can reference the originating frame.
+            session:
+              $ref: '#/components/schemas/SessionConfig'
+        examples:
+        - name: configureLeda
+          payload:
+            type: session.configure
+            session:
+              instructions: You are a friendly assistant. Reply briefly.
+              voice: leda
+      sessionConfigured:
+        name: SessionConfigured
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [session.configured]
+            event_id:
+              type: string
+            session:
+              type: object
+              description: |
+                Effective session configuration as accepted by the server. Echoes the fields the server applied:
+                `instructions`, `voice`, `tools`, `output_audio_format`, `output_audio_sample_rate`, `generate_initial_response`.
+                **The negotiated `output_audio_sample_rate` is the source of truth for playback** — Hydra currently streams output at 48000 Hz.
+              properties:
+                instructions: { type: string }
+                voice: { type: string }
+                tools:
+                  type: array
+                  items: { $ref: '#/components/schemas/Tool' }
+                output_audio_format:
+                  type: string
+                  enum: [pcm16]
+                output_audio_sample_rate:
+                  type: integer
+                  description: Negotiated output sample rate in Hz. Currently 48000.
+                generate_initial_response:
+                  type: boolean
+      sessionUpdate:
+        name: SessionUpdate
+        contentType: application/json
+        payload:
+          type: object
+          required: [type, session]
+          properties:
+            type:
+              type: string
+              enum: [session.update]
+            session:
+              type: object
+              description: Mid-session live patch. Only `tools` is honoured today; persona, voice, and audio formats are frozen at handshake.
+              properties:
+                tools:
+                  type: array
+                  items: { $ref: '#/components/schemas/Tool' }
+      sessionUpdated:
+        name: SessionUpdated
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [session.updated]
+            event_id: { type: string }
+            session:
+              type: object
+              description: Echo containing only the fields that were applied. A no-op patch produces no echo.
+      inputAudioBufferAppend:
+        name: InputAudioBufferAppend
+        contentType: application/json
+        payload:
+          type: object
+          required: [type, audio]
+          properties:
+            type:
+              type: string
+              enum: [input_audio_buffer.append]
+            audio:
+              type: string
+              description: 'Base64-encoded PCM16 audio chunk. Signed little-endian, mono, 16 kHz. Recommended chunk size: 20–40 ms (640–1280 samples).'
+      inputAudioBufferSpeechStarted:
+        name: InputAudioBufferSpeechStarted
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [input_audio_buffer.speech_started]
+            event_id: { type: string }
+            audio_start_ms:
+              type: integer
+              description: Offset (in ms) from session start when speech was detected.
+            item_id:
+              type: string
+              description: ID of the user message item that will be created when the turn ends.
+      inputAudioBufferSpeechStopped:
+        name: InputAudioBufferSpeechStopped
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [input_audio_buffer.speech_stopped]
+            event_id: { type: string }
+            audio_end_ms: { type: integer }
+            item_id: { type: string }
+      conversationItemAdded:
+        name: ConversationItemAdded
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [conversation.item.added]
+            event_id: { type: string }
+            previous_item_id:
+              type: string
+              description: ID of the item immediately preceding this one in the conversation log.
+            item: { $ref: '#/components/schemas/ConversationItem' }
+      conversationItemDone:
+        name: ConversationItemDone
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [conversation.item.done]
+            event_id: { type: string }
+            previous_item_id: { type: string }
+            item: { $ref: '#/components/schemas/ConversationItem' }
+      conversationItemCreate:
+        name: ConversationItemCreate
+        contentType: application/json
+        payload:
+          type: object
+          required: [type, item]
+          properties:
+            type:
+              type: string
+              enum: [conversation.item.create]
+            item: { $ref: '#/components/schemas/ConversationItem' }
+      responseCreated:
+        name: ResponseCreated
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [response.created]
+            event_id: { type: string }
+            response:
+              type: object
+              properties:
+                id: { type: string }
+      responseCreate:
+        name: ResponseCreate
+        contentType: application/json
+        payload:
+          type: object
+          required: [type]
+          properties:
+            type:
+              type: string
+              enum: [response.create]
+            response:
+              type: object
+              description: Optional response shaping. Body is optional — send an empty `response.create` after posting all tool outputs to request narration.
+      responseOutputAudioDelta:
+        name: ResponseOutputAudioDelta
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [response.output_audio.delta]
+            event_id: { type: string }
+            response_id: { type: string }
+            item_id: { type: string }
+            output_index: { type: integer }
+            content_index: { type: integer }
+            delta:
+              type: string
+              description: Base64-encoded PCM16 audio chunk at the negotiated output sample rate.
+      responseOutputAudioDone:
+        name: ResponseOutputAudioDone
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [response.output_audio.done]
+            event_id: { type: string }
+            response_id: { type: string }
+            item_id: { type: string }
+            output_index: { type: integer }
+            content_index: { type: integer }
+      responseFunctionCallArgumentsDelta:
+        name: ResponseFunctionCallArgumentsDelta
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [response.function_call_arguments.delta]
+            event_id: { type: string }
+            response_id: { type: string }
+            call_id: { type: string }
+            name:
+              type: string
+              description: Tool name (present on first delta).
+            delta:
+              type: string
+              description: Streaming JSON fragment of the arguments. Concatenate per `call_id`.
+      responseFunctionCallArgumentsDone:
+        name: ResponseFunctionCallArgumentsDone
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [response.function_call_arguments.done]
+            event_id: { type: string }
+            response_id: { type: string }
+            call_id: { type: string }
+            name: { type: string }
+            arguments:
+              type: string
+              description: Full arguments JSON. Parse with `JSON.parse` / `json.loads` before passing to your tool.
+      responseDone:
+        name: ResponseDone
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [response.done]
+            event_id: { type: string }
+            response:
+              type: object
+              properties:
+                id: { type: string }
+                status:
+                  type: string
+                  enum: [completed, cancelled, incomplete, failed]
+                status_details:
+                  type: object
+                  properties:
+                    reason:
+                      type: string
+                      enum: [interrupted, client_cancelled, max_output_tokens, content_filter]
+                    type: { type: string }
+                    error:
+                      type: object
+                      properties:
+                        code: { type: string }
+                        type: { type: string }
+                output:
+                  type: array
+                  items: { $ref: '#/components/schemas/ConversationItem' }
+                usage:
+                  type: object
+                  properties:
+                    input_tokens: { type: integer }
+                    output_tokens: { type: integer }
+                    total_tokens: { type: integer }
+      responseCancel:
+        name: ResponseCancel
+        contentType: application/json
+        payload:
+          type: object
+          required: [type]
+          properties:
+            type:
+              type: string
+              enum: [response.cancel]
+            response_id:
+              type: string
+              description: Optional — target a specific in-flight response. No-op if no response is in flight.
+      errorEvent:
+        name: ErrorEvent
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [error]
+            event_id: { type: string }
+            error:
+              type: object
+              properties:
+                type: { type: string }
+                code:
+                  type: string
+                  enum:
+                  - invalid_request_error
+                  - invalid_audio
+                  - tool_response_timeout
+                  - server_full
+                  - internal_error
+                message: { type: string }
+                param: { type: string }
+                event_id:
+                  type: string
+                  description: When present, the `event_id` of the client frame that triggered the error.
+    description: |
+      # Hydra Speech-to-Speech WebSocket
+
+      Hydra is Smallest AI's full-duplex speech-to-speech model. A single WebSocket carries microphone audio from your client to the model and streams synthesised response audio back. **Audio in, audio out** — Hydra does not emit a transcript stream. If your application needs text, transcribe the PCM you sent or received using the Waves Pulse STT API.
+
+      ## When to use this
+
+      - **Use Hydra** when latency-to-voice matters above all else — phone agents, kiosks, in-car assistants, real-time tutors.
+      - **Use the Pulse → Electron → Lightning v3.1 stack** when you need explicit text in the middle (analytics, custom RAG, regulated content moderation, BYOM).
+      - **Use just Lightning v3.1** when you already have text and only need TTS.
+
+      ## How it works
+
+      1. Connect: `wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=<SMALLEST_API_KEY>`.
+      2. Receive `session.created` → send `session.configure` with persona, voice, optional tools.
+      3. Stream `input_audio_buffer.append` continuously while the mic is open — even while the model is speaking. Hydra detects turn boundaries on its own.
+      4. Receive `response.output_audio.delta` chunks (base64 PCM16) and queue them for playback at the rate echoed in `session.configured.session.output_audio_sample_rate`.
+      5. Handle barge-in: if `response.created` arrives before the previous response's `response.output_audio.done`, drop any still-scheduled audio buffers from the previous response.
+
+      ## Audio formats
+
+      - **Input** (client → server): PCM16, signed little-endian, mono, **16 kHz**, base64 inside `input_audio_buffer.append`. Recommended chunk size 20–40 ms (640–1280 samples).
+      - **Output** (server → client): PCM16, signed little-endian, mono. Sample rate is announced in `session.configured.session.output_audio_sample_rate` and is currently **48000 Hz**. Each chunk arrives base64-encoded inside `response.output_audio.delta`.
+
+      ## Voices
+
+      Currently supported: `leda`, `aoede`, `autonoe`, `charon`, `fenrir`, `zephyr`.
+
+      ## Idle timeout
+
+      ~30 seconds of no traffic from either side. Reconnect to resume.
+
+      ## Connection rejection and close codes
+
+      - Bad `api_key` is rejected during the WebSocket *handshake* with **HTTP 401** — the upgrade never completes, so no `error` event or close code lands on the wire.
+      - `1000` — normal close (including the ~30 s server-side idle timeout).
+      - `1013` — server at capacity. An `error` event with `code: "server_full"` precedes the close frame; back off with jitter and retry.
+
+      See the [Hydra realtime guide](/waves/documentation/speech-to-speech-hydra/realtime) for the full protocol reference, tool-calling pattern, interruption handling, and complete Python + browser examples.
+operations:
+  SessionCreated:
+    action: receive
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: Server-minted session identifier
+    description: First message after the WebSocket opens.
+    messages:
+    - $ref: '#/channels/hydraSession/messages/sessionCreated'
+  SessionConfigure:
+    action: send
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: One-shot session configuration
+    description: Sent exactly once, immediately after receiving `session.created`. The server will not accept audio until this frame is processed.
+    messages:
+    - $ref: '#/channels/hydraSession/messages/sessionConfigure'
+  SessionConfigured:
+    action: receive
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: Effective session configuration
+    description: Server echoes the effective configuration, including the negotiated `output_audio_sample_rate`.
+    messages:
+    - $ref: '#/channels/hydraSession/messages/sessionConfigured'
+  SessionUpdate:
+    action: send
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: Mid-session live patch
+    description: Apply a mid-session change. Today, only `tools` is honoured.
+    messages:
+    - $ref: '#/channels/hydraSession/messages/sessionUpdate'
+  SessionUpdated:
+    action: receive
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: Echo of applied mid-session changes
+    messages:
+    - $ref: '#/channels/hydraSession/messages/sessionUpdated'
+  InputAudioBufferAppend:
+    action: send
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: Stream microphone audio
+    description: Continuously while the microphone is open. No manual `commit` or `end-of-turn` event — Hydra decides when a turn ends.
+    messages:
+    - $ref: '#/channels/hydraSession/messages/inputAudioBufferAppend'
+  InputAudioBufferSpeechStarted:
+    action: receive
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: User speech started
+    messages:
+    - $ref: '#/channels/hydraSession/messages/inputAudioBufferSpeechStarted'
+  InputAudioBufferSpeechStopped:
+    action: receive
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: User speech stopped
+    messages:
+    - $ref: '#/channels/hydraSession/messages/inputAudioBufferSpeechStopped'
+  ConversationItemAdded:
+    action: receive
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: A new conversation item was added
+    messages:
+    - $ref: '#/channels/hydraSession/messages/conversationItemAdded'
+  ConversationItemDone:
+    action: receive
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: A conversation item reached its final state
+    messages:
+    - $ref: '#/channels/hydraSession/messages/conversationItemDone'
+  ConversationItemCreate:
+    action: send
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: Post a tool output back to the model
+    messages:
+    - $ref: '#/channels/hydraSession/messages/conversationItemCreate'
+  ResponseCreated:
+    action: receive
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: The model started generating a response
+    messages:
+    - $ref: '#/channels/hydraSession/messages/responseCreated'
+  ResponseCreate:
+    action: send
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: Request narration after posting tool outputs
+    messages:
+    - $ref: '#/channels/hydraSession/messages/responseCreate'
+  ResponseOutputAudioDelta:
+    action: receive
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: A streamed chunk of response audio
+    description: Decode the base64 `delta` and play at the negotiated output sample rate. If `response.created` arrives before the previous response's `response.output_audio.done`, drop any still-scheduled audio from the previous response — the user has barged in.
+    messages:
+    - $ref: '#/channels/hydraSession/messages/responseOutputAudioDelta'
+  ResponseOutputAudioDone:
+    action: receive
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: Audio streaming for the current output item is complete
+    messages:
+    - $ref: '#/channels/hydraSession/messages/responseOutputAudioDone'
+  ResponseFunctionCallArgumentsDelta:
+    action: receive
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: Streaming tool-call arguments
+    messages:
+    - $ref: '#/channels/hydraSession/messages/responseFunctionCallArgumentsDelta'
+  ResponseFunctionCallArgumentsDone:
+    action: receive
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: Tool-call arguments complete
+    description: The client is responsible for executing the tool and posting the result back via `conversation.item.create`.
+    messages:
+    - $ref: '#/channels/hydraSession/messages/responseFunctionCallArgumentsDone'
+  ResponseDone:
+    action: receive
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: The response turn finished
+    messages:
+    - $ref: '#/channels/hydraSession/messages/responseDone'
+  ResponseCancel:
+    action: send
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: Programmatically cancel an in-flight response
+    messages:
+    - $ref: '#/channels/hydraSession/messages/responseCancel'
+  ErrorEvent:
+    action: receive
+    channel: { $ref: '#/channels/hydraSession' }
+    summary: A recoverable error
+    description: Errors are non-fatal unless followed by a close frame. Treat them as diagnostics.
+    messages:
+    - $ref: '#/channels/hydraSession/messages/errorEvent'
+components:
+  schemas:
+    SessionConfig:
+      type: object
+      description: Sent inside the client's `session.configure` frame and echoed inside the server's `session.configured` frame. All fields optional — omitted fields fall back to the server default.
+      properties:
+        instructions:
+          type: string
+          description: Persona / system prompt that defines the assistant's behaviour.
+        voice:
+          type: string
+          enum:
+          - leda
+          - aoede
+          - autonoe
+          - charon
+          - fenrir
+          - zephyr
+          description: Voice identifier.
+        tools:
+          type: array
+          items: { $ref: '#/components/schemas/Tool' }
+          description: Function-calling tool schemas the model may invoke.
+        output_audio_format:
+          type: string
+          enum: [pcm16]
+          description: Currently only `pcm16`.
+        output_audio_sample_rate:
+          type: integer
+          description: Output sample rate in Hz. The server selects a sensible default (currently 48000); the value echoed in `session.configured` is the source of truth for playback.
+        generate_initial_response:
+          type: boolean
+          description: When `true`, the model speaks first instead of waiting for user input. Honoured only at handshake.
+    Tool:
+      type: object
+      required: [type, name]
+      properties:
+        type:
+          type: string
+          enum: [function]
+        name: { type: string }
+        description: { type: string }
+        parameters:
+          type: object
+          description: JSON Schema for the tool's parameters.
+    ConversationItem:
+      type: object
+      description: Carried by most conversation events. The shape is intentionally flat — every field is optional; presence is dictated by `type`.
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          enum: [message, function_call, function_call_output]
+        role:
+          type: string
+          enum: [user, assistant, system]
+        status:
+          type: string
+          enum: [in_progress, completed, incomplete]
+        content:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [input_audio, input_text, output_audio, output_text]
+              text:
+                type: string
+                description: For audio message items, `text` is always `null` — audio bytes are the payload. The field exists for `function_call_output` and other text-bearing items.
+        call_id: { type: string, description: '`function_call` / `function_call_output` only.' }
+        name: { type: string, description: '`function_call` only.' }
+        arguments: { type: string, description: '`function_call` only — JSON-encoded argument string.' }
+        output: { type: string, description: '`function_call_output` only — your tool result.' }

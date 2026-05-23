@@ -1,0 +1,78 @@
+---
+title: "Overview"
+description: "Hydra is Smallest AI's full-duplex speech-to-speech model — audio in, audio out, one WebSocket. Optimised for phone-grade latency and barge-in."
+icon: "comments"
+---
+
+Hydra is a **full-duplex speech-to-speech model**. A single WebSocket carries microphone audio from your client to the model and streams synthesised response audio back. There is no transcript on the wire.
+
+<CardGroup cols={4}>
+  <Card title="Audio in, audio out" icon="arrow-right-arrow-left">
+    No STT → LLM → TTS pipeline. One model. One socket.
+  </Card>
+  <Card title="Full-duplex" icon="wave-pulse">
+    User can speak over the model. In-flight responses cancel automatically.
+  </Card>
+  <Card title="Tool calling" icon="screwdriver-wrench">
+    Standard JSON-schema function calls, executed on your side.
+  </Card>
+  <Card title="Bot speaks first" icon="hand-wave">
+    `generate_initial_response: true` for greetings and concierge openers.
+  </Card>
+</CardGroup>
+
+## When to use Hydra
+
+- **Phone agents, kiosks, in-car assistants, live tutoring** — anywhere latency-to-voice matters above all else.
+- **Customer-facing voice UX** where round-trip through three separate models adds too much glass-to-glass delay.
+
+## When to use the three-model stack instead
+
+If you need **explicit text in the middle** — for analytics, custom retrieval, regulated content moderation, BYOM, or anything that has to inspect what was said before the model replies — use the Pulse → Electron → Lightning v3.1 stack.
+
+| Capability | Hydra (S2S) | Pulse → Electron → Lightning |
+|---|:---:|:---:|
+| Lowest glass-to-glass latency | ✅ | — |
+| Explicit transcript at every turn | — | ✅ |
+| Plug your own LLM in the middle | — | ✅ |
+| Server-side content moderation hooks | — | ✅ |
+| Single WebSocket | ✅ | — |
+
+## What you get on the wire
+
+A single voice session looks like this:
+
+```
+client                                            server
+  │  ── WebSocket connect ──▶                       │
+  │  ◀─── session.created ─────────────────────────  │
+  │  ──── session.configure ─────────────────────▶   │   one-shot: persona, voice, tools
+  │  ◀─── session.configured ──────────────────────  │   server echoes effective config
+  │  ──── input_audio_buffer.append ─────────────▶   │   mic audio (base64 PCM16, 16 kHz)
+  │  ──── input_audio_buffer.append ─────────────▶   │
+  │  ◀─── input_audio_buffer.speech_started ───────  │
+  │  ◀─── input_audio_buffer.speech_stopped ───────  │
+  │  ◀─── response.created ────────────────────────  │
+  │  ◀─── response.output_audio.delta ─────────────  │   base64 PCM16 chunks
+  │  ◀─── response.output_audio.done ──────────────  │
+  │  ◀─── response.done ───────────────────────────  │
+```
+
+Stream `input_audio_buffer.append` continuously while the mic is open — even while the model is speaking. Hydra detects turn boundaries on its own.
+
+## Quick links
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/waves/documentation/speech-to-speech-hydra/quickstart">
+    Stream a WAV through Hydra and play back the reply — under 50 lines.
+  </Card>
+  <Card title="Realtime Protocol" icon="plug" href="/waves/documentation/speech-to-speech-hydra/realtime-protocol">
+    Full event reference, session config, tool calling, interruption, errors.
+  </Card>
+  <Card title="Model Card" icon="circle-info" href="/waves/model-cards/speech-to-speech/hydra">
+    Voices, performance, pricing.
+  </Card>
+  <Card title="Reference Client" icon="github" href="https://github.com/smallest-inc/hydra_agents">
+    Production-grade Next.js client. Live wire-log, presets, tools, barge-in.
+  </Card>
+</CardGroup>
