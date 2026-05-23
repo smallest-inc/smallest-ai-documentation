@@ -31,6 +31,8 @@ WAV_IN, WAV_OUT = "input_16khz_mono.wav", "reply.wav"
 
 async def main():
     chunks, out_rate = [], 48000
+    configured = asyncio.Event()         # gate audio streaming on session.configured
+    done = asyncio.Event()               # set by reader when response.done arrives
 
     async with websockets.connect(URL, max_size=None) as ws:
         async def reader():
@@ -45,25 +47,33 @@ async def main():
                     }))
                 elif t == "session.configured":
                     out_rate = evt["session"].get("output_audio_sample_rate", 48000)
+                    configured.set()
                 elif t == "response.output_audio.delta":
                     chunks.append(base64.b64decode(evt["delta"]))
                 elif t == "response.done":
                     print(f"[{evt['response']['status']}]")
+                    done.set()
                 elif t == "error":
                     print("ERROR:", evt["error"])
 
         recv_task = asyncio.create_task(reader())
+        await configured.wait()           # don't stream audio before the server is ready
 
         with wave.open(WAV_IN, "rb") as w:
             assert w.getframerate() == 16000 and w.getnchannels() == 1
-            while pcm := w.readframes(320):           # 20 ms at 16 kHz
+            while pcm := w.readframes(320):       # 20 ms at 16 kHz
+                if done.is_set():                  # response finished — stop streaming
+                    break
                 await ws.send(json.dumps({
                     "type": "input_audio_buffer.append",
                     "audio": base64.b64encode(pcm).decode(),
                 }))
-                await asyncio.sleep(0.02)
+                await asyncio.sleep(0.02)          # pace at real-time
 
-        await asyncio.sleep(10)
+        try:
+            await asyncio.wait_for(done.wait(), timeout=15)
+        except asyncio.TimeoutError:
+            pass
         recv_task.cancel()
 
     with wave.open(WAV_OUT, "wb") as w:
@@ -106,5 +116,11 @@ ffmpeg -i any-input.wav -ac 1 -ar 16000 -sample_fmt s16 input_16khz_mono.wav
   </Card>
   <Card title="Tool calling" icon="screwdriver-wrench" href="/waves/documentation/speech-to-speech-hydra/tool-calling">
     Declare tools, run them locally, narrate the result.
+  </Card>
+  <Card title="Model card" icon="id-card" href="/waves/model-cards/speech-to-speech/hydra">
+    Capabilities, voices, performance, pricing.
+  </Card>
+  <Card title="Reference client" icon="github" href="https://github.com/smallest-inc/hydra_agents">
+    Full Next.js client with live wire-log, multi-agent presets, tool execution.
   </Card>
 </CardGroup>

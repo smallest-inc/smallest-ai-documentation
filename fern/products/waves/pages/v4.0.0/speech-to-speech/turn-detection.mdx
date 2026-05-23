@@ -77,13 +77,18 @@ ws.onmessage = (ev) => {
 
 If you've kept references to `AudioBufferSourceNode`s, also call `stop()` on each one — `playCursor` only controls *future* schedules, it doesn't cancel buffers already started.
 
-In Python with `sounddevice`, drain your playback queue on `response.created`:
+In Python with `sounddevice`, drain your playback queue on `response.created` — shown here as the relevant branch of the event handler:
 
 ```python
-elif t == "response.created":
-    while not play_queue.empty():
-        try: play_queue.get_nowait()
-        except asyncio.QueueEmpty: break
+async for raw in ws:
+    evt = json.loads(raw)
+    if evt["type"] == "response.created":
+        # Fresh response — drop anything still scheduled in the playback queue.
+        while not play_queue.empty():
+            try:
+                play_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
 ```
 
 ## Programmatic cancellation
