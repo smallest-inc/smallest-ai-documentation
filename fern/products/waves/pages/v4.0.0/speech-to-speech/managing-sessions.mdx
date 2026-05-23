@@ -98,6 +98,12 @@ Setting `generate_initial_response: true` on `session.configure` makes Hydra del
 
 Immediately after `session.configured`, the standard `response.created` → audio deltas → `response.done` sequence fires, with **no preceding `input_audio_buffer.speech_started`**.
 
+## Conversation history
+
+Hydra maintains a **rolling window of ~40 turns** per session; older turns are evicted automatically. The model uses this history to keep multi-turn dialogue coherent — you don't need to replay prior turns on each request, and you don't need to truncate them yourself.
+
+Long-running sessions that need more than ~40 turns should plan to open a fresh connection at a natural break (e.g. after a long pause or topic change) and re-seed any required context in the new session's `instructions`.
+
 ## Conversation items
 
 Most events carry a `ConversationItem`. The shape is intentionally flat — every field is optional, presence is dictated by `type`.

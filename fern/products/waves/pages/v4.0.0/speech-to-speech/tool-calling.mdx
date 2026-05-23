@@ -131,6 +131,10 @@ If you declare tools but don't post `function_call_output` + `response.create` w
 
 Common causes: a long-running tool with no async dispatch, network call to your own backend that hangs, or forgetting to send `response.create` after the output.
 
+<Tip>
+**Long-running tools.** Tools that take more than a few seconds should return a synchronous "working on it" output immediately and emit real results as a follow-up message via a fresh `conversation.item.create`. This keeps Hydra responsive — the assistant acknowledges the request out loud while the actual work happens, instead of waiting silently and risking a `tool_response_timeout`.
+</Tip>
+
 ## Common gotchas
 
 - **One `response.create` per turn, not per tool.** Multi-tool turns require debounce. The model decides when to call multiple tools — your client decides when to request narration.

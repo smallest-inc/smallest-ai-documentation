@@ -66,28 +66,61 @@ Hydra is Smallest AI's in-house **speech-to-speech model**. A single WebSocket c
 **Read `output_audio_sample_rate` from `session.configured`** rather than hardcoding 48000. The server may negotiate other rates in the future.
 </Note>
 
+## Languages
+
+Hydra currently supports **English only**. Additional languages are on the roadmap.
+
+| Language | ISO code | Status |
+|---|---|---|
+| English | `en` | ✅ Production |
+
 ## Voices
+
+Six voice IDs are accepted on `session.configure.session.voice` and frozen at handshake.
 
 | Voice ID | Notes |
 |---|---|
-| `leda` | Warm, mid-range. Default for general assistants. |
-| `aoede` | Bright, expressive. Good for upbeat use cases. |
-| `autonoe` | Calm, lower register. |
-| `charon` | Authoritative, lower register. |
-| `fenrir` | Energetic, mid-to-low. |
-| `zephyr` | Light, airy mid-range. |
+| `leda` | Default (server-side default if `voice` is omitted). |
+| `aoede` | — |
+| `autonoe` | — |
+| `charon` | — |
+| `fenrir` | — |
+| `zephyr` | — |
 
-## Performance
+<Info>
+The voice catalog is in preview and voice IDs may be renamed before general availability. Watch the [changelog](/waves/changelog) for a migration notice ahead of any rename.
+</Info>
+
+## Performance & benchmarks
+
+Hydra is benchmarked against eight other production-grade voice / realtime models — Ultravox v0.7, OpenAI gpt-realtime (1.0 / 1.5 / 2-low), Gemini Live, Gemini 3.1 Flash Live Preview, Grok Voice Think Fast 1.0, and Amazon Nova-2-Sonic.
+
+### AIEWF S2S — 10 runs × 30 turns, `aiwf_medium_context`
+
+| Model | Pass rate | Non-tool V2V median | Non-tool V2V max | Tool V2V mean |
+|---|---|---|---|---|
+| ultravox-v0.7 | 97.7 % | 864 ms | 1888 ms | 2406 ms |
+| gpt-realtime-2 (low) | 96.0 % | 1728 ms | 4032 ms | 2005 ms |
+| **Hydra** | **95.9 %** | **864 ms** | **1984 ms** | **1624 ms** |
+| grok-voice-think-fast-1.0 | 95.3 % | 2336 ms | 4800 ms | 2753 ms |
+| gpt-realtime-1.5 | 93.3 % | 1152 ms | 2304 ms | 2251 ms |
+| gemini-3.1-flash-live-preview | 91.7 % | 1632 ms | 5664 ms | 3172 ms |
+| gpt-realtime | 86.7 % | 1536 ms | 4672 ms | 2199 ms |
+| gemini-live | 86.0 % | 2624 ms | 30000 ms | 4082 ms |
+| nova-2-sonic | — | 1280 ms | 3232 ms | 1689 ms |
+
+Hydra is **#3 of 9** on pass rate (within ~2 pp of the leader), **tied-fastest** on non-tool voice-to-voice median, and **fastest of 9** on tool voice-to-voice mean. Latency numbers are from `transcript.jsonl` across all 10 runs (n = 224 non-tool turns, n = 64 tool turns).
+
+<Note>
+Hydra is evaluated on voice-agent axes — voice-to-voice latency, turn-taking accuracy, barge-in handling, and tool-call reliability under realistic conditions. Generic LLM benchmarks (MMLU, IFEval) target a different objective and aren't the right yardstick for a realtime voice model.
+</Note>
+
+### Operational metrics
 
 | Metric | Value |
 |---|---|
-| **Glass-to-glass latency** | < 1 s typical from end-of-user-speech to first audio chunk |
-| **Server idle timeout** | ~30 s with no traffic from either side |
-| **Quality tier** | Competitive with leading production speech-to-speech models on internal voice-agent evaluations |
-
-<Note>
-Hydra is benchmarked internally on voice-agent axes — turn-taking accuracy, barge-in latency, prosody, and tool-call reliability under real phone conditions. Generic LLM benchmarks (MMLU, IFEval) target a different objective and aren't the right yardstick for a real-time voice model.
-</Note>
+| **Idle timeout** | ~30 s with no traffic from either side. Keep streaming audio (silence frames are fine) to hold the connection. |
+| **Conversation history** | Rolling window of ~40 turns; older turns are evicted automatically. |
 
 ## Capacity & rate limits
 
@@ -100,11 +133,21 @@ For higher limits, contact your account manager.
 
 Contact your Smallest AI account manager for current pricing. Hydra is billed by session minute; `usage` per turn is reported on `response.done` when available.
 
-## When to use Hydra
+## Use cases
 
-- **Phone agents** — lowest end-to-end latency, no glue between STT/LLM/TTS.
-- **Kiosks, in-car, live tutoring** — anywhere a model has to start talking before the user finishes thinking.
-- **Voice-first consumer apps** — companions, audio diaries, hands-free assistants.
+### Direct use
+
+- **Realtime voice assistants** — companion apps, concierge bots, in-app tutors.
+- **Phone agents** — restaurant reservations, banking concierges, customer support.
+- **Voice copilots embedded in web and mobile apps.**
+- **Accessibility** — voice-first interfaces for visually-impaired users.
+- **Voice-controlled IoT and games** — kiosks, in-car assistants, gaming companions.
+
+### Downstream use
+
+- **Conversational analytics** over recorded phone-call audio (transcribe the captured audio with [Pulse STT](/waves/documentation/speech-to-text-pulse/overview) afterwards).
+- **Multi-agent voice systems** where Hydra is one specialised speaker.
+- **Hybrid voice + text agents** where a text fallback is needed for compliance.
 
 ## When to use the three-model stack instead
 
@@ -120,6 +163,14 @@ Pulse → Electron → Lightning v3.1 is the right pick when you need **explicit
 | Close codes | `1000` normal, `1013` server full — auth failures are HTTP 401 during the WS handshake (no close code) |
 
 See the [documentation hub](/waves/documentation/speech-to-speech-hydra/overview) for the full event catalog, session config, tool calling, interruption handling, and errors.
+
+## Known limitations
+
+- **English only.** Additional languages are on the roadmap but not currently supported.
+- **No transcripts on the wire.** Applications that need synchronous text alongside audio must transcribe client-side or via the Waves [Pulse STT API](/waves/documentation/speech-to-text-pulse/overview).
+- **Session-scoped voice + persona.** Voice, persona, and audio formats are frozen at handshake; changes require a fresh connection. Only `tools` can be patched mid-session via `session.update`.
+- **~30 s idle timeout.** Long pauses on the client side must keep a heartbeat of audio frames flowing — see [WebSocket connection](/waves/documentation/speech-to-speech-hydra/websocket-connection#idle-timeout).
+- **~40-turn conversation window.** Older turns are evicted; for very long sessions, plan to reseat context in a fresh session at natural breaks.
 
 ## Safety & responsible use
 

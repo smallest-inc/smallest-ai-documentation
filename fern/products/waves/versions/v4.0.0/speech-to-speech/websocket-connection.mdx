@@ -96,7 +96,9 @@ The server now waits for one `session.configure` from you before accepting audio
 
 If neither side sends a frame for ~**30 seconds**, the server closes with code `1000` (normal close). Reconnect to resume.
 
-To keep a long-lived session open during a pause, keep sending `input_audio_buffer.append` frames with silence — that counts as traffic.
+<Tip>
+**Heartbeat with silence frames.** If your client has a UX pause where the user might think for a while (a long deliberation prompt, a UI confirmation step), keep streaming `input_audio_buffer.append` with whatever the mic is producing — silence still counts as traffic and keeps the session alive. Stopping the mic stream and resuming it later is exactly the case the 30 s timeout will catch.
+</Tip>
 
 ## Close codes
 
