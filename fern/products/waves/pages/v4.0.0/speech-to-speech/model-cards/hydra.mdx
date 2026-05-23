@@ -87,29 +87,20 @@ Six voice IDs are accepted on `session.configure.session.voice` and frozen at ha
 | `fenrir` | — |
 | `zephyr` | — |
 
-<Info>
-The voice catalog is in preview and voice IDs may be renamed before general availability. Watch the [changelog](/waves/changelog) for a migration notice ahead of any rename.
-</Info>
-
 ## Performance & benchmarks
 
-Hydra is benchmarked against eight other production-grade voice / realtime models — Ultravox v0.7, OpenAI gpt-realtime (1.0 / 1.5 / 2-low), Gemini Live, Gemini 3.1 Flash Live Preview, Grok Voice Think Fast 1.0, and Amazon Nova-2-Sonic.
+Hydra is benchmarked head-to-head against a set of production-grade realtime voice / speech-to-speech models.
 
 ### AIEWF S2S — 10 runs × 30 turns, `aiwf_medium_context`
 
-| Model | Pass rate | Non-tool V2V median | Non-tool V2V max | Tool V2V mean |
-|---|---|---|---|---|
-| ultravox-v0.7 | 97.7 % | 864 ms | 1888 ms | 2406 ms |
-| gpt-realtime-2 (low) | 96.0 % | 1728 ms | 4032 ms | 2005 ms |
-| **Hydra** | **95.9 %** | **864 ms** | **1984 ms** | **1624 ms** |
-| grok-voice-think-fast-1.0 | 95.3 % | 2336 ms | 4800 ms | 2753 ms |
-| gpt-realtime-1.5 | 93.3 % | 1152 ms | 2304 ms | 2251 ms |
-| gemini-3.1-flash-live-preview | 91.7 % | 1632 ms | 5664 ms | 3172 ms |
-| gpt-realtime | 86.7 % | 1536 ms | 4672 ms | 2199 ms |
-| gemini-live | 86.0 % | 2624 ms | 30000 ms | 4082 ms |
-| nova-2-sonic | — | 1280 ms | 3232 ms | 1689 ms |
+| Metric | Hydra |
+|---|---|
+| **Pass rate** | **95.9 %** *(top 3 of 9 in the comparison set, within ~2 pp of the leader)* |
+| **Non-tool voice-to-voice median latency** | **864 ms** *(tied-fastest in the comparison set)* |
+| **Non-tool voice-to-voice max latency** | 1984 ms |
+| **Tool voice-to-voice mean latency** | **1624 ms** *(fastest in the comparison set)* |
 
-Hydra is **#3 of 9** on pass rate (within ~2 pp of the leader), **tied-fastest** on non-tool voice-to-voice median, and **fastest of 9** on tool voice-to-voice mean. Latency numbers are from `transcript.jsonl` across all 10 runs (n = 224 non-tool turns, n = 64 tool turns).
+Latency numbers come from `transcript.jsonl` across all 10 runs (n = 224 non-tool turns, n = 64 tool turns). Pass rate is the fraction of turns that completed the expected interaction.
 
 <Note>
 Hydra is evaluated on voice-agent axes — voice-to-voice latency, turn-taking accuracy, barge-in handling, and tool-call reliability under realistic conditions. Generic LLM benchmarks (MMLU, IFEval) target a different objective and aren't the right yardstick for a realtime voice model.
