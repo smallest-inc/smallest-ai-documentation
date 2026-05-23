@@ -89,18 +89,26 @@ Six voice IDs are accepted on `session.configure.session.voice` and frozen at ha
 
 ## Performance & benchmarks
 
-Hydra is benchmarked head-to-head against a set of production-grade realtime voice / speech-to-speech models.
+Hydra is benchmarked head-to-head against production-grade realtime voice / speech-to-speech models.
 
 ### AIEWF S2S — 10 runs × 30 turns, `aiwf_medium_context`
 
-| Metric | Hydra |
-|---|---|
-| **Pass rate** | **95.9 %** *(top 3 of 9 in the comparison set, within ~2 pp of the leader)* |
-| **Non-tool voice-to-voice median latency** | **864 ms** *(tied-fastest in the comparison set)* |
-| **Non-tool voice-to-voice max latency** | 1984 ms |
-| **Tool voice-to-voice mean latency** | **1624 ms** *(fastest in the comparison set)* |
+| Model | Pass rate | Non-tool V2V median | Non-tool V2V max | Tool V2V mean |
+|---|---|---|---|---|
+| ultravox-v0.7 | 97.7 % | 864 ms | 1888 ms | 2406 ms |
+| gpt-realtime-2 (low) | 96.0 % | 1728 ms | 4032 ms | 2005 ms |
+| **Hydra** | **95.9 %** | **864 ms** | **1984 ms** | **1624 ms** |
+| grok-voice-think-fast-1.0 | 95.3 % | 2336 ms | 4800 ms | 2753 ms |
+| gpt-realtime-1.5 | 93.3 % | 1152 ms | 2304 ms | 2251 ms |
+| gpt-realtime | 86.7 % | 1536 ms | 4672 ms | 2199 ms |
+| nova-2-sonic | — | 1280 ms | 3232 ms | 1689 ms |
 
-Latency numbers come from `transcript.jsonl` across all 10 runs (n = 224 non-tool turns, n = 64 tool turns). Pass rate is the fraction of turns that completed the expected interaction.
+Reading the table:
+- **Tool V2V mean latency: Hydra is the fastest in the set** (1624 ms — beats nova-2-sonic at 1689 ms and gpt-realtime-2 low at 2005 ms).
+- **Non-tool V2V median latency: tied-fastest** (864 ms with ultravox).
+- **Pass rate: top tier** (95.9 %, within ~2 pp of the leader).
+
+Latency numbers are computed from `transcript.jsonl` across all 10 runs (n = 224 non-tool turns, n = 64 tool turns). Pass rate is the fraction of turns that completed the expected interaction.
 
 <Note>
 Hydra is evaluated on voice-agent axes — voice-to-voice latency, turn-taking accuracy, barge-in handling, and tool-call reliability under realistic conditions. Generic LLM benchmarks (MMLU, IFEval) target a different objective and aren't the right yardstick for a realtime voice model.
