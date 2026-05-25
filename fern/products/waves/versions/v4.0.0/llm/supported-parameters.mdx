@@ -20,7 +20,7 @@ Electron implements the OpenAI Chat Completions wire format. Most request fields
 | `stop` | String or array of strings (up to 4). |
 | `seed` | Best-effort determinism. |
 | `response_format` | `{"type":"text"}` (default) or `{"type":"json_object"}`. |
-| `tools` | Standard OpenAI tools array. **Max 64 entries**. See [Tool Calling](/waves/documentation/llm-electron/tool-calling). |
+| `tools` | Standard OpenAI tools array. **Max 64 entries**. See [Tool Calling](/waves/documentation/llm-electron/tool-function-calling). |
 | `tool_choice` | `"auto"`, `"required"`, `"none"`, or `{"type":"function","function":{"name":"…"}}`. |
 | `logit_bias` | Per-token-id biases (`{"<token_id>": <bias>}`). |
 | `logprobs` | Boolean. |
@@ -61,7 +61,7 @@ Beyond the standard OpenAI response shape, Electron returns these additional fie
 | `usage.prompt_tokens_details.cached_tokens` | Subset of `prompt_tokens` served from prefix cache. Billed at the discounted rate. See [Prefix Caching](/waves/documentation/llm-electron/prefix-caching). |
 | HTTP header `X-Request-Id` | Unique request identifier. Echo this in support tickets so we can find the trace. |
 
-For tool calls, Electron's assistant message also typically includes a short filler phrase in `content` alongside `tool_calls` — see [Tool Calling: the filler-phrase pattern](/waves/documentation/llm-electron/tool-calling#response-shape-the-filler-phrase-pattern).
+For tool calls, Electron's assistant message also typically includes a short filler phrase in `content` alongside `tool_calls` — see [Tool Calling: the filler-phrase pattern](/waves/documentation/llm-electron/tool-function-calling#response-shape-the-filler-phrase-pattern).
 
 ## Differences from OpenAI
 
@@ -72,7 +72,7 @@ For tool calls, Electron's assistant message also typically includes a short fil
 | Auth header | `Authorization: Bearer sk-…` | `Authorization: Bearer sk_…` (Smallest API key) |
 | Multi-completion `n` | Supported (up to 128) | Rejected — `n=1` only |
 | `prompt_logprobs` | Supported on some models | Rejected |
-| `content` when tool calls present | `null` | Often a natural-language filler (see [Tool Calling](/waves/documentation/llm-electron/tool-calling)) |
+| `content` when tool calls present | `null` | Often a natural-language filler (see [Tool Calling](/waves/documentation/llm-electron/tool-function-calling)) |
 | Pricing | Per model, varies | Flat: $0.40 / $0.10 / $1.60 per 1M (input / cached input / output) |
 
-Everything else — request shape, response shape, streaming format, error envelope — matches OpenAI's. See [Migrate from OpenAI](/waves/documentation/llm-electron/migrate-from-openai) for the side-by-side code diff.
+Everything else — request shape, response shape, streaming format, error envelope — matches OpenAI's. See [Migrate from OpenAI](/waves/documentation/llm-electron/migrate-from-open-ai) for the side-by-side code diff.
