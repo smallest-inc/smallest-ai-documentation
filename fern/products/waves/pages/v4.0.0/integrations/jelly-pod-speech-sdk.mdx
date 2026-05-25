@@ -1,0 +1,157 @@
+---
+title: "JellyPod Speech SDK"
+description: "Use Smallest AI TTS in JavaScript and TypeScript apps with the JellyPod Speech SDK."
+icon: "waveform-lines"
+---
+
+Use Smallest AI's TTS models in any JavaScript or TypeScript application — Node.js, edge runtimes, and browsers — through the [`@speech-sdk/core`](https://www.npmjs.com/package/@speech-sdk/core) package.
+
+## Installation
+
+```bash
+npm install @speech-sdk/core
+```
+
+## Setup
+
+Get your API key from [waves.smallest.ai](https://waves.smallest.ai) and set it as an environment variable:
+
+```bash
+export SMALLEST_API_KEY="your_key_here"
+```
+
+## Quick Start
+
+```typescript
+import { generateSpeech } from "@speech-sdk/core";
+import { createSmallestAI } from "@speech-sdk/core/providers";
+
+const smallestAI = createSmallestAI();
+
+const result = await generateSpeech({
+  model: smallestAI("lightning-v3.1"),
+  text: "Hello from Smallest AI!",
+  voice: "magnus",
+});
+
+// result.audio.uint8Array — raw audio bytes
+// result.audio.base64    — base64 encoded audio
+// result.audio.mediaType — e.g. "audio/wav"
+// result.metadata.latencyMs        — request latency
+// result.metadata.audioDurationMs  — audio length
+```
+
+## Models
+
+### lightning-v3.1 (Standard Pool)
+
+44 kHz, 15 languages, 217 voices. Supports voice cloning from 5–15 seconds of audio.
+
+```typescript
+const result = await generateSpeech({
+  model: smallestAI("lightning-v3.1"),
+  text: "Hello!",
+  voice: "magnus",
+});
+```
+
+Default voice: `magnus`. Supported languages: `en`, `hi`, `es`, `ta`, `kn`, `te`, `ml`, `mr`, `gu`, `fr`, `it`, `nl`, `sv`, `pt`, `de`. Pass `language: "auto"` (SDK default) for automatic detection.
+
+### lightning_v3.1_pro (Premium Pool)
+
+44 kHz, English + Hindi, curated voice catalog with American, British, and Indian accents. Indian voices code-switch between English and Hindi; British and American voices are English-only.
+
+```typescript
+const result = await generateSpeech({
+  model: smallestAI("lightning_v3.1_pro"),
+  text: "Hello from Pro!",
+  voice: "meher",
+});
+```
+
+Default voice: `meher`.
+
+**Pro voice catalog:**
+
+| Accent | Gender | Voices |
+|--------|--------|--------|
+| Indian | Female | `rhea`, `zariya`, `kareena`, `mishka`, `inaaya`, `saira`, `meher`, `aarini` |
+| Indian | Male | `aviraj`, `vyom`, `zoravar`, `reyansh`, `ahan` |
+| British | Female | `cressida`, `elowen`, `ottilie`, `seraphina`, `tabitha`, `arabella` |
+| British | Male | `benedict`, `cormac`, `everett`, `finley`, `rupert`, `winston`, `caspian` |
+| American | Female | `willow`, `autumn`, `skylar`, `savannah`, `kennedy`, `reagan`, `sierra` |
+| American | Male | `maverick`, `brooks`, `hunter`, `colton`, `wesley`, `asher` |
+
+## Provider Options
+
+Customize the request using `providerOptions`:
+
+```typescript
+const result = await generateSpeech({
+  model: smallestAI("lightning-v3.1"),
+  text: "Hello!",
+  voice: "magnus",
+  providerOptions: {
+    output_format: "wav",   // wav (default) | mp3 | pcm | ulaw | alaw
+    sample_rate: 24_000,    // 8000 | 16000 | 24000 | 44100
+    speed: 1.0,             // 0.5–2.0
+    language: "auto",       // auto (default) | en | hi | es | ta | ...
+  },
+});
+```
+
+## Output Formats
+
+The `output` option provides a provider-agnostic way to request a format:
+
+```typescript
+const result = await generateSpeech({
+  model: smallestAI("lightning-v3.1"),
+  text: "Hello!",
+  output: { format: "mp3" },
+});
+```
+
+Natively supported formats for both models: `wav`, `pcm`, `mp3`. The SDK forwards the chosen format to the provider as `output_format`.
+
+## Switching Providers
+
+The `generateSpeech` interface is identical across all providers — swap the model without changing any other code:
+
+```typescript
+import { createOpenAI } from "@speech-sdk/core/providers";
+
+// Switch to OpenAI TTS
+const openai = createOpenAI();
+const result = await generateSpeech({
+  model: openai("tts-1"),
+  text: "Hello!",
+  voice: "alloy",
+});
+```
+
+## Voice Library
+
+Fetch the full standard voice list programmatically:
+
+```bash
+curl -s "https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY"
+```
+
+## Links
+
+<CardGroup cols={2}>
+  <Card title="npm Package" icon="npm" href="https://www.npmjs.com/package/@speech-sdk/core">
+    Install from npm
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/Jellypod-Inc/speech-sdk">
+    Source code and examples
+  </Card>
+  <Card title="Smallest AI API" icon="waveform-lines" href="https://waves.smallest.ai">
+    Get your API key
+  </Card>
+  <Card title="Changelog" icon="list" href="https://github.com/Jellypod-Inc/speech-sdk/releases">
+    Release history
+  </Card>
+</CardGroup>
