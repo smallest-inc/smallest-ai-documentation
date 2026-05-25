@@ -51,8 +51,17 @@ jobs:
   classify-and-notify:
     name: Classify upstream PR for docs impact
     runs-on: ubuntu-latest
+    # The auto-PR step (below) needs to create branches and open PRs on
+    # this repo when the upstream PR included a filled-in changelog template.
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Need full history so the auto-PR step can branch off
+          # `origin/main` cleanly with a deterministic commit base.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -197,3 +206,25 @@ jobs:
           webhook: ${{ secrets.SLACK_DM_WEBHOOK_URL || secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload-file-path: /tmp/slack-payload.json
+
+      - name: Open docs PR with auto-generated changelog entry
+        # Fires only when the upstream PR shipped with a structured
+        # `## 📢 Changelog (customer-facing)` section. The classifier emits
+        # that under `changelog.kind=structured` in classification.json;
+        # if missing (legacy PR, or author didn't fill it in), we stop
+        # at the Slack ping above and let a human open the docs PR.
+        if: steps.classify.outputs.verdict == 'DOCS_NEEDED'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          kind=$(jq -r '.changelog.kind // ""' /tmp/classification.json)
+          if [ "$kind" != "structured" ]; then
+            echo "No structured changelog template — skipping auto-PR. (kind=$kind)"
+            exit 0
+          fi
+          python3 scripts/probes/open_docs_changelog_pr.py \
+            --classification-json /tmp/classification.json \
+            --repo       "${{ steps.ctx.outputs.repo }}" \
+            --pr-url     "${{ steps.ctx.outputs.pr_url }}" \
+            --pr-title   "${{ steps.ctx.outputs.pr_title }}" \
+            --pr-number  "${{ steps.ctx.outputs.pr_number }}"
