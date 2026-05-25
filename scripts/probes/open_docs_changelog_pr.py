@@ -101,28 +101,45 @@ def render_mdx(fields: dict, repo: str, pr_url: str) -> str:
     return "\n".join(parts)
 
 
-def target_paths(repo: str, surface: str | None, slug: str) -> list[Path]:
-    """Compute the file path(s) the entry should land at. Multiple for waves (mirror)."""
+def target_paths(repo: str, surface: str | None, slug: str) -> tuple[str | None, list[Path]]:
+    """Compute the file path(s) the entry should land at.
+
+    Returns:
+        (effective_surface, paths)
+        - effective_surface: the surface key actually used after any fallback.
+          None for atoms (no surface concept). Callers should display this
+          value (not the input `surface`) so the PR body matches where the
+          file actually lands.
+        - paths: one entry for atoms, two for waves (pages/ + versions/ mirror).
+    """
     today = dt.date.today().isoformat()
     filename = f"{today}-{slug}.mdx"
 
     if repo.endswith("/atoms-platform"):
-        return [ATOMS_DIR / filename]
+        return None, [ATOMS_DIR / filename]
 
-    if repo.endswith("/waves-platform"):
-        if surface not in WAVES_SURFACES:
-            # Soft fallback so a new model shipping before the template
-            # picker is updated still lands a usable entry. Reviewer can
-            # move the file post-merge if a more specific surface exists.
+    # waves-platform AND phonon-uv (the Hydra source repo) both land
+    # entries in the waves doc tree. phonon-uv always routes to
+    # surface=hydra; for waves-platform we trust the author's surface
+    # picker, with a soft fallback when it's empty / unrecognised so the
+    # workflow keeps moving instead of failing the job.
+    if repo.endswith("/waves-platform") or repo.endswith("/phonon-uv"):
+        if repo.endswith("/phonon-uv"):
+            # phonon-uv only ships Hydra changes; ignore any surface from
+            # the PR template (the template default is `hydra` anyway).
+            effective = "hydra"
+        elif surface in WAVES_SURFACES:
+            effective = surface
+        else:
             print(
                 f"WARN: waves changelog surface {surface!r} not in known set "
                 f"{sorted(WAVES_SURFACES)} — falling back to {WAVES_FALLBACK_SURFACE!r}.",
                 file=sys.stderr,
             )
-            surface = WAVES_FALLBACK_SURFACE
-        return [
-            WAVES_PAGES_BASE / surface / filename,
-            WAVES_VERSIONS_BASE / surface / filename,
+            effective = WAVES_FALLBACK_SURFACE
+        return effective, [
+            WAVES_PAGES_BASE / effective / filename,
+            WAVES_VERSIONS_BASE / effective / filename,
         ]
 
     print(f"ERROR: unsupported repo for changelog auto-PR: {repo}", file=sys.stderr)
@@ -174,7 +191,7 @@ def main() -> int:
 
     surface = fields.get("changelog_surface")
     slug = slugify(title)
-    paths = target_paths(args.repo, surface, slug)
+    effective_surface, paths = target_paths(args.repo, surface, slug)
 
     rendered = render_mdx(fields, args.repo, args.pr_url)
     for path in paths:
@@ -203,7 +220,15 @@ def main() -> int:
         f"## Generated entry\n\n"
         f"- Title: **{title}**\n"
         + (f"- Category: {fields.get('category')}\n" if fields.get("category") else "")
-        + (f"- Surface: `{surface}`\n" if surface else "")
+        + (
+            # Show the surface the file actually landed in. When the input
+            # surface was unrecognised and we fell back, also annotate that
+            # so the reviewer knows to (optionally) move the file post-merge.
+            f"- Surface: `{effective_surface}`"
+            + (f" *(fell back from `{surface}`)*" if surface and surface != effective_surface else "")
+            + "\n"
+            if effective_surface else ""
+        )
         + (f"- Ships: {fields.get('ships')}\n" if fields.get("ships") else "")
         + (f"- Migration: {fields.get('migration')}\n" if fields.get("migration") else "")
         + (f"- Byline: {fields.get('byline')}\n" if fields.get("byline") else "")
