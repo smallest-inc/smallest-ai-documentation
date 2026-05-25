@@ -13,20 +13,15 @@ sequenceDiagram
     autonumber
     participant C as Client
     participant H as Hydra
-    Note over C,H: 1. Client opens WebSocket
-    C->>H: connect
-    Note over C,H: 2. Server emits session.created<br/>(server-minted session_id)
+    C->>H: WebSocket connect
     H-->>C: session.created
-    Note over C,H: 3. Client sends session.configure<br/>(one-shot: persona, voice, tools)
-    C->>H: session.configure
-    Note over C,H: 4. Server echoes effective config<br/>(including audio sample rates)
-    H-->>C: session.configured
-    Note over C,H: 5. Client streams audio continuously
-    loop
-        C->>H: input_audio_buffer.append
+    C->>H: session.configure (one-shot: persona, voice, tools)
+    H-->>C: session.configured (effective config echo)
+    loop while session is open
+        C->>H: input_audio_buffer.append (continuous)
+        H-->>C: speech / conversation / response events
     end
-    Note over C,H: Server emits speech, conversation,<br/>and response events as the turn progresses
-    Note over C,H: 6. Either side closes the WebSocket → session ends
+    Note right of C: Either side closes the WebSocket → session ends
 ```
 
 The handshake is **one-shot**. After `session.created`, the server waits for exactly one `session.configure` before accepting audio. Subsequent `session.configure` frames are ignored — use `session.update` for mid-session changes.
