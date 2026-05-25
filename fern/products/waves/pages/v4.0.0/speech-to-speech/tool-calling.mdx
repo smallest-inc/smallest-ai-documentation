@@ -8,22 +8,29 @@ Hydra is a voice model — it doesn't execute tools. The client declares tool sc
 
 ## Event flow
 
-```
-client → session.configure                       (tools: [...])
-   user speaks: "what's the weather in Paris?"
-server ← response.created
-server ← conversation.item.added                 (role=assistant, in_progress)
-server ← response.function_call_arguments.delta  { call_id, name, delta: "{\"cit"  }
-server ← response.function_call_arguments.delta  { call_id, delta: "y\":\"Paris\"}" }
-server ← response.function_call_arguments.done   { call_id, name, arguments }
-
-client → conversation.item.create                (function_call_output, call_id, output)
-client → response.create                         (request narration)
-
-server ← response.created                        (narration response)
-server ← response.output_audio.delta             (the bot narrates the result)
-server ← response.output_audio.done
-server ← response.done
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant H as Hydra
+    C->>H: session.configure<br/>(tools: [get_weather, ...])
+    H-->>C: session.configured
+    Note over C: user speaks: "what's the weather in Paris?"
+    H-->>C: response.created
+    H-->>C: conversation.item.added<br/>(role=assistant, in_progress)
+    loop streaming arguments
+        H-->>C: response.function_call_arguments.delta<br/>(call_id, name, JSON fragment)
+    end
+    H-->>C: response.function_call_arguments.done<br/>(call_id, name, full arguments JSON)
+    Note over C: client runs get_weather(city="Paris")
+    C->>H: conversation.item.create<br/>(function_call_output, call_id, output)
+    C->>H: response.create
+    H-->>C: response.created (narration)
+    loop streamed reply
+        H-->>C: response.output_audio.delta<br/>(bot narrates the result)
+    end
+    H-->>C: response.output_audio.done
+    H-->>C: response.done
 ```
 
 ## Declare tools

@@ -36,16 +36,26 @@ If you've used the OpenAI Realtime API, Hydra fills the same role on the Smalles
 
 ## What's on the wire
 
-```
-client                                            server
-  │  ── WebSocket connect ──▶                       │
-  │  ◀─── session.created ─────────────────────────  │
-  │  ──── session.configure ─────────────────────▶   │   one-shot
-  │  ◀─── session.configured ──────────────────────  │   echoes effective config
-  │  ──── input_audio_buffer.append ─────────────▶   │   mic audio (16 kHz PCM16)
-  │  ◀─── input_audio_buffer.speech_started ───────  │   server-side VAD
-  │  ◀─── response.output_audio.delta ─────────────  │   base64 PCM16 chunks
-  │  ◀─── response.done ───────────────────────────  │
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant H as Hydra
+    C->>H: WebSocket connect
+    H-->>C: session.created
+    C->>H: session.configure<br/>(persona, voice, tools)
+    H-->>C: session.configured<br/>(effective config echo)
+    loop continuous mic stream
+        C->>H: input_audio_buffer.append<br/>(base64 PCM16, 16 kHz)
+    end
+    H-->>C: input_audio_buffer.speech_started
+    H-->>C: input_audio_buffer.speech_stopped
+    H-->>C: response.created
+    loop streamed reply
+        H-->>C: response.output_audio.delta<br/>(base64 PCM16)
+    end
+    H-->>C: response.output_audio.done
+    H-->>C: response.done
 ```
 
 Three things to know up front:
