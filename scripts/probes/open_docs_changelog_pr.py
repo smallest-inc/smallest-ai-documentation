@@ -5,12 +5,15 @@ emits classification.json with verdict=DOCS_NEEDED and a structured `changelog` 
 
 Routing (where the entry lands):
 
-  Upstream repo                Surface picker              Target directory
+  Upstream repo                Surface picker     Target directory
   ────────────────────────────────────────────────────────────────────────────
-  smallest-inc/atoms-platform  (n/a)                       fern/products/atoms/pages/intro/reference/changelog-entries/
-  smallest-inc/waves-platform  general                     fern/products/waves/pages/v4.0.0/changelog-entries/general/
-  smallest-inc/waves-platform  lightning-v3.1              fern/products/waves/pages/v4.0.0/changelog-entries/lightning-v3.1/
-  smallest-inc/waves-platform  pulse-stt                   fern/products/waves/pages/v4.0.0/changelog-entries/pulse-stt/
+  smallest-inc/atoms-platform  (n/a)              fern/products/atoms/pages/intro/reference/changelog-entries/
+  smallest-inc/waves-platform  general            fern/products/waves/pages/v4.0.0/changelog-entries/general/
+  smallest-inc/waves-platform  lightning-v3.1     fern/products/waves/pages/v4.0.0/changelog-entries/lightning-v3.1/
+  smallest-inc/waves-platform  pulse-stt          fern/products/waves/pages/v4.0.0/changelog-entries/pulse-stt/
+  smallest-inc/waves-platform  electron           fern/products/waves/pages/v4.0.0/changelog-entries/electron/
+  smallest-inc/waves-platform  hydra              fern/products/waves/pages/v4.0.0/changelog-entries/hydra/
+  (waves PR with unrecognised / empty surface)    → falls back to general/ with a warning
 
 For waves entries we also mirror to fern/products/waves/versions/v4.0.0/changelog-entries/<surface>/
 so the version-pin and the live-tracking copies stay in sync (the v4_mirror_check.py
@@ -38,7 +41,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ATOMS_DIR = REPO_ROOT / "fern/products/atoms/pages/intro/reference/changelog-entries"
 WAVES_PAGES_BASE = REPO_ROOT / "fern/products/waves/pages/v4.0.0/changelog-entries"
 WAVES_VERSIONS_BASE = REPO_ROOT / "fern/products/waves/versions/v4.0.0/changelog-entries"
-WAVES_SURFACES = {"general", "lightning-v3.1", "pulse-stt"}
+# Surfaces accepted from the waves-platform `Changelog surface` picker.
+# Mirror this set when the source-repo PR template adds new options.
+WAVES_SURFACES = {"general", "lightning-v3.1", "pulse-stt", "electron", "hydra"}
+WAVES_FALLBACK_SURFACE = "general"  # used when the picker is empty / unrecognised
 
 
 def slugify(text: str, max_len: int = 60) -> str:
@@ -105,8 +111,15 @@ def target_paths(repo: str, surface: str | None, slug: str) -> list[Path]:
 
     if repo.endswith("/waves-platform"):
         if surface not in WAVES_SURFACES:
-            print(f"ERROR: waves changelog surface {surface!r} not one of {sorted(WAVES_SURFACES)}", file=sys.stderr)
-            sys.exit(2)
+            # Soft fallback so a new model shipping before the template
+            # picker is updated still lands a usable entry. Reviewer can
+            # move the file post-merge if a more specific surface exists.
+            print(
+                f"WARN: waves changelog surface {surface!r} not in known set "
+                f"{sorted(WAVES_SURFACES)} — falling back to {WAVES_FALLBACK_SURFACE!r}.",
+                file=sys.stderr,
+            )
+            surface = WAVES_FALLBACK_SURFACE
         return [
             WAVES_PAGES_BASE / surface / filename,
             WAVES_VERSIONS_BASE / surface / filename,

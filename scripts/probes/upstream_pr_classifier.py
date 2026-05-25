@@ -1,5 +1,5 @@
-"""Classify an upstream PR (atoms-platform / waves-platform / lightning-asr-offline / godspeed)
-for likely docs / API-spec impact.
+"""Classify an upstream PR (atoms-platform / waves-platform, plus any other
+backend repo wired via repository_dispatch) for likely docs / API-spec impact.
 
 Reads PR metadata + diff and asks Claude:
   - Does this PR change a public API surface, default, response shape,
@@ -73,9 +73,9 @@ REPO_DOC_HINTS = load_repo_doc_hints()
 SYSTEM_PROMPT = """You are the docs-impact reviewer for Smallest AI.
 
 You receive a merged PR from an upstream backend or demos repo
-(lightning-asr-offline / waves-platform / atoms-platform / godspeed).
-Your job: decide whether this docs repo needs an update, and if so,
-which files.
+(atoms-platform, waves-platform, or any other backend repo wired into
+the dispatcher). Your job: decide whether this docs repo needs an
+update, and if so, which files.
 
 Return ONE of three verdicts:
 
