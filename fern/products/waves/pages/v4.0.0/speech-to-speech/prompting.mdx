@@ -1,6 +1,6 @@
 ---
 title: "Prompting voice agents"
-description: "How to write Hydra system prompts that produce natural-sounding voice agents — persona, turn-taking discipline, and <style> tags for prosody."
+description: "How to write Hydra system prompts that produce natural-sounding voice agents — persona, length discipline, tool-call prompting, and turn-taking."
 icon: "masks-theater"
 ---
 
@@ -19,7 +19,7 @@ Three things this gets right:
 3. **Warm tone** — single-word style cue. The model carries it through prosody.
 
 <Tip>
-**Don't micromanage prosody in prose.** Hydra adapts tone from context. Telling the model "speak slowly and carefully and pause between thoughts" mostly produces text that *says* "slowly and carefully and pause" rather than changing how it sounds. For deliberate prosody, use the `<style>` tags described below instead.
+**Don't micromanage prosody in prose.** Hydra adapts tone from context. Telling the model "speak slowly and carefully and pause between thoughts" mostly produces text that *says* "slowly and carefully and pause" rather than changing how it sounds. Shape the *content* and *length*; let Hydra handle delivery.
 </Tip>
 
 ## Anti-patterns
@@ -56,18 +56,6 @@ If the tool returns an error, apologise and ask the user for a different city.
 ```
 
 Without explicit instruction, the model sometimes answers from priors instead of calling the tool. Be direct.
-
-## `<style>` tags for prosody
-
-Embed `<style>` tags in `instructions` to request specific emotional rendering for spoken output:
-
-```text
-<style emotion="excited">That's incredible news!</style>
-```
-
-Style tags are interpreted server-side. The audio you receive already reflects the requested prosody — the tags themselves do not appear in any wire payload.
-
-The set of supported emotions is voice-dependent and evolving. The example above is the documented form; test against the voice you're using to confirm which emotion values render with the prosody you want.
 
 ## Greetings and `generate_initial_response`
 
