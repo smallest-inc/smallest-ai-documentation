@@ -1,0 +1,21 @@
+---
+title: Chat completions — `/chat/chat/completions` and `/chat/pca` flattened to `/chat/completions`
+date: 2026-05-18
+description: Two duplicated path segments on the Electron chat-completions routes have been flattened. The canonical URL is now `/waves/v1/chat/completions`.
+---
+
+The Electron chat-completions endpoint URL has been flattened. The canonical path is now:
+
+```
+POST https://api.smallest.ai/waves/v1/chat/completions
+```
+
+Previously, two duplicated-segment variants existed (`/waves/v1/chat/chat/completions` and `/waves/v1/chat/pca`). These were artifacts of an earlier router setup and confusing to integrate against. Both have been replaced by the single canonical route.
+
+**Migration:** if you were calling `/chat/chat/completions` or `/chat/pca` directly, update your `base_url` to `https://api.smallest.ai/waves/v1` and use the standard OpenAI client — `/chat/completions` is appended automatically.
+
+```python
+from openai import OpenAI
+client = OpenAI(base_url="https://api.smallest.ai/waves/v1", api_key=os.environ["SMALLEST_API_KEY"])
+client.chat.completions.create(model="electron", messages=[...])
+```

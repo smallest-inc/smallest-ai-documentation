@@ -1,0 +1,27 @@
+---
+title: Per-org rate limiting now enforced on the Atoms main backend
+date: 2026-05-24
+description: Atoms API requests are now rate-limited per organisation via a shared `/rate-limiter` package. Excess requests return 429 with a `Retry-After` header.
+---
+
+Atoms API now enforces **per-org rate limits**. The limits are configured per plan and are independent of the per-route rate limits that already existed.
+
+**What you'll see:**
+
+- Excess requests return `429 Too Many Requests` with a `Retry-After` header indicating when to retry (seconds).
+- Limits are evaluated across all API key + session callers belonging to the same org.
+- Limits scale with your plan tier; talk to your account manager to lift them if you hit the ceiling.
+
+**Recommended client behaviour:**
+
+```python
+import time, requests
+
+while True:
+    r = requests.post(url, json=payload, headers=headers)
+    if r.status_code != 429:
+        break
+    time.sleep(int(r.headers.get("Retry-After", "1")))
+```
+
+**Migration:** no action. If you don't have backoff on 429 in your client, add it now.

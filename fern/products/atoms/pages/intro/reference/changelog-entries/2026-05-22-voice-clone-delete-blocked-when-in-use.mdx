@@ -1,0 +1,27 @@
+---
+title: Voice clone deletion now blocked when an agent references the voice
+date: 2026-05-22
+description: Atoms no longer lets you delete a cloned voice that's still in use by one or more agents — the delete returns a 409 with the agent IDs so you can update them first.
+---
+
+Deleting a cloned voice that's still referenced by one or more agents now fails fast with a `409 Conflict` instead of silently breaking the agent at the next call.
+
+**Response when the voice is in use:**
+
+```json
+{
+  "status": "error",
+  "error_code": "VOICE_IN_USE_BY_AGENT",
+  "message": "This voice is still referenced by 2 agents. Update those agents to a different voice before deleting.",
+  "referenced_by": [
+    { "agent_id": "agt_…", "agent_name": "…" }
+  ]
+}
+```
+
+**How to recover:**
+
+1. Switch each listed agent to a different voice (via the agent config UI or `PATCH /agent/{id}`).
+2. Re-run the delete.
+
+**Migration:** no action. If you have automation that deletes voices in bulk, add a 409 handler that surfaces the `referenced_by` agent list to operators.
