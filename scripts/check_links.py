@@ -230,6 +230,10 @@ def main() -> int:
         '--pending-base', default='origin/main',
         help='Git ref to diff against when detecting pages added in this branch. A 404 on a URL whose last segment matches a newly-added MDX stem is reported as PENDING rather than broken. Default: origin/main.',
     )
+    ap.add_argument(
+        '--strict', action='store_true',
+        help='Disable the pending-stems reclassification — any 404 is broken. Use on push-to-main where all merged PRs should have deployed by now (otherwise pending false-positives mask real link rot indefinitely).',
+    )
     args = ap.parse_args()
 
     # v2.2.0 and v3.0.1 are deprecated, frozen, and explicitly off-limits per
@@ -287,7 +291,11 @@ def main() -> int:
 
     print(f'Checking {len(url_sources)} unique internal URL(s) across {len(targets)} file(s) against {args.base} ...')
 
-    pending_stems = newly_registered_mdx_stems(args.pending_base)
+    # In strict mode (push-to-main full audit), any 404 is broken — no pending
+    # reclassification. This catches the gap where a URL whose last segment
+    # coincidentally matches an MDX stem stays "pending" forever even though
+    # Fern's actual derived slug is different (e.g. tag/section-name-based).
+    pending_stems = set() if args.strict else newly_registered_mdx_stems(args.pending_base)
 
     broken: list[tuple[str, int, list[str]]] = []
     pending: list[tuple[str, int, list[str]]] = []
