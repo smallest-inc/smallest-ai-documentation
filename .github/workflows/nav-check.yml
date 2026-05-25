@@ -58,17 +58,13 @@ jobs:
         # (reads nav YAMLs both on this branch and on origin/main).
         run: pip install pyyaml
 
-      - name: Determine changed MDX files
+      - name: Determine changed MDX files (PR only)
         id: changed
+        if: github.event_name == 'pull_request'
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            base_sha="${{ github.event.pull_request.base.sha }}"
-            head_sha="${{ github.event.pull_request.head.sha }}"
-            files=$(git diff --name-only "$base_sha" "$head_sha" -- 'fern/**/*.mdx' | tr '\n' ' ')
-          else
-            # push to main — check everything that changed in the push
-            files=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- 'fern/**/*.mdx' | tr '\n' ' ')
-          fi
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          head_sha="${{ github.event.pull_request.head.sha }}"
+          files=$(git diff --name-only "$base_sha" "$head_sha" -- 'fern/**/*.mdx' | tr '\n' ' ')
           if [ -z "$files" ]; then
             echo "No MDX files changed."
             echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -77,14 +73,25 @@ jobs:
             echo "files=$files" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Run link check on changed files
-        if: steps.changed.outputs.skip != 'true'
+      - name: Run link check on changed files (PR — pending tolerance for newly-added pages)
+        if: github.event_name == 'pull_request' && steps.changed.outputs.skip != 'true'
         run: |
-          # Use the PR base SHA as pending-base so --pending-base resolves
-          # deterministically in CI (origin/main isn't always present as a ref).
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            base="${{ github.event.pull_request.base.sha }}"
-          else
-            base="${{ github.event.before }}"
-          fi
-          python3 scripts/check_links.py --pending-base "$base" ${{ steps.changed.outputs.files }}
+          python3 scripts/check_links.py \
+            --pending-base "${{ github.event.pull_request.base.sha }}" \
+            ${{ steps.changed.outputs.files }}
+
+      # Push-to-main full audit. Catches the rot class the PR-mode check
+      # misses by design: links in unmodified files, and URLs the
+      # pending-stems heuristic mis-classified at PR time (stem matched
+      # an MDX file but Fern's actual derived slug differs from the
+      # stem — e.g. tag-derived API ref slugs).
+      #
+      # --strict disables pending reclassification because at push time
+      # all merged PRs should have deployed; anything still 404 is real
+      # rot. Skips orphan and frozen-version files (same default scope
+      # as PR mode), so we only flag links in pages that actually
+      # render to customers.
+      - name: Run link check (push to main — full audit, strict)
+        if: github.event_name == 'push'
+        run: |
+          python3 scripts/check_links.py --strict
