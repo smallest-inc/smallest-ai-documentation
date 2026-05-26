@@ -1733,26 +1733,55 @@ paths:
   /campaign:
     get:
       summary: Retrieve all campaigns
-      description: Get all campaigns
+      description: Get all campaigns for the authenticated organization.
       tags:
         - Campaigns
       security:
         - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                page:
-                  type: number
-                  description: The page number
-                  default: 1
-                limit:
-                  type: number
-                  description: The number of items per page
-                  default: 10
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+        - in: query
+          name: offset
+          required: false
+          schema:
+            type: integer
+            default: 5
+          description: Number of campaigns per page
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [draft, scheduled, processing, running, paused, completed, failed]
+          description: Filter campaigns by status
+        - in: query
+          name: search
+          required: false
+          schema:
+            type: string
+          description: Search campaigns by name
+        - in: query
+          name: sortField
+          required: false
+          schema:
+            type: string
+            default: createdAt
+            enum: [createdAt, updatedAt]
+          description: Field to sort by
+        - in: query
+          name: sortOrder
+          required: false
+          schema:
+            type: string
+            default: desc
+            enum: [asc, desc]
+          description: Sort direction
       responses:
         "200":
           description: A list of campaigns
@@ -1784,18 +1813,51 @@ paths:
                             organization:
                               type: string
                               description: The ID of the organization
-                            agentId:
-                              type: string
-                              description: The ID of the agent
+                            agent:
+                              type: object
+                              description: The agent assigned to this campaign
+                              properties:
+                                _id:
+                                  type: string
+                                name:
+                                  type: string
+                                workflowType:
+                                  type: string
+                            audience:
+                              type: object
+                              description: The audience assigned to this campaign
+                              properties:
+                                _id:
+                                  type: string
+                                name:
+                                  type: string
                             createdBy:
                               type: string
                               description: The ID of the user who created the campaign
-                            audienceId:
-                              type: string
-                              description: The ID of the audience
                             participantsCount:
                               type: integer
                               description: The number of participants in the campaign
+                            status:
+                              type: string
+                              enum: [draft, scheduled, processing, running, paused, completed, failed]
+                              description: Current status of the campaign
+                            maxRetries:
+                              type: integer
+                              description: Maximum retry attempts per failed call
+                            retryDelay:
+                              type: integer
+                              description: Delay in minutes between retry attempts
+                            retryAttempts:
+                              type: integer
+                              description: Total retry attempts made so far
+                            scheduledAt:
+                              type: string
+                              format: date-time
+                            pausedAt:
+                              type: string
+                              format: date-time
+                            cancelledCallsCount:
+                              type: integer
                             createdAt:
                               type: string
                               format: date-time
@@ -1804,12 +1866,22 @@ paths:
                               type: string
                               format: date-time
                               description: The date and time when the campaign was last updated
-                            isCampaignInProgress:
-                              type: boolean
-                              description: Whether the campaign is in progress
-                            isCampaignCompleted:
-                              type: boolean
-                              description: Whether the campaign is completed
+                      pagination:
+                        type: object
+                        properties:
+                          total:
+                            type: integer
+                          page:
+                            type: integer
+                          offset:
+                            type: integer
+                          hasMore:
+                            type: boolean
+                          totalPages:
+                            type: integer
+                      totalCampaignCount:
+                        type: integer
+                        description: Total number of campaigns in the organization (unfiltered)
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
@@ -1887,7 +1959,9 @@ paths:
                 - agentId
       responses:
         "201":
-          description: Campaign created successfully
+          description: |
+            Campaign created successfully. Note: the response is the raw Mongoose document — `agentId`
+            and `audienceId` are plain ObjectId strings here, not nested objects as returned by GET endpoints.
           content:
             application/json:
               schema:
@@ -1913,13 +1987,13 @@ paths:
                         description: The ID of the organization
                       agentId:
                         type: string
-                        description: The ID of the agent
+                        description: Raw ObjectId of the agent (not a nested object)
                       createdBy:
                         type: string
                         description: The ID of the user who created the campaign
                       audienceId:
                         type: string
-                        description: The ID of the audience
+                        description: Raw ObjectId of the audience (not a nested object)
                       participantsCount:
                         type: integer
                         description: The number of participants in the campaign
@@ -1938,7 +2012,7 @@ paths:
                         description: Number of retries attempted so far across the campaign.
                       status:
                         type: string
-                        enum: [draft, scheduled, running, paused, completed, failed]
+                        enum: [draft, scheduled, processing, running, paused, completed, failed]
                         description: Current campaign status.
                       createdAt:
                         type: string
@@ -1952,6 +2026,8 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -1999,21 +2075,33 @@ paths:
                           organization:
                             type: string
                             description: The ID of the organization
-                          agentId:
-                            type: string
-                            description: The ID of the agent
+                          agent:
+                            type: object
+                            description: The agent assigned to this campaign
+                            properties:
+                              _id:
+                                type: string
+                              name:
+                                type: string
+                              workflowType:
+                                type: string
+                          audience:
+                            type: object
+                            description: The audience assigned to this campaign
+                            properties:
+                              _id:
+                                type: string
+                              name:
+                                type: string
                           createdBy:
                             type: string
                             description: The ID of the user who created the campaign
-                          audienceId:
-                            type: string
-                            description: The ID of the audience
                           participantsCount:
                             type: integer
                             description: The number of participants in the campaign
                           status:
                             type: string
-                            enum: [draft, scheduled, running, paused, scheduled_for_retry, completed]
+                            enum: [draft, scheduled, processing, running, paused, completed, failed]
                             description: The current status of the campaign
                           maxRetries:
                             type: integer
@@ -2023,10 +2111,27 @@ paths:
                             type: integer
                             description: Delay between retries in minutes
                             example: 15
+                          retryAttempts:
+                            type: integer
+                            description: Total retry attempts made so far
                           scheduledAt:
                             type: string
                             format: date-time
                             description: Scheduled start time for the campaign
+                          pausedAt:
+                            type: string
+                            format: date-time
+                            description: When the campaign was paused
+                          cancelledCallsCount:
+                            type: integer
+                            description: Number of calls cancelled (e.g. when campaign was paused)
+                          error:
+                            type: string
+                            description: Error message if the campaign failed
+                          failedAt:
+                            type: string
+                            format: date-time
+                            description: When the campaign entered failed state
                           createdAt:
                             type: string
                             format: date-time
@@ -2043,13 +2148,14 @@ paths:
                           properties:
                             _id:
                               type: string
-                            campaignId:
-                              type: string
                             triggerSource:
                               type: string
                             eventAction:
                               type: string
                             createdAt:
+                              type: string
+                              format: date-time
+                            updatedAt:
                               type: string
                               format: date-time
                       metrics:
@@ -2062,7 +2168,7 @@ paths:
                             example: 500
                           contacts_called:
                             type: integer
-                            description: Number of unique contacts where call was attempted (statuses IN_PROGRESS, COMPLETED, FAILED, NO_ANSWER)
+                            description: Number of unique contacts where a call was attempted (statuses ACTIVE, COMPLETED, FAILED, NO_ANSWER)
                             example: 247
                           contacts_connected:
                             type: integer
@@ -2103,13 +2209,20 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Campaign not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
   /campaign/{id}/start:
     post:
-      summary: Start a campaign
-      description: Start a campaign
+      summary: Start or resume a campaign
+      description: |
+        Queues the campaign for processing and returns immediately — the campaign is **not** yet
+        running when the 202 is returned. Poll `GET /campaign/{id}` and watch for `status: "running"`.
+
+        This endpoint also acts as a **resume** endpoint: if the campaign is currently paused,
+        calling this endpoint resumes it (`status` transitions from `paused` → `running`).
       tags:
         - Campaigns
       security:
@@ -2122,8 +2235,8 @@ paths:
           schema:
             type: string
       responses:
-        "201":
-          description: Campaign started successfully
+        "202":
+          description: Campaign queued for processing
           content:
             application/json:
               schema:
@@ -2132,17 +2245,33 @@ paths:
                   status:
                     type: boolean
                     example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Campaign is being processed"
+                      taskId:
+                        type: string
+                        description: Internal task identifier for the queued job
+                      campaignId:
+                        type: string
+                        description: The ID of the campaign
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Campaign not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
   /campaign/{id}/pause:
     post:
       summary: Pause a campaign
-      description: Pause a campaign
+      description: |
+        Queues a pause task and returns immediately — the campaign is **not** immediately paused.
+        Poll `GET /campaign/{id}` and watch for `status: "paused"`.
       tags:
         - Campaigns
       security:
@@ -2156,7 +2285,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Campaign paused successfully
+          description: Pause task queued successfully
           content:
             application/json:
               schema:
