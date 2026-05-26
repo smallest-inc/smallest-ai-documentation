@@ -171,27 +171,37 @@ jobs:
           FILES=$(jq -r '.affected_doc_files | map("• `" + . + "`") | join("\n")' /tmp/classification.json)
           QUESTIONS=$(jq -r '.questions_for_human | map("• " + .) | join("\n")' /tmp/classification.json)
           VERDICT="${{ steps.classify.outputs.verdict }}"
+          REPO="${{ steps.ctx.outputs.repo }}"
           if [ "$VERDICT" = "DOCS_NEEDED" ]; then
             HEADER=":rotating_light: Upstream PR likely needs docs update"
           else
             HEADER=":mag: Upstream PR — maybe needs docs (your call)"
           fi
+          # Per-repo owner routing:
+          #   atoms-platform  → Sumit  (U0ADV6P2VLP)
+          #   anything else   → Abhishek (U0A5SG1LM1C)  — waves-platform, phonon-uv, cookbook, godspeed
+          case "$REPO" in
+            */atoms-platform) PING="<@U0ADV6P2VLP>" ;;
+            *)                PING="<@U0A5SG1LM1C>" ;;
+          esac
           jq -n \
             --arg header "$HEADER" \
             --arg verdict "$VERDICT" \
-            --arg repo "${{ steps.ctx.outputs.repo }}" \
+            --arg repo "$REPO" \
             --arg pr "#${{ steps.ctx.outputs.pr_number }} — ${{ steps.ctx.outputs.pr_title }}" \
             --arg pr_url "${{ steps.ctx.outputs.pr_url }}" \
             --arg run_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             --arg summary "$SUMMARY" \
             --arg files "$FILES" \
             --arg questions "$QUESTIONS" \
-            --arg ping "<@U0A5SG1LM1C>" \
+            --arg ping "$PING" \
+            --arg channel "${{ vars.DOCS_CI_FEED_CHANNEL_ID || 'C0B5Q3EHU07' }}" \
             '{
+              channel: $channel,
               text: ("Upstream PR drift: " + $verdict + " — cc " + $ping),
               blocks: [
                 { type: "header",  text: { type: "plain_text", text: $header } },
-                { type: "section", text: { type: "mrkdwn",     text: ("*" + $repo + "* — <" + $pr_url + "|" + $pr + ">") } },
+                { type: "section", text: { type: "mrkdwn",     text: ("*" + $repo + "* — <" + $pr_url + "|" + $pr + "> — cc " + $ping) } },
                 { type: "section", text: { type: "mrkdwn",     text: $summary } },
                 { type: "section", text: { type: "mrkdwn",     text: ("*Affected doc files:*\n" + $files) } },
                 { type: "section", text: { type: "mrkdwn",     text: (if $questions == "" then "_no open questions_" else ("*Need from you:*\n" + $questions) end) } },
@@ -199,8 +209,20 @@ jobs:
               ]
             }' > /tmp/slack-payload.json
 
-      - name: Notify Slack
-        if: steps.classify.outputs.verdict == 'DOCS_NEEDED' || steps.classify.outputs.verdict == 'MAYBE'
+      - name: Notify Slack — channel post via bot token (preferred)
+        if: (steps.classify.outputs.verdict == 'DOCS_NEEDED' || steps.classify.outputs.verdict == 'MAYBE') && env.SLACK_BOT_TOKEN != ''
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload-file-path: /tmp/slack-payload.json
+
+      - name: Notify Slack — webhook fallback (legacy DM path)
+        if: (steps.classify.outputs.verdict == 'DOCS_NEEDED' || steps.classify.outputs.verdict == 'MAYBE') && env.SLACK_BOT_TOKEN == ''
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         uses: slackapi/slack-github-action@v2.0.0
         with:
           webhook: ${{ secrets.SLACK_DM_WEBHOOK_URL || secrets.SLACK_WEBHOOK_URL }}

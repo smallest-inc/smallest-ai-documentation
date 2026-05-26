@@ -244,6 +244,10 @@ jobs:
           # margin so we don't blow the limit.
           STT_REPORT=$(head -c 1000 /tmp/diff-report.md 2>/dev/null || echo "(no STT diff)")
           TTS_REPORT=$(head -c 1000 /tmp/diff-tts-report.md 2>/dev/null || echo "(no TTS diff)")
+          # API-probe pings: Pulse covers atoms+waves shared surface, so
+          # default to Abhishek (Waves owner) and let Sumit follow up on
+          # Atoms-side fallout. We could split per-signal later if useful.
+          PING="<@U0A5SG1LM1C>"
           jq -n \
             --arg run_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             --arg summary "$SUMMARY" \
@@ -251,8 +255,10 @@ jobs:
             --arg files "$FILES" \
             --arg stt_report "$STT_REPORT" \
             --arg tts_report "$TTS_REPORT" \
-            --arg ping "<@U0A5SG1LM1C>" \
+            --arg ping "$PING" \
+            --arg channel "${{ vars.DOCS_CI_FEED_CHANNEL_ID || 'C0B5Q3EHU07' }}" \
             '{
+              channel: $channel,
               text: ("API probe — newsworthy behavior change — cc " + $ping),
               blocks: [
                 { type: "header", text: { type: "plain_text", text: ":rotating_light: API probe — newsworthy change" } },
@@ -265,11 +271,23 @@ jobs:
               ]
             }' > /tmp/slack-payload.json
 
-      # SLACK_DM_WEBHOOK_URL preferred (binds to a personal DM channel).
-      # Falls back to SLACK_WEBHOOK_URL (channel) if the DM webhook isn't
-      # configured. Either way, the payload is the same.
-      - name: Notify Slack (newsworthy only)
-        if: steps.classify.outputs.verdict == 'NEWSWORTHY'
+      # Prefer SLACK_BOT_TOKEN (lets us post to #feed-doc-ci-change-detection
+      # via chat.postMessage with channel ID); fall back to the legacy
+      # SLACK_DM_WEBHOOK_URL / SLACK_WEBHOOK_URL if no token is set.
+      - name: Notify Slack — channel post via bot token (preferred)
+        if: steps.classify.outputs.verdict == 'NEWSWORTHY' && env.SLACK_BOT_TOKEN != ''
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload-file-path: /tmp/slack-payload.json
+
+      - name: Notify Slack — webhook fallback (legacy DM path)
+        if: steps.classify.outputs.verdict == 'NEWSWORTHY' && env.SLACK_BOT_TOKEN == ''
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         uses: slackapi/slack-github-action@v2.0.0
         with:
           webhook: ${{ secrets.SLACK_DM_WEBHOOK_URL || secrets.SLACK_WEBHOOK_URL }}
