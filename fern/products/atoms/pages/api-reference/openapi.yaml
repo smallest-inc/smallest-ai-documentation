@@ -2439,7 +2439,7 @@ paths:
           name: webhookId
           schema:
             type: string
-            description: Optional webhook ID to get a specific webhook
+          description: Optional MongoDB ObjectId (24-char hex) of a specific webhook to retrieve. If omitted, returns all webhooks for the organization.
       responses:
         "200":
           description: Successful response
@@ -2457,13 +2457,19 @@ paths:
                       - type: array
                         items:
                           $ref: "#/components/schemas/Webhook"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
     post:
       summary: Create a webhook
-      description: Create a new webhook with subscriptions for specific agents and events
+      description: |
+        Create a new webhook with subscriptions for specific agents and events.
+
+        **400 is also returned when the endpoint URL is already registered:**
+        `"A webhook with this URL has already been registered"`
       tags:
         - Webhooks
       security:
@@ -2488,6 +2494,9 @@ paths:
                   description: Array of events to subscribe to
                   items:
                     type: object
+                    required:
+                      - agentId
+                      - eventType
                     properties:
                       agentId:
                         type: string
@@ -2495,12 +2504,9 @@ paths:
                         example: "60d0fe4f5311236168a109ca"
                       eventType:
                         type: string
-                        enum: [pre-conversation, post-conversation]
+                        enum: [pre-conversation, post-conversation, analytics-completed]
                         description: The type of event to subscribe to
                         example: "post-conversation"
-                  required:
-                    - agentId
-                    - eventType
               required:
                 - endpoint
                 - description
@@ -2530,7 +2536,15 @@ paths:
   /webhook/{id}:
     delete:
       summary: Delete a webhook
-      description: Delete a webhook by its ID
+      description: |
+        Delete a webhook by its ID.
+
+        **400 is returned when the webhook still has active agent subscriptions:**
+        `"Cannot delete webhook: It is currently assigned to one or more agents. Please remove all agent assignments first."`
+        Call `DELETE /agent/{agentId}/webhook-subscriptions` for each assigned agent before deleting.
+
+        **400 is also returned for an invalid webhook ID format:**
+        `"The provided Webhook ID is invalid."`
       tags:
         - Webhooks
       security:
@@ -2553,6 +2567,10 @@ paths:
                   status:
                     type: boolean
                     example: true
+                  data:
+                    type: string
+                    description: Success message
+                    example: "Webhook deleted successfully"
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
@@ -2609,6 +2627,8 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           description: Agent not found
           content:
@@ -2627,8 +2647,11 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
     post:
-      summary: Create webhook subscriptions for an agent
-      description: Create webhook subscriptions for a specific agent with selected event types
+      summary: Replace webhook subscriptions for an agent
+      description: |
+        **Replaces** all existing webhook subscriptions for the agent with the provided event types.
+        Any previously configured subscriptions for this agent are deleted before the new ones are created.
+        To add subscriptions without removing existing ones, retrieve current subscriptions first and include them in the request.
       tags:
         - Agents
       security:
@@ -2652,7 +2675,7 @@ paths:
                   description: Array of event types to subscribe to
                   items:
                     type: string
-                    enum: [pre-conversation, post-conversation]
+                    enum: [pre-conversation, post-conversation, analytics-completed]
                     description: The type of event to subscribe to
                     example: "post-conversation"
                 webhookId:
@@ -2678,25 +2701,11 @@ paths:
                     description: Success message
                     example: "Subscriptions created successfully"
         "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  errors:
-                    type: array
-                    items:
-                      type: string
-                    example:
-                      [
-                        "Agent already has webhook subscriptions. Please remove existing subscriptions before creating new ones.",
-                      ]
+          $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           description: Agent not found
           content:
@@ -2716,7 +2725,9 @@ paths:
           $ref: "#/components/responses/InternalServerErrorResponse"
     delete:
       summary: Delete webhook subscriptions for an agent
-      description: Delete webhook subscriptions for a given agent ID
+      description: |
+        Deletes **all** webhook subscriptions for the agent, regardless of which webhook they belong to.
+        If the agent has subscriptions across multiple webhooks, all of them are removed in a single call.
       tags:
         - Agents
       security:
@@ -2747,6 +2758,8 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           description: Agent not found
           content:
