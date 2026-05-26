@@ -2836,6 +2836,27 @@ paths:
                           format: date-time
                           description: The date and time when the audience was last updated
                           example: "2025-01-15T10:30:00.000Z"
+                        memberCount:
+                          type: number
+                          description: Current number of members in the audience
+                        hasCampaigns:
+                          type: boolean
+                          description: Whether any campaigns are currently using this audience
+                        campaigns:
+                          type: array
+                          description: Active campaigns using this audience
+                          items:
+                            type: object
+                            properties:
+                              _id:
+                                type: string
+                              name:
+                                type: string
+                              status:
+                                type: string
+                              createdAt:
+                                type: string
+                                format: date-time
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
         "500":
@@ -2843,7 +2864,13 @@ paths:
 
     post:
       summary: Create audience with CSV upload
-      description: Create a new audience by uploading a CSV file containing phone numbers
+      description: |
+        Create a new audience by uploading a CSV file containing phone numbers.
+        Only CSV text files are accepted — binary files will produce malformed data.
+
+        **Additional 400 cases:**
+        - Duplicate phone numbers in the CSV: `"Some phone numbers in your CSV already exist in this audience. Please remove duplicate entries and try again."`
+        - Member limit exceeded: `"Audience cannot exceed X members"`
       tags:
         - Audience
       security:
@@ -2879,7 +2906,6 @@ paths:
               required:
                 - name
                 - phoneNumberColumnName
-                - identifierColumnName
                 - file
 
       responses:
@@ -2961,7 +2987,9 @@ paths:
   /audience/{id}:
     get:
       summary: Get audience by ID
-      description: Retrieve a specific audience by its ID. Users can only access audiences they have created.
+      description: |
+        Retrieve a specific audience by its ID.
+        Note: if the audience belongs to a different organization, the API returns 404 (not 403) — ownership is deliberately obscured.
       tags:
         - Audience
       security:
@@ -3039,42 +3067,21 @@ paths:
                     example: ["Audience ID missing"]
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
-        "403":
-          description: Forbidden - User can only access audiences they created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  errors:
-                    type: array
-                    items:
-                      type: string
-                    example: ["Not authorized to view this audience"]
         "404":
-          description: Audience not found
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  errors:
-                    type: array
-                    items:
-                      type: string
-                    example: ["Audience not found"]
+          description: Audience not found (also returned when audience belongs to a different organization)
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
     delete:
       summary: Delete audience
-      description: Delete a specific audience by its ID. Users can only delete audiences they created. Cannot delete if audience is being used by a campaign.
+      description: |
+        Delete a specific audience by its ID. Users can only delete audiences they created.
+
+        **400 is returned if the audience is used by an active campaign:**
+        `"can't delete audience, campaign with this audience <id> exists"`
+        Remove the campaign first, then retry deletion.
+
+        On success, `data` is always an empty array `[]`.
       tags:
         - Audience
       security:
@@ -3116,9 +3123,11 @@ paths:
                     items:
                       type: string
                     example:
-                      ["cant delete audience, campaign with this audience 60d0fe4f5311236168a109ca exists"]
+                      ["can't delete audience, campaign with this audience 60d0fe4f5311236168a109ca exists"]
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Audience not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -3147,10 +3156,10 @@ paths:
             minimum: 1
             default: 1
             example: 1
-        - name: limit
+        - name: offset
           in: query
           required: false
-          description: Number of items per page (default is 5)
+          description: Number of items per page (default is 5). Note: this parameter is named `offset`, not `limit` — sending `?limit=N` is silently ignored.
           schema:
             type: integer
             minimum: 1
@@ -3213,6 +3222,12 @@ paths:
                     items:
                       type: string
                     example: ["Audience ID is required"]
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Forbidden — audience belongs to a different organization
+        "404":
+          description: Audience not found
         "500":
           description: Internal server error
           content:
@@ -3231,7 +3246,14 @@ paths:
 
     post:
       summary: Add audience members
-      description: Add new members to an existing audience. Users can only add members to audiences they created.
+      description: |
+        Add new members to an existing audience.
+
+        Each member object must include a key matching the audience's `phoneNumberColumnName`.
+        If it's missing, the API returns 400: `"Each member must have a <phoneNumberColumnName> field"`.
+        Adding members that would exceed the audience limit also returns 400.
+
+        Note: if the audience belongs to a different organization, the API returns 404 (not 403).
       tags:
         - Audience
       security:
@@ -3314,36 +3336,8 @@ paths:
                       ]
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
-        "403":
-          description: Forbidden - User can only modify audiences they created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  errors:
-                    type: array
-                    items:
-                      type: string
-                    example: ["Not authorized to modify this audience"]
         "404":
-          description: Audience not found
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  errors:
-                    type: array
-                    items:
-                      type: string
-                    example: ["Audience not found"]
+          description: Audience not found (also returned when audience belongs to a different organization)
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -3412,36 +3406,8 @@ paths:
                     example: ["Audience ID missing"]
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
-        "403":
-          description: Forbidden - User can only modify audiences they created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  errors:
-                    type: array
-                    items:
-                      type: string
-                    example: ["Not authorized to modify this audience"]
         "404":
-          description: Audience not found
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  errors:
-                    type: array
-                    items:
-                      type: string
-                    example: ["Audience not found"]
+          description: Audience not found (also returned when audience belongs to a different organization)
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -3529,8 +3495,8 @@ paths:
                           searchType:
                             type: string
                             description: The type of search performed
-                            enum: ["general", "field"]
-                            example: "field"
+                            enum: ["general", "multiple"]
+                            example: "multiple"
                           searchTerm:
                             type: string
                             description: The search term(s) used
@@ -3563,6 +3529,10 @@ paths:
                       [
                         "At least one search parameter is required. Use 'query' for general search across all fields, or use field-specific searches like 'firstName=john' or 'phoneNumber=123456'.",
                       ]
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Audience not found
         "500":
           description: Internal server error
           content:
