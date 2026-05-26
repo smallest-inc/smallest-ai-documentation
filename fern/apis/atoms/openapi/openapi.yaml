@@ -4391,7 +4391,7 @@ paths:
   /agent/{id}/drafts:
     post:
       summary: Create a draft
-      description: Create a new draft from an existing published version or another draft. Exactly one of sourceVersionId or sourceDraftId is required.
+      description: Create a new draft from an existing published version or another draft. At least one of sourceVersionId or sourceDraftId is required (both may be sent simultaneously).
       tags:
         - Agent Versioning - Drafts
       security:
@@ -4421,6 +4421,10 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Agent not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -4457,6 +4461,10 @@ paths:
                               description: Display name of the last editor
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Agent not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -4506,6 +4514,10 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Agent or draft not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -4531,8 +4543,9 @@ paths:
               properties:
                 draftName:
                   type: string
+                  minLength: 1
                   maxLength: 100
-                  description: New name for the draft
+                  description: New name for the draft (1–100 characters)
       responses:
         "200":
           description: Draft renamed successfully
@@ -4553,6 +4566,10 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Agent or draft not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -4579,10 +4596,19 @@ paths:
                     example: true
                   data:
                     type: "null"
-        "403":
-          $ref: "#/components/responses/ForbiddenError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: |
+            Forbidden. Returned in two cases:
+            - The caller is not the draft creator or an org admin
+            - The agent uses workflow_graph and the org lacks conversational agents access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "404":
+          description: Agent or draft not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -4622,6 +4648,10 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Agent or draft not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -4659,6 +4689,10 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Agent or draft not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -4693,10 +4727,18 @@ paths:
                   data:
                     type: object
                     description: Test call result details
+                    properties:
+                      callId:
+                        type: string
+                        description: The call ID of the initiated test call. Use with GET /conversation/{id} to fetch the call log.
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Agent or draft not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -4764,6 +4806,10 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Agent or draft not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -4772,7 +4818,10 @@ paths:
   /agent/{id}/versions:
     get:
       summary: List published versions
-      description: List published versions for an agent with pagination and optional pin filter.
+      description: |
+        List published versions for an agent with pagination and optional pin filter.
+        The `total` value currently represents the total number of published versions
+        for the agent, not necessarily the filtered count when `isPinned` is used.
       tags:
         - Agent Versioning - Versions
       security:
@@ -4827,18 +4876,32 @@ paths:
                                   type: string
                                   nullable: true
                                   description: Display name of the user who published
+                                activatedByName:
+                                  type: string
+                                  nullable: true
+                                  description: Display name of the user who activated the version
                       total:
                         type: integer
-                        description: Total count of matching versions
+                        description: Total published versions for the agent. When `isPinned` is used, this may not equal the filtered result count.
+        "400":
+          $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/WorkflowGraphAgentAccessForbiddenError"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
   /agent/{id}/versions/diff:
     get:
       summary: Diff two versions
-      description: Compare two published versions side-by-side by their IDs.
+      description: Compare two version or draft revision records side-by-side by their IDs. The implementation tries published versions first and can fall back to the latest draft revision.
       tags:
         - Agent Versioning - Versions
       security:
@@ -4871,12 +4934,19 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    type: object
-                    description: Section-by-section diff between the two versions
+                    $ref: "#/components/schemas/AgentVersionDiff"
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/WorkflowGraphAgentAccessForbiddenError"
+        "404":
+          description: Agent or version not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -4907,17 +4977,19 @@ paths:
         - name: dateFrom
           in: query
           required: false
-          description: Start date for the comparison range (ISO 8601)
+          description: Start date for the comparison range in YYYY-MM-DD format.
           schema:
             type: string
-            format: date-time
+            format: date
+            example: "2026-05-01"
         - name: dateTo
           in: query
           required: false
-          description: End date for the comparison range (ISO 8601)
+          description: End date for the comparison range in YYYY-MM-DD format.
           schema:
             type: string
-            format: date-time
+            format: date
+            example: "2026-05-31"
       responses:
         "200":
           description: Metrics comparison returned
@@ -4930,12 +5002,19 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    type: object
-                    description: Aggregated metrics for each version
+                    $ref: "#/components/schemas/AgentVersionMetricsComparison"
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/WorkflowGraphAgentAccessForbiddenError"
+        "404":
+          description: Agent or version not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -4969,10 +5048,22 @@ paths:
                     properties:
                       version:
                         $ref: "#/components/schemas/AgentVersion"
+                      resolvedConfig:
+                        type: object
+                        description: Resolved agent configuration keyed by config section.
+                        additionalProperties: true
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/WorkflowGraphAgentAccessForbiddenError"
+        "404":
+          description: Agent or version not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -5013,6 +5104,14 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/WorkflowGraphAgentAccessForbiddenError"
+        "404":
+          description: Agent or version not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -5022,7 +5121,9 @@ paths:
       description: |
         Set a published version as the active version for the agent. The previously
         active version is deactivated. This does not modify the version's config — it
-        only changes which version serves live traffic.
+        only changes which version serves live traffic. Activation is idempotent: if
+        the version is already active, the endpoint returns that version without
+        changing config.
       tags:
         - Agent Versioning - Versions
       security:
@@ -5047,13 +5148,25 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/WorkflowGraphAgentAccessForbiddenError"
+        "404":
+          description: Agent or version not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
   /agent/{id}/versions/{versionId}/test-call:
     post:
       summary: Test call with version config
-      description: Initiate a test call using a specific published version's configuration.
+      description: |
+        Initiate a test call using a specific published version's configuration.
+        The response always includes `conversationId` and `callId`. For `webcall`
+        and `chat`, it also includes `token`, `roomName`, and `host`. Those fields
+        are omitted for `telephony`.
       tags:
         - Agent Versioning - Versions
       security:
@@ -5080,11 +5193,37 @@ paths:
                     example: true
                   data:
                     type: object
-                    description: Test call result details
+                    required:
+                      - conversationId
+                      - callId
+                    properties:
+                      conversationId:
+                        type: string
+                        description: Conversation ID created for the test call
+                      callId:
+                        type: string
+                        description: Call ID created for the test call
+                      token:
+                        type: string
+                        description: Returned for webcall and chat modes only
+                      roomName:
+                        type: string
+                        description: Returned for webcall and chat modes only
+                      host:
+                        type: string
+                        description: Returned for webcall and chat modes only
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/WorkflowGraphAgentAccessForbiddenError"
+        "404":
+          description: Agent or version not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -5581,20 +5720,104 @@ components:
           description: Whether the agent is visible to all members of the organization.
 
     DraftConfigRequest:
+      type: object
       description: |
         Config payload for editing a draft via `PATCH /agent/{id}/drafts/{draftId}/config`.
-        Accepts the same shape as the legacy `PATCH /agent/{id}` body plus two
-        versioning-era fields — `singlePromptConfig` (prompt + tools) and
-        `postCallAnalyticsConfig`. All fields are optional; a draft save may update
-        any subset.
-      allOf:
-        - $ref: "#/components/schemas/CreateAgentRequest"
-        - type: object
-          properties:
-            singlePromptConfig:
-              $ref: "#/components/schemas/SinglePromptConfig"
-            postCallAnalyticsConfig:
-              $ref: "#/components/schemas/PostCallAnalyticsConfig"
+        All fields are optional — only the fields provided are updated. A subset of
+        config fields from `CreateAgentRequest` is accepted, plus two versioning-era fields.
+
+        **Fields NOT accepted here** (use `PATCH /agent/{id}` instead):
+        - `name` — agent metadata, not a config field; sending it alone returns 400 "No recognized config fields"
+        - `telephonyProductId` — agent metadata, not a config field
+      properties:
+        singlePromptConfig:
+          $ref: "#/components/schemas/SinglePromptConfig"
+        postCallAnalyticsConfig:
+          $ref: "#/components/schemas/PostCallAnalyticsConfig"
+        language:
+          type: object
+          description: Language configuration. See CreateAgentRequest for full shape.
+        synthesizer:
+          type: object
+          description: Synthesizer (TTS) configuration. See CreateAgentRequest for full shape.
+        slmModel:
+          type: string
+          enum:
+            - electron
+            - electron-kogta
+            - electron-kogta-v2
+            - gpt-4o
+            - gpt-4.1
+            - gpt-5.2
+            - gpt-realtime
+            - gpt-realtime-mini
+          description: LLM model for this draft
+        transcriberType:
+          type: string
+          description: STT engine to use for this draft
+        customLLMWebSocketUrl:
+          type: string
+          description: Custom LLM WebSocket URL (overrides slmModel)
+        widgetConfig:
+          type: object
+          description: Widget configuration for chat-mode agents
+        defaultVariables:
+          type: object
+          description: Default prompt variables
+        preCallAPI:
+          type: object
+          description: Pre-call API configuration. See CreateAgentRequest for full shape.
+        globalPrompt:
+          type: string
+          maxLength: 4000
+          description: Global prompt for workflow_graph agents (max 4000 characters)
+        globalKnowledgeBaseId:
+          type: string
+          description: Knowledge base ID to attach to this draft
+        firstMessage:
+          type: string
+          description: Opening message for this draft
+        allowInterruptions:
+          type: boolean
+        waitForUserToSpeakFirst:
+          type: boolean
+        muteUserUntilFirstBotResponse:
+          type: boolean
+        interruptionBackoffTimer:
+          type: number
+          minimum: 0
+          maximum: 10
+        backgroundSound:
+          type: string
+          enum: ["", "office", "cafe", "call_center", "static"]
+        smartTurnConfig:
+          type: object
+        voiceDetectionConfig:
+          type: object
+        voiceMailDetectionConfig:
+          type: object
+        denoisingConfig:
+          type: object
+        redactionConfig:
+          type: object
+        pronunciationDicts:
+          type: array
+          items:
+            type: object
+        llmIdleTimeoutConfig:
+          type: object
+        sessionTimeoutConfig:
+          type: object
+        workflowType:
+          $ref: "#/components/schemas/WorkflowType"
+        timezone:
+          type: object
+        callDispositionConfig:
+          type: string
+        enableStyleGuide:
+          type: boolean
+        speechFormatting:
+          type: boolean
 
     AgentDTO:
       type: object
@@ -5949,6 +6172,20 @@ components:
           type: string
           nullable: true
           description: User ID of who published this version
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When this version was published
+        activatedBy:
+          type: string
+          nullable: true
+          description: User ID of who activated this version
+        activatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When this version was activated
         draftId:
           type: string
           nullable: true
@@ -6015,6 +6252,109 @@ components:
           type: string
           format: date-time
 
+    AgentVersionDiff:
+      type: object
+      description: Section-by-section diff between two version or draft revision records.
+      properties:
+        unchangedSections:
+          type: array
+          description: Config sections that did not change.
+          items:
+            type: string
+        diffs:
+          type: array
+          description: Config sections with one or more changes.
+          items:
+            type: object
+            properties:
+              section:
+                type: string
+                description: Config section name.
+              changes:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    path:
+                      type: string
+                      description: Path to the changed value within the section.
+                    oldValue:
+                      nullable: true
+                      description: Previous value. Can be any JSON value or null.
+                      oneOf:
+                        - type: string
+                        - type: number
+                        - type: boolean
+                        - type: object
+                          additionalProperties: true
+                        - type: array
+                          items: {}
+                    newValue:
+                      nullable: true
+                      description: New value. Can be any JSON value or null.
+                      oneOf:
+                        - type: string
+                        - type: number
+                        - type: boolean
+                        - type: object
+                          additionalProperties: true
+                        - type: array
+                          items: {}
+
+    AgentVersionMetrics:
+      type: object
+      properties:
+        orgId:
+          type: string
+        agentId:
+          type: string
+        versionId:
+          type: string
+        totalCalls:
+          type: number
+        answeredCalls:
+          type: number
+        avgDurationMs:
+          type: number
+        completionRate:
+          type: number
+        totalCost:
+          type: number
+        hangupSourceDistribution:
+          type: object
+          additionalProperties:
+            type: number
+        period:
+          type: object
+          description: Date range used for the metric aggregation.
+          additionalProperties: true
+
+    AgentVersionMetricsComparison:
+      type: object
+      properties:
+        configDiff:
+          $ref: "#/components/schemas/AgentVersionDiff"
+        metrics:
+          type: object
+          properties:
+            versionA:
+              $ref: "#/components/schemas/AgentVersionMetrics"
+            versionB:
+              $ref: "#/components/schemas/AgentVersionMetrics"
+            deltas:
+              type: object
+              properties:
+                totalCalls:
+                  type: number
+                answeredCalls:
+                  type: number
+                avgDurationMs:
+                  type: number
+                completionRate:
+                  type: number
+                totalCost:
+                  type: number
+
     DraftEditHistoryEntry:
       type: object
       properties:
@@ -6045,14 +6385,17 @@ components:
         sourceVersionId:
           type: string
           pattern: "^[a-f\\d]{24}$"
-          description: ID of a published version to branch from
+          description: |
+            ID of a published version to branch from. Must be a valid MongoDB ObjectId (24-char hex).
+            Sending a non-ObjectId format returns 400.
         sourceDraftId:
           type: string
           description: ID of an existing draft to branch from
         draftName:
           type: string
+          minLength: 1
           maxLength: 100
-          description: Optional name for the draft
+          description: Optional name for the draft (1–100 characters)
 
     PublishDraftRequest:
       type: object
@@ -6097,10 +6440,11 @@ components:
           type: string
           enum: [webcall, chat, telephony]
           default: webcall
-          description: Test call mode
+          description: Test call mode. Defaults to `webcall` when omitted.
         toPhone:
           type: string
-          description: Phone number for telephony mode
+          description: |
+            Phone number to call. Required only when `mode` is `telephony`. Omit for `webcall` and `chat`.
 
     WebhookAgent:
       type: object
@@ -7106,6 +7450,13 @@ components:
 
     ForbiddenError:
       description: Forbidden access
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiResponse"
+
+    WorkflowGraphAgentAccessForbiddenError:
+      description: Forbidden. Returned for workflow_graph agents when the organization lacks conversational agents access.
       content:
         application/json:
           schema:
