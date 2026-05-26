@@ -1,0 +1,27 @@
+---
+title: Analytics-completed webhook — deterministic disposition for no-answer and failed calls
+date: 2026-05-18
+description: For calls that end as no-answer or fail before any conversation transcript exists, the analytics-completed webhook now sends a deterministic null disposition + canonical reasoning instead of an LLM-generated guess.
+---
+
+The `analytics-completed` post-call webhook now sends a **deterministic fallback payload** for calls where no meaningful transcript exists (no-answer dispositions, calls that fail before the agent speaks). Previously the platform invoked the LLM to "guess" a disposition from an empty transcript, often emitting plausible-looking but incorrect values.
+
+**What the payload looks like now:**
+
+```json
+{
+  "event": "ANALYTICS_COMPLETED",
+  "callId": "…",
+  "disposition": {
+    "value": null,
+    "confidence": 0,
+    "reasoning": "Call ended without a conversation transcript — no LLM-based disposition computed."
+  }
+}
+```
+
+The `reasoning` string is canonical (byte-identical across reruns) so you can rely on string-matching to detect the fallback path.
+
+**Why it changed:** the LLM was hallucinating dispositions on empty transcripts, which broke routing rules customers had built on `disposition.value`. Returning `null` + `confidence: 0` makes the "no data to classify" case explicit.
+
+**Migration:** if your webhook handler does `if disposition.value == "X"`, update it to first check `disposition.value is not None` (or `confidence > 0`) before string-matching. No spec or endpoint URL changed.

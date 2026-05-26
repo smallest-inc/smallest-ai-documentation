@@ -4,6 +4,14 @@ date: 2026-05-25
 description: Pulse Pro adds a higher-accuracy speech-to-text pool, available via new `/speech/transcribe` endpoints (sync + async) with webhook delivery for long-form audio.
 ---
 
+<Warning>
+Pulse Pro is **rolling out across regions** — at the time of publishing, the
+`/waves/v1/speech/transcribe`, `/waves/v1/pulse-pro/get_text`, and
+`/waves/v1/speech/deliver-webhook` routes are not yet live in every region
+(probed 2026-05-26: returns 404 on `ap-south-1`). If you receive a 404,
+contact your account manager for early-access enablement.
+</Warning>
+
 Pulse STT Pro is now available. It runs on a dedicated, higher-accuracy inference pool and is reachable via two new endpoints:
 
 | Endpoint | Mode | Max file size |
@@ -16,7 +24,8 @@ The legacy `/waves/v1/pulse/*` routes are unchanged — Pulse Pro is a pure addi
 ```bash
 curl -X POST "https://api.smallest.ai/waves/v1/speech/transcribe?language=en" \
   -H "Authorization: Bearer $SMALLEST_API_KEY" \
-  -F "file=@call.wav"
+  -H "Content-Type: audio/wav" \
+  --data-binary @call.wav
 ```
 
 **What you need to know:**

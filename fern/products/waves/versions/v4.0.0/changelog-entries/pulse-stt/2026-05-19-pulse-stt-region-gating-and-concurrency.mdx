@@ -16,8 +16,12 @@ Two cleanups on the Pulse STT gating layer:
 }
 ```
 
-The region gate applies to both the pre-recorded REST endpoint and the streaming WebSocket path.
+The region gate applies to both the pre-recorded REST endpoint and the streaming WebSocket path. On the WebSocket path the same `LANGUAGE_NOT_ENABLED_IN_REGION` arrives as an error frame followed by close.
 
-**Concurrency caps tuned.** Per-org concurrency limits on ASR have been recalibrated to match infrastructure capacity. Excess requests get `429`; back off with jitter.
+**Concurrency caps tuned.** Per-org concurrency limits on ASR have been recalibrated to match infrastructure capacity:
 
-**Migration:** if you're hitting `LANGUAGE_NOT_ENABLED_IN_REGION` for a language you previously had access to, contact your account manager — it's a region setting, not a code issue.
+- **REST (HTTP)** — excess requests return `429 rate_limit_exceeded`. Back off with jitter.
+- **WebSocket** — sessions opened beyond the org concurrency cap close with code `1008` and reason `concurrency_limit_reached`. Sessions from an org without ASR entitlement close with code `1008` and reason `forbidden` (the upgrade handshake itself succeeds; the close arrives immediately after).
+- A WebSocket caller exceeding the streaming-request rate is also rejected with close code `1008` and reason `rate_limit_exceeded`.
+
+**Migration:** if you're hitting `LANGUAGE_NOT_ENABLED_IN_REGION` for a language you previously had access to, contact your account manager — it's a region setting, not a code issue. On WS, treat close code `1008` as the family of "back off or contact us about entitlement" — the reason string is the discriminator.
