@@ -2810,7 +2810,8 @@ paths:
             type: string
             minLength: 2
             maxLength: 2
-          description: ISO 3166-1 alpha-2 country code
+          description: |
+            ISO 3166-1 alpha-2 country code. Must be exactly 2 characters (e.g. "IN", "US"). Sending 3+ characters returns 400.
           example: "IN"
         - name: numberType
           in: query
@@ -2864,11 +2865,17 @@ paths:
                         items:
                           $ref: "#/components/schemas/RequiredDocumentType"
         "400":
-          description: Invalid query parameters
+          $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
+        "502":
+          description: Bad gateway — Plivo's compliance API returned an error or is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
 
   /compliance/requirements:
     get:
@@ -2889,7 +2896,8 @@ paths:
             type: string
             minLength: 2
             maxLength: 2
-          description: ISO 3166-1 alpha-2 country code
+          description: |
+            ISO 3166-1 alpha-2 country code. Must be exactly 2 characters (e.g. "IN", "US"). Sending 3+ characters returns 400.
           example: "IN"
         - name: numberType
           in: query
@@ -2921,11 +2929,17 @@ paths:
                   data:
                     $ref: "#/components/schemas/ComplianceRequirement"
         "400":
-          description: Invalid query parameters
+          $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
+        "502":
+          description: Bad gateway — Plivo's compliance API returned an error or is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
 
   /compliance/applications:
     post:
@@ -2973,14 +2987,20 @@ paths:
                 endUser:
                   type: string
                   description: |
-                    JSON string containing end-user details. Example:
-                    ```json
-                    {
-                      "name": "Acme Corp",
-                      "country": "IN"
-                    }
-                    ```
-                  example: '{"name": "Acme Corp", "country": "IN"}'
+                    JSON-stringified end-user details. `name` is required; all other fields are optional
+                    but may be required by Plivo depending on country/numberType. Accepted fields:
+
+                    - `name` (required) — full name or business name
+                    - `lastName` — last name
+                    - `email` — email address
+                    - `addressLine1` — street address line 1
+                    - `addressLine2` — street address line 2
+                    - `city` — city
+                    - `state` — state or province
+                    - `postalCode` — postal/ZIP code
+                    - `country` — ISO country code; defaults to `countryIso` if omitted
+                    - `registrationNumber` — business registration number (required for some business applications)
+                  example: '{"name":"Acme Corp","email":"legal@acme.com","addressLine1":"123 Main St","city":"Mumbai","state":"MH","postalCode":"400001","country":"IN"}'
                 documents:
                   type: string
                   description: |
@@ -3013,13 +3033,29 @@ paths:
                   data:
                     $ref: "#/components/schemas/ComplianceApplication"
         "400":
-          description: Validation error (invalid JSON, file count mismatch, unsupported file type)
+          description: Validation error — invalid JSON, unsupported file type, or file count mismatch (`"Expected X files, got Y"`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
         "409":
-          description: A compliance application already exists for this country/numberType/userType
+          description: |
+            A compliance application already exists for this country/numberType combination.
+            Exact message: `"A compliance application already exists for {countryIso}/{numberType}. Status: {status}"`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
+        "502":
+          description: Bad gateway — Plivo's compliance API returned an error or is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
 
   /compliance/applications/{id}:
     patch:
@@ -3028,6 +3064,8 @@ paths:
         Resubmit a previously rejected compliance application with corrected documents.
         Only applications in `rejected` status can be resubmitted. All documents must be
         re-uploaded — partial updates are not supported.
+
+        File/document count must match exactly. Mismatch returns 400 with message `"Expected X files, got Y"`.
       tags:
         - Compliance
       security:
@@ -3077,13 +3115,27 @@ paths:
                   data:
                     $ref: "#/components/schemas/ComplianceApplication"
         "400":
-          description: Only rejected applications can be resubmitted, or validation error
+          description: Application is not in rejected status, file count mismatch, or other validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
         "404":
           description: Application not found or does not belong to this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
+        "502":
+          description: Bad gateway — Plivo's compliance API returned an error or is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
 
   /compliance/applications/{id}/refresh:
     post:
@@ -3120,8 +3172,18 @@ paths:
           $ref: "#/components/responses/UnauthorizedErrorResponse"
         "404":
           description: Application not found or does not belong to this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
+        "502":
+          description: Bad gateway — Plivo's compliance API returned an error or is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
 
   /webhook:
     get:
