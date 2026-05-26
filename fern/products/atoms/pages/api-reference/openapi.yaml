@@ -2346,7 +2346,11 @@ paths:
   /product/phone-numbers:
     get:
       summary: Get acquired phone numbers
-      description: Retrieve all acquired phone numbers for the organization
+      description: |
+        Retrieve all platform-purchased telephony numbers (Twilio/Plivo) for the organization.
+
+        **Note:** Imported SIP numbers added via `POST /product/import-phone-number` are **not** included
+        in this response — they are stored as a separate product type and returned by a different internal call.
       tags:
         - Phone Numbers
       security:
@@ -2371,22 +2375,42 @@ paths:
                           type: string
                           description: The unique identifier for the phone number
                           example: "6867ca76d0f8f2e0f4201281"
+                        productType:
+                          type: string
+                          enum: [telephony]
+                          description: The product type — always `telephony` for numbers returned by this endpoint
                         isActive:
                           type: boolean
                           description: Whether the phone number is active
                           example: false
+                        agentId:
+                          type: string
+                          nullable: true
+                          description: ID of the agent currently assigned to this number, or null if unassigned
                         attributes:
                           type: object
-                          description: Additional attributes of the phone number
+                          description: Telephony provider attributes for the phone number
                           properties:
                             provider:
                               type: string
+                              enum: [twilio, plivo]
                               description: The telephony provider
                               example: "twilio"
                             phoneNumber:
                               type: string
-                              description: The actual phone number
+                              description: The actual phone number in E.164 format
                               example: "+13412184691"
+                            countryCode:
+                              type: string
+                              description: ISO 3166-1 alpha-2 country code of the number
+                              example: "US"
+                            areaCode:
+                              type: string
+                              description: Area code of the number (if applicable)
+                              example: "341"
+                            complianceApplicationId:
+                              type: string
+                              description: Compliance application ID associated with the number (if applicable)
                         createdAt:
                           type: string
                           format: date-time
