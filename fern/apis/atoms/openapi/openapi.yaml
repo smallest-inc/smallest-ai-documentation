@@ -2344,6 +2344,9 @@ paths:
               properties:
                 name:
                   type: string
+                  minLength: 1
+                  maxLength: 40
+                  description: Name of the knowledge base (1–40 characters, trimmed)
                 description:
                   type: string
               required:
@@ -2401,11 +2404,18 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Knowledge base not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
     delete:
       summary: Delete a knowledge base
-      description: Delete a knowledge base
+      description: |
+        Delete a knowledge base.
+
+        **400 is returned when the knowledge base is still linked to an agent:**
+        `"This knowledge base is connected to an agent. Please detach it from the agent before deleting."`
+        Detach the KB from all agents (via agent config) before attempting deletion.
       tags:
         - Knowledge Base
       security:
@@ -2432,6 +2442,8 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Knowledge base not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -2514,7 +2526,14 @@ paths:
   /knowledgebase/{id}/items/upload-media:
     post:
       summary: Upload a PDF file to a knowledge base
-      description: Upload a PDF file to a knowledge base. Only PDF files are accepted.
+      description: |
+        Upload a PDF file to a knowledge base. Only PDF files are accepted (validated by MIME type and extension).
+
+        **400 is returned for billing/entitlement failures before the file is processed:**
+        - `"Insufficient credits for KB storage upload."` — account lacks upload credits
+        - `"KB storage access is not enabled for your account."` — plan doesn't include KB storage
+
+        No application-level file size limit is enforced — any proxy or infrastructure limits (e.g. nginx) apply instead.
       tags:
         - Knowledge Base
       security:
@@ -6395,6 +6414,10 @@ components:
         createdBy:
           type: string
           description: The user ID who created the knowledge base
+        processingStatus:
+          type: string
+          enum: [pending, processing, completed, failed]
+          description: The current processing status of the knowledge base
         createdAt:
           type: string
           format: date-time
