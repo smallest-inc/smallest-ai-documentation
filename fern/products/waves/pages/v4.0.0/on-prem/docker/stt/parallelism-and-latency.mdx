@@ -11,9 +11,9 @@ All figures are single-GPU steady-state. Multi-GPU clusters scale linearly. Re-b
 
 ## Pulse Pro
 
-Benchmark hardware: **1× NVIDIA L40S (48 GB VRAM)**, 4 vCPU host.
+**Recommended GPU:** 1× NVIDIA L4 (24 GB VRAM). The numbers below were measured on **L40S (48 GB)** for reference; L4 delivers lower throughput at materially lower cost, A100 / H100 deliver higher. Re-benchmark on your target GPU before locking customer SLOs.
 
-### Long-form audio (single 2 hr file)
+### Long-form audio on L40S (single 2 hr file)
 
 | Mode | Throughput (RTFx) | 2 hr file latency |
 |---|---|---|
@@ -22,7 +22,7 @@ Benchmark hardware: **1× NVIDIA L40S (48 GB VRAM)**, 4 vCPU host.
 
 RTFx is the multiple of real-time speed (250× means a 1 hour audio file transcribes in ~14 seconds). RTFx for the no-timestamps mode is roughly one-third faster because the alignment pass is skipped.
 
-### Sustained throughput (batched, 50-second chunks)
+### Sustained throughput on L40S (batched, 50-second chunks)
 
 | Mode | RPS (requests / second) | Effective RTFx |
 |---|---|---|
@@ -33,7 +33,7 @@ These numbers assume optimal batching of typical-length audio. On a single chall
 
 ### Hardware reference
 
-The public Open ASR Leaderboard measures throughput on A100-80GB at batch 64. The L40S figures above are roughly half of what A100 delivers for the same workload. Customers running A100 should expect materially higher RTFx than the published L40S numbers.
+The public Open ASR Leaderboard measures throughput on A100-80GB at batch 64. The L40S figures above are roughly half of what A100 delivers for the same workload. The recommended L4 deployment delivers lower throughput than L40S; expect a multi-fold drop on RTFx relative to the L40S numbers, especially with word timestamps enabled.
 
 ## Pulse
 
@@ -60,7 +60,7 @@ Sustained throughput on Pulse depends on language and feature mix (diarization a
 - **Speaker diarization.** Adds latency, more pronounced on shorter audio. On long-form files the relative cost is smaller.
 - **Audio length and chunking.** Pulse Pro processes audio in internal chunks; very long single files do not parallelize across the GPU the way batches of medium-length files do.
 - **Batch size.** The published 250–300× RTFx assumes the worker is fed efficiently. A bursty single-request workload realizes lower numbers; a steady batched workload realizes higher numbers.
-- **GPU host class.** L40S is the reference. A100 is materially faster on this workload. T4 and L4 are supported but with reduced throughput.
+- **GPU host class.** L4 is the recommended production GPU for STT. L40S is the internal benchmark reference (used for the numbers above); A100 / H100 deliver higher throughput; T4 is supported with reduced throughput.
 
 ## Reference: Open ASR Leaderboard positioning
 
@@ -71,9 +71,9 @@ For context, here is where Pulse Pro and a few other models sit on the public Op
 | NVIDIA Parakeet TDT 0.6B v2 | ~3,400 | 6.05 |
 | NVIDIA Parakeet TDT 0.6B v3 | ~3,300 | 6.32 |
 | Cohere Labs Transcribe | ~525 | 5.42 |
-| **Pulse Pro: long-form, no TS (L40S)** | **250–300** | **5.42** |
+| **Pulse Pro (L40S, long-form, no TS)** | **250–300** | **5.42** |
 | IBM Granite Speech 3.3 2B | ~270 | 6.00 |
-| **Pulse Pro: long-form, with TS (L40S)** | **~200** | **5.42** |
+| **Pulse Pro (L40S, long-form, with TS)** | **~200** | **5.42** |
 | OpenAI Whisper Large v3 | ~146 | 7.44 |
 
 Pulse Pro sits in the accuracy-first quadrant: tied for #2 on accuracy at 5.42% WER, with throughput optimized for high-quality output rather than pure speed.
