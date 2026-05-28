@@ -1,0 +1,318 @@
+openapi: 3.0.1
+info:
+  title: Unified Speech-to-Text API
+  description: |
+    Unified Speech-to-Text endpoint. Path is `/waves/v1/stt/`; the model is selected via the `?model=` query parameter.
+
+    Supported models:
+    - `pulse` — high-accuracy multilingual STT (38 languages), supports pre-recorded HTTP and streaming WebSocket.
+    - `pulse-pro` — leaderboard-ranked English STT (5.42% ESB avg WER, #2 tied on Open ASR Leaderboard). HTTP only.
+
+    The path mirrors the unified TTS shape (`POST /waves/v1/tts/` + `WS /waves/v1/tts/live`). Adding a new ASR model in the future means adding a new `?model=` value; the path stays stable.
+
+    Legacy endpoints (`POST /waves/v1/pulse/get_text`, `POST /waves/v1/lightning/get_text` and their WS equivalents) continue to work but are deprecated. New integrations should use `/waves/v1/stt/`.
+  version: 1.0.0
+servers:
+- url: https://api.smallest.ai
+  description: Waves API server
+  x-fern-server-name: waves
+paths:
+  /waves/v1/stt/:
+    post:
+      tags:
+      - Speech to Text
+      summary: Transcribe audio (Pulse or Pulse Pro)
+      description: |
+        Transcribe an audio file. The model is chosen via `?model=`:
+
+        - `?model=pulse` — multilingual transcription (38 languages), supports both raw bytes and audio-by-URL.
+        - `?model=pulse-pro` — English-only, leaderboard-ranked accuracy. Raw bytes only; pass `webhook_url` to receive transcription asynchronously on long files.
+
+        ## When to use this
+
+        Use this endpoint when you have a complete audio file (call recording, voicemail, podcast episode) and want the transcript back in one response. For live transcription as audio arrives, use the realtime WebSocket endpoint (`WS /waves/v1/stt/live`) instead.
+
+        Pulse Pro has no streaming worker today; calls to `WS /waves/v1/stt/live?model=pulse-pro` return `400` before the WebSocket upgrades.
+
+        ## Input methods
+
+        - **Raw bytes** — `Content-Type: application/octet-stream` with the audio in the body. All knobs are query parameters.
+        - **URL (`?model=pulse` only)** — `Content-Type: application/json` with `{"url": "..."}` in the body.
+
+        ## Examples
+
+        **cURL** — Pulse Pro, sync
+        ```bash
+        curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en&word_timestamps=true" \
+          -H "Authorization: Bearer $SMALLEST_API_KEY" \
+          -H "Content-Type: application/octet-stream" \
+          --data-binary "@./call.wav"
+        ```
+
+        **cURL** — Pulse Pro, async via webhook
+        ```bash
+        curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en&webhook_url=https://your.app/cb" \
+          -H "Authorization: Bearer $SMALLEST_API_KEY" \
+          -H "Content-Type: application/octet-stream" \
+          --data-binary "@./call.wav"
+        ```
+        Returns `202 { "status": "accepted", "request_id": "..." }`. The webhook receives the full transcription when ready.
+
+        **cURL** — Pulse, audio-by-URL
+        ```bash
+        curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse&language=en" \
+          -H "Authorization: Bearer $SMALLEST_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{"url": "https://your-bucket.s3.amazonaws.com/call.wav"}'
+        ```
+
+        **Python**
+        ```python
+        import requests
+
+        with open("./call.wav", "rb") as f:
+            audio = f.read()
+
+        r = requests.post(
+            "https://api.smallest.ai/waves/v1/stt/",
+            params={"model": "pulse-pro", "language": "en", "word_timestamps": "true"},
+            headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/octet-stream"},
+            data=audio,
+        )
+        r.raise_for_status()
+        print(r.json()["transcription"])
+        ```
+
+        **JavaScript / TypeScript**
+        ```typescript
+        import { readFileSync } from "node:fs";
+
+        const audio = readFileSync("./call.wav");
+        const params = new URLSearchParams({ model: "pulse-pro", language: "en", word_timestamps: "true" });
+
+        const res = await fetch(`https://api.smallest.ai/waves/v1/stt/?${params}`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${process.env.SMALLEST_API_KEY}`, "Content-Type": "application/octet-stream" },
+          body: audio,
+        });
+        console.log((await res.json()).transcription);
+        ```
+
+        ## Common gotchas
+
+        - **`model` is required.** Missing or invalid values return `400` with an enum-validation error.
+        - **Pulse Pro is English only.** Pass `language=en`. Other language codes are accepted at the wire level but produce unpredictable output.
+        - **Pulse Pro does not support audio-by-URL.** Send raw bytes or use `?model=pulse` for the URL flow.
+        - **Async (webhook) mode is Pulse Pro only.** Pulse runs sync only on this endpoint.
+        - **Max payload 25 MB.** Larger requests return `413`. Compress to mono 16 kHz PCM if you are close to the limit; quality is unaffected.
+      operationId: transcribe
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: model
+        in: query
+        required: true
+        schema:
+          type: string
+          enum: [pulse, pulse-pro]
+        description: |
+          Selects which ASR model handles the request. Required; missing or invalid values return `400`.
+
+          - `pulse` — multilingual (38 languages), raw bytes OR URL.
+          - `pulse-pro` — English only, leaderboard-ranked accuracy, raw bytes only; supports async via `webhook_url`.
+      - name: language
+        in: query
+        required: true
+        schema:
+          type: string
+        description: |
+          Language of the audio file. For Pulse Pro pass `en`. For Pulse, see the Pulse model card for the full 38-language list, plus the `multi`, `multi-eu`, `multi-indic`, and `multi-asian` aggregators.
+      - name: word_timestamps
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+        description: Include per-word timestamps in the response. On Pulse Pro this costs roughly one-third of throughput.
+      - name: diarize
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+        description: Multi-speaker identification; adds per-word and per-utterance speaker labels.
+      - name: webhook_url
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uri
+        description: |
+          Pulse Pro only. If set, the response is `202` immediately and the transcription hits this URL when ready. Use for long files where you do not want to hold an HTTP connection open.
+      - name: webhook_method
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [GET, POST]
+          default: POST
+        description: HTTP method to use when calling the webhook. Pulse Pro only.
+      - name: webhook_extra
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Arbitrary metadata returned to the webhook in addition to the transcription payload. Pulse Pro only.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+              description: Raw audio bytes. Set `Content-Type` to the audio MIME type (e.g. `audio/wav`).
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: https://example.com/audio.wav
+              required: [url]
+            example:
+              url: https://example.com/audio.wav
+      responses:
+        '200':
+          description: Sync transcription succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranscriptionResponse'
+              example:
+                status: success
+                transcription: 'Hi, how are you doing? Could you help me reschedule my appointment?'
+                words:
+                - { word: Hi, start: 0.32, end: 0.40, confidence: 0.96 }
+                - { word: how, start: 0.48, end: 0.56, confidence: 0.93 }
+                language: en
+                metadata:
+                  duration: 5.6
+                  processing_time_ms: 240.51
+                  rtfx: 23.3
+                  num_chunks: 1
+                request_id: 87dd36c1-4267-472d-96ee-4113e0a770a6
+        '202':
+          description: Async accepted (Pulse Pro with `webhook_url`). The transcription will arrive on the webhook when ready.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: accepted }
+                  request_id: { type: string }
+                required: [status, request_id]
+              example:
+                status: accepted
+                request_id: f3a1c2e0-09c3-43e2-8d8e-cb1f3b1b8f7d
+        '400':
+          description: Missing or invalid `model` query parameter, invalid params, or unsupported feature combination (e.g. `?model=pulse-pro` on the WS endpoint, audio-by-URL with `?model=pulse-pro`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: error
+                message: Invalid model query parameter.
+                errors:
+                - expected: "'pulse' | 'pulse-pro'"
+                  received: undefined
+                  code: invalid_type
+                  path: [model]
+                  message: 'Missing required query param: model. Supported values: pulse | pulse-pro.'
+        '401':
+          description: API key missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Plan does not include access to the requested model.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: Payload exceeds 25 MB.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: RPM cap exceeded (Standard plan default 25/min per model).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Worker temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'API key authentication. Include your key as `Authorization: Bearer YOUR_API_KEY`.'
+  schemas:
+    Word:
+      type: object
+      properties:
+        word:    { type: string,  example: hello }
+        start:   { type: number,  example: 0.32 }
+        end:     { type: number,  example: 0.40 }
+        confidence: { type: number, example: 0.96 }
+        speaker: { type: string,  description: "Present when `diarize=true`.", example: speaker_0 }
+    Utterance:
+      type: object
+      properties:
+        text:    { type: string,  example: Hello world. }
+        start:   { type: number,  example: 0.0 }
+        end:     { type: number,  example: 0.9 }
+        speaker: { type: string,  example: speaker_0 }
+    TranscriptionResponse:
+      type: object
+      required: [status, transcription]
+      properties:
+        status:        { type: string, example: success }
+        transcription: { type: string, example: "Hi, how are you doing?" }
+        words:
+          type: array
+          items: { $ref: '#/components/schemas/Word' }
+        utterances:
+          type: array
+          description: "Present on Pulse responses; Pulse Pro returns an empty array unless `diarize=true`."
+          items: { $ref: '#/components/schemas/Utterance' }
+        language:      { type: string, example: en }
+        metadata:
+          type: object
+          properties:
+            duration:           { type: number, description: "Audio duration in seconds.", example: 5.6 }
+            processing_time_ms: { type: number, description: "Pulse Pro only.", example: 240.51 }
+            rtfx:               { type: number, description: "Real-time factor for this request (Pulse Pro only).", example: 23.3 }
+            num_chunks:         { type: number, description: "Number of internal chunks the audio was split into (Pulse Pro only).", example: 1 }
+            filename:           { type: string, description: "Pulse responses include this when sent via URL.", example: audio.wav }
+            fileSize:           { type: number, description: "Bytes received (Pulse responses).", example: 268844 }
+        request_id:    { type: string, example: 87dd36c1-4267-472d-96ee-4113e0a770a6 }
+    ErrorResponse:
+      type: object
+      properties:
+        status:  { type: string, example: error }
+        message: { type: string }
+        errors:
+          type: array
+          items: { type: object }
+      required: [status, message]

@@ -1,0 +1,24 @@
+---
+title: Unified Speech-to-Text endpoint, Pulse Pro model
+---
+
+The Speech-to-Text API now lives at the unified path `/waves/v1/stt/`, mirroring the unified TTS shape. The model is selected via the `?model=` query parameter. Two models are live today:
+
+- `?model=pulse`: multilingual (38 languages), HTTP + WebSocket streaming.
+- `?model=pulse-pro`: leaderboard-ranked English STT (5.42% ESB avg WER, tied #2 on the public Open ASR Leaderboard). HTTP only.
+
+Pulse Pro on the streaming endpoint (`WS /waves/v1/stt/live?model=pulse-pro`) is rejected with `400` before WebSocket upgrade because the streaming worker is not yet deployed. Use the HTTP endpoint and pass `webhook_url` for long files.
+
+**Customer pricing (Standard plan):**
+
+- Pulse, streaming (WebSocket): $0.006 / minute
+- Pulse, non-streaming (HTTP): $0.0035 / minute
+- Pulse Pro, non-streaming (HTTP): $0.004 / minute
+
+Standard plan rate limits default to 25 RPM per model and 100 concurrent WebSocket sessions. Enterprise is unlimited and configurable per-customer.
+
+Legacy endpoints (`POST /waves/v1/pulse/get_text`, `POST /waves/v1/lightning/get_text`, and their WebSocket equivalents) continue to work but are deprecated. New integrations should use `/waves/v1/stt/`.
+
+- [Pulse Pro model card](/waves/model-cards/speech-to-text/pulse-pro)
+- [Speech-to-Text quickstart](/waves/documentation/speech-to-text-pulse/pre-recorded/quickstart) covers both models.
+- [STT API reference (`POST /waves/v1/stt/`)](/waves/api-reference/api-reference/speech-to-text/transcribe)

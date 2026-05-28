@@ -1,0 +1,85 @@
+---
+title: Parallelism and Latency
+description: Throughput, real-time factor (RTFx), and latency figures for self-hosted Pulse and Pulse Pro deployments.
+---
+
+The numbers below come from internal benchmarks on a single GPU host. Use them to size deployments for batch transcription or to set customer-facing SLOs.
+
+<Warning>
+All figures are single-GPU steady-state. Multi-GPU clusters scale linearly. Re-benchmark in your own environment before locking SLOs; throughput depends on hardware revision, driver version, and audio characteristics.
+</Warning>
+
+## Pulse Pro
+
+Benchmark hardware: **1× NVIDIA L40S (48 GB VRAM)**, 4 vCPU host.
+
+### Long-form audio (single 2 hr file)
+
+| Mode | Throughput (RTFx) | 2 hr file latency |
+|---|---|---|
+| No word timestamps | **250–300×** | ~24–29 sec |
+| With word timestamps | **~200×** | ~36 sec |
+
+RTFx is the multiple of real-time speed (250× means a 1 hour audio file transcribes in ~14 seconds). RTFx for the no-timestamps mode is roughly one-third faster because the alignment pass is skipped.
+
+### Sustained throughput (batched, 50-second chunks)
+
+| Mode | RPS (requests / second) | Effective RTFx |
+|---|---|---|
+| No word timestamps | 19–21 | ~1,000× |
+| With word timestamps | 8–10 | ~450× |
+
+These numbers assume optimal batching of typical-length audio. On a single challenging long-form file we have measured down to **68× RTFx** (1.92 hr Earnings22 sample). Plan for the lower bound on single very-long-form files.
+
+### Hardware reference
+
+The public Open ASR Leaderboard measures throughput on A100-80GB at batch 64. The L40S figures above are roughly half of what A100 delivers for the same workload. Customers running A100 should expect materially higher RTFx than the published L40S numbers.
+
+## Pulse
+
+Pulse is multilingual and runs on a smaller GPU footprint than Pulse Pro.
+
+### Time to first transcript (TTFT)
+
+| Concurrency | TTFT |
+|---|---|
+| 1 | 64 ms |
+| 100 | 300 ms |
+
+Streaming TTFT is the time from the first audio frame arriving until the first transcription event leaves the server.
+
+### Sustained throughput
+
+Sustained throughput on Pulse depends on language and feature mix (diarization adds latency, word timestamps add a small amount). Benchmark in your environment for production sizing; rough order of magnitude is similar to Pulse Pro batched mode.
+
+---
+
+## What affects throughput in practice
+
+- **Word timestamps.** Word alignment costs roughly one-third of throughput on Pulse Pro. Skip them if you only need the transcript text.
+- **Speaker diarization.** Adds latency, more pronounced on shorter audio. On long-form files the relative cost is smaller.
+- **Audio length and chunking.** Pulse Pro processes audio in internal chunks; very long single files do not parallelize across the GPU the way batches of medium-length files do.
+- **Batch size.** The published 250–300× RTFx assumes the worker is fed efficiently. A bursty single-request workload realizes lower numbers; a steady batched workload realizes higher numbers.
+- **GPU host class.** L40S is the reference. A100 is materially faster on this workload. T4 and L4 are supported but with reduced throughput.
+
+## Reference: Open ASR Leaderboard positioning
+
+For context, here is where Pulse Pro and a few other models sit on the public Open ASR Leaderboard's batched-A100 RTFx baseline. ESB WER is the average across 8 datasets; lower is better.
+
+| Model | RTFx (A100) | ESB WER ↓ |
+|---|---|---|
+| NVIDIA Parakeet TDT 0.6B v2 | ~3,400 | 6.05 |
+| NVIDIA Parakeet TDT 0.6B v3 | ~3,300 | 6.32 |
+| Cohere Labs Transcribe | ~525 | 5.42 |
+| **Pulse Pro: long-form, no TS (L40S)** | **250–300** | **5.42** |
+| IBM Granite Speech 3.3 2B | ~270 | 6.00 |
+| **Pulse Pro: long-form, with TS (L40S)** | **~200** | **5.42** |
+| OpenAI Whisper Large v3 | ~146 | 7.44 |
+
+Pulse Pro sits in the accuracy-first quadrant: tied for #2 on accuracy at 5.42% WER, with throughput optimized for high-quality output rather than pure speed.
+
+## Next steps
+
+- [Hardware requirements](/waves/on-premises-deployment/docker-setup/stt-deployment/prerequisites/hardware-requirements) for picking a GPU.
+- [Cloud deployment recommendations](/waves/on-premises-deployment/docker-setup/stt-deployment/cloud-deployment) for AWS, GCP, and Azure.
+- [Quick Start](/waves/on-premises-deployment/docker-setup/stt-deployment/quick-start) to bring up a self-hosted STT cluster.

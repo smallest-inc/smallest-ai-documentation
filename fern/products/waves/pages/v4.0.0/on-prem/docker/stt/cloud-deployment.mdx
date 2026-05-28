@@ -1,0 +1,62 @@
+---
+title: Cloud Deployment
+description: Recommended GPU instance types on AWS, GCP, and Azure for self-hosting Pulse and Pulse Pro.
+---
+
+This page lists the recommended cloud instance types for self-hosting Pulse and Pulse Pro. The recommendations are based on the GPUs we benchmark against internally; the broader [hardware requirements](./prerequisites/hardware-requirements) page lists every supported GPU class.
+
+<Warning>
+Pricing varies by region, commitment term (on-demand, 1-year reserved, 3-year reserved, spot), and quota availability. Confirm rate and quota in your account before sizing a deployment.
+</Warning>
+
+## AWS
+
+| Model | Instance type | GPU | vCPU | RAM | Notes |
+|---|---|---|---|---|---|
+| **Pulse Pro** | [`g6e.xlarge`](https://aws.amazon.com/ec2/instance-types/g6e/) | 1× NVIDIA L40S (48 GB) | 4 | 32 GB | Reference benchmark hardware. On-demand list price ~$1.86/hr in `us-east-1`. |
+| Pulse Pro (alt) | [`p5.48xlarge`](https://aws.amazon.com/ec2/instance-types/p5/) | 8× H100 | 192 | 2 TB | Multi-tenant or very high RPS. Overkill for a single worker. |
+| **Pulse** | [`g6.xlarge`](https://aws.amazon.com/ec2/instance-types/g6/) | 1× NVIDIA L4 (24 GB) | 4 | 16 GB | Production reference for Pulse multilingual. |
+| Pulse (budget) | [`g4dn.xlarge`](https://aws.amazon.com/ec2/instance-types/g4/) | 1× NVIDIA T4 (16 GB) | 4 | 16 GB | Older T4 still supported; reduced throughput. |
+
+Region availability: L40S and L4 instances are available in major regions (`us-east-1`, `us-west-2`, `eu-west-1`, `ap-south-1`). Check the [EC2 instance availability matrix](https://aws.amazon.com/ec2/pricing/on-demand/) for your target region before deployment.
+
+## GCP
+
+| Model | Machine type | GPU | vCPU | RAM | Notes |
+|---|---|---|---|---|---|
+| **Pulse Pro** | [`g2-standard-8`](https://cloud.google.com/compute/docs/gpus#l4-gpus) | 1× NVIDIA L4 (24 GB) | 8 | 32 GB | L40S not yet GA on GCP; L4 is the closest stable choice. Re-benchmark before locking SLOs. |
+| Pulse Pro (alt) | [`a2-highgpu-1g`](https://cloud.google.com/compute/docs/gpus#a100-gpus) | 1× NVIDIA A100 (40 GB) | 12 | 85 GB | Higher cost, materially higher throughput than L4. |
+| **Pulse** | [`g2-standard-4`](https://cloud.google.com/compute/docs/gpus#l4-gpus) | 1× NVIDIA L4 (24 GB) | 4 | 16 GB | Production reference for Pulse multilingual. |
+| Pulse (budget) | [`n1-standard-4` + T4](https://cloud.google.com/compute/docs/gpus#t4-gpus) | 1× NVIDIA T4 (16 GB) | 4 | 15 GB | T4 still supported; reduced throughput. |
+
+Region availability: G2 family is available in `us-central1`, `us-east4`, `us-west4`, `europe-west4`, `asia-southeast1` among others. Confirm in [GCP regions & zones](https://cloud.google.com/compute/docs/regions-zones).
+
+## Azure
+
+| Model | VM size | GPU | vCPU | RAM | Notes |
+|---|---|---|---|---|---|
+| **Pulse Pro** | [`Standard_NC24ads_A100_v4`](https://learn.microsoft.com/en-us/azure/virtual-machines/nc-a100-v4-series) | 1× NVIDIA A100 (80 GB) | 24 | 220 GB | A100 is the closest stable equivalent; L40S availability on Azure is limited. |
+| Pulse Pro (alt) | [`Standard_ND96asr_A100_v4`](https://learn.microsoft.com/en-us/azure/virtual-machines/nda100-v4-series) | 8× A100 (40 GB) | 96 | 900 GB | Multi-tenant. Significantly more capacity than required for a single worker. |
+| **Pulse** | [`Standard_NC4as_T4_v3`](https://learn.microsoft.com/en-us/azure/virtual-machines/nct4-v3-series) | 1× NVIDIA T4 (16 GB) | 4 | 28 GB | Production reference for Pulse multilingual on Azure. |
+
+Region availability: NC A100 v4 is available in `eastus2`, `southcentralus`, `westeurope`, `southeastasia` among others. Confirm in the [Azure GPU regions list](https://azure.microsoft.com/en-us/explore/global-infrastructure/products-by-region/?products=virtual-machines).
+
+## Picking between on-demand, reserved, and spot
+
+- **On-demand** for proof-of-concept and bursty workloads.
+- **1-year or 3-year reserved** for steady-state production. Materially reduces hourly rate (commonly 30–60% vs on-demand).
+- **Spot / preemptible** for batch / overnight transcription. Cheapest option, but the worker can be preempted; build your queue to tolerate restarts.
+
+## Container image
+
+Once you have the GPU host, follow the [Quick Start](./quick-start) to pull the Pulse / Pulse Pro container image and run the worker. The image runs identically across AWS, GCP, and Azure; the only difference is the GPU driver version on the host.
+
+<Note>
+**Instance-type recommendations are provisional.** These are the closest stable matches per cloud against our internal L40S reference hardware. If your workload is latency-sensitive or you have committed capacity for a specific class, the engineering team can confirm the best fit for your specific case; contact [support@smallest.ai](mailto:support@smallest.ai).
+</Note>
+
+## Next steps
+
+- [Hardware requirements](./prerequisites/hardware-requirements): minimum and recommended GPU specs.
+- [Parallelism and latency](./parallelism-and-latency): RTFx, RPS, and latency by mode.
+- [Quick Start](./quick-start): deploy the STT worker.

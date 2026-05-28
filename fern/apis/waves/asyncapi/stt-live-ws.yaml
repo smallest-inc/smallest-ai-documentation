@@ -1,0 +1,175 @@
+asyncapi: 3.0.0
+info:
+  title: Unified Speech-to-Text Live WebSocket API
+  version: 1.0.0
+  description: |
+    Unified WebSocket endpoint for live speech-to-text streaming. Path is `/waves/v1/stt/live`; the ASR model is selected via the `?model=` query parameter, mirroring the unified TTS shape.
+
+    Today only `?model=pulse` is supported. `?model=pulse-pro` is rejected with `400` before the WebSocket upgrades because Pulse Pro has no streaming worker yet; use `POST /waves/v1/stt/?model=pulse-pro` (HTTP) instead.
+
+    Legacy `WS /waves/v1/pulse/get_text` and `WS /waves/v1/lightning/get_text` continue to work but are deprecated.
+  contact:
+    name: Waves API Support
+    email: support@smallest.ai
+  license:
+    name: Proprietary
+servers:
+  production:
+    host: api.smallest.ai
+    pathname: /waves/v1/stt/live
+    protocol: wss
+    description: Production WebSocket streaming STT endpoint
+    security:
+    - $ref: '#/components/securitySchemes/bearerAuth'
+    bindings:
+      ws:
+        query:
+          type: object
+          required: [model, language]
+          properties:
+            model:
+              type: string
+              enum: [pulse]
+              description: |
+                Selects the ASR model. Today only `pulse` is supported on the streaming endpoint. `pulse-pro` returns `400` before WebSocket upgrade — use `POST /waves/v1/stt/?model=pulse-pro` (HTTP) for Pulse Pro.
+            language:
+              type: string
+              description: Language code (e.g. `en`, `hi`). For Pulse, see the Pulse model card for the full 38-language list and the `multi-*` aggregators.
+            sample_rate:
+              type: integer
+              enum: [8000, 16000, 22050, 24000, 44100, 48000]
+              default: 16000
+              description: Audio sample rate in Hz.
+            encoding:
+              type: string
+              enum: [linear16, linear32, alaw, mulaw, opus, ogg_opus]
+              default: linear16
+              description: Audio encoding format.
+            word_timestamps:
+              type: string
+              enum: ['true', 'false']
+              default: 'false'
+              description: Include word-level timestamps in transcription events.
+            diarize:
+              type: string
+              enum: ['true', 'false']
+              default: 'false'
+              description: Speaker diarization.
+            eou_timeout_ms:
+              type: integer
+              description: End-of-utterance silence timeout in milliseconds.
+channels:
+  transcription:
+    address: /
+    description: Bidirectional channel. Client sends binary audio chunks; server emits transcription and lifecycle events.
+    messages:
+      audioChunkOut:
+        $ref: '#/components/messages/AudioChunkOut'
+      closeStream:
+        $ref: '#/components/messages/CloseStream'
+      transcriptionEvent:
+        $ref: '#/components/messages/TranscriptionEvent'
+      errorEvent:
+        $ref: '#/components/messages/ErrorEvent'
+operations:
+  sendAudio:
+    action: send
+    channel: { $ref: '#/channels/transcription' }
+    summary: Send a binary audio chunk to the server.
+    messages:
+    - $ref: '#/channels/transcription/messages/audioChunkOut'
+  sendClose:
+    action: send
+    channel: { $ref: '#/channels/transcription' }
+    summary: Signal end of stream and flush remaining audio.
+    messages:
+    - $ref: '#/channels/transcription/messages/closeStream'
+  receiveTranscription:
+    action: receive
+    channel: { $ref: '#/channels/transcription' }
+    summary: Receive transcription events as the model processes audio.
+    messages:
+    - $ref: '#/channels/transcription/messages/transcriptionEvent'
+    - $ref: '#/channels/transcription/messages/errorEvent'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'API key authentication. Include your key in the `Authorization` header as `Bearer YOUR_API_KEY`.'
+  messages:
+    AudioChunkOut:
+      contentType: application/octet-stream
+      summary: Binary audio frame (PCM or encoded per `?encoding=`).
+      payload:
+        type: string
+        format: binary
+    CloseStream:
+      contentType: application/json
+      summary: Tell the server to flush remaining audio and close the connection.
+      payload:
+        type: object
+        required: [type]
+        properties:
+          type:
+            type: string
+            enum: [close_stream]
+          is_last:
+            type: boolean
+            default: true
+      examples:
+      - name: close
+        payload: { type: close_stream, is_last: true }
+    TranscriptionEvent:
+      contentType: application/json
+      summary: Streaming transcription event.
+      payload:
+        type: object
+        properties:
+          type:          { type: string, enum: [transcription] }
+          status:        { type: string, example: success }
+          transcription: { type: string, example: "Hi, how are you doing?" }
+          is_final:      { type: boolean, description: 'True when this segment will not be revised.' }
+          is_last:       { type: boolean, description: 'True on the final segment before close.' }
+          session_id:    { type: string }
+          words:
+            type: array
+            items:
+              type: object
+              properties:
+                word:    { type: string }
+                start:   { type: number }
+                end:     { type: number }
+                speaker: { type: string, description: 'Present when `diarize=true`.' }
+      examples:
+      - name: partial
+        payload:
+          type: transcription
+          status: success
+          transcription: "Hi, how are you"
+          is_final: false
+          is_last: false
+          session_id: 4b5ae9cb-1234-5678-9abc-def012345678
+      - name: final
+        payload:
+          type: transcription
+          status: success
+          transcription: "Hi, how are you doing?"
+          is_final: true
+          is_last: false
+          session_id: 4b5ae9cb-1234-5678-9abc-def012345678
+    ErrorEvent:
+      contentType: application/json
+      summary: |
+        Error emitted as JSON before a forced close. Common closure scenarios:
+
+        - `HTTP 400` before upgrade — invalid `?model=` value. For `pulse-pro`: *"Pulse Pro has no streaming transport. Use POST /waves/v1/stt/?model=pulse-pro instead."*
+        - `HTTP 401` before upgrade — missing or invalid API key.
+        - WebSocket close `1008` — concurrency limit reached (org has too many open WS sessions).
+      payload:
+        type: object
+        properties:
+          type:    { type: string, enum: [error] }
+          status:  { type: string, example: error }
+          message: { type: string }
