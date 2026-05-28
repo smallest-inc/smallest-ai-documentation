@@ -56,7 +56,7 @@ paths:
           -H "Content-Type: application/octet-stream" \
           --data-binary "@./call.wav"
         ```
-        Returns `202 { "status": "accepted", "request_id": "..." }`. The webhook receives the full transcription when ready.
+        Returns `200 { "status": "processing", "request_id": "..." }` immediately. The webhook receives the full transcription when ready.
 
         **cURL** — Pulse, audio-by-URL
         ```bash
@@ -184,11 +184,17 @@ paths:
               url: https://example.com/audio.wav
       responses:
         '200':
-          description: Sync transcription succeeded.
+          description: |
+            Transcription succeeded. The response body has two shapes:
+
+            - **Sync**: full `TranscriptionResponse` with `transcription`, `words`, `metadata`, etc. Returned when `webhook_url` is not set (all `?model=pulse` requests, and `?model=pulse-pro` requests without a webhook).
+            - **Async**: `{ "status": "processing", "request_id": "..." }`. Returned when `?model=pulse-pro` is paired with `webhook_url`. The full `TranscriptionResponse` then arrives on the webhook when ready.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TranscriptionResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/TranscriptionResponse'
+                  - $ref: '#/components/schemas/AsyncAccepted'
               example:
                 status: success
                 transcription: 'Hi, how are you doing? Could you help me reschedule my appointment?'
@@ -202,19 +208,6 @@ paths:
                   rtfx: 23.3
                   num_chunks: 1
                 request_id: 87dd36c1-4267-472d-96ee-4113e0a770a6
-        '202':
-          description: Async accepted (Pulse Pro with `webhook_url`). The transcription will arrive on the webhook when ready.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status: { type: string, example: accepted }
-                  request_id: { type: string }
-                required: [status, request_id]
-              example:
-                status: accepted
-                request_id: f3a1c2e0-09c3-43e2-8d8e-cb1f3b1b8f7d
         '400':
           description: Missing or invalid `model` query parameter, invalid params, or unsupported feature combination (e.g. `?model=pulse-pro` on the WS endpoint, audio-by-URL with `?model=pulse-pro`).
           content:
@@ -294,7 +287,7 @@ components:
           items: { $ref: '#/components/schemas/Word' }
         utterances:
           type: array
-          description: "Present on Pulse responses; Pulse Pro returns an empty array unless `diarize=true`."
+          description: "Sentence-level segments with optional speaker labels. Returned by `?model=pulse` only; Pulse Pro responses omit this field."
           items: { $ref: '#/components/schemas/Utterance' }
         language:      { type: string, example: en }
         metadata:
@@ -307,6 +300,13 @@ components:
             filename:           { type: string, description: "Pulse responses include this when sent via URL.", example: audio.wav }
             fileSize:           { type: number, description: "Bytes received (Pulse responses).", example: 268844 }
         request_id:    { type: string, example: 87dd36c1-4267-472d-96ee-4113e0a770a6 }
+    AsyncAccepted:
+      type: object
+      description: Returned by Pulse Pro when `webhook_url` is set. The transcription arrives on the webhook when ready.
+      required: [status, request_id]
+      properties:
+        status:     { type: string, example: processing }
+        request_id: { type: string, example: f3a1c2e0-09c3-43e2-8d8e-cb1f3b1b8f7d }
     ErrorResponse:
       type: object
       properties:
