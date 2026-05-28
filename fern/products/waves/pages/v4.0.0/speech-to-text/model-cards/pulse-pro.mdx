@@ -45,11 +45,14 @@ Pulse Pro is the premium Speech-to-Text model in the Pulse family. Built for Eng
 Pulse Pro is selected via the `model` query parameter on the unified Speech-to-Text endpoint.
 
 ```bash
-curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en" \
-  -H "Authorization: Bearer $SMALLEST_API_KEY" \
-  -H "Content-Type: application/octet-stream" \
-  --data-binary "@./call.wav"
+curl -sL "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav" | \
+  curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en" \
+    -H "Authorization: Bearer $SMALLEST_API_KEY" \
+    -H "Content-Type: application/octet-stream" \
+    --data-binary @-
 ```
+
+Replace the inline sample URL with `--data-binary "@./your.wav"` to send a local file.
 
 Sample response:
 
@@ -67,10 +70,11 @@ Sample response:
 For long files where you do not want to hold the HTTP connection open, pass a `webhook_url`:
 
 ```bash
-curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en&webhook_url=https://your-server.com/cb" \
-  -H "Authorization: Bearer $SMALLEST_API_KEY" \
-  -H "Content-Type: application/octet-stream" \
-  --data-binary "@./call.wav"
+curl -sL "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav" | \
+  curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en&webhook_url=https://your-server.com/cb" \
+    -H "Authorization: Bearer $SMALLEST_API_KEY" \
+    -H "Content-Type: application/octet-stream" \
+    --data-binary @-
 ```
 
 Returns `200` immediately with `{"status": "processing", "request_id": "..."}`. The webhook receives the full transcription payload when ready.
@@ -125,7 +129,7 @@ WER % on the eight ESB datasets. **Bold** = winner per row. Whisper EnglishTextN
 | TED-LIUM | 3.68 | **3.07** | 2.49 |
 | VoxPopuli | 6.32 | **5.70** | 5.87 |
 | **Average (8 datasets)** | **5.42** | **5.33** | **5.42** |
-| **Open ASR rank** | 🥈 #2 (tied) | 🥇 #1 | 🥈 #2 (tied) |
+| **Open ASR rank** | **🥈 #2 (tied)** | 🥇 #1 | 🥈 #2 (tied) |
 
 Pulse Pro and Cohere Transcribe are a statistical tie on aggregate WER. Pulse Pro leads on conversational and financial workloads (AMI, SPGISpeech); Cohere edges ahead on read speech (LibriSpeech, TED-LIUM).
 
