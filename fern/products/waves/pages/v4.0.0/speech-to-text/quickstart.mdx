@@ -1,6 +1,6 @@
 ---
 title: "Quickstart"
-description: "Transcribe your first audio file in under 60 seconds with Pulse STT."
+description: "Transcribe your first audio file in under 60 seconds with Pulse Pro."
 icon: "rocket"
 ---
 
@@ -29,32 +29,44 @@ Here's the sample audio we'll transcribe:
   Your browser does not support the audio element.
 </audio>
 
-Paste this cURL — no install required:
+Paste this cURL (no install required). It downloads the sample and pipes it into Pulse Pro as raw bytes:
 
 ```bash
-curl -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
-  -H "Authorization: Bearer $SMALLEST_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"}'
+curl -sL "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav" | \
+  curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en" \
+    -H "Authorization: Bearer $SMALLEST_API_KEY" \
+    -H "Content-Type: application/octet-stream" \
+    --data-binary @-
 ```
 
 You'll get back:
 
 ```json
 {
-  "transcription": "This is a sample audio file for testing speech to text transcription with the Pulse API."
+  "status": "success",
+  "transcription": "This is a sample audio file for testing speech-to-text transcription with the Pulse API.",
+  "language": "en",
+  "metadata": { "duration": 5.6, "processing_time_ms": 109.58, "rtfx": 51.1, "num_chunks": 1 },
+  "request_id": "354c932b-3c3a-473c-a6e7-fd497ba10d96"
 }
 ```
 
+<Note>
+This quickstart uses **Pulse Pro**, our leaderboard-ranked English model. If you need multilingual transcription (38 languages) or streaming, swap `?model=pulse-pro` for `?model=pulse`. See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the full language list.
+</Note>
+
 ## Step 3: Build It Into Your App
+
+The snippets below use **Pulse Pro** (`?model=pulse-pro`). For multilingual audio, swap to `?model=pulse` and set the appropriate `language` code. Both models share the same `/waves/v1/stt/` endpoint and request shape.
 
 <CodeGroup>
 
 ```bash cURL
-curl -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
-  -H "Authorization: Bearer $SMALLEST_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"}'
+curl -sL "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav" | \
+  curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en" \
+    -H "Authorization: Bearer $SMALLEST_API_KEY" \
+    -H "Content-Type: application/octet-stream" \
+    --data-binary @-
 ```
 
 ```python Python
@@ -62,48 +74,47 @@ import os
 import requests
 
 API_KEY = os.environ["SMALLEST_API_KEY"]
+SAMPLE_URL = "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
+
+audio = requests.get(SAMPLE_URL).content
 
 response = requests.post(
-    "https://api.smallest.ai/waves/v1/pulse/get_text",
-    params={"language": "en"},
+    "https://api.smallest.ai/waves/v1/stt/",
+    params={"model": "pulse-pro", "language": "en"},
     headers={
         "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
+        "Content-Type": "application/octet-stream",
     },
-    json={
-        "url": "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
-    },
+    data=audio,
     timeout=120,
 )
 
-result = response.json()
-print(result["transcription"])
+response.raise_for_status()
+print(response.json()["transcription"])
 ```
 
 ```javascript JavaScript
-const params = new URLSearchParams({ language: "en" });
-const response = await fetch(
-  `https://api.smallest.ai/waves/v1/pulse/get_text?${params}`,
-  {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.SMALLEST_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      url: "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
-    }),
-  }
-);
+const audioResponse = await fetch("https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav");
+const audio = Buffer.from(await audioResponse.arrayBuffer());
 
-const result = await response.json();
-console.log(result.transcription);
+const params = new URLSearchParams({ model: "pulse-pro", language: "en" });
+const response = await fetch(`https://api.smallest.ai/waves/v1/stt/?${params}`, {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.SMALLEST_API_KEY}`,
+    "Content-Type": "application/octet-stream",
+  },
+  body: audio,
+});
+
+if (!response.ok) throw new Error(await response.text());
+console.log((await response.json()).transcription);
 ```
 
 </CodeGroup>
 
 <Note>
-Set `language` explicitly to match the audio for the best accuracy (`en`, `hi`, `es`, etc.). Use `multi-eu` for unknown European-language audio or `multi` for full multilingual auto-detection. Omitting `language` routes to `multi-eu` and can mis-detect on non-European audio.
+For Pulse Pro, `language` must be `en`. For Pulse, set `language` to the known code (`en`, `hi`, `es`, etc.) for best accuracy, or use a `multi-*` aggregator (`multi-eu`, `multi-indic`, `multi-asian`, `multi`) for unknown audio.
 </Note>
 
 <Tip>

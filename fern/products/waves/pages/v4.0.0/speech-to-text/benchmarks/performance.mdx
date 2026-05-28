@@ -1,9 +1,73 @@
 ---
 title: 'Performance'
-description: 'Pulse STT latency and accuracy benchmarks against the FLEURS, ESB, and WildASR datasets'
+description: 'Pulse and Pulse Pro accuracy and latency benchmarks across FLEURS, ESB, WildASR, and the public Open ASR Leaderboard.'
 ---
 
-Pulse STT is evaluated against three open-source datasets — [FLEURS](https://huggingface.co/datasets/google/fleurs), [ESB](https://huggingface.co/datasets/esb/datasets), and [WildASR](https://huggingface.co/datasets/bosonai/WildASR) — and one internal English perturbation suite. Word Error Rate (WER) by language. Lower is better. `NA` = not available or not supported by that provider.
+Smallest STT models are evaluated against three open-source datasets, [FLEURS](https://huggingface.co/datasets/google/fleurs), [ESB](https://huggingface.co/datasets/esb/datasets), and [WildASR](https://huggingface.co/datasets/bosonai/WildASR), plus an internal English perturbation suite. Word Error Rate (WER) by language. Lower is better. `NA` = not available or not supported by that provider.
+
+This page covers both models:
+
+- **Pulse Pro** (English only) sits in the leaderboard-accuracy band. Benchmarks are on the [Open ASR Leaderboard](https://huggingface.co/spaces/hf-audio/open_asr_leaderboard) ESB suite and FLEURS English.
+- **Pulse** (38 languages, streaming + non-streaming) is evaluated on FLEURS, ESB, WildASR, and our internal perturbation suite below.
+
+## Pulse Pro: Open ASR Leaderboard
+
+Pulse Pro is tied for **#2 on the public Open ASR Leaderboard** at 5.42% average WER across eight ESB datasets. Whisper EnglishTextNormalizer applied, normalized WER. Lower is better.
+
+### Head-to-head vs leaderboard top-3
+
+| Dataset | Pulse Pro | Granite 4.1 2B | Cohere Transcribe |
+|---|---:|---:|---:|
+| AMI (meetings) | **7.32** | 8.09 | 8.13 |
+| Earnings22 | 9.04 | **8.37** | 10.86 |
+| GigaSpeech | 9.52 | 9.80 | **9.34** |
+| LibriSpeech clean | 1.73 | 1.33 | **1.25** |
+| LibriSpeech other | 3.74 | 2.50 | **2.37** |
+| SPGISpeech (financial) | **2.04** | 3.78 | 3.08 |
+| TED-LIUM | 3.68 | **3.07** | 2.49 |
+| VoxPopuli | 6.32 | **5.70** | 5.87 |
+| **Average (8 datasets)** | **5.42** | **5.33** | **5.42** |
+| **Open ASR rank** | 🥈 #2 (tied) | 🥇 #1 | 🥈 #2 (tied) |
+
+Pulse Pro leads on conversational (AMI) and financial (SPGISpeech) workloads. Cohere edges ahead on read speech (LibriSpeech, TED-LIUM).
+
+### Position on the public leaderboard
+
+Sorted by ESB average WER. Lower is better. Commercial APIs in our accuracy band:
+
+| Rank | Model | ESB Avg WER ↓ |
+|---|---|---:|
+| 1 | IBM Granite Speech 4.1 2B | 5.33 |
+| **2** | **Pulse Pro** | **5.42** |
+| 2 | Cohere Labs Transcribe (tied) | 5.42 |
+| 3 | Zoom Scribe v1 | 5.47 |
+| 5 | NVIDIA Canary Qwen 2.5B | 5.63 |
+| 8 | ElevenLabs Scribe v2 | 5.83 |
+| 12 | AssemblyAI Universal-3 Pro | 6.21 |
+| 18 | Speechmatics Enhanced | 6.91 |
+| 23 | OpenAI Whisper Large v3 | 7.44 |
+
+### FLEURS English
+
+| Metric | Pulse Pro |
+|---|---:|
+| WER (FLEURS en_us) | 3.92% |
+| CER (FLEURS en_us) | 1.73% |
+
+### Throughput
+
+Measured on 1× NVIDIA L40S (48 GB), long-form audio.
+
+| Mode | Throughput (RTFx) |
+|---|---|
+| No word timestamps | **250–300×** |
+| With word timestamps | **~200×** |
+
+L4 is the recommended production GPU and runs at lower throughput than the L40S reference. See [Cloud deployment](/waves/on-premises-deployment/docker-setup/stt-deployment/cloud-deployment) for sizing.
+
+---
+
+## Pulse: multilingual benchmarks
 
 ## Latency
 
