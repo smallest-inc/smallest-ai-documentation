@@ -23,7 +23,7 @@ Since ITN normalizes only finalized transcripts, it is recommended that you cont
 
 1. Set `finalize_on_words=false` so the server does not finalize internally based on word count
 2. Set `eou_timeout_ms` to match your VAD (Voice Activity Detection) silence threshold
-3. When your VAD detects that the user has stopped speaking, send `{"type": "finalize"}` — this finalizes the entire chunk and ITN normalizes it as a whole
+3. When your VAD detects that the user has stopped speaking, send `{"type": "close_stream"}` — this closes the stream, ITN normalizes the entire accumulated chunk, and emits a final `is_last=true` transcript
 
 This approach is especially useful for agentic use cases where you want clean, fully-normalized utterances for downstream LLM processing.
 </Note>
@@ -198,7 +198,7 @@ ws.onmessage = (event) => {
 
 ### Python — Agentic Setup (Recommended for Voice AI)
 
-Disable internal word-count finalization, set `eou_timeout_ms` to match your VAD, and send `{"type": "finalize"}` when your VAD detects end-of-speech. This finalizes the entire chunk and ITN normalizes it as a whole:
+Disable internal word-count finalization, set `eou_timeout_ms` to match your VAD, and send `{"type": "close_stream"}` when your VAD detects end-of-speech. This closes the stream, flushes the final chunk, ITN normalizes it as a whole, and emits `is_last=true` so the receive loop can exit:
 
 ```python
 params = {
