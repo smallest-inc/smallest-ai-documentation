@@ -5,8 +5,8 @@ info:
     Unified Speech-to-Text endpoint. Path is `/waves/v1/stt/`; the model is selected via the `?model=` query parameter.
 
     Supported models:
-    - `pulse` — high-accuracy multilingual STT (38 languages), supports pre-recorded HTTP and streaming WebSocket.
-    - `pulse-pro` — leaderboard-ranked English STT (5.42% ESB avg WER, #2 tied on Open ASR Leaderboard). HTTP only.
+    - `pulse-pro`: leaderboard-ranked English STT (5.42% ESB avg WER, #2 tied on Open ASR Leaderboard). HTTP only.
+    - `pulse`: high-accuracy multilingual STT (38 languages), supports pre-recorded HTTP and streaming WebSocket.
 
     The path mirrors the unified TTS shape (`POST /waves/v1/tts/` + `WS /waves/v1/tts/live`). Adding a new ASR model in the future means adding a new `?model=` value; the path stays stable.
 
@@ -25,8 +25,8 @@ paths:
       description: |
         Transcribe an audio file. The model is chosen via `?model=`:
 
-        - `?model=pulse` — multilingual transcription (38 languages), supports both raw bytes and audio-by-URL.
-        - `?model=pulse-pro` — English-only, leaderboard-ranked accuracy. Raw bytes only; pass `webhook_url` to receive transcription asynchronously on long files.
+        - `?model=pulse-pro`: English-only, leaderboard-ranked accuracy. Raw bytes only; pass `webhook_url` to receive transcription asynchronously on long files.
+        - `?model=pulse`: multilingual transcription (38 languages), supports both raw bytes and audio-by-URL.
 
         ## When to use this
 
@@ -36,12 +36,12 @@ paths:
 
         ## Input methods
 
-        - **Raw bytes** — `Content-Type: application/octet-stream` with the audio in the body. All knobs are query parameters.
-        - **URL (`?model=pulse` only)** — `Content-Type: application/json` with `{"url": "..."}` in the body.
+        - **Raw bytes**: `Content-Type: application/octet-stream` with the audio in the body. All knobs are query parameters.
+        - **URL (`?model=pulse` only)**: `Content-Type: application/json` with `{"url": "..."}` in the body.
 
         ## Examples
 
-        **cURL** — Pulse Pro, sync
+        **cURL**: Pulse Pro, sync
         ```bash
         curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en&word_timestamps=true" \
           -H "Authorization: Bearer $SMALLEST_API_KEY" \
@@ -49,7 +49,7 @@ paths:
           --data-binary "@./call.wav"
         ```
 
-        **cURL** — Pulse Pro, async via webhook
+        **cURL**: Pulse Pro, async via webhook
         ```bash
         curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en&webhook_url=https://your.app/cb" \
           -H "Authorization: Bearer $SMALLEST_API_KEY" \
@@ -58,7 +58,7 @@ paths:
         ```
         Returns `200 { "status": "processing", "request_id": "..." }` immediately. The webhook receives the full transcription when ready.
 
-        **cURL** — Pulse, audio-by-URL
+        **cURL**: Pulse, audio-by-URL
         ```bash
         curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse&language=en" \
           -H "Authorization: Bearer $SMALLEST_API_KEY" \
@@ -119,8 +119,8 @@ paths:
         description: |
           Selects which ASR model handles the request. Required; missing or invalid values return `400`.
 
-          - `pulse-pro` — English only, leaderboard-ranked accuracy, raw bytes only; supports async via `webhook_url`.
-          - `pulse` — multilingual (38 languages), raw bytes OR URL.
+          - `pulse-pro`: English only, leaderboard-ranked accuracy, raw bytes only; supports async via `webhook_url`.
+          - `pulse`: multilingual (38 languages), raw bytes OR URL.
       - name: language
         in: query
         required: true
