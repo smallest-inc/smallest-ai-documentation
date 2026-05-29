@@ -110,6 +110,16 @@ paths:
         - Agent Templates
       security:
         - BearerAuth: []
+      parameters:
+        - name: region
+          in: query
+          required: false
+          description: Filter templates by region. Omit to return all templates.
+          schema:
+            type: string
+            enum:
+              - us
+              - in
       responses:
         "200":
           description: Successful response
@@ -126,6 +136,9 @@ paths:
                     items:
                       type: object
                       properties:
+                        _id:
+                          type: string
+                          description: MongoDB ObjectId of the template
                         id:
                           type: string
                           description: The ID of the agent template
@@ -140,10 +153,65 @@ paths:
                           description: The avatar URL of the agent template
                         referenceUrl:
                           type: string
-                          description: The docs url of the agent template
-                        category:
+                          description: The docs URL of the agent template
+                        industry:
                           type: string
-                          description: The category of the agent template
+                          description: The industry the template is designed for (e.g. "Finance", "Healthcare")
+                        useCase:
+                          type: string
+                          description: The use case the template addresses (e.g. "Lead Generation")
+                        callType:
+                          type: string
+                          description: The type of calls the template handles
+                          enum:
+                            - Inbound
+                            - Outbound
+                            - Both
+                        workflowType:
+                          type: string
+                          description: The workflow architecture of the template
+                          enum:
+                            - SINGLE_PROMPT
+                            - WORKFLOW_GRAPH
+                        region:
+                          type: string
+                          description: Human-readable region the template is available in
+                          enum:
+                            - India
+                            - US
+                        trending:
+                          type: boolean
+                          description: Whether the template is featured or trending
+                        defaultLanguage:
+                          type: string
+                          description: The default language configured in the template
+                          enum:
+                            - English
+                            - Hindi
+                            - Marathi
+                            - Gujarati
+                        singlePromptConfig:
+                          type: object
+                          description: Configuration for single-prompt agents
+                          properties:
+                            prompt:
+                              type: string
+                              description: The system prompt used by the agent
+                            tools:
+                              type: array
+                              description: Tools available to the agent
+                              items:
+                                type: object
+                                properties:
+                                  name:
+                                    type: string
+                                    description: The name of the tool
+                                  description:
+                                    type: string
+                                    description: What the tool does
+                                  input_schema:
+                                    type: object
+                                    description: JSON Schema describing the tool's input parameters
 
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
@@ -214,6 +282,45 @@ paths:
           schema:
             type: string
             description: Search query
+        - in: query
+          name: type
+          required: false
+          schema:
+            type: string
+            enum:
+              - single_prompt
+              - workflow_graph
+          description: Filter agents by workflow type
+        - in: query
+          name: sortField
+          required: false
+          schema:
+            type: string
+            default: createdAt
+            enum:
+              - createdAt
+              - updatedAt
+              - totalCalls
+              - name
+              - workflowType
+          description: Field to sort results by
+        - in: query
+          name: sortOrder
+          required: false
+          schema:
+            type: string
+            default: desc
+            enum:
+              - asc
+              - desc
+          description: Sort direction
+        - in: query
+          name: archived
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: When true, returns only archived agents. Omit or set to false to return active agents.
       responses:
         "200":
           description: Successful response
@@ -240,6 +347,8 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
     post:
@@ -275,13 +384,29 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
   /agent/{id}:
     get:
       summary: Get agent by ID
-      description: Agents are the main entities in the system. Agents are used to create conversations. You can create workflow for an agent and configure it for different use cases. You can also create custom workflows for an agent.
+      description: |
+        Returns the agent document merged with the resolved config of the active version
+        under `_resolvedConfig`. Non-versioned fields sit at the top level; versioned fields
+        (prompt, tools, language, synthesizer, post-call analytics, …) are resolved from the
+        target version and exposed under `_resolvedConfig`.
+
+        **Previewing a draft or specific version**
+
+        Pass `?draftId=<id>` to resolve config from a specific draft instead of the active version.
+        Pass `?versionId=<id>` to resolve config from a specific published version.
+        When either param is used, the response includes `_configSource: "draft" | "version" | "active"`
+        indicating which config was resolved.
+
+        **400 — also used for "not found":** if the agent ID does not exist in the
+        organization, the API returns 400 with `errors: ["No agent found"]` rather than 404.
       tags:
         - Agents
       security:
@@ -292,6 +417,18 @@ paths:
           required: true
           schema:
             type: string
+        - in: query
+          name: draftId
+          required: false
+          schema:
+            type: string
+          description: Resolve `_resolvedConfig` from this draft instead of the active version. Sets `_configSource` to `"draft"` in the response.
+        - in: query
+          name: versionId
+          required: false
+          schema:
+            type: string
+          description: Resolve `_resolvedConfig` from this published version instead of the active version. Sets `_configSource` to `"version"` in the response.
       responses:
         "200":
           description: Successful response
@@ -309,10 +446,30 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
     patch:
-      summary: Update an agent
+      summary: Update agent metadata
+      description: |
+        Update agent fields. Behavior depends on whether the agent has versioning enabled:
+
+        **Versioned agents** (have an active published version): only metadata fields are accepted —
+        `name`, `description`, `avatarUrl`, `telephonyProductId`, `allowInboundCall`, `visibleToEveryone`.
+        Submitting any config-level field returns 400 with
+        `"Agent has versioning enabled. Config changes must be made through drafts."`.
+        Use `PATCH /agent/{id}/drafts/{draftId}/config` instead.
+
+        **Non-versioned agents** (no active version): all configuration fields are accepted,
+        the same full set as `POST /agent`.
+
+        **400 is also returned when:**
+        - The agent is locked (`"Agent is locked, please unlock it to update"`)
+        - Cross-field constraint violated (e.g. `north_indic` language requires `transcriberType: pulse`)
+
+        **403** is returned when selecting a gated model (`gpt-5.2`, `electron-kogta`, `electron-kogta-v2`)
+        without org-level access.
       tags:
         - Agents
       security:
@@ -328,120 +485,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                description:
-                  type: string
-                language:
-                  type: object
-                  description: Language configuration for the agent. You can enable or disable language switching for the agent. This will be used to determine the language of the agent.
-                  properties:
-                    enabled:
-                      type: string
-                      enum: [en, hi, ta]
-                      description: "The language of the agent. Supported: 'en' (English), 'hi' (Hindi), 'ta' (Tamil)."
-                      default: en
-                    switching:
-                      type: object
-                      description: Language switching configuration for the agent. If enabled, the agent will be able to switch between languages based on the user's language.
-                      properties:
-                        isEnabled:
-                          type: boolean
-                          description: Whether to enable language switching for the agent
-                          default: false
-                        minWordsForDetection:
-                          type: number
-                          minimum: 1
-                          maximum: 10
-                          description: Minimum number of words required for language detection
-                          default: 2
-                        strongSignalThreshold:
-                          type: number
-                          minimum: 0.1
-                          maximum: 0.9
-                          description: Threshold for strong language signal detection (0.1 to 0.9)
-                          default: 0.7
-                        weakSignalThreshold:
-                          type: number
-                          minimum: 0.1
-                          maximum: 0.9
-                          description: Threshold for weak language signal detection (0.1 to 0.9)
-                          default: 0.3
-                        minConsecutiveForWeakThresholdSwitch:
-                          type: number
-                          minimum: 1
-                          maximum: 5
-                          description: Minimum consecutive detections required for weak threshold language switch
-                          default: 2
-                synthesizer:
-                  type: object
-                  description: Synthesizer configuration for the agent. You can configure the synthesizer to use different voices and models. Currently we support 3 types of models for the synthesizer. Waves, Waves Lightning Large and Waves Lightning Large Voice Clone. You can clone your voice using waves platform https://waves.smallest.ai/voice-clone and use the voiceId for this field and select the model as waves_lightning_large_voice_clone to use your cloned voice. When updating the synthesizer configuration to voice clone model, you have to provide model and voiceId and gender all are required fields but when selecting the model as waves or waves and waves_lightning_large, you have to provide only model field and voiceId.
-                  properties:
-                    voiceConfig:
-                      oneOf:
-                        - type: object
-                          properties:
-                            model:
-                              type: string
-                              enum: [waves_lightning_large_voice_clone]
-                              description: We currently support 3 types of models for the synthesizer. Waves, Waves Lightning Large and Waves Lightning Large Voice Clone. You can clone your voice using waves platform and use the voiceId for this field and select the model as waves_lightning_large_voice_clone to use your cloned voice.
-                            voiceId:
-                              type: string
-                            gender:
-                              type: string
-                              enum:
-                                - male
-                                - female
-                              description: The gender of the synthesizer. When selecting gender, you have to select the model and voiceId which are required fields.
-                        - type: object
-                          properties:
-                            model:
-                              type: string
-                              enum: [waves, waves_lightning_large]
-                              description: We currently support 3 types of models for the synthesizer. Waves, Waves Lightning Large and Waves Lightning Large Voice Clone. You can clone your voice using waves platform and use the voiceId for this field and select the model as waves_lightning_large_voice_clone to use your cloned voice.
-                            voiceId:
-                              type: string
-                              default: nyah
-                              description: The voice ID to use
-                      default:
-                        model: waves_lightning_large
-                        voiceId: nyah
-                    speed:
-                      type: number
-                      default: 1.2
-                    consistency:
-                      type: number
-                      minimum: 0
-                      maximum: 1
-                      default: 0.5
-                    similarity:
-                      type: number
-                      minimum: 0
-                      maximum: 1
-                      default: 0
-                    enhancement:
-                      type: number
-                      enum: [0, 1, 2]
-                      default: 1
-                globalKnowledgeBaseId:
-                  type: string
-                slmModel:
-                  type: string
-                  enum: ["electron", "gpt-4o"]
-                  default: "electron"
-                defaultVariables:
-                  type: object
-                  description: The default variables to use for the agent. These variables will be used if no variables are provided when initiating a conversation with the agent.
-                globalPrompt:
-                  type: string
-                  description: |
-                    Set global instructions for your agent's personality, role, and behavior throughout conversations. 
-                    Note: Only used for workflow_graph agents.
-                telephonyProductId:
-                  type: string
-                  description: The telephony product ID of the agent. This is the product ID of the telephony product that will be used to make the outbound call. You can buy telephone number and assign it to the agent.
+              $ref: "#/components/schemas/UpdateAgentRequest"
       responses:
         "200":
           description: Agent updated successfully
@@ -460,11 +504,24 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
-          $ref: "#/components/responses/UnauthorizedError"
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Agent not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
     delete:
-      summary: Delete an agent
+      summary: Archive or unarchive an agent
+      description: |
+        Soft-archives the agent — it is excluded from listings and stops accepting calls,
+        but all data is preserved and the operation is fully reversible.
+
+        Pass `?on=false` to unarchive (restore) a previously archived agent.
+
+        **409 is returned when:**
+        - The agent is already in the requested state (`"Agent is already archived"` / `"Agent is already active"`)
+        - The agent is linked to an active campaign (`"Agent is associated with the [status] campaign "[name]". Complete or remove the campaign before archiving."`)
       tags:
         - Agents
       security:
@@ -475,9 +532,18 @@ paths:
           required: true
           schema:
             type: string
+        - in: query
+          name: on
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: |
+            `true` (default) — archive the agent.
+            `false` — unarchive (restore) a previously archived agent.
       responses:
         "200":
-          description: Agent deleted successfully
+          description: Agent archived or unarchived successfully
           content:
             application/json:
               schema:
@@ -486,12 +552,28 @@ paths:
                   status:
                     type: boolean
                     example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        description: Human-readable outcome message
+                        enum:
+                          - Agent archived
+                          - Agent unarchived
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
-          $ref: "#/components/responses/UnauthorizedError"
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
         "403":
           $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Agent not found
+        "409":
+          description: |
+            Conflict — agent is already in the requested state, or is linked to an active campaign.
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
 
   /agent/{id}/workflow:
     get:
@@ -658,7 +740,8 @@ paths:
             type: integer
             default: 5
             minimum: 1
-          description: Number of items per page
+            maximum: 500
+          description: Number of items per page. Server-side cap is 500 — values above 500 are silently clamped.
           example: 10
         - in: query
           name: agentIds
@@ -679,7 +762,7 @@ paths:
             enum:
               - telephony_inbound
               - telephony_outbound
-              - chat
+              - webcall
           description: Comma-separated list of call types to filter by
           example: "telephony_outbound,telephony_inbound"
         - in: query
@@ -694,7 +777,7 @@ paths:
             type: string
           description: |
             Comma-separated list of call statuses to filter by.
-            Available statuses: pending, in_progress, completed, failed, no_answer, cancelled, busy
+            Available statuses: pending, in_progress, in_queue, processing, active, completed, failed, no_answer, cancelled
           example: "completed,failed"
         - in: query
           name: disconnectReasonFilter
@@ -720,6 +803,48 @@ paths:
             Comma-separated list of duration ranges to filter by.
             Available ranges: 0-30 (0-30 seconds), 30-60 (30-60 seconds), 1-5 (1-5 minutes), 5+ (more than 5 minutes)
           example: "0-30,30-60"
+        - in: query
+          name: sortBy
+          required: false
+          schema:
+            type: string
+            enum:
+              - createdAt
+              - updatedAt
+              - callDuration
+              - avgLatency
+          description: Field to sort results by
+        - in: query
+          name: sortOrder
+          required: false
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+          description: Sort direction
+        - in: query
+          name: dateFrom
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: ISO date — return calls created on or after this date
+          example: "2025-01-01T00:00:00.000Z"
+        - in: query
+          name: dateTo
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: ISO date — return calls created on or before this date
+          example: "2025-01-31T23:59:59.999Z"
+        - in: query
+          name: versionFilter
+          required: false
+          schema:
+            type: string
+          description: Comma-separated version IDs to filter calls by the agent version that handled them
       responses:
         "200":
           description: Successful response
@@ -750,7 +875,7 @@ paths:
                             status:
                               type: string
                               description: The status of the call
-                              enum: [pending, in_progress, completed, failed, no_answer, cancelled, busy]
+                              enum: [pending, in_progress, in_queue, processing, active, completed, failed, no_answer, cancelled]
                               example: "completed"
                             duration:
                               type: number
@@ -767,16 +892,12 @@ paths:
                             type:
                               type: string
                               description: The type of call
-                              enum: [telephony_inbound, telephony_outbound, chat]
+                              enum: [telephony_inbound, telephony_outbound, webcall]
                               example: "telephony_outbound"
                             agentId:
                               type: string
                               description: The ID of the agent that handled the call
                               example: "60d0fe4f5311236168a109ca"
-                            agentName:
-                              type: string
-                              description: The name of the agent
-                              example: "Sales Agent"
                             recordingUrl:
                               type: string
                               description: URL to the call recording (if available)
@@ -816,6 +937,69 @@ paths:
                                     type: string
                                   type:
                                     type: string
+                            callFailureReason:
+                              type: string
+                              description: Reason the call failed, if applicable
+                            callCost:
+                              type: number
+                              description: Discounted total cost of the call
+                            versionId:
+                              type: string
+                              description: ID of the agent version that handled this call
+                            versionNumber:
+                              type: number
+                              description: Human-readable version number of the agent version used
+                            isTest:
+                              type: boolean
+                              description: Whether this was a test call
+                            retryCallId:
+                              type: string
+                              description: ID of the retry call if this call was retried
+                            retryAttemptNumber:
+                              type: number
+                              description: Which retry attempt this was (0 = initial, 1 = first retry, etc.)
+                            postCallAnalytics:
+                              type: object
+                              description: |
+                                Post-call analytics results evaluated against the call transcript.
+                                Contains disposition metric values with confidence scores.
+                              properties:
+                                summary:
+                                  type: string
+                                  description: Auto-generated summary of the call
+                                dispositionMetrics:
+                                  type: array
+                                  description: Evaluated disposition metrics for this call
+                                  items:
+                                    type: object
+                                    properties:
+                                      identifier:
+                                        type: string
+                                        description: Metric identifier matching the agent config
+                                      value:
+                                        type: string
+                                        description: The evaluated value for this metric
+                                      confidence:
+                                        type: number
+                                        description: Confidence score for the evaluation (0–1)
+                            turnLatencyMetrics:
+                              type: object
+                              description: Per-turn latency statistics for the call
+                              properties:
+                                avgLatency:
+                                  type: number
+                                  description: Average turn latency in milliseconds
+                                medianLatency:
+                                  type: number
+                                  description: Median turn latency in milliseconds
+                                turns:
+                                  type: number
+                                  description: Total number of turns in the call
+                                latencies:
+                                  type: array
+                                  items:
+                                    type: number
+                                  description: Array of individual turn latencies in milliseconds
                       pagination:
                         type: object
                         properties:
@@ -863,6 +1047,12 @@ paths:
         Fetch specific conversation logs by their callIds. This endpoint allows you to retrieve up to 100 specific calls at once.
         Only returns calls that belong to agents in your organization (security check enforced).
         Unlike the GET /conversation endpoint, this endpoint can also return retry calls (non-root calls).
+
+        **Differences from GET /conversation response:** each log item has the same base structure but
+        the following three fields are **not** included here:
+        - `dispositionMetrics` — not enriched
+        - `agentDispositionConfig` — not enriched
+        - `versionNumber` — not enriched
       tags:
         - Logs
       security:
@@ -882,7 +1072,9 @@ paths:
                     type: string
                   minItems: 1
                   maxItems: 100
-                  description: Array of callIds to fetch
+                  description: |
+                    Array of callIds to fetch. Format: `CALL-{13-digit-timestamp}-{6-char-hex}`
+                    (e.g. `CALL-1737000000000-abc123`). Minimum 1, maximum 100 per request.
                   example: ["CALL-1737000000000-abc123", "CALL-1737000000001-def456"]
       responses:
         "200":
@@ -902,7 +1094,106 @@ paths:
                         type: array
                         items:
                           type: object
-                          description: Call log details (same structure as GET /conversation)
+                          properties:
+                            _id:
+                              type: string
+                              description: The database ID of the call log
+                              example: "60d0fe4f5311236168a109ca"
+                            callId:
+                              type: string
+                              description: The unique call identifier
+                              example: "CALL-1737000000000-abc123"
+                            status:
+                              type: string
+                              description: The status of the call
+                              enum: [pending, in_progress, in_queue, processing, active, completed, failed, no_answer, cancelled]
+                              example: "completed"
+                            duration:
+                              type: number
+                              description: The duration of the call in seconds
+                              example: 120
+                            from:
+                              type: string
+                              description: The phone number the call was made from
+                              example: "+15551234567"
+                            to:
+                              type: string
+                              description: The phone number the call was made to
+                              example: "+15559876543"
+                            type:
+                              type: string
+                              description: The type of call
+                              enum: [telephony_inbound, telephony_outbound, webcall]
+                              example: "telephony_outbound"
+                            agentId:
+                              type: string
+                              description: The ID of the agent that handled the call
+                              example: "60d0fe4f5311236168a109ca"
+                            recordingUrl:
+                              type: string
+                              description: URL to the call recording (if available)
+                            recordingDualUrl:
+                              type: string
+                              description: URL to the dual-channel call recording (if available)
+                            disconnectionReason:
+                              type: string
+                              description: The reason the call was disconnected
+                            retryCount:
+                              type: integer
+                              description: Number of retry attempts for this call
+                            createdAt:
+                              type: string
+                              format: date-time
+                              description: When the call was created
+                            callFailureReason:
+                              type: string
+                              description: Reason the call failed, if applicable
+                            callCost:
+                              type: number
+                              description: Discounted total cost of the call
+                            versionId:
+                              type: string
+                              description: ID of the agent version that handled this call
+                            isTest:
+                              type: boolean
+                              description: Whether this was a test call
+                            retryCallId:
+                              type: string
+                              description: ID of the retry call if this call was retried
+                            retryAttemptNumber:
+                              type: number
+                              description: Which retry attempt this was (0 = initial)
+                            postCallAnalytics:
+                              type: object
+                              description: Post-call analytics results evaluated against the call transcript
+                              properties:
+                                summary:
+                                  type: string
+                                dispositionMetrics:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      identifier:
+                                        type: string
+                                      value:
+                                        type: string
+                                      confidence:
+                                        type: number
+                            turnLatencyMetrics:
+                              type: object
+                              description: Per-turn latency statistics for the call
+                              properties:
+                                avgLatency:
+                                  type: number
+                                medianLatency:
+                                  type: number
+                                turns:
+                                  type: number
+                                latencies:
+                                  type: array
+                                  items:
+                                    type: number
                       total:
                         type: integer
                         description: Number of logs returned
@@ -930,7 +1221,7 @@ paths:
         - in: path
           name: id
           required: true
-          description: The callId of the conversation. You can get the callId from the conversation logs endpoint.
+          description: The callId of the conversation (format `CALL-{13-digit-timestamp}-{6-char-hex}`). You can get the callId from the conversation logs endpoint.
           schema:
             type: string
           example: "CALL-1737000000000-abc123"
@@ -950,17 +1241,18 @@ paths:
                     properties:
                       _id:
                         type: string
-                        description: The ID of the conversation
-                        example: "abc123"
+                        description: The database ID of the conversation log
+                        example: "60d0fe4f5311236168a109ca"
                       callId:
                         type: string
-                        description: The ID of the conversation
-                        example: "abc123"
+                        description: The unique call identifier
+                        example: "CALL-1737000000000-abc123"
                       agent:
                         $ref: "#/components/schemas/AgentDTO"
                       status:
                         type: string
                         description: The status of the conversation
+                        enum: [pending, in_progress, in_queue, processing, active, completed, failed, no_answer, cancelled]
                         example: "completed"
                       duration:
                         type: number
@@ -969,88 +1261,228 @@ paths:
                       recordingUrl:
                         type: string
                         description: The recording URL of the conversation
+                      recordingDualUrl:
+                        type: string
+                        description: URL to the dual-channel recording of the conversation
                       from:
                         type: string
                         description: The phone number of the caller
                       to:
                         type: string
                         description: The phone number of the callee
-                      transcript:
-                        type: array
-                        description: The transcript of the conversation
-                      average_transcriber_latency:
-                        type: number
-                        description: The average time taken by the TTS to transcribe the conversation
-                      average_agent_latency:
-                        type: number
-                        description: The average time taken by the LLM to respond to the conversation
-                      average_synthesizer_latency:
-                        type: number
-                        description: The average time taken by the TTS to synthesize the conversation
                       type:
                         type: string
                         description: The type of the conversation
                         enum:
                           - telephony_inbound
                           - telephony_outbound
-                          - chat
+                          - webcall
+                      transcript:
+                        type: array
+                        description: The reconstructed transcript of the conversation
+                        items:
+                          type: object
+                          properties:
+                            role:
+                              type: string
+                              enum: [agent, user]
+                              description: Who spoke this turn
+                            content:
+                              type: string
+                              description: The spoken text for this turn
+                            timestamp:
+                              type: number
+                              description: Timestamp offset in milliseconds from call start
+                      variables:
+                        type: object
+                        description: Runtime variables resolved and used during the call
+                        additionalProperties: true
+                      events:
+                        type: array
+                        description: Raw event stream from the relay service
+                        items:
+                          type: object
+                          additionalProperties: true
+                      callCost:
+                        type: number
+                        description: Discounted total cost of the call
+                      callFailureReason:
+                        type: string
+                        description: Reason the call failed, if applicable
+                      retryCallId:
+                        type: string
+                        description: ID of the retry call if this call was retried
+                      postCallAnalytics:
+                        type: object
+                        description: Post-call analytics results evaluated against the call transcript
+                        properties:
+                          summary:
+                            type: string
+                            description: Auto-generated summary of the call
+                          dispositionMetrics:
+                            type: array
+                            description: Evaluated disposition metrics for this call
+                            items:
+                              type: object
+                              properties:
+                                identifier:
+                                  type: string
+                                  description: Metric identifier matching the agent config
+                                value:
+                                  type: string
+                                  description: The evaluated value for this metric
+                                confidence:
+                                  type: number
+                                  description: Confidence score for the evaluation (0–1)
+                      turnLatencyMetrics:
+                        type: object
+                        description: Per-turn latency statistics for the call. Replaces the deprecated average_*_latency fields.
+                        properties:
+                          turns:
+                            type: number
+                            description: Total number of turns in the call
+                          avgLatency:
+                            type: number
+                            description: Average turn latency in milliseconds
+                          medianLatency:
+                            type: number
+                            description: Median turn latency in milliseconds
+                          minLatency:
+                            type: number
+                            description: Minimum turn latency in milliseconds
+                          maxLatency:
+                            type: number
+                            description: Maximum turn latency in milliseconds
+                          latencies:
+                            type: array
+                            items:
+                              type: number
+                            description: Array of individual turn latencies in milliseconds
+                          transitions:
+                            type: array
+                            description: Per-turn timing breakdown
+                            items:
+                              type: object
+                              properties:
+                                turn:
+                                  type: number
+                                user_end:
+                                  type: number
+                                  description: Timestamp (ms) when the user finished speaking
+                                bot_start:
+                                  type: number
+                                  description: Timestamp (ms) when the agent started responding
+                                latency:
+                                  type: number
+                                  description: Latency for this turn in milliseconds
+                          processedAt:
+                            type: string
+                            format: date-time
+                            description: When the latency metrics were computed
                       voiceConfigUsed:
                         type: object
-                        description: The voice configuration that was actually used for this call.
+                        description: The voice configuration that was actually used for this call
                         properties:
                           model:
                             type: string
-                            description: The TTS model used for the call.
+                            description: The TTS model used for the call
                           voiceId:
                             type: string
-                            description: The voice ID used for the call.
+                            description: The voice ID used for the call
                           gender:
                             type: string
-                            description: The gender of the voice used for the call (e.g., "male", "female").
+                            description: The gender of the voice used for the call
                       slmModelUsed:
                         type: string
-                        description: The SLM/LLM model that was actually used for this call.
+                        description: The SLM/LLM model that was actually used for this call
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Conversation log not found — the callId does not exist or does not belong to the caller's organization
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
   /conversation/outbound:
     post:
       summary: Start an outbound call
-      description: Initiates an outbound conversation with a specified agent and phone number.
+      description: |
+        Initiates an outbound telephony call with a specified agent and phone number.
+
+        **400 is returned for:**
+        - Invalid `agentId` format (`"Invalid agent id"`)
+        - Invalid `phoneNumber` format (`"Invalid phone number"`)
+        - Invalid `fromProductId` format (`"Invalid product id"`)
+        - Agent not found or not in the caller's org (`"Agent not found"`)
+        - Agent is archived (`"Agent is archived and cannot initiate calls"`)
+        - `workflow_graph` agent has no workflow configured (`"Workflow not found"`)
+        - Workflow has validation errors (`"Invalid workflow, please fix the errors..."`)
+
+        **403** is returned for `workflow_graph` agents when the org lacks conversational agents access.
+
+        **Test calls:** set the `x-test-call: true` header to mark the resulting call log as a test call
+        (`isTest: true`). Test calls are subject to concurrent slot limits.
       tags:
         - Calls
       security:
         - BearerAuth: []
+      parameters:
+        - in: header
+          name: x-test-call
+          required: false
+          schema:
+            type: string
+            enum: ["true"]
+          description: Set to `"true"` to mark this as a test call. The call log will have `isTest: true` and counts against concurrent test-call slot limits.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              properties:
-                agentId:
-                  type: string
-                  description: The ID of the agent initiating the conversation
-                  example: 60d0fe4f5311236168a109ca
-                phoneNumber:
-                  type: string
-                  description: The phone number to call
-                  example: "+1234567890"
-                variables:
-                  type: object
-                  description: The variables to pass to the conversation
-                  example: { "name": "John", "age": 30 }
-                fromProductId:
-                  type: string
-                  description: The ID of the product to use for the call (get this from the /product/phone-numbers endpoint)
-                  example: 60d0fe4f5311236168a109ca
               required:
                 - agentId
                 - phoneNumber
+              properties:
+                agentId:
+                  type: string
+                  description: MongoDB ObjectId of the agent initiating the conversation
+                  example: "60d0fe4f5311236168a109ca"
+                phoneNumber:
+                  type: string
+                  description: The E.164 phone number to call
+                  example: "+1234567890"
+                variables:
+                  type: object
+                  description: |
+                    Variables to inject into the agent's prompt at call time.
+                    Values must be string, number, or boolean — nested objects are not supported.
+                  additionalProperties:
+                    oneOf:
+                      - type: string
+                      - type: number
+                      - type: boolean
+                  example: { "name": "John", "age": 30, "vip": true }
+                fromProductId:
+                  type: string
+                  description: ID of the telephony product (phone number) to call from. Get this from `GET /product/phone-numbers`.
+                  example: "60d0fe4f5311236168a109ca"
+                versionId:
+                  type: string
+                  description: |
+                    ID of a specific published agent version to use for this call.
+                    Useful for test calls — attributes the call log to that version so you can track
+                    which version was tested.
+                operatorId:
+                  type: string
+                  description: |
+                    Integration operator identifier. Pass `"webengage"` to trigger the WebEngage
+                    integration flow.
+                operatorData:
+                  type: object
+                  description: Arbitrary data passed to the operator (e.g. `userId`, `journeyId` for WebEngage).
+                  additionalProperties: true
       responses:
         "200":
           description: Successfully started the outbound conversation
@@ -1067,38 +1499,72 @@ paths:
                     properties:
                       conversationId:
                         type: string
-                        description: The ID of the initiated call
-                        example: "CALL-XXXXX1234"
+                        description: |
+                          The callId of the initiated call (format `CALL-{13-digit-timestamp}-{6-char-hex}`).
+                          Use this value as the `id` path parameter in `GET /conversation/{id}` and as an
+                          entry in `POST /conversation/search`.
+                        example: "CALL-1737000000000-abc123"
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
   /campaign:
     get:
       summary: Retrieve all campaigns
-      description: Get all campaigns
+      description: Get all campaigns for the authenticated organization.
       tags:
         - Campaigns
       security:
         - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                page:
-                  type: number
-                  description: The page number
-                  default: 1
-                limit:
-                  type: number
-                  description: The number of items per page
-                  default: 10
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+        - in: query
+          name: offset
+          required: false
+          schema:
+            type: integer
+            default: 5
+          description: Number of campaigns per page
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [draft, scheduled, processing, running, paused, completed, failed]
+          description: Filter campaigns by status
+        - in: query
+          name: search
+          required: false
+          schema:
+            type: string
+          description: Search campaigns by name
+        - in: query
+          name: sortField
+          required: false
+          schema:
+            type: string
+            default: createdAt
+            enum: [createdAt, updatedAt]
+          description: Field to sort by
+        - in: query
+          name: sortOrder
+          required: false
+          schema:
+            type: string
+            default: desc
+            enum: [asc, desc]
+          description: Sort direction
       responses:
         "200":
           description: A list of campaigns
@@ -1130,18 +1596,48 @@ paths:
                             organization:
                               type: string
                               description: The ID of the organization
-                            agentId:
-                              type: string
-                              description: The ID of the agent
+                            agent:
+                              type: object
+                              description: The agent assigned to this campaign
+                              properties:
+                                _id:
+                                  type: string
+                                name:
+                                  type: string
+                                workflowType:
+                                  type: string
+                            audience:
+                              type: object
+                              description: The audience assigned to this campaign
+                              properties:
+                                _id:
+                                  type: string
+                                name:
+                                  type: string
                             createdBy:
                               type: string
                               description: The ID of the user who created the campaign
-                            audienceId:
-                              type: string
-                              description: The ID of the audience
                             participantsCount:
                               type: integer
                               description: The number of participants in the campaign
+                            status:
+                              type: string
+                              enum: [draft, scheduled, processing, running, paused, completed, failed]
+                              description: Current status of the campaign
+                            maxRetries:
+                              type: integer
+                            retryDelay:
+                              type: integer
+                            retryAttempts:
+                              type: integer
+                            scheduledAt:
+                              type: string
+                              format: date-time
+                            pausedAt:
+                              type: string
+                              format: date-time
+                            cancelledCallsCount:
+                              type: integer
                             createdAt:
                               type: string
                               format: date-time
@@ -1150,12 +1646,22 @@ paths:
                               type: string
                               format: date-time
                               description: The date and time when the campaign was last updated
-                            isCampaignInProgress:
-                              type: boolean
-                              description: Whether the campaign is in progress
-                            isCampaignCompleted:
-                              type: boolean
-                              description: Whether the campaign is completed
+                      pagination:
+                        type: object
+                        properties:
+                          total:
+                            type: integer
+                          page:
+                            type: integer
+                          offset:
+                            type: integer
+                          hasMore:
+                            type: boolean
+                          totalPages:
+                            type: integer
+                      totalCampaignCount:
+                        type: integer
+                        description: Total number of campaigns in the organization (unfiltered)
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
@@ -1192,13 +1698,44 @@ paths:
                   type: string
                   description: The ID of the agent
                   example: "60d0fe4f5311236168a109ca"
+                phoneNumberIds:
+                  type: array
+                  description: |
+                    Optional list of caller-ID phone number IDs to rotate across
+                    when placing outbound calls for this campaign.
+                  items:
+                    type: string
+                  example: ["60d0fe4f5311236168a109cb"]
+                scheduledAt:
+                  type: string
+                  format: date-time
+                  description: |
+                    Optional ISO-8601 timestamp for when the campaign should start dialing.
+                    Must be in the future. If provided, the campaign is created in `scheduled` status.
+                  example: "2026-04-24T10:00:00.000Z"
+                maxRetries:
+                  type: integer
+                  minimum: 0
+                  maximum: 10
+                  default: 3
+                  description: Maximum number of times a failed call is retried. `0` disables retries.
+                  example: 3
+                retryDelay:
+                  type: integer
+                  minimum: 1
+                  maximum: 1440
+                  default: 15
+                  description: Delay in minutes between retry attempts.
+                  example: 15
               required:
                 - name
                 - audienceId
                 - agentId
       responses:
         "201":
-          description: Campaign created successfully
+          description: |
+            Campaign created successfully. Note: the response is the raw Mongoose document — `agentId`
+            and `audienceId` are plain ObjectId strings here, not nested objects as returned by GET endpoints.
           content:
             application/json:
               schema:
@@ -1224,16 +1761,29 @@ paths:
                         description: The ID of the organization
                       agentId:
                         type: string
-                        description: The ID of the agent
+                        description: Raw ObjectId of the agent (not a nested object)
                       createdBy:
                         type: string
                         description: The ID of the user who created the campaign
                       audienceId:
                         type: string
-                        description: The ID of the audience
+                        description: Raw ObjectId of the audience (not a nested object)
                       participantsCount:
                         type: integer
                         description: The number of participants in the campaign
+                      status:
+                        type: string
+                        enum: [draft, scheduled, processing, running, paused, completed, failed]
+                        description: Current campaign status
+                      scheduledAt:
+                        type: string
+                        format: date-time
+                      maxRetries:
+                        type: integer
+                      retryDelay:
+                        type: integer
+                      retryAttempts:
+                        type: integer
                       createdAt:
                         type: string
                         format: date-time
@@ -1246,6 +1796,8 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -1293,21 +1845,33 @@ paths:
                           organization:
                             type: string
                             description: The ID of the organization
-                          agentId:
-                            type: string
-                            description: The ID of the agent
+                          agent:
+                            type: object
+                            description: The agent assigned to this campaign
+                            properties:
+                              _id:
+                                type: string
+                              name:
+                                type: string
+                              workflowType:
+                                type: string
+                          audience:
+                            type: object
+                            description: The audience assigned to this campaign
+                            properties:
+                              _id:
+                                type: string
+                              name:
+                                type: string
                           createdBy:
                             type: string
                             description: The ID of the user who created the campaign
-                          audienceId:
-                            type: string
-                            description: The ID of the audience
                           participantsCount:
                             type: integer
                             description: The number of participants in the campaign
                           status:
                             type: string
-                            enum: [draft, scheduled, running, paused, scheduled_for_retry, completed]
+                            enum: [draft, scheduled, processing, running, paused, completed, failed]
                             description: The current status of the campaign
                           maxRetries:
                             type: integer
@@ -1317,10 +1881,25 @@ paths:
                             type: integer
                             description: Delay between retries in minutes
                             example: 15
+                          retryAttempts:
+                            type: integer
+                            description: Total retry attempts made so far
                           scheduledAt:
                             type: string
                             format: date-time
                             description: Scheduled start time for the campaign
+                          pausedAt:
+                            type: string
+                            format: date-time
+                            description: When the campaign was paused
+                          cancelledCallsCount:
+                            type: integer
+                          error:
+                            type: string
+                            description: Error message if the campaign failed
+                          failedAt:
+                            type: string
+                            format: date-time
                           createdAt:
                             type: string
                             format: date-time
@@ -1337,13 +1916,14 @@ paths:
                           properties:
                             _id:
                               type: string
-                            campaignId:
-                              type: string
                             triggerSource:
                               type: string
                             eventAction:
                               type: string
                             createdAt:
+                              type: string
+                              format: date-time
+                            updatedAt:
                               type: string
                               format: date-time
                       metrics:
@@ -1356,7 +1936,7 @@ paths:
                             example: 500
                           contacts_called:
                             type: integer
-                            description: Number of unique contacts where call was attempted (statuses IN_PROGRESS, COMPLETED, FAILED, NO_ANSWER)
+                            description: Number of unique contacts where a call was attempted (statuses ACTIVE, COMPLETED, FAILED, NO_ANSWER)
                             example: 247
                           contacts_connected:
                             type: integer
@@ -1397,13 +1977,20 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Campaign not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
   /campaign/{id}/start:
     post:
-      summary: Start a campaign
-      description: Start a campaign
+      summary: Start or resume a campaign
+      description: |
+        Queues the campaign for processing and returns immediately — the campaign is **not** yet
+        running when the 202 is returned. Poll `GET /campaign/{id}` and watch for `status: "running"`.
+
+        This endpoint also acts as a **resume** endpoint: if the campaign is currently paused,
+        calling this endpoint resumes it (`status` transitions from `paused` → `running`).
       tags:
         - Campaigns
       security:
@@ -1416,8 +2003,8 @@ paths:
           schema:
             type: string
       responses:
-        "201":
-          description: Campaign started successfully
+        "202":
+          description: Campaign queued for processing
           content:
             application/json:
               schema:
@@ -1426,17 +2013,33 @@ paths:
                   status:
                     type: boolean
                     example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Campaign is being processed"
+                      taskId:
+                        type: string
+                        description: Internal task identifier for the queued job
+                      campaignId:
+                        type: string
+                        description: The ID of the campaign
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Campaign not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
   /campaign/{id}/pause:
     post:
       summary: Pause a campaign
-      description: Pause a campaign
+      description: |
+        Queues a pause task and returns immediately — the campaign is **not** immediately paused.
+        Poll `GET /campaign/{id}` and watch for `status: "paused"`.
       tags:
         - Campaigns
       security:
@@ -1450,7 +2053,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Campaign paused successfully
+          description: Pause task queued successfully
           content:
             application/json:
               schema:
@@ -1509,6 +2112,9 @@ paths:
               properties:
                 name:
                   type: string
+                  minLength: 1
+                  maxLength: 40
+                  description: Name of the knowledge base (1–40 characters, trimmed)
                 description:
                   type: string
               required:
@@ -1566,11 +2172,18 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Knowledge base not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
     delete:
       summary: Delete a knowledge base
-      description: Delete a knowledge base
+      description: |
+        Delete a knowledge base.
+
+        **400 is returned when the knowledge base is still linked to an agent:**
+        `"This knowledge base is connected to an agent. Please detach it from the agent before deleting."`
+        Detach the KB from all agents (via agent config) before attempting deletion.
       tags:
         - Knowledge Base
       security:
@@ -1597,6 +2210,8 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Knowledge base not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -1679,7 +2294,14 @@ paths:
   /knowledgebase/{id}/items/upload-media:
     post:
       summary: Upload a PDF file to a knowledge base
-      description: Upload a PDF file to a knowledge base. Only PDF files are accepted.
+      description: |
+        Upload a PDF file to a knowledge base. Only PDF files are accepted (validated by MIME type and extension).
+
+        **400 is returned for billing/entitlement failures before the file is processed:**
+        - `"Insufficient credits for KB storage upload."` — account lacks upload credits
+        - `"KB storage access is not enabled for your account."` — plan doesn't include KB storage
+
+        No application-level file size limit is enforced — any proxy or infrastructure limits (e.g. nginx) apply instead.
       tags:
         - Knowledge Base
       security:
@@ -1724,7 +2346,11 @@ paths:
   /product/phone-numbers:
     get:
       summary: Get acquired phone numbers
-      description: Retrieve all acquired phone numbers for the organization
+      description: |
+        Retrieve all platform-purchased telephony numbers (Twilio/Plivo) for the organization.
+
+        **Note:** Imported SIP numbers added via `POST /product/import-phone-number` are **not** included
+        in this response — they are stored as a separate product type and returned by a different internal call.
       tags:
         - Phone Numbers
       security:
@@ -1749,22 +2375,42 @@ paths:
                           type: string
                           description: The unique identifier for the phone number
                           example: "6867ca76d0f8f2e0f4201281"
+                        productType:
+                          type: string
+                          enum: [telephony]
+                          description: The product type — always `telephony` for numbers returned by this endpoint
                         isActive:
                           type: boolean
                           description: Whether the phone number is active
                           example: false
+                        agentId:
+                          type: string
+                          nullable: true
+                          description: ID of the agent currently assigned to this number, or null if unassigned
                         attributes:
                           type: object
-                          description: Additional attributes of the phone number
+                          description: Telephony provider attributes for the phone number
                           properties:
                             provider:
                               type: string
+                              enum: [twilio, plivo]
                               description: The telephony provider
                               example: "twilio"
                             phoneNumber:
                               type: string
-                              description: The actual phone number
+                              description: The actual phone number in E.164 format
                               example: "+13412184691"
+                            countryCode:
+                              type: string
+                              description: ISO 3166-1 alpha-2 country code of the number
+                              example: "US"
+                            areaCode:
+                              type: string
+                              description: Area code of the number (if applicable)
+                              example: "341"
+                            complianceApplicationId:
+                              type: string
+                              description: Compliance application ID associated with the number (if applicable)
                         createdAt:
                           type: string
                           format: date-time
@@ -1793,7 +2439,7 @@ paths:
           name: webhookId
           schema:
             type: string
-            description: Optional webhook ID to get a specific webhook
+          description: Optional MongoDB ObjectId (24-char hex) of a specific webhook to retrieve. If omitted, returns all webhooks for the organization.
       responses:
         "200":
           description: Successful response
@@ -1811,13 +2457,19 @@ paths:
                       - type: array
                         items:
                           $ref: "#/components/schemas/Webhook"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
     post:
       summary: Create a webhook
-      description: Create a new webhook with subscriptions for specific agents and events
+      description: |
+        Create a new webhook with subscriptions for specific agents and events.
+
+        **400 is also returned when the endpoint URL is already registered:**
+        `"A webhook with this URL has already been registered"`
       tags:
         - Webhooks
       security:
@@ -1842,6 +2494,9 @@ paths:
                   description: Array of events to subscribe to
                   items:
                     type: object
+                    required:
+                      - agentId
+                      - eventType
                     properties:
                       agentId:
                         type: string
@@ -1849,12 +2504,9 @@ paths:
                         example: "60d0fe4f5311236168a109ca"
                       eventType:
                         type: string
-                        enum: [pre-conversation, post-conversation]
+                        enum: [pre-conversation, post-conversation, analytics-completed]
                         description: The type of event to subscribe to
                         example: "post-conversation"
-                  required:
-                    - agentId
-                    - eventType
               required:
                 - endpoint
                 - description
@@ -1884,7 +2536,15 @@ paths:
   /webhook/{id}:
     delete:
       summary: Delete a webhook
-      description: Delete a webhook by its ID
+      description: |
+        Delete a webhook by its ID.
+
+        **400 is returned when the webhook still has active agent subscriptions:**
+        `"Cannot delete webhook: It is currently assigned to one or more agents. Please remove all agent assignments first."`
+        Call `DELETE /agent/{agentId}/webhook-subscriptions` for each assigned agent before deleting.
+
+        **400 is also returned for an invalid webhook ID format:**
+        `"The provided Webhook ID is invalid."`
       tags:
         - Webhooks
       security:
@@ -1907,6 +2567,10 @@ paths:
                   status:
                     type: boolean
                     example: true
+                  data:
+                    type: string
+                    description: Success message
+                    example: "Webhook deleted successfully"
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
@@ -1963,6 +2627,8 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           description: Agent not found
           content:
@@ -1981,8 +2647,11 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
     post:
-      summary: Create webhook subscriptions for an agent
-      description: Create webhook subscriptions for a specific agent with selected event types
+      summary: Replace webhook subscriptions for an agent
+      description: |
+        **Replaces** all existing webhook subscriptions for the agent with the provided event types.
+        Any previously configured subscriptions for this agent are deleted before the new ones are created.
+        To add subscriptions without removing existing ones, retrieve current subscriptions first and include them in the request.
       tags:
         - Agents
       security:
@@ -2006,7 +2675,7 @@ paths:
                   description: Array of event types to subscribe to
                   items:
                     type: string
-                    enum: [pre-conversation, post-conversation]
+                    enum: [pre-conversation, post-conversation, analytics-completed]
                     description: The type of event to subscribe to
                     example: "post-conversation"
                 webhookId:
@@ -2032,25 +2701,11 @@ paths:
                     description: Success message
                     example: "Subscriptions created successfully"
         "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  errors:
-                    type: array
-                    items:
-                      type: string
-                    example:
-                      [
-                        "Agent already has webhook subscriptions. Please remove existing subscriptions before creating new ones.",
-                      ]
+          $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           description: Agent not found
           content:
@@ -2070,7 +2725,9 @@ paths:
           $ref: "#/components/responses/InternalServerErrorResponse"
     delete:
       summary: Delete webhook subscriptions for an agent
-      description: Delete webhook subscriptions for a given agent ID
+      description: |
+        Deletes **all** webhook subscriptions for the agent, regardless of which webhook they belong to.
+        If the agent has subscriptions across multiple webhooks, all of them are removed in a single call.
       tags:
         - Agents
       security:
@@ -2101,6 +2758,8 @@ paths:
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           description: Agent not found
           content:
@@ -2177,6 +2836,27 @@ paths:
                           format: date-time
                           description: The date and time when the audience was last updated
                           example: "2025-01-15T10:30:00.000Z"
+                        memberCount:
+                          type: number
+                          description: Current number of members in the audience
+                        hasCampaigns:
+                          type: boolean
+                          description: Whether any campaigns are currently using this audience
+                        campaigns:
+                          type: array
+                          description: Active campaigns using this audience
+                          items:
+                            type: object
+                            properties:
+                              _id:
+                                type: string
+                              name:
+                                type: string
+                              status:
+                                type: string
+                              createdAt:
+                                type: string
+                                format: date-time
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
         "500":
@@ -2184,7 +2864,13 @@ paths:
 
     post:
       summary: Create audience with CSV upload
-      description: Create a new audience by uploading a CSV file containing phone numbers
+      description: |
+        Create a new audience by uploading a CSV file containing phone numbers.
+        Only CSV text files are accepted — binary files will produce malformed data.
+
+        **Additional 400 cases:**
+        - Duplicate phone numbers in the CSV: `"Some phone numbers in your CSV already exist in this audience. Please remove duplicate entries and try again."`
+        - Member limit exceeded: `"Audience cannot exceed X members"`
       tags:
         - Audience
       security:
@@ -2220,7 +2906,6 @@ paths:
               required:
                 - name
                 - phoneNumberColumnName
-                - identifierColumnName
                 - file
 
       responses:
@@ -2302,7 +2987,9 @@ paths:
   /audience/{id}:
     get:
       summary: Get audience by ID
-      description: Retrieve a specific audience by its ID. Users can only access audiences they have created.
+      description: |
+        Retrieve a specific audience by its ID.
+        Note: if the audience belongs to a different organization, the API returns 404 (not 403) — ownership is deliberately obscured.
       tags:
         - Audience
       security:
@@ -2380,42 +3067,21 @@ paths:
                     example: ["Audience ID missing"]
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
-        "403":
-          description: Forbidden - User can only access audiences they created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  errors:
-                    type: array
-                    items:
-                      type: string
-                    example: ["Not authorized to view this audience"]
         "404":
-          description: Audience not found
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  errors:
-                    type: array
-                    items:
-                      type: string
-                    example: ["Audience not found"]
+          description: Audience not found (also returned when audience belongs to a different organization)
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
     delete:
       summary: Delete audience
-      description: Delete a specific audience by its ID. Users can only delete audiences they created. Cannot delete if audience is being used by a campaign.
+      description: |
+        Delete a specific audience by its ID. Users can only delete audiences they created.
+
+        **400 is returned if the audience is used by an active campaign:**
+        `"can't delete audience, campaign with this audience <id> exists"`
+        Remove the campaign first, then retry deletion.
+
+        On success, `data` is always an empty array `[]`.
       tags:
         - Audience
       security:
@@ -2457,9 +3123,11 @@ paths:
                     items:
                       type: string
                     example:
-                      ["cant delete audience, campaign with this audience 60d0fe4f5311236168a109ca exists"]
+                      ["can't delete audience, campaign with this audience 60d0fe4f5311236168a109ca exists"]
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Audience not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -2488,10 +3156,10 @@ paths:
             minimum: 1
             default: 1
             example: 1
-        - name: limit
+        - name: offset
           in: query
           required: false
-          description: Number of items per page (default is 5)
+          description: Number of items per page (default is 5). Note: this parameter is named `offset`, not `limit` — sending `?limit=N` is silently ignored.
           schema:
             type: integer
             minimum: 1
@@ -2554,6 +3222,12 @@ paths:
                     items:
                       type: string
                     example: ["Audience ID is required"]
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Forbidden — audience belongs to a different organization
+        "404":
+          description: Audience not found
         "500":
           description: Internal server error
           content:
@@ -2572,7 +3246,14 @@ paths:
 
     post:
       summary: Add audience members
-      description: Add new members to an existing audience. Users can only add members to audiences they created.
+      description: |
+        Add new members to an existing audience.
+
+        Each member object must include a key matching the audience's `phoneNumberColumnName`.
+        If it's missing, the API returns 400: `"Each member must have a <phoneNumberColumnName> field"`.
+        Adding members that would exceed the audience limit also returns 400.
+
+        Note: if the audience belongs to a different organization, the API returns 404 (not 403).
       tags:
         - Audience
       security:
@@ -2655,36 +3336,8 @@ paths:
                       ]
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
-        "403":
-          description: Forbidden - User can only modify audiences they created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  errors:
-                    type: array
-                    items:
-                      type: string
-                    example: ["Not authorized to modify this audience"]
         "404":
-          description: Audience not found
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  errors:
-                    type: array
-                    items:
-                      type: string
-                    example: ["Audience not found"]
+          description: Audience not found (also returned when audience belongs to a different organization)
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -2753,36 +3406,8 @@ paths:
                     example: ["Audience ID missing"]
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
-        "403":
-          description: Forbidden - User can only modify audiences they created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  errors:
-                    type: array
-                    items:
-                      type: string
-                    example: ["Not authorized to modify this audience"]
         "404":
-          description: Audience not found
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: boolean
-                    example: false
-                  errors:
-                    type: array
-                    items:
-                      type: string
-                    example: ["Audience not found"]
+          description: Audience not found (also returned when audience belongs to a different organization)
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -2870,8 +3495,8 @@ paths:
                           searchType:
                             type: string
                             description: The type of search performed
-                            enum: ["general", "field"]
-                            example: "field"
+                            enum: ["general", "multiple"]
+                            example: "multiple"
                           searchTerm:
                             type: string
                             description: The search term(s) used
@@ -2904,6 +3529,10 @@ paths:
                       [
                         "At least one search parameter is required. Use 'query' for general search across all fields, or use field-specific searches like 'firstName=john' or 'phoneNumber=123456'.",
                       ]
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Audience not found
         "500":
           description: Internal server error
           content:
@@ -2997,19 +3626,30 @@ components:
           type: string
           enum: ["", "office", "cafe", "call_center", "static"]
           default: ""
-          description: "Ambient background sound during calls. Options: '' (none), 'office', 'cafe', 'call_center', 'static'."
+          description: "Ambient background sound during calls. Options: '' (none), 'office', 'cafe', 'call_center', 'static'. Note: this value is currently overridden by the server default on creation; update via PATCH after creation."
         # visibleToEveryone:
         #   type: boolean
         #   default: false
         language:
           type: object
-          description: Language configuration for the agent. You can enable or disable language switching for the agent. This will be used to determine the language of the agent.
+          description: |
+            Language configuration for the agent.
+            Cross-field rule: `default` must be one of the values in `supported`.
+            Tamil (`ta`) cannot be combined with other languages in `supported`.
           properties:
-            enabled:
+            default:
               type: string
-              enum: [en, hi, ta]
-              description: "The language of the agent. Supported: 'en' (English), 'hi' (Hindi), 'ta' (Tamil)."
+              enum: [en, hi, mr, gu, ta, es, north_indic, bn, or]
+              description: "The default language of the agent. Note: `ta` cannot be combined with other languages in `supported`."
               default: en
+            supported:
+              type: array
+              description: |
+                Languages the agent understands. `default` must be one of these values.
+                Tamil (`ta`) cannot be combined with other languages.
+              items:
+                type: string
+                enum: [en, hi, mr, gu, ta, es, north_indic, bn, or]
             switching:
               type: object
               description: Language switching configuration for the agent. If enabled, the agent will be able to switch between languages based on the user's language.
@@ -3044,39 +3684,47 @@ components:
                   default: 2
         synthesizer:
           type: object
-          description: Synthesizer configuration for the agent. You can configure the synthesizer to use different voices and models. Currently we support 3 types of models for the synthesizer. Waves, Waves Lightning Large and Waves Lightning Large Voice Clone. You can clone your voice using waves platform https://waves.smallest.ai/voice-clone and use the voiceId for this field and select the model as waves_lightning_large_voice_clone to use your cloned voice. When updating the synthesizer configuration to voice clone model, you have to provide model and voiceId and gender all are required fields but when selecting the model as waves or waves and waves_lightning_large, you have to provide only model field and voiceId.
+          description: |
+            Synthesizer (TTS) configuration for the agent.
+            Models `waves`, `waves_lightning_large`, `waves_lightning_v2`, and `waves_lightning_v3_1`
+            validate `voiceId` against the Waves API. All other models accept any voiceId.
+            Cloned voices are regular voiceIds — use them with any compatible Waves model.
           properties:
             voiceConfig:
-              oneOf:
-                - type: object
-                  properties:
-                    model:
-                      type: string
-                      enum: [waves_lightning_large_voice_clone]
-                      description: We currently support 3 types of models for the synthesizer. Waves, Waves Lightning Large and Waves Lightning Large Voice Clone. You can clone your voice using waves platform and use the voiceId for this field and select the model as waves_lightning_large_voice_clone to use your cloned voice.
-                    voiceId:
-                      type: string
-                    gender:
-                      type: string
-                      enum:
-                        - male
-                        - female
-                      description: The gender of the synthesizer. When selecting gender, you have to select the model and voiceId which are required fields.
-                - type: object
-                  properties:
-                    model:
-                      type: string
-                      enum: [waves, waves_lightning_large]
-                      description: We currently support 3 types of models for the synthesizer. Waves, Waves Lightning Large and Waves Lightning Large Voice Clone. You can clone your voice using waves platform and use the voiceId for this field and select the model as waves_lightning_large_voice_clone to use your cloned voice.
-                    voiceId:
-                      type: string
-                      default: nyah
-                      description: The voice ID to use
+              type: object
+              description: Voice configuration for the synthesizer.
+              properties:
+                model:
+                  type: string
+                  enum:
+                    - waves
+                    - waves_lightning_large
+                    - waves_lightning_v2
+                    - waves_lightning_v3_1
+                    - waves_lightning_v3
+                    - waves_lightning_v2_http
+                    - gpt-realtime
+                    - gpt-realtime-mini
+                  default: waves_lightning_large
+                  description: The TTS model to use.
+                voiceId:
+                  type: string
+                  default: nyah
+                  description: The voice ID to use. For cloned voices, pass the voiceId from the Waves platform with a compatible model.
+                gender:
+                  type: string
+                  enum:
+                    - male
+                    - female
+                  default: female
+                  description: The gender of the voice.
               default:
                 model: waves_lightning_large
                 voiceId: nyah
             speed:
               type: number
+              minimum: 0
+              maximum: 2
               default: 1.2
             consistency:
               type: number
@@ -3092,32 +3740,95 @@ components:
               type: number
               enum: [0, 1, 2]
               default: 1
+            sampleRate:
+              type: number
+              enum: [8000, 16000, 24000, 44100]
+              default: 16000
+              description: Output audio sample rate in Hz.
         globalKnowledgeBaseId:
           type: string
           description: The global knowledge base ID of the agent. You can create a global knowledge base by using the /knowledgebase endpoint and assign it to the agent. The agent will use this knowledge base for its responses.
         slmModel:
           type: string
-          enum: ["electron", "gpt-4o"]
-          default: "electron"
-          description: The LLM model to use for the agent. LLM model will be used to generate the response and take decisions based on the user's query.
+          enum:
+            - electron
+            - electron-kogta
+            - electron-kogta-v2
+            - gpt-4o
+            - gpt-4.1
+            - gpt-5.2
+            - gpt-realtime
+            - gpt-realtime-mini
+          default: electron
+          description: |
+            The LLM model to use for the agent.
+            Note: `gpt-5.2`, `electron-kogta`, and `electron-kogta-v2` require org-level access and return 403 if not enabled.
+            `workflowType` must be `single_prompt` to use `gpt-realtime` or `gpt-realtime-mini`.
         defaultVariables:
           type: object
           description: The default variables to use for the agent. These variables will be used if no variables are provided when initiating a conversation with the agent.
         globalPrompt:
           type: string
+          maxLength: 4000
           description: |
-            Set global instructions for your agent's personality, role, and behavior throughout conversations. 
-            Note: Only used for workflow_graph agents.
+            Set global instructions for your agent's personality, role, and behavior throughout conversations.
+            Note: Only used for workflow_graph agents. Maximum 4000 characters.
         telephonyProductId:
-          type: string
-          description: The telephony product ID of the agent. This is the product ID of the telephony product that will be used to make the outbound call. You can buy telephone number and assign it to the agent.
+          type: array
+          items:
+            type: string
+          description: IDs of telephony products (phone numbers) to associate with the agent for inbound/outbound calls.
         workflowType:
           $ref: "#/components/schemas/WorkflowType"
-          default: workflow_graph
-          description: The type of workflow to create for the agent. Defaults to workflow_graph if not specified.
+          default: single_prompt
+          description: The type of workflow to create for the agent. Defaults to `single_prompt` if not specified. Using `workflow_graph` requires conversational agent access (403 if not enabled).
+        callDispositionConfig:
+          type: string
+          description: Configuration string for call disposition tracking.
+        allowInboundCall:
+          type: boolean
+          default: true
+          description: Whether the agent accepts inbound calls.
+        enableStyleGuide:
+          type: boolean
+          default: true
+          description: Whether style guide enforcement is applied to agent responses.
+        speechFormatting:
+          type: boolean
+          description: Whether speech formatting is applied to the agent's responses.
 
     UpdateAgentRequest:
-      $ref: "#/components/schemas/CreateAgentRequest"
+      type: object
+      description: |
+        Agent update payload. Behavior depends on whether the agent has versioning enabled:
+
+        **Versioned agents**: only `name`, `description`, `avatarUrl`, `telephonyProductId`,
+        `allowInboundCall`, and `visibleToEveryone` are accepted. Config-level fields
+        (language, synthesizer, slmModel, etc.) return 400.
+
+        **Non-versioned agents**: all configuration fields are accepted — the same full set
+        as `POST /agent`. See `CreateAgentRequest` for the complete field list.
+      properties:
+        name:
+          type: string
+          description: Name of the agent.
+        description:
+          type: string
+          description: Description of the agent.
+        avatarUrl:
+          type: string
+          description: URL of the agent's avatar image.
+        telephonyProductId:
+          type: array
+          items:
+            type: string
+          description: IDs of telephony products (phone numbers) to associate with the agent.
+        allowInboundCall:
+          type: boolean
+          description: Whether the agent accepts inbound calls.
+        visibleToEveryone:
+          type: boolean
+          description: Whether the agent is visible to all members of the organization.
 
     AgentDTO:
       type: object
@@ -3155,10 +3866,10 @@ components:
           type: object
           description: The language configuration of the agent
           properties:
-            enabled:
+            default:
               type: string
-              description: The language of the agent
-              enum: [en, hi, ta]
+              description: The default language of the agent
+              enum: [en, hi, mr, gu, ta, es, north_indic, bn, or]
             switching:
               type: object
               description: Language switching configuration for the agent
@@ -3198,6 +3909,7 @@ components:
                     - waves
                     - waves_lightning_large
                     - waves_lightning_large_voice_clone
+                    - waves_lightning_v2
                   default: waves_lightning_large
                 voiceId:
                   type: string
@@ -3225,15 +3937,55 @@ components:
               type: number
               default: 1
               description: The enhancement of the synthesizer
+            sampleRate:
+              type: number
+              description: The audio sample rate used by the synthesizer
         slmModel:
           type: string
           enum:
             - electron
+            - electron-kogta
+            - electron-kogta-v2
             - gpt-4o
+            - gpt-4.1
+            - gpt-5.2
+            - gpt-realtime
+            - gpt-realtime-mini
           description: The LLM model to use for the agent. LLM model will be used to generate the response and take decisions based on the user's query.
         defaultVariables:
           type: object
           description: The default variables to use for the agent. These variables will be used if no variables are provided when initiating a conversation with the agent.
+        avatarUrl:
+          type: string
+          description: URL of the agent's avatar image
+        firstMessage:
+          type: string
+          description: The opening message spoken by the agent at the start of a call
+        allowInterruptions:
+          type: boolean
+          description: Whether the agent can be interrupted mid-speech by the caller
+        waitForUserToSpeakFirst:
+          type: boolean
+          description: When true, the agent waits for the caller to speak before responding
+        totalCalls:
+          type: number
+          description: Total number of calls made with this agent
+        transcriberType:
+          type: string
+          description: The speech-to-text engine used for transcription
+        globalPrompt:
+          type: string
+          description: A global system prompt prepended to all agent interactions
+        archived:
+          type: boolean
+          description: Whether the agent has been archived. Archived agents are excluded from default listings.
+        archivedAt:
+          type: string
+          format: date-time
+          description: The date and time when the agent was archived
+        isLocked:
+          type: boolean
+          description: Whether the agent is locked and cannot be edited
         createdAt:
           type: string
           format: date-time
@@ -3242,6 +3994,100 @@ components:
           type: string
           format: date-time
           description: The date and time when the agent was last updated
+        _resolvedConfig:
+          type: object
+          additionalProperties: true
+          description: |
+            The resolved config of the target version, merged into a flat shape. Not returned in
+            list responses (`GET /agent`). Only populated in single-agent responses
+            (`GET /agent/{id}`) when the agent has a published, activated version.
+            Can contain up to ~30 fields depending on which config sections are set.
+          properties:
+            prompt:
+              type: string
+              description: Active version's single-prompt text.
+            tools:
+              type: array
+              items:
+                type: object
+              description: Active version's configured tools.
+            postCallAnalyticsConfig:
+              type: object
+              description: Disposition metrics and analytics model configuration.
+            callDispositionConfig:
+              type: string
+            modelName:
+              type: string
+              description: LLM model name on the resolved version.
+            transcriberType:
+              type: string
+              description: STT engine in use on the resolved version.
+            defaultLanguage:
+              type: string
+              enum: [en, hi, mr, gu, ta, es, north_indic, bn, or]
+              description: Default language set on the resolved version.
+            supportedLanguages:
+              type: array
+              items:
+                type: string
+              description: Supported languages on the resolved version.
+            languageSwitching:
+              type: object
+              description: Language-switching configuration on the resolved version.
+            firstMessage:
+              type: string
+              description: Opening message on the resolved version.
+            globalPrompt:
+              type: string
+              description: Global prompt on the resolved version (workflow_graph agents only).
+            preCallAPI:
+              type: object
+              description: Pre-call API configuration on the resolved version.
+            workflowGraph:
+              type: object
+              description: Full node graph for workflow_graph agents. Null for single_prompt agents.
+            muteUserUntilFirstBotResponse:
+              type: boolean
+            allowInterruptions:
+              type: boolean
+            voiceDetectionConfig:
+              type: object
+            smartTurnConfig:
+              type: object
+            backgroundSound:
+              type: string
+            denoisingConfig:
+              type: object
+            redactionConfig:
+              type: object
+            llmIdleTimeoutConfig:
+              type: object
+            sessionTimeoutConfig:
+              type: object
+        _configSource:
+          type: string
+          enum:
+            - active
+            - draft
+            - version
+          description: |
+            Only present when `?draftId` or `?versionId` query params are used.
+            Indicates which config source was resolved into `_resolvedConfig`.
+        _versionedWorkflow:
+          type: object
+          description: |
+            **Deprecated — internal use only.** Legacy field present whenever `_resolvedConfig` is populated.
+            Mirrors a subset of `_resolvedConfig` (`prompt`, `tools`, `workflowGraph`). Kept for backward
+            compatibility with existing frontend code. Ignore in new integrations.
+          properties:
+            prompt:
+              type: string
+            tools:
+              type: array
+              items:
+                type: object
+            workflowGraph:
+              type: object
 
     WebhookAgent:
       type: object
@@ -3364,6 +4210,10 @@ components:
         createdBy:
           type: string
           description: The user ID who created the knowledge base
+        processingStatus:
+          type: string
+          enum: [pending, processing, completed, failed]
+          description: The current processing status of the knowledge base
         createdAt:
           type: string
           format: date-time
