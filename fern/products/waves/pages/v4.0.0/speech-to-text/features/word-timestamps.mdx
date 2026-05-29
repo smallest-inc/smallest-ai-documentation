@@ -11,7 +11,7 @@ Word timestamps provide precise timing information for each word in the transcri
 
 ### Pre-Recorded API
 
-Add `word_timestamps=true` to your Pulse STT query parameters. This works for both raw-byte uploads (`Content-Type: audio/wav`) and JSON requests with hosted audio URLs.
+Add `word_timestamps=true` to your query parameters. Pulse Pro accepts raw-byte uploads only (`Content-Type: application/octet-stream`); Pulse also accepts JSON requests with a hosted audio URL.
 
 #### Sample request
 
@@ -22,7 +22,7 @@ curl -sL -o audio.wav "https://github.com/smallest-inc/cookbook/raw/main/speech-
 curl --request POST \
   --url "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en&word_timestamps=true" \
   --header "Authorization: Bearer $SMALLEST_API_KEY" \
-  --header "Content-Type: audio/wav" \
+  --header "Content-Type: application/octet-stream" \
   --data-binary "@audio.wav"
 ```
 
@@ -50,6 +50,24 @@ Responses include a `words` array with `word`, `start`, `end`, and `confidence` 
 
 ### Pre-Recorded API Response
 
+Pulse Pro response — `words` array with per-word timing and confidence; no `utterances` field:
+
+```json
+{
+  "status": "success",
+  "transcription": "Hello world.",
+  "words": [
+    { "word": "Hello", "start": 0.0, "end": 0.5, "confidence": 0.98 },
+    { "word": "world.", "start": 0.6, "end": 0.9, "confidence": 0.96 }
+  ],
+  "language": "en",
+  "metadata": { "duration": 0.9, "processing_time_ms": 42.5, "rtfx": 21.2, "num_chunks": 1 },
+  "request_id": "8c355f4d-bd45-48ee-aa83-d00e4670f6bb"
+}
+```
+
+Pulse response — also includes an `utterances` array with sentence-level timestamps:
+
 ```json
 {
   "status": "success",
@@ -63,8 +81,6 @@ Responses include a `words` array with `word`, `start`, `end`, and `confidence` 
   ]
 }
 ```
-
-The response of Pre-Recorded API includes the utterances field, which includes sentence level timestamps.
 
 ### Real-Time WebSocket API Response
 
