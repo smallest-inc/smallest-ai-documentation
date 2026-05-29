@@ -1,0 +1,113 @@
+---
+title: 'Keyword Boosting'
+description: 'Boost specific words or phrases so the speech-to-text model recognizes them correctly'
+---
+
+<Badge color="purple">Real-Time</Badge>
+
+Keyword boosting lets you bias the Pulse speech-to-text model toward specific words or phrases — useful for proper nouns, brand names, technical terms, or domain-specific vocabulary that the model might otherwise misrecognize.
+
+## Format
+
+Keywords are passed as a **single comma-separated string** in the `keywords` query parameter. Each entry follows the format:
+
+```
+KEYWORD:INTENSIFIER
+```
+
+| Part | Required | Description |
+|---|---|---|
+| `KEYWORD` | Yes | The word or phrase to boost |
+| `INTENSIFIER` | No | A number controlling boost strength. Defaults to `1.0` if omitted |
+
+<Warning>
+The value is a plain string, **not** a JSON array. Both of these shapes are wrong and produce garbled transcripts (the API parses the brackets and quotes as keyword characters):
+
+```
+❌ keywords=["I:20,smiling:26"]
+❌ keywords=['I:20,smiling:26']
+```
+
+Pass it as one string instead:
+
+```
+✅ keywords=I:20,smiling:26
+```
+
+In JavaScript: `url.searchParams.append("keywords", "I:20,smiling:26")` — `URLSearchParams` URL-encodes the colons and comma for you. In Python: `params = {"keywords": "I:20,smiling:26"}` then `urlencode(params)` does the same. Verified against the live API.
+</Warning>
+
+## Intensifier Scale
+
+| Value | Effect |
+|---|---|
+| `1` | Mild boost (default if omitted) |
+| `2-3` | Moderate boost — good for uncommon proper nouns |
+| `4-6` | Strong boost — for rare terms the model struggles with |
+| `7-10` | Very strong boost — use sparingly, can over-bias results |
+
+Higher values create a stronger bias toward that word in the output. Start low and increase if the word still isn't recognized correctly.
+
+## Enabling Keyword Boosting
+
+### Real-Time WebSocket API
+
+Add the `keywords` query parameter to your WebSocket connection URL with a comma-separated list of keywords and optional intensifiers.
+
+#### Single keyword
+
+```javascript
+const url = new URL("wss://api.smallest.ai/waves/v1/stt/live?model=pulse");
+url.searchParams.append("language", "en");
+url.searchParams.append("encoding", "linear16");
+url.searchParams.append("sample_rate", "16000");
+url.searchParams.append("keywords", "I:20,smiling:26");
+
+const ws = new WebSocket(url.toString(), {
+  headers: {
+    Authorization: `Bearer ${API_KEY}`,
+  },
+});
+```
+
+#### Multiple keywords
+
+```
+wss://api.smallest.ai/waves/v1/stt/live?model=pulse&language=en&encoding=linear16&sample_rate=16000&keywords=Hansi:6,Muller:6,CVV:9
+```
+
+#### Mix of boosted and default-intensity keywords
+
+```
+wss://api.smallest.ai/waves/v1/stt/live?model=pulse&language=en&encoding=linear16&sample_rate=16000&keywords=CEO:3,NVIDIA:5,Jensen
+```
+
+`Jensen` with no intensifier defaults to `1.0`.
+
+## Examples
+
+### Boost names in a meeting transcript
+
+```
+wss://api.smallest.ai/waves/v1/stt/live?model=pulse&language=en&encoding=linear16&sample_rate=16000&keywords=Jensen:4,NVIDIA:5,Blackwell:6,CUDA:3
+```
+
+### Boost brand names and product terms
+
+```
+wss://api.smallest.ai/waves/v1/stt/live?model=pulse&language=en&encoding=linear16&sample_rate=16000&keywords=Anthropic:5,Claude:4,Sonnet:3
+```
+
+<Warning>
+Very high intensifiers (above 10) heavily bias the transcript and can hallucinate the keyword even when it was not spoken. The example `I:20,smiling:26` demonstrates the format, not recommended values. Start at `3-6` and tune from there.
+</Warning>
+
+## Limits
+
+- Max **100 keywords** per session
+- Intensifier must be a **non-negative number**
+- Each keyword must be a **string**
+
+<Note>
+Start with lower intensifier values (1–3) and increase gradually. Very high values (7–10) can over-bias the model and should be used sparingly.
+</Note>

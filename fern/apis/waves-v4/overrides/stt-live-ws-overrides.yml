@@ -1,0 +1,143 @@
+# Override file for stt-live-ws.yaml (v4 docs)
+# Adds server mapping, audience tags, unique message names, and query params as channel parameters.
+# Query params are in server bindings in the base spec, but Fern only extracts channel parameters,
+# so we redeclare them at channel scope here for SDK generation. Mirrors pulse-stt-ws-overrides.yml.
+
+info:
+  x-fern-audiences:
+    - v4docs
+
+servers:
+  production:
+    x-fern-server-name: waves
+
+channels:
+  transcription:
+    x-fern-server-name: waves
+    x-fern-audiences:
+      - v4docs
+    x-fern-sdk-group-name: Speech to Text
+    title: Transcribe (Realtime / WebSocket)
+    description: |
+      Real-time speech-to-text over a persistent WebSocket. The fit-for-purpose path for live captioning, voice agents, and any flow where you need partial transcripts as the user is still speaking.
+
+      ## When to use this
+
+      - **Use this** for live audio: microphone input, voice-agent turns, simultaneous interpretation, low-latency captioning. Partial results stream back while audio is still arriving.
+      - **Use `POST /waves/v1/stt/`** when you have a complete file. Single request, single response, less plumbing.
+
+      ## Model selection
+
+      Today only `?model=pulse` is supported on the streaming endpoint. `?model=pulse-pro` is rejected with `400` before WebSocket upgrade because Pulse Pro has no streaming worker; use `POST /waves/v1/stt/?model=pulse-pro` (HTTP) instead.
+
+      ## How it works
+
+      1. Open a WebSocket to `wss://api.smallest.ai/waves/v1/stt/live` with `Authorization: Bearer <key>` and the session params (`model`, `language`, `sample_rate`, `encoding`, etc.) as query string.
+      2. Stream raw PCM (or your chosen `encoding`) over the socket as binary frames.
+      3. The server pushes back JSON `transcription` messages with `is_final: false` partial results as audio streams and `is_final: true` when an utterance closes.
+      4. Send `{"type":"close_stream","is_last":true}` to flush remaining audio and end the session.
+
+      ## Example
+
+      **Python**
+      ```python
+      import asyncio, json, websockets
+
+      URL = "wss://api.smallest.ai/waves/v1/stt/live?model=pulse&language=en&sample_rate=16000&encoding=linear16"
+      HEADERS = {"Authorization": f"Bearer {API_KEY}"}
+
+      async def stream():
+          async with websockets.connect(URL, additional_headers=HEADERS) as ws:
+              # ... send audio bytes, receive transcription events ...
+              await ws.send(json.dumps({"type": "close_stream", "is_last": True}))
+
+      asyncio.run(stream())
+      ```
+
+      ## Common gotchas
+
+      - **`model` is required.** Missing or invalid values return `400` before the WebSocket upgrades.
+      - **Match `sample_rate` to your audio.** The server does not resample; mismatched rates produce garbage transcripts.
+      - **Existing clients** on `wss://api.smallest.ai/waves/v1/pulse/get_text` continue to work alongside this unified path.
+    servers:
+      - $ref: "#/servers/production"
+    parameters:
+      model:
+        description: |
+          Selects the ASR model. Today only `pulse` is supported on the streaming endpoint. `pulse-pro` returns `400` before the WebSocket upgrade because Pulse Pro has no streaming worker yet; for Pulse Pro use the HTTP endpoint (`POST /waves/v1/stt/?model=pulse-pro`).
+        enum:
+          - pulse
+        required: true
+        location: $message.header#/model
+      language:
+        description: |
+          Language code for transcription. Set explicitly to the known language for best accuracy. See the Pulse model card for the full 38-language list and the `multi-*` aggregators.
+        required: true
+        location: $message.header#/language
+      sample_rate:
+        description: Audio sample rate in Hz of the bytes you stream. Must match the actual rate of your audio source.
+        enum:
+          - "8000"
+          - "16000"
+          - "22050"
+          - "24000"
+          - "44100"
+          - "48000"
+        default: "16000"
+        required: false
+        location: $message.header#/sample_rate
+      encoding:
+        description: |
+          Audio encoding of the bytes you stream. The server uses this to decode incoming frames; set it to match what your client is sending.
+
+          - `linear16`, `linear32`: raw PCM (16-bit and 32-bit). Pair with the matching `sample_rate`.
+          - `alaw`, `mulaw`: 8 kHz telephony codecs. Pair with `sample_rate=8000`.
+          - `opus`, `ogg_opus`: Opus compressed audio (raw and Ogg container).
+        enum:
+          - linear16
+          - linear32
+          - alaw
+          - mulaw
+          - opus
+          - ogg_opus
+        default: linear16
+        required: false
+        location: $message.header#/encoding
+      word_timestamps:
+        description: Include word-level timestamps in transcription events.
+        enum:
+          - "true"
+          - "false"
+        default: "false"
+        required: false
+        location: $message.header#/word_timestamps
+      diarize:
+        description: Enable speaker diarization to identify different speakers in the audio.
+        enum:
+          - "true"
+          - "false"
+        default: "false"
+        required: false
+        location: $message.header#/diarize
+      eou_timeout_ms:
+        description: Time in milliseconds to wait after speech ends before flushing the transcript.
+        default: 800
+        required: false
+        location: $message.header#/eou_timeout_ms
+    messages:
+      audioChunkOut:
+        name: V4SttAudioChunk
+      closeStream:
+        name: V4SttCloseStream
+      transcriptionEvent:
+        name: V4SttTranscriptionEvent
+      errorEvent:
+        name: V4SttErrorEvent
+
+operations:
+  sendAudio:
+    action: send
+  sendClose:
+    action: send
+  receiveTranscription:
+    action: receive
