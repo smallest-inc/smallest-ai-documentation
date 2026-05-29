@@ -140,8 +140,8 @@ async def transcribe(audio_file: str):
             while chunk := f.read(4096):
                 await ws.send(chunk)
 
-        # Signal end of audio
-        await ws.send(json.dumps({"type": "finalize"}))
+        # Signal end of audio (close_stream is the only message that emits is_last=true)
+        await ws.send(json.dumps({"type": "close_stream"}))
 
         # Receive transcriptions
         async for message in ws:
@@ -220,9 +220,10 @@ async def transcribe_agentic(audio_file: str):
             while chunk := f.read(4096):
                 await ws.send(chunk)
 
-        # VAD detected end-of-speech → send finalize
-        # ITN normalizes the entire accumulated chunk
-        await ws.send(json.dumps({"type": "finalize"}))
+        # VAD detected end-of-speech → close_stream
+        # (close_stream is the only message that emits is_last=true; the
+        # protocol's `finalize` only forces an interim is_final=true)
+        await ws.send(json.dumps({"type": "close_stream"}))
 
         async for message in ws:
             data = json.loads(message)
