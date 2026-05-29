@@ -61,7 +61,47 @@ servers:
 channels:
   transcription:
     address: /waves/v1/stt/live
-    description: Bidirectional channel. Client sends binary audio chunks; server emits transcription and lifecycle events.
+    description: |
+      Real-time speech-to-text over a persistent WebSocket. The fit-for-purpose path for live captioning, voice agents, and any flow where you need partial transcripts as the user is still speaking.
+
+      ## When to use this
+
+      - **Use this** for live audio: microphone input, voice-agent turns, simultaneous interpretation, low-latency captioning. Partial results stream back while audio is still arriving.
+      - **Use `POST /waves/v1/stt/`** when you have a complete file. Single request, single response, less plumbing.
+
+      ## Model selection
+
+      Today only `?model=pulse` is supported on the streaming endpoint. `?model=pulse-pro` is rejected with `400` before WebSocket upgrade because Pulse Pro has no streaming worker; use `POST /waves/v1/stt/?model=pulse-pro` (HTTP) instead.
+
+      ## How it works
+
+      1. Open a WebSocket to `wss://api.smallest.ai/waves/v1/stt/live` with `Authorization: Bearer <key>` and the session params (`model`, `language`, `sample_rate`, `encoding`, etc.) as query string.
+      2. Stream raw PCM (or your chosen `encoding`) over the socket as binary frames.
+      3. The server pushes back JSON `transcription` messages with `is_final: false` partial results as audio streams and `is_final: true` when an utterance closes.
+      4. Send `{"type":"close_stream","is_last":true}` to flush remaining audio and end the session.
+
+      ## Example
+
+      **Python**
+      ```python
+      import asyncio, json, websockets
+
+      URL = "wss://api.smallest.ai/waves/v1/stt/live?model=pulse&language=en&sample_rate=16000&encoding=linear16"
+      HEADERS = {"Authorization": f"Bearer {API_KEY}"}
+
+      async def stream():
+          async with websockets.connect(URL, additional_headers=HEADERS) as ws:
+              # ... send audio bytes, receive transcription events ...
+              await ws.send(json.dumps({"type": "close_stream", "is_last": True}))
+
+      asyncio.run(stream())
+      ```
+
+      ## Common gotchas
+
+      - **`model` is required.** Missing or invalid values return `400` before the WebSocket upgrades.
+      - **Match `sample_rate` to your audio.** The server does not resample; mismatched rates produce garbage transcripts.
+      - **Existing clients** on `wss://api.smallest.ai/waves/v1/pulse/get_text` continue to work alongside this unified path.
     messages:
       audioChunkOut:
         $ref: '#/components/messages/AudioChunkOut'

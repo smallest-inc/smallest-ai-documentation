@@ -114,12 +114,13 @@ paths:
         required: true
         schema:
           type: string
-          enum: [pulse, pulse-pro]
+          enum: [pulse-pro, pulse]
+        example: pulse-pro
         description: |
           Selects which ASR model handles the request. Required; missing or invalid values return `400`.
 
-          - `pulse` — multilingual (38 languages), raw bytes OR URL.
           - `pulse-pro` — English only, leaderboard-ranked accuracy, raw bytes only; supports async via `webhook_url`.
+          - `pulse` — multilingual (38 languages), raw bytes OR URL.
       - name: language
         in: query
         required: true
@@ -241,12 +242,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: error
+                message: File size exceeds maximum limit of 250MB.
         '429':
           description: RPM cap exceeded (Standard plan default 25/min per model).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: error
+                message: Rate limit exceeded. Please retry after a short backoff.
         '503':
           description: Worker temporarily unavailable.
           content:
