@@ -20,7 +20,7 @@ async def main():
             if evt["type"] == "session.created":
                 await ws.send(json.dumps({
                     "type": "session.configure",
-                    "session": {"instructions": "Be brief.", "voice": "leda"},
+                    "session": {"instructions": "Be brief.", "voice": "wren"},
                 }))
             elif evt["type"] == "response.output_audio.delta":
                 ...  # decode base64 PCM16 and play
@@ -32,7 +32,7 @@ asyncio.run(main())
 
 - **Single WebSocket endpoint** at `wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=...`. JSON text frames; no binary frames.
 - **Full-duplex with server-side VAD** — stream `input_audio_buffer.append` continuously while the mic is open. Hydra detects turn boundaries on its own. If the user speaks while the model is responding, the in-flight response is cancelled (`response.done` with `reason: "interrupted"`) and a fresh turn begins.
-- **Six voices**: `leda`, `aoede`, `autonoe`, `charon`, `fenrir`, `zephyr`.
+- **Six voices**: `wren`, `sloane`, `marlowe`, `reed`, `knox`, `tate`.
 - **Tool calling** — declare JSON-schema tools in `session.configure`, Hydra streams arguments via `response.function_call_arguments.delta`, your client executes the tool and posts the result back via `conversation.item.create` + `response.create`.
 - **Bot speaks first** — set `generate_initial_response: true` on `session.configure` for greetings and concierge openers.
 - **Mid-session updates** — live-patch `tools` via `session.update` without reconnecting.

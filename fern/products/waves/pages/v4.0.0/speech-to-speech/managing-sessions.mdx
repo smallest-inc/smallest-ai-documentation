@@ -35,7 +35,7 @@ Send this once, immediately after `session.created`. Every field is optional.
   "type": "session.configure",
   "session": {
     "instructions": "You are a warm, concise voice assistant. Reply in one short sentence.",
-    "voice": "leda",
+    "voice": "wren",
     "tools": [],
     "generate_initial_response": false
   }
@@ -45,11 +45,13 @@ Send this once, immediately after `session.created`. Every field is optional.
 | Field | Type | Notes |
 |---|---|---|
 | `instructions` | string | System prompt. See [Prompting voice agents](/waves/documentation/speech-to-speech-hydra/prompting). |
-| `voice` | string | One of `leda`, `aoede`, `autonoe`, `charon`, `fenrir`, `zephyr`. Unknown values silently fall back to the default — **validate client-side**. |
+| `voice` | string | One of `wren`, `sloane`, `marlowe`, `reed`, `knox`, `tate`. Unknown values silently fall back to the default — **validate client-side**. |
 | `tools` | array | Function-calling tool schemas. See [Tool calling](/waves/documentation/speech-to-speech-hydra/tool-calling). |
-| `output_audio_format` | string | Currently only `pcm16`. |
-| `output_audio_sample_rate` | integer | Server selects (currently 48000). The value echoed in `session.configured` is the source of truth — **don't hardcode**. |
 | `generate_initial_response` | boolean | `true` makes the model speak first, before any user audio. Honoured only at handshake. |
+
+<Warning>
+`session.configure` silently accepts unknown fields — a typo like `instuctions` is ignored, not rejected, and the default persona ships instead. Validate keys client-side. `session.update` is stricter and returns an `invalid_frame` error on unknown fields.
+</Warning>
 
 ## `session.configured` (server echo)
 
@@ -59,7 +61,7 @@ Send this once, immediately after `session.created`. Every field is optional.
   "event_id": "sv_df88e2e7ef6145c7",
   "session": {
     "instructions": "...",
-    "voice": "leda",
+    "voice": "wren",
     "tools": [],
     "output_audio_format": "pcm16",
     "output_audio_sample_rate": 48000,
@@ -96,19 +98,13 @@ Setting `generate_initial_response: true` on `session.configure` makes Hydra del
   "type": "session.configure",
   "session": {
     "instructions": "You are a hotel concierge. Greet the guest warmly and ask how you can help.",
-    "voice": "leda",
+    "voice": "wren",
     "generate_initial_response": true
   }
 }
 ```
 
 Immediately after `session.configured`, the standard `response.created` → audio deltas → `response.done` sequence fires, with **no preceding `input_audio_buffer.speech_started`**.
-
-## Conversation history
-
-Hydra maintains a **rolling window of ~40 turns** per session; older turns are evicted automatically. The model uses this history to keep multi-turn dialogue coherent — you don't need to replay prior turns on each request, and you don't need to truncate them yourself.
-
-Long-running sessions that need more than ~40 turns should plan to open a fresh connection at a natural break (e.g. after a long pause or topic change) and re-seed any required context in the new session's `instructions`.
 
 ## Conversation items
 
@@ -130,9 +126,7 @@ Most events carry a `ConversationItem`. The shape is intentionally flat — ever
 }
 ```
 
-For audio message items, `content[].text` is **`null`** — audio bytes are the payload. The `text` field exists for `function_call_output` and other text-bearing items.
-
-Discarded user turns (e.g. brief mic noise that didn't trigger a response) arrive as `conversation.item.done` with `status: "incomplete"` and should be ignored.
+Discarded user turns — speech that VAD started but the turn detector later rejected — arrive as `conversation.item.done` with `status: "incomplete"`. Silence and sub-VAD noise produce no events at all.
 
 ## `response.done`
 

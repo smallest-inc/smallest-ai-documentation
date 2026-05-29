@@ -174,7 +174,7 @@ For barge-in, you reset `playCursor = playCtx.currentTime` when a fresh `respons
 
 ## Common gotchas
 
-- **Sending audio before `session.configured`** — the server queues but may emit `error` codes if the session isn't ready. Wait for the echo before streaming.
+- **Sending audio before `session.configured`** — frames are **silently dropped**; the server does not queue them and does not emit an error. Always wait for the `session.configured` echo before starting the mic.
 - **Sample-rate mismatch** — sending 24 kHz audio while claiming PCM16 16 kHz produces unintelligible transcription on the model side. Resample explicitly.
 - **Stereo input** — Hydra expects mono. If you have stereo, downmix before encoding.
 - **Hardcoding the output rate** — see the warning above. Always read it from `session.configured`.
@@ -206,7 +206,7 @@ async def main():
                 if t == "session.created":
                     await ws.send(json.dumps({
                         "type": "session.configure",
-                        "session": {"instructions": "Reply briefly.", "voice": "leda"},
+                        "session": {"instructions": "Reply briefly.", "voice": "wren"},
                     }))
                 elif t == "session.configured":
                     out_rate = evt["session"].get("output_audio_sample_rate", 48000)

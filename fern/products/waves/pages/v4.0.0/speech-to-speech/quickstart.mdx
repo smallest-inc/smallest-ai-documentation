@@ -1,10 +1,10 @@
 ---
 title: "Quickstart"
-description: "Talk to Hydra in under a minute — a single-file Python CLI with live status and a wire log, plus a one-clone browser client for full-fidelity UX."
+description: "Talk to Hydra in under a minute — a one-clone browser client with multi-agent presets, tool execution, and a live wire log."
 icon: "rocket"
 ---
 
-Hydra is realtime, full-duplex, speech-to-speech. The fastest way to feel that is to **talk to it**. Two paths below — both single-file, both copy-paste-and-run.
+Hydra is realtime, full-duplex, speech-to-speech. The fastest way to feel that is to **talk to it**. The reference client below is single-clone and ships with multiple agent presets so you can hear barge-in, tool calls, and persona switching live.
 
 ## 1. Get an API key
 
@@ -14,182 +14,16 @@ In the [Smallest AI Console](https://app.smallest.ai/dashboard/api-keys), create
 export SMALLEST_API_KEY="..."
 ```
 
-## 2. Talk to it now
+## 2. Run the reference client
 
-A single Python file, a live status panel, a wire log of every event. Talk into your laptop mic, hear Hydra reply through your speakers. Speak over Hydra to interrupt — barge-in is automatic.
-
-```bash
-pip install websockets sounddevice numpy rich
-python3 hydra_chat.py
-```
-
-```python
-import asyncio, base64, json, os, time
-from collections import deque
-
-import numpy as np
-import sounddevice as sd
-import websockets
-from rich.console import Console
-from rich.layout import Layout
-from rich.live import Live
-from rich.panel import Panel
-from rich.table import Table
-from rich.text import Text
-
-URL = f"wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key={os.environ['SMALLEST_API_KEY']}"
-IN_RATE, MIC_FRAMES = 16000, 320     # 20 ms chunks of 16 kHz mono PCM16
-VOICE = "leda"                        # leda · aoede · autonoe · charon · fenrir · zephyr
-PERSONA = (
-    "You are a warm, concise voice assistant. Reply in one or two short sentences. "
-    "If the user is mid-sentence, wait for them to finish."
-)
-
-console = Console()
-events = deque(maxlen=20)
-state = {"status": "Connecting…", "session_id": "", "voice": VOICE,
-         "out_rate": 48000, "turns": 0}
-
-def render():
-    color = {"Listening": "green", "Hydra is speaking": "cyan",
-             "User speaking": "magenta", "Barge-in": "bold red",
-             "Connecting…": "yellow", "Closed": "red"}.get(state["status"], "white")
-    head = Table.grid(expand=True)
-    head.add_column(); head.add_column(justify="right")
-    head.add_row(Text.assemble(("Hydra ", "bold"), ("speech-to-speech", "dim")),
-                 Text(state["status"], style=color))
-    meta = Table.grid(padding=(0, 2))
-    meta.add_column(style="dim"); meta.add_column()
-    meta.add_row("voice", state["voice"])
-    meta.add_row("session", state["session_id"][:16] + ("…" if len(state["session_id"]) > 16 else ""))
-    meta.add_row("output rate", f"{state['out_rate']} Hz")
-    meta.add_row("turns", str(state["turns"]))
-    log = Text()
-    for ts, d, m in list(events)[-15:]:
-        log.append(f"{ts}  ", style="dim")
-        log.append("→ " if d == "out" else "← ", style="blue" if d == "out" else "green")
-        log.append(m + "\n")
-    layout = Layout()
-    layout.split_column(
-        Layout(Panel(head, border_style="white"), size=3),
-        Layout(Panel(meta, title="Session", border_style="cyan"), size=8),
-        Layout(Panel(log, title="Wire log", border_style="dim")),
-    )
-    return layout
-
-def evt(direction, msg):
-    events.append((time.strftime("%H:%M:%S"), direction, msg))
-
-async def main():
-    loop = asyncio.get_running_loop()
-    play_q: asyncio.Queue[bytes] = asyncio.Queue()
-    mic_q: asyncio.Queue[bytes] = asyncio.Queue(maxsize=200)
-    stop = asyncio.Event()                                 # signals every loop to exit cleanly
-    speaker: sd.RawOutputStream | None = None
-
-    def mic_cb(indata, frames, *_):
-        # mic_cb runs on the sounddevice audio thread — bounce queue mutation
-        # back to the event loop via call_soon_threadsafe (asyncio.Queue is
-        # not thread-safe; calling put_nowait directly can drop wake-ups).
-        pcm = (np.clip(indata[:, 0], -1, 1) * 32767).astype(np.int16).tobytes()
-        def _put():
-            try: mic_q.put_nowait(pcm)
-            except asyncio.QueueFull: pass
-        loop.call_soon_threadsafe(_put)
-
-    mic = sd.InputStream(samplerate=IN_RATE, channels=1, dtype="float32",
-                         blocksize=MIC_FRAMES, callback=mic_cb)
-
-    with Live(render(), console=console, refresh_per_second=10) as live:
-        async with websockets.connect(URL, max_size=None, close_timeout=2) as ws:
-            async def reader():
-                nonlocal speaker
-                try:
-                    async for raw in ws:
-                        e = json.loads(raw); t = e["type"]
-                        if t == "session.created":
-                            state["session_id"] = e.get("session_id", "")
-                            evt("in", "session.created")
-                            await ws.send(json.dumps({"type": "session.configure",
-                                "session": {"instructions": PERSONA, "voice": VOICE}}))
-                            evt("out", f"session.configure voice={VOICE}")
-                        elif t == "session.configured":
-                            state["out_rate"] = e["session"].get("output_audio_sample_rate", 48000)
-                            state["status"] = "Listening"
-                            evt("in", f"session.configured out_rate={state['out_rate']}")
-                            speaker = sd.RawOutputStream(samplerate=state["out_rate"],
-                                                        channels=1, dtype="int16")
-                            speaker.start(); mic.start()
-                        elif t == "input_audio_buffer.speech_started":
-                            state["status"] = "Barge-in" if state["status"] == "Hydra is speaking" else "User speaking"
-                            while not play_q.empty():
-                                try: play_q.get_nowait()
-                                except asyncio.QueueEmpty: break
-                            evt("in", "speech_started")
-                        elif t == "input_audio_buffer.speech_stopped":
-                            evt("in", "speech_stopped")
-                        elif t == "response.created":
-                            state["status"] = "Hydra is speaking"
-                            evt("in", "response.created")
-                        elif t == "response.output_audio.delta":
-                            await play_q.put(base64.b64decode(e["delta"]))
-                        elif t == "response.done":
-                            state["status"] = "Listening"; state["turns"] += 1
-                            evt("in", f"response.done [{e['response']['status']}]")
-                        elif t == "error":
-                            evt("in", f"error {e['error'].get('code', '?')}")
-                finally:
-                    state["status"] = "Closed"
-                    stop.set()                              # wake the other coroutines
-
-            async def mic_send():
-                while not stop.is_set():
-                    try:
-                        pcm = await asyncio.wait_for(mic_q.get(), timeout=0.2)
-                    except asyncio.TimeoutError:
-                        continue
-                    if ws.state.name != "OPEN": return
-                    await ws.send(json.dumps({"type": "input_audio_buffer.append",
-                                              "audio": base64.b64encode(pcm).decode()}))
-
-            async def speaker_drain():
-                while not stop.is_set():
-                    try:
-                        pcm = await asyncio.wait_for(play_q.get(), timeout=0.2)
-                    except asyncio.TimeoutError:
-                        continue
-                    if speaker: speaker.write(pcm)
-
-            async def refresh():
-                while not stop.is_set():
-                    live.update(render())
-                    await asyncio.sleep(0.1)
-
-            try:
-                await asyncio.gather(reader(), mic_send(), speaker_drain(), refresh())
-            finally:
-                mic.stop(); mic.close()
-                if speaker: speaker.stop(); speaker.close()
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        console.print("\n[dim]bye[/dim]")
-```
-
-You'll see a live status header (**Listening → User speaking → Hydra is speaking → Barge-in**), session info, and a wire log of every event the server emits. Ctrl-C to quit.
-
-## 3. Want a full browser experience?
-
-Clone the reference client — a production-grade Next.js app with multi-agent presets, tool execution, and a live wire log.
+A production-grade Next.js app with multi-agent presets, local tool execution, and a live wire log.
 
 ```bash
 git clone https://github.com/smallest-inc/hydra_agents.git
 cd hydra_agents && npm install && npm run dev
 ```
 
-Open `http://localhost:3000`, paste your `SMALLEST_API_KEY`, click **Connect**, and talk.
+Open `http://localhost:3000`, paste your `SMALLEST_API_KEY`, pick an agent preset, click **Connect**, and talk. Speak over Hydra to interrupt — barge-in is automatic.
 
 ## What just happened
 

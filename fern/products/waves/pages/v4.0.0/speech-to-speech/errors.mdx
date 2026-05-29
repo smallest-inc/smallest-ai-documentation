@@ -26,7 +26,7 @@ Errors arrive as JSON events with `type: "error"`. The connection stays usable u
 
 ## Two fields to switch on: `error.type` and `error.code`
 
-An error frame has both a `type` (broad category) and a `code` (specific reason). Match on **`error.code`** for actionable handling — `error.type` is `invalid_request_error` for almost every client-induced failure.
+An error frame has both a `type` (broad category) and a `code` (specific reason). Match on **`error.code`** for actionable handling.
 
 ```python
 if evt["type"] == "error":
@@ -40,13 +40,12 @@ if evt["type"] == "error":
 
 | `error.code` | When it fires | Recovery |
 |---|---|---|
-| `invalid_request_error` | Schema validation failure — unknown field, missing `type`, wrong type, malformed JSON, unsupported audio format. | Fix the frame and resend. Session continues. |
+| `invalid_frame` | A frame failed schema validation on a strict path — `session.update` with an unknown field, malformed JSON, or wrong frame `type`. | Fix the frame and resend. Session continues. |
+| `invalid_request_error` | Generic request validation failure — missing `type`, wrong type for a known field, unsupported audio format. | Fix the frame and resend. Session continues. |
 | `invalid_audio` | The `input_audio_buffer.append.audio` payload was not valid base64, or not PCM16. | Stop sending audio, fix encoding, resume. Session continues. |
 | `tool_response_timeout` | You declared tools, the model called one, and you didn't post `function_call_output` + `response.create` within the timeout window. | The turn is abandoned. Next user turn proceeds normally. Investigate why your tool didn't return in time. |
 | `server_full` | The server is at capacity. **Always followed by close code `1013`.** | Back off with jitter, retry. Surface a queue message to the user. |
 | `internal_error` | Unhandled server-side exception. | Reconnect once. If it persists, contact support. |
-
-Note that `invalid_request_error` shows up in *both* fields: it's always the `error.type`, and it's also the `error.code` value when the failure is generic schema validation rather than a more specific bucket like `invalid_audio`.
 
 ## What's NOT an error event
 
