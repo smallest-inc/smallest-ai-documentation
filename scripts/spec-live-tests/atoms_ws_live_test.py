@@ -17,7 +17,7 @@ Flow per run:
   2. Assert `session.created` arrives within timeout. The session_id
      and call_id from this event are logged so backend devs can grep
      their logs against any failure.
-  3. Observe documented server-pushed message types (`agent_start_talking`,
+  3. Observe documented server-pushed message types (`agent.start_talking`,
      `output_audio.delta`, etc.) for the rest of the window.
   4. Send `session.close` to end cleanly.
 
@@ -65,8 +65,8 @@ AGENT_ID = os.environ.get("ATOMS_WS_TEST_AGENT_ID") or DEFAULT_TEST_AGENT_ID
 EXPECTED_SERVER_TYPES = {
     "session.created",
     "session.closed",
-    "agent_start_talking",
-    "agent_stop_talking",
+    "agent.start_talking",
+    "agent.stop_talking",
     "output_audio.delta",
     "interruption",
     "transcript",

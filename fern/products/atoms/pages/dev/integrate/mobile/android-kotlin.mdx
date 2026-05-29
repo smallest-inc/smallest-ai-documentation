@@ -273,8 +273,8 @@ private fun handleServerEvent(text: String) {
             val pcm = Base64.decode(json.getString("audio"), Base64.NO_WRAP)
             player.enqueue(pcm)
         }
-        "agent_start_talking"   -> { /* UI: show "speaking" */ }
-        "agent_stop_talking"    -> { /* UI: hide "speaking" */ }
+        "agent.start_talking"   -> { /* UI: show "speaking" */ }
+        "agent.stop_talking"    -> { /* UI: hide "speaking" */ }
         "interruption"          -> player.flush()
         "session.closed"        -> stop()
         "error"                 -> Log.e("Atoms", "[${json.optString("code")}] ${json.optString("message")}")
@@ -370,7 +370,7 @@ OkHttp's `onFailure` fires on network drops. Reconnect with exponential backoff 
 
 ### Mic mute while agent speaks
 
-Stop `AudioRecord` briefly on `agent_start_talking` and restart on `agent_stop_talking` if device AEC is underperforming. The user's speech during the agent turn goes undetected, which is usually the right trade-off versus audible self-feedback.
+Stop `AudioRecord` briefly on `agent.start_talking` and restart on `agent.stop_talking` if device AEC is underperforming. The user's speech during the agent turn goes undetected, which is usually the right trade-off versus audible self-feedback.
 
 ### Battery
 

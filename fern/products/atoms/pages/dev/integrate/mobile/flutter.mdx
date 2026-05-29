@@ -204,16 +204,16 @@ void _handleServerEvent(dynamic raw) {
       final byteData = bytes.buffer.asByteData(bytes.offsetInBytes, bytes.lengthInBytes);
       FlutterPcmSound.feed(PcmArrayInt16(bytes: byteData));
       break;
-    case 'agent_start_talking':
+    case 'agent.start_talking':
       // UI: show "speaking" indicator
       break;
-    case 'agent_stop_talking':
+    case 'agent.stop_talking':
       // UI: hide "speaking" indicator
       break;
     case 'interruption':
       // No public flush API in flutter_pcm_sound. The residual buffer
       // (~100 ms at 24 kHz) will play out. Stop feeding and wait for
-      // the next agent_start_talking.
+      // the next agent.start_talking.
       break;
     case 'session.closed':
       _stop();
@@ -305,7 +305,7 @@ void _onWebSocketClosed(int? code) {
 
 ### Mic mute while agent speaks
 
-If your target devices have weaker echo cancellation, cancel the mic subscription on `agent_start_talking` and restart it on `agent_stop_talking`. The user's speech during the agent turn goes undetected; it is the safer trade-off than audible feedback.
+If your target devices have weaker echo cancellation, cancel the mic subscription on `agent.start_talking` and restart it on `agent.stop_talking`. The user's speech during the agent turn goes undetected; it is the safer trade-off than audible feedback.
 
 ### App lifecycle
 
