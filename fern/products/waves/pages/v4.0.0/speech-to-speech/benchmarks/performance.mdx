@@ -1,0 +1,63 @@
+---
+title: "Performance"
+description: "Hydra head-to-head against eight production realtime voice and speech-to-speech models on the AIEWF S2S benchmark — pass rate and voice-to-voice latency, with and without tool calls."
+---
+
+Hydra is benchmarked against eight other production-grade voice / realtime models on the AIEWF S2S benchmark. For each metric, the comparison set is identical across runs and Hydra is the only model under test from Smallest AI.
+
+## AIEWF S2S — 10 runs × 30 turns, `aiwf_medium_context`
+
+The same fixed prompt + transcript distribution is replayed against every model, ten times each. Latency numbers are computed from `transcript.jsonl` (n = 224 non-tool turns, n = 64 tool turns). Pass rate is the fraction of turns that completed the expected interaction.
+
+| Model | Pass rate | Non-tool V2V median | Non-tool V2V max | Tool V2V mean |
+|---|---|---|---|---|
+| ultravox-v0.7 | 97.7 % | 864 ms | 1888 ms | 2406 ms |
+| gpt-realtime-2 (low) | 96.0 % | 1728 ms | 4032 ms | 2005 ms |
+| **Hydra** | **95.9 %** | **864 ms** | **1984 ms** | **1624 ms** |
+| grok-voice-think-fast-1.0 | 95.3 % | 2336 ms | 4800 ms | 2753 ms |
+| gpt-realtime-1.5 | 93.3 % | 1152 ms | 2304 ms | 2251 ms |
+| gemini-3.1-flash-live-preview | 91.7 % | 1632 ms | 5664 ms | 3172 ms |
+| gpt-realtime | 86.7 % | 1536 ms | 4672 ms | 2199 ms |
+| gemini-live | 86.0 % | 2624 ms | 30000 ms | 4082 ms |
+| nova-2-sonic | — | 1280 ms | 3232 ms | 1689 ms |
+
+### Where Hydra leads
+
+<CardGroup cols={3}>
+  <Card title="Tool V2V mean" icon="trophy">
+    **1624 ms** — fastest of 9. Beats nova-2-sonic by 65 ms, gpt-realtime-2 low by 381 ms, ultravox by 782 ms.
+  </Card>
+  <Card title="Non-tool V2V median" icon="trophy">
+    **864 ms** — tied-fastest with ultravox. Beats gpt-realtime-2 low by 864 ms and gemini-live by 1760 ms.
+  </Card>
+  <Card title="Pass rate" icon="medal">
+    **95.9 %** — #3 of 8 (nova-2-sonic did not report pass rate). Within ~2 pp of the leader.
+  </Card>
+</CardGroup>
+
+### How to read this
+
+- **Pass rate** is the fraction of turns where the model produced a usable, on-topic response to the test prompt. It's the integrative quality metric.
+- **Non-tool V2V latency** is end-of-user-speech to first audio chunk on turns where the model replies directly (no tool call). This is the lower-bound conversational latency you'd see on a phone call where the user just asks something.
+- **Tool V2V latency** is the same end-to-end timing but on turns that route through a tool — measured from end-of-user-speech to the start of the model narrating the tool result. This is the metric that matters for voice agents that do anything *real*: phone bookings, account lookups, order placement.
+
+See [Metrics Overview](/waves/documentation/speech-to-speech-hydra/benchmarks/metrics-overview) for the exact definitions.
+
+## Why Hydra wins tool V2V
+
+The model is purpose-built for **realtime voice agents that call tools**. Three architectural choices show up in the numbers:
+
+1. **Streaming tool-call arguments.** Hydra emits `response.function_call_arguments.delta` as soon as the arguments start materialising — the client can begin executing tools before the arguments JSON has finished streaming. Most other models wait until arguments are fully formed before emitting them.
+2. **Server-side VAD tuned for voice agents.** Hydra detects end-of-turn without waiting for a fixed silence window; it adapts to the speaker's cadence. Models with conservative VAD wait longer on short utterances.
+3. **No intermediate text serialisation.** Audio in → model → audio out, all on a single socket. No STT → text → LLM → text → TTS hop.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Metrics Overview" icon="ruler" href="/waves/documentation/speech-to-speech-hydra/benchmarks/metrics-overview">
+    Exact definitions of pass rate, non-tool V2V, and tool V2V.
+  </Card>
+  <Card title="Model card" icon="id-card" href="/waves/model-cards/speech-to-speech/hydra">
+    Capabilities, voices, audio formats, pricing.
+  </Card>
+</CardGroup>
