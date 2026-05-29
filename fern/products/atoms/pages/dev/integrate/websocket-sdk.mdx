@@ -56,8 +56,8 @@ const agent = new AtomsAgent({
 agent.on("session_started", (e) => {
   console.log("Session started:", e.session_id, e.call_id);
 });
-agent.on("agent.start_talking", () => console.log("Agent speaking"));
-agent.on("agent.stop_talking",  () => console.log("Agent stopped"));
+agent.on("agent_start_talking", () => console.log("Agent speaking"));
+agent.on("agent_stop_talking",  () => console.log("Agent stopped"));
 agent.on("error",               (e) => console.error(`[${e.code}] ${e.message}`));
 
 await agent.connect();
@@ -115,8 +115,8 @@ Subscribe with `agent.on(eventName, handler)`.
 |---|---|---|
 | `session_started` | `{ session_id: string, call_id: string }` | The server accepts the connection and creates a session. Use `call_id` to look up the call log or subscribe to [live transcripts via SSE](/atoms/developer-guide/operate/analytics/sse-for-live-transcripts). |
 | `session_ended` | `{ reason: string }` | The session has ended. `reason` is either a string sent by the server (`client_requested`, `websocket_closed`, or an error tag) or, when the WebSocket closes without a server-side `session.closed` frame, the numeric close code as a string (`"1005"`, `"1006"`, `"1000"`, etc.). |
-| `agent.start_talking` | None | The server begins streaming agent TTS for a turn. Useful for "agent speaking" UI state. |
-| `agent.stop_talking` | None | The server has finished the current turn. |
+| `agent_start_talking` | None | The server begins streaming agent TTS for a turn. Useful for "agent speaking" UI state. |
+| `agent_stop_talking` | None | The server has finished the current turn. |
 | `error` | `{ code: string, message: string }` | A non-fatal session error occurred. Fatal errors also trigger `session_ended`. |
 | `transcript` | `{ role: "user" \| "agent", text: string }` | Reserved. The SDK wires this event up, but the current agent pipeline does not stream transcripts over this WebSocket. Use the [post-call conversation API](/atoms/api-reference/api-reference/logs/get-conversation-log-by-id) or the [SSE live-transcripts stream](/atoms/developer-guide/operate/analytics/sse-for-live-transcripts) for transcript data. |
 
@@ -148,8 +148,8 @@ talkButton.addEventListener("pointerup",   () => agent.mute());
 Reflect agent turn state in the UI.
 
 ```typescript
-agent.on("agent.start_talking", () => setSpeaking(true));
-agent.on("agent.stop_talking",  () => setSpeaking(false));
+agent.on("agent_start_talking", () => setSpeaking(true));
+agent.on("agent_stop_talking",  () => setSpeaking(false));
 ```
 
 ### Clean teardown on page unload
@@ -225,8 +225,8 @@ A minimal standalone test to confirm the SDK reaches the agent and produces audi
     agentId: params.get('agent'),
   });
   agent.on("session_started",    (e) => log("session_started", e));
-  agent.on("agent.start_talking",()  => log("agent.start_talking"));
-  agent.on("agent.stop_talking", ()  => log("agent.stop_talking"));
+  agent.on("agent_start_talking",()  => log("agent_start_talking"));
+  agent.on("agent_stop_talking", ()  => log("agent_stop_talking"));
   agent.on("error",              (e) => log("error", e));
   agent.connect().then(() => log("connected"));
 </script>
@@ -239,7 +239,7 @@ python3 -m http.server 8765
 # http://localhost:8765/smoke.html?key=sk_...&agent=...
 ```
 
-Expected console output, in order: `session_started` with `session_id` and `call_id`, then `agent.start_talking`, then `agent.stop_talking` after the agent's first turn completes. If the agent has a greeting, it plays through the default audio output.
+Expected console output, in order: `session_started` with `session_id` and `call_id`, then `agent_start_talking`, then `agent_stop_talking` after the agent's first turn completes. If the agent has a greeting, it plays through the default audio output.
 
 ## Limitations
 

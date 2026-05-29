@@ -201,8 +201,8 @@ export default function App() {
     switch (ev.type) {
       case 'session.created':      setStatus('connected'); break;
       case 'output_audio.delta':   playPcm16(Buffer.from(ev.audio, 'base64')); break;
-      case 'agent.start_talking':  /* UI: show "speaking" */ break;
-      case 'agent.stop_talking':   /* UI: hide "speaking"  */ break;
+      case 'agent_start_talking':  /* UI: show "speaking" */ break;
+      case 'agent_stop_talking':   /* UI: hide "speaking"  */ break;
       case 'interruption':         flushPlayback(); break;
       case 'session.closed':       setStatus('idle'); break;
       case 'error':                console.error(`[${ev.code}] ${ev.message}`); break;
@@ -261,10 +261,10 @@ The quickstart's switch handles everything, but here are the six event types wit
 |---|---|
 | `session.created` | Connection accepted; you can start streaming mic audio. Contains `session_id` and `call_id`. |
 | `output_audio.delta` | Decode base64, schedule on the `AudioContext`. |
-| `agent.start_talking` | The agent's TTS turn is starting. Show a speaking indicator; optionally mute the mic to cut self-feedback. |
-| `agent.stop_talking` | The agent's TTS turn is done. Unmute if you muted. |
+| `agent_start_talking` | The agent's TTS turn is starting. Show a speaking indicator; optionally mute the mic to cut self-feedback. |
+| `agent_stop_talking` | The agent's TTS turn is done. Unmute if you muted. |
 | `session.closed` | Session ended. `reason` tells you why (`client_requested`, `websocket_closed`, or a server tag). |
-| `interruption` | User barged in during the agent turn. Drop the playback queue and wait for a new `agent.start_talking`. |
+| `interruption` | User barged in during the agent turn. Drop the playback queue and wait for a new `agent_start_talking`. |
 | `error` | Server-side error during the session. Non-fatal errors keep the socket open. |
 
 ## Full session handling
@@ -275,9 +275,9 @@ A single conversational turn has this sequence on the wire:
 
 1. Client keeps streaming `input_audio_buffer.append` from the mic.
 2. Server detects end of user utterance, runs STT → LLM → TTS.
-3. Server sends `agent.start_talking`.
+3. Server sends `agent_start_talking`.
 4. Server sends a stream of `output_audio.delta` chunks.
-5. Server sends `agent.stop_talking`.
+5. Server sends `agent_stop_talking`.
 6. Back to step 1.
 
 The client does not send `input_audio_buffer.commit` in normal conversational flow. The server's VAD handles turn boundaries. You only send `commit` if you implement explicit push-to-talk and want to force an immediate response.
@@ -288,7 +288,7 @@ The server emits `output_audio.delta` faster than realtime when the LLM finishes
 
 ### Interruptions
 
-When the server emits `interruption`, the user has spoken while the agent was talking. The agent's remaining TTS output for that turn is invalid; drop it. Call `playback.flush()` or your ring buffer's equivalent. A new `agent.start_talking` will follow shortly.
+When the server emits `interruption`, the user has spoken while the agent was talking. The agent's remaining TTS output for that turn is invalid; drop it. Call `playback.flush()` or your ring buffer's equivalent. A new `agent_start_talking` will follow shortly.
 
 ## Platform gotchas
 
@@ -334,7 +334,7 @@ useEffect(() => {
 
 On iOS, `AudioManager.setAudioSessionOptions({ iosCategory: 'playAndRecord', iosMode: 'voiceChat', ... })` turns on the system AEC + NS pipeline. On Android, `react-native-audio-api` selects the `VOICE_COMMUNICATION` input source internally, which enables the platform's AEC + NS.
 
-Without AEC, the agent hears its own audio through the mic and the server's VAD fires continuous `interruption` events. This is the expected behavior on the iOS simulator (speaker loops back into the Mac mic). On a real device with earphones or an HFP Bluetooth headset the feedback loop is broken. If your target devices have weaker AEC (older Androids, tablets with distant mics), stop the recorder on `agent.start_talking` and start it again on `agent.stop_talking`. The user's speech during the agent's turn goes undetected, which is the safer trade-off than audible feedback.
+Without AEC, the agent hears its own audio through the mic and the server's VAD fires continuous `interruption` events. This is the expected behavior on the iOS simulator (speaker loops back into the Mac mic). On a real device with earphones or an HFP Bluetooth headset the feedback loop is broken. If your target devices have weaker AEC (older Androids, tablets with distant mics), stop the recorder on `agent_start_talking` and start it again on `agent_stop_talking`. The user's speech during the agent's turn goes undetected, which is the safer trade-off than audible feedback.
 
 ### Bluetooth audio routing
 

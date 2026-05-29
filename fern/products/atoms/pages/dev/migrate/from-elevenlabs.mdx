@@ -82,8 +82,8 @@ Create a Smallest API key at [app.smallest.ai/dashboard/api-keys](https://app.sm
 
 Smallest adds two events not present in the ElevenLabs protocol:
 
-- `agent.start_talking`: fires once per agent turn, before the first `output_audio.delta` of that turn.
-- `agent.stop_talking`: fires when the agent turn ends.
+- `agent_start_talking`: fires once per agent turn, before the first `output_audio.delta` of that turn.
+- `agent_stop_talking`: fires when the agent turn ends.
 
 Full protocol: [Realtime Agent API reference](/atoms/api-reference/api-reference/realtime-agent/realtime-agent).
 
@@ -199,7 +199,7 @@ async def main(wav_path: str):
             ev = json.loads(await ws.recv())
             if ev["type"] == "output_audio.delta":
                 out.extend(base64.b64decode(ev["audio"]))
-            elif ev["type"] in ("agent.stop_talking", "session.closed"):
+            elif ev["type"] in ("agent_stop_talking", "session.closed"):
                 break
 
         with wave.open("reply.wav", "wb") as wf:
