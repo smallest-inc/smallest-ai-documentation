@@ -95,20 +95,13 @@ channels:
               type: object
               description: |
                 Effective session configuration as accepted by the server. Echoes the fields the server applied:
-                `instructions`, `voice`, `tools`, `output_audio_format`, `output_audio_sample_rate`, `generate_initial_response`.
-                **The negotiated `output_audio_sample_rate` is the source of truth for playback** — Hydra currently streams output at 48000 Hz.
+                `instructions`, `voice`, `tools`, `generate_initial_response`.
               properties:
                 instructions: { type: string }
                 voice: { type: string }
                 tools:
                   type: array
                   items: { $ref: '#/components/schemas/Tool' }
-                output_audio_format:
-                  type: string
-                  enum: [pcm16]
-                output_audio_sample_rate:
-                  type: integer
-                  description: Negotiated output sample rate in Hz. Currently 48000.
                 generate_initial_response:
                   type: boolean
       sessionUpdate:
@@ -405,13 +398,13 @@ channels:
       1. Connect: `wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=<SMALLEST_API_KEY>`.
       2. Receive `session.created` → send `session.configure` with persona, voice, optional tools.
       3. Stream `input_audio_buffer.append` continuously while the mic is open — even while the model is speaking. Hydra detects turn boundaries on its own.
-      4. Receive `response.output_audio.delta` chunks (base64 PCM16) and queue them for playback at the rate echoed in `session.configured.session.output_audio_sample_rate`.
+      4. Receive `response.output_audio.delta` chunks (base64 PCM16) and queue them for playback at 48000 Hz.
       5. Handle barge-in: if `response.created` arrives before the previous response's `response.output_audio.done`, drop any still-scheduled audio buffers from the previous response.
 
       ## Audio formats
 
       - **Input** (client → server): PCM16, signed little-endian, mono, **16 kHz**, base64 inside `input_audio_buffer.append`. Recommended chunk size 20–40 ms (640–1280 samples).
-      - **Output** (server → client): PCM16, signed little-endian, mono. Sample rate is announced in `session.configured.session.output_audio_sample_rate` and is currently **48000 Hz**. Each chunk arrives base64-encoded inside `response.output_audio.delta`.
+      - **Output** (server → client): PCM16, signed little-endian, mono, **48000 Hz**. Each chunk arrives base64-encoded inside `response.output_audio.delta`.
 
       ## Voices
 
@@ -447,7 +440,7 @@ operations:
     action: receive
     channel: { $ref: '#/channels/hydraSession' }
     summary: Effective session configuration
-    description: Server echoes the effective configuration, including the negotiated `output_audio_sample_rate`.
+    description: Server echoes the effective configuration the server applied.
     messages:
     - $ref: '#/channels/hydraSession/messages/sessionConfigured'
   SessionUpdate:
@@ -580,13 +573,6 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Tool' }
           description: Function-calling tool schemas the model may invoke.
-        output_audio_format:
-          type: string
-          enum: [pcm16]
-          description: Currently only `pcm16`.
-        output_audio_sample_rate:
-          type: integer
-          description: Output sample rate in Hz. The server selects a sensible default (currently 48000); the value echoed in `session.configured` is the source of truth for playback.
         generate_initial_response:
           type: boolean
           description: When `true`, the model speaks first instead of waiting for user input. Honoured only at handshake.
