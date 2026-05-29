@@ -91,7 +91,11 @@ jobs:
       # rot. Skips orphan and frozen-version files (same default scope
       # as PR mode), so we only flag links in pages that actually
       # render to customers.
+      #
+      # --deploy-wait gives the CDN a few minutes to publish freshly-merged
+      # pages before declaring 404s real. Without it, a slow Fern deploy
+      # races CI and every push that adds a new page fails this check.
       - name: Run link check (push to main — full audit, strict)
         if: github.event_name == 'push'
         run: |
-          python3 scripts/check_links.py --strict
+          python3 scripts/check_links.py --strict --deploy-wait 240
