@@ -96,20 +96,16 @@ The STT service connects to `wss://api.smallest.ai/waves/v1/pulse/get_text` for 
 
 ### `smallestai.TTS`
 
-Text-to-speech using the Smallest AI Lightning API. Because the plugin synthesizes audio per request rather than streaming tokens, wrap it in `tts.StreamAdapter` with a `SentenceTokenizer`. The adapter splits LLM output at sentence boundaries and fires synthesis for each chunk, keeping first-audio latency low.
+Text-to-speech using the Smallest AI Lightning API. The plugin uses persistent WebSocket streaming backed by a connection pool for low-latency audio delivery.
 
 ```python
-from livekit.agents import tts, tokenize
 from livekit.plugins import smallestai
 
-smallest_tts = tts.StreamAdapter(
-    tts=smallestai.TTS(
-        model="lightning_v3.1_pro",
-        voice_id="meher",
-        language="en",
-        speed=1.0,
-    ),
-    sentence_tokenizer=tokenize.basic.SentenceTokenizer(),
+smallest_tts = smallestai.TTS(
+    model="lightning_v3.1_pro",
+    voice_id="meher",
+    language="en",
+    speed=1.0,
 )
 ```
 
@@ -121,7 +117,8 @@ smallest_tts = tts.StreamAdapter(
 | `language` | `str` | `"en"` | Language code. `lightning_v3.1` supports 12 codes plus `"auto"`; `lightning_v3.1_pro` supports `"en"`, `"hi"`, and `"auto"` only — see the [model cards](/waves/model-cards/text-to-speech) for the full lists |
 | `speed` | `float` | `1.0` | Playback speed multiplier (0.5–2.0) |
 | `sample_rate` | `int` | `24000` | Output audio sample rate in Hz. Supported: `8000`, `16000`, `24000`, `44100` |
-| `output_format` | `str` | `"pcm"` | Output encoding: `"pcm"`, `"mp3"`, `"wav"`, `"ulaw"`, `"alaw"` |
+| `output_format` | `str` | `"pcm"` | Output encoding for HTTP synthesis: `"pcm"`, `"mp3"`, `"wav"`, `"ulaw"`, `"alaw"`. WebSocket streaming always returns PCM. |
+| `ws_url` | `str` | `wss://api.smallest.ai/waves/v1/tts/live` | WebSocket endpoint for low-latency streaming synthesis |
 
 ---
 
@@ -141,8 +138,6 @@ from livekit.agents import (
     RoomOutputOptions,
     WorkerOptions,
     cli,
-    tts,
-    tokenize,
 )
 from livekit.plugins import openai, silero, smallestai
 
@@ -169,10 +164,7 @@ async def entrypoint(ctx: JobContext):
         vad=ctx.proc.userdata["vad"],
         stt=smallestai.STT(language="en"),
         llm=openai.LLM(model="gpt-4o-mini"),
-        tts=tts.StreamAdapter(
-            tts=smallestai.TTS(),
-            sentence_tokenizer=tokenize.basic.SentenceTokenizer(),
-        ),
+        tts=smallestai.TTS(),
     )
 
     await session.start(
@@ -203,7 +195,7 @@ The pipeline is fully interruptible — if the user speaks while the bot is talk
 
 ## Notes
 
-- The `StreamAdapter` + `SentenceTokenizer` wrapper is required for TTS — the Smallest AI plugin synthesizes audio per request. Without it, the agent waits for the entire LLM response before starting synthesis.
 - Set `eou_timeout_ms=0` (the default) when using LiveKit's built-in turn detection. Setting it to a non-zero value adds server-side silence detection on top of LiveKit's own logic, which increases end-of-turn latency.
 - `"lightning_v3.1_pro"` is the default TTS model — a premium 44.1 kHz pool with curated American, British, and Indian voices. Use `"lightning_v3.1"` for the standard pool with 217 voices across 12 languages.
+- Call `tts.prewarm()` during worker startup to pre-warm the WebSocket connection pool and reduce first-audio latency on the initial request.
 - For issues or questions, open an issue in the [cookbook repository](https://github.com/smallest-inc/cookbook) or reach out on [Discord](https://discord.gg/9WtSXv26WE).
