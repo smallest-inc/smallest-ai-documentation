@@ -21,11 +21,15 @@ Inverse Text Normalization automatically converts spoken numbers, dates, currenc
 <Note>
 Since ITN normalizes only finalized transcripts, it is recommended that you control finalization from your end for the best results:
 
-1. Set `finalize_on_words=false` so the server does not finalize internally based on word count
-2. Set `eou_timeout_ms` to match your VAD (Voice Activity Detection) silence threshold
-3. When your VAD detects that the user has stopped speaking, send `{"type": "close_stream"}` — this closes the stream, ITN normalizes the entire accumulated chunk, and emits a final `is_last=true` transcript
+1. Set `finalize_on_words=false` so the server does not finalize internally based on word count.
+2. Set `eou_timeout_ms` to match your VAD (Voice Activity Detection) silence threshold.
+3. When your VAD detects the user has stopped speaking, choose the control message that matches your session shape:
+   - **`{"type": "finalize"}`** — for **multi-turn voice agents**. Flushes the current buffer, runs ITN over the full utterance, and emits an `is_final: true` transcript while **keeping the WebSocket open** for the next user turn. Use this between every turn of a conversation.
+   - **`{"type": "close_stream"}`** — for **single-shot transcription** (or at the end of a multi-turn session). Flushes any remaining audio, emits the terminal `is_final: true` + `is_last: true` transcript, then closes the session.
 
-This approach is especially useful for agentic use cases where you want clean, fully-normalized utterances for downstream LLM processing.
+**Rule of thumb:** if the same user will speak again on the same WebSocket, use `finalize`. If the session is over, use `close_stream`. A typical voice agent sends many `finalize` messages and a single `close_stream` at the end.
+
+This approach gives you clean, fully-normalized utterances for downstream LLM processing without paying the WebSocket-reconnect cost between turns.
 </Note>
 
 ## Enabling ITN
@@ -195,9 +199,9 @@ ws.onmessage = (event) => {
 };
 ```
 
-### Python — Agentic Setup (Recommended for Voice AI)
+### Python — Multi-turn voice agent (recommended for Voice AI)
 
-Disable internal word-count finalization, set `eou_timeout_ms` to match your VAD, and send `{"type": "close_stream"}` when your VAD detects end-of-speech. This closes the stream, flushes the final chunk, ITN normalizes it as a whole, and emits `is_last=true` so the receive loop can exit:
+For voice agents that handle many user turns in a single session, send `{"type": "finalize"}` after each turn. The WebSocket stays open and you pay the connection cost only once per call:
 
 ```python
 params = {
@@ -211,7 +215,45 @@ params = {
 }
 WS_URL = f"{BASE_WS_URL}&{urlencode(params)}"
 
-async def transcribe_agentic(audio_file: str):
+async def run_voice_agent():
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+
+    async with websockets.connect(WS_URL, additional_headers=headers) as ws:
+        # Audio producer — stream mic frames as the user speaks across many turns
+        async def stream_audio():
+            while session_active:
+                frame = await mic_queue.get()
+                await ws.send(frame)
+
+        # Per-turn finalizer — your VAD calls this when the user pauses
+        async def on_user_end_of_turn():
+            await ws.send(json.dumps({"type": "finalize"}))
+            # Server emits is_final: true with the full ITN-normalized transcript;
+            # the WS stays open so the user can speak again.
+
+        # Consumer — receive transcripts (each turn yields one is_final: true frame)
+        async def consume():
+            async for message in ws:
+                data = json.loads(message)
+                if data.get("is_final"):
+                    print(f"Turn final: {data['transcript']}")
+                    # → hand to your LLM, generate the agent reply, speak via TTS,
+                    #   and loop back to listening for the next user turn
+                if data.get("is_last"):
+                    break  # only fires after close_stream below
+
+        # ... wire stream_audio / consume / VAD-driven on_user_end_of_turn together ...
+
+        # End of call (user hung up, agent finished, etc.) — close the session
+        await ws.send(json.dumps({"type": "close_stream"}))
+```
+
+### Python — Single-shot transcription
+
+For one-off transcription of a complete audio buffer (file or single utterance) with no further audio coming, use `close_stream` directly. It flushes, normalizes, emits `is_last: true`, and closes — no extra round-trip:
+
+```python
+async def transcribe_once(audio_file: str):
     headers = {"Authorization": f"Bearer {API_KEY}"}
 
     async with websockets.connect(WS_URL, additional_headers=headers) as ws:
@@ -219,9 +261,7 @@ async def transcribe_agentic(audio_file: str):
             while chunk := f.read(4096):
                 await ws.send(chunk)
 
-        # VAD detected end-of-speech → close_stream
-        # (close_stream is the only message that emits is_last=true; the
-        # protocol's `finalize` only forces an interim is_final=true)
+        # All audio sent → close_stream is the only message that emits is_last=true
         await ws.send(json.dumps({"type": "close_stream"}))
 
         async for message in ws:
