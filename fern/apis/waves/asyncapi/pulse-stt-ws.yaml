@@ -544,16 +544,16 @@ operations:
     action: send
     channel:
       $ref: '#/channels/pulseStream'
-    summary: Flush current audio buffer
-    description: Force an immediate is_final transcript for pending speech without ending the session. Useful in agentic pipelines.
+    summary: 'Turn-boundary signal — flush the current buffer, emit `is_final`, keep the session open'
+    description: 'Flush the current audio buffer, run ITN over the accumulated utterance, and emit one `is_final` transcript. The WebSocket stays open and accepts audio for the next user turn. Send this once per turn in any multi-turn flow.'
     messages:
     - $ref: '#/channels/pulseStream/messages/pulseFinalizeSignal.message'
   sendCloseStreamSignal:
     action: send
     channel:
       $ref: '#/channels/pulseStream'
-    summary: End the audio stream
-    description: Signal that audio streaming is complete. The server flushes remaining audio, delivers final transcripts, and responds with is_last=true.
+    summary: 'Session-end signal — flush remaining audio, emit `is_last`, close the socket'
+    description: 'Flush any remaining buffered audio, emit the terminal `is_final` + `is_last` transcript, then close the WebSocket. Send this once at the actual end of the session — end of call, app shutdown, or after the entire buffer of a single-shot transcription is streamed.'
     messages:
     - $ref: '#/channels/pulseStream/messages/pulseCloseStreamSignal.message'
   receiveTranscription:
