@@ -35,23 +35,74 @@ channels:
       1. Open a WebSocket to `wss://api.smallest.ai/waves/v1/stt/live` with `Authorization: Bearer <key>` and the session params (`model`, `language`, `sample_rate`, `encoding`, etc.) as query string.
       2. Stream raw PCM (or your chosen `encoding`) over the socket as binary frames.
       3. The server pushes back JSON `transcription` messages with `is_final: false` partial results as audio streams and `is_final: true` when an utterance closes.
-      4. Send `{"type":"close_stream","is_last":true}` to flush remaining audio and end the session.
+      4. Send a control message when the user pauses or the session ends:
+         - **`{"type":"finalize"}`** — *turn-boundary signal*. Flushes the current audio buffer, emits one `is_final: true` transcript for that turn, and **keeps the WebSocket open** for the next user turn. Use this once per turn in a multi-turn voice agent.
+         - **`{"type":"close_stream"}`** — *session-end signal*. Flushes remaining audio, emits the terminal `is_final: true` + `is_last: true` transcript, then closes the WebSocket. Use this once, at the actual end of the session (call end, app shutdown, or after a single-shot transcription buffer is fully streamed).
 
-      ## Example
+      A multi-turn voice agent typically fires many `finalize` messages and exactly one `close_stream`. A one-off transcription of a fixed audio buffer fires only `close_stream`.
 
-      **Python**
+      ## Examples
+
+      **Python — multi-turn voice agent (recommended for Voice AI)**
+
+      Send `finalize` per user turn so the WebSocket stays open across the whole call — you pay the connection cost once, not per turn:
+
+      ```python
+      import asyncio, json, websockets
+
+      URL = "wss://api.smallest.ai/waves/v1/stt/live?model=pulse&language=en&sample_rate=16000&encoding=linear16&itn_normalize=true&finalize_on_words=false&eou_timeout_ms=1000"
+      HEADERS = {"Authorization": f"Bearer {API_KEY}"}
+
+      async def run_voice_agent(audio_source, llm_reply, stop_event):
+          async with websockets.connect(URL, additional_headers=HEADERS) as ws:
+              async def stream_audio():
+                  async for frame in audio_source:
+                      if stop_event.is_set(): return
+                      await ws.send(frame)
+
+              # Call this when your VAD detects end-of-turn (user paused)
+              async def end_of_turn():
+                  await ws.send(json.dumps({"type": "finalize"}))
+
+              async def consume():
+                  async for msg in ws:
+                      data = json.loads(msg)
+                      if data.get("is_last"): break          # only fires after close_stream
+                      if data.get("is_final"):
+                          await llm_reply(data["transcript"])  # ITN-normalized full turn
+
+              producer = asyncio.create_task(stream_audio())
+              consumer = asyncio.create_task(consume())
+              await stop_event.wait()                          # end of call
+
+              await ws.send(json.dumps({"type": "close_stream"}))
+              await consumer
+              producer.cancel()
+      ```
+
+      **Python — single-shot transcription**
+
+      For one-off transcription of a complete audio buffer (file, single utterance) where no further audio is coming, send `close_stream` directly after the last chunk:
+
       ```python
       import asyncio, json, websockets
 
       URL = "wss://api.smallest.ai/waves/v1/stt/live?model=pulse&language=en&sample_rate=16000&encoding=linear16"
       HEADERS = {"Authorization": f"Bearer {API_KEY}"}
 
-      async def stream():
+      async def transcribe_once(audio_bytes):
           async with websockets.connect(URL, additional_headers=HEADERS) as ws:
-              # ... send audio bytes, receive transcription events ...
-              await ws.send(json.dumps({"type": "close_stream", "is_last": True}))
+              for i in range(0, len(audio_bytes), 4096):
+                  await ws.send(audio_bytes[i:i+4096])
+              await ws.send(json.dumps({"type": "close_stream"}))
+              async for msg in ws:
+                  data = json.loads(msg)
+                  if data.get("is_final"):
+                      print(data["transcript"])
+                  if data.get("is_last"):
+                      break
 
-      asyncio.run(stream())
+      asyncio.run(transcribe_once(open("audio.pcm", "rb").read()))
       ```
 
       ## Common gotchas
@@ -127,6 +178,8 @@ channels:
     messages:
       audioChunkOut:
         name: V4SttAudioChunk
+      finalizeSignal:
+        name: V4SttFinalizeSignal
       closeStream:
         name: V4SttCloseStream
       transcriptionEvent:
@@ -136,6 +189,8 @@ channels:
 
 operations:
   sendAudio:
+    action: send
+  sendFinalize:
     action: send
   sendClose:
     action: send

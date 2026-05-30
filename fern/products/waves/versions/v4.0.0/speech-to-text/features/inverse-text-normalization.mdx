@@ -116,7 +116,11 @@ This flushes any remaining audio, returns the final transcript with `is_last: tr
 
 ## Examples
 
-### Python — WebSocket with ITN
+<Note>
+The two examples below — **Python WebSocket** and **JavaScript WebSocket** — show the **single-shot** pattern (transcribe a fixed audio buffer, then close the session). For a **multi-turn voice agent** that handles many user turns on the same WebSocket, scroll down to the [Python — Multi-turn voice agent](#python--multi-turn-voice-agent-recommended-for-voice-ai) example below — it sends `{"type":"finalize"}` per turn (session stays open) and `{"type":"close_stream"}` once at the end of the call. Sending `close_stream` per turn forces a WebSocket reconnect every turn — that's the wrong pattern for voice agents.
+</Note>
+
+### Python — WebSocket with ITN (single-shot file transcription)
 
 ```python
 import asyncio
@@ -136,19 +140,24 @@ WS_URL = f"{BASE_WS_URL}&{urlencode(params)}"
 
 API_KEY = "YOUR_API_KEY"
 
-async def transcribe(audio_file: str):
+async def transcribe_file(audio_file: str):
+    """Single-shot: stream a fixed audio buffer, then close the session.
+    For multi-turn voice agents, use the Multi-turn voice agent example
+    further down — it keeps the WebSocket open across user turns.
+    """
     headers = {"Authorization": f"Bearer {API_KEY}"}
 
     async with websockets.connect(WS_URL, additional_headers=headers) as ws:
-        # Stream audio in 4096-byte chunks
+        # Stream the file in 4096-byte chunks
         with open(audio_file, "rb") as f:
             while chunk := f.read(4096):
                 await ws.send(chunk)
 
-        # Signal end of audio (close_stream is the only message that emits is_last=true)
+        # All audio sent. For one-off transcription with no more audio coming,
+        # send close_stream — it flushes, runs ITN over the full buffer, emits
+        # is_final + is_last, and closes the WebSocket.
         await ws.send(json.dumps({"type": "close_stream"}))
 
-        # Receive transcriptions
         async for message in ws:
             data = json.loads(message)
             if data.get("is_final"):
@@ -161,12 +170,17 @@ async def transcribe(audio_file: str):
             if data.get("is_last"):
                 break
 
-asyncio.run(transcribe("audio.wav"))
+asyncio.run(transcribe_file("audio.wav"))
 ```
 
-### JavaScript — WebSocket with ITN
+### JavaScript — WebSocket with ITN (single-shot file transcription)
 
 ```javascript
+// Single-shot pattern. For a multi-turn voice agent, mirror the
+// Python "Multi-turn voice agent" example below: send {"type":"finalize"}
+// per user turn (session stays open) and {"type":"close_stream"} once at
+// the end of the call.
+
 const API_KEY = "YOUR_API_KEY";
 
 const url = new URL("wss://api.smallest.ai/waves/v1/stt/live?model=pulse");
@@ -182,7 +196,9 @@ const ws = new WebSocket(url.toString(), {
 
 ws.onopen = () => {
   console.log("Connected — streaming audio with ITN enabled");
-  // Start sending audio chunks as binary messages
+  // ... send audio chunks as binary messages ...
+  // When the buffer is fully streamed and no more audio is coming:
+  // ws.send(JSON.stringify({ type: "close_stream" }));
 };
 
 ws.onmessage = (event) => {
