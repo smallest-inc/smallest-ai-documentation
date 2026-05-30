@@ -34,7 +34,7 @@ import urllib.request
 PAGES = [
     {
         "path": "/waves/api-reference/api-reference/speech-to-text/speech-to-text",
-        "name": "Unified STT WebSocket API reference (non-versioned slug)",
+        "name": "Unified STT API reference",
         "markers": [
             # The three send operations — sendFinalize was missing for months
             # because the unified /stt/live spec didn't declare it at all.
@@ -49,7 +49,7 @@ PAGES = [
         # Yash flagged this v-4-0-0 versioned URL specifically. Same content,
         # different slug — Fern renders both. Both must have sendFinalize.
         "path": "/waves/v-4-0-0/api-reference/api-reference/speech-to-text/speech-to-text",
-        "name": "Unified STT WebSocket API reference (v-4-0-0 versioned slug)",
+        "name": "Unified STT API reference — v-4-0-0",
         "markers": [
             "sendAudio",
             "sendFinalize",
