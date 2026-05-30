@@ -26,3 +26,32 @@ jobs:
         env:
           FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
         run: fern generate --docs --log-level debug
+
+      - name: Set up Python for smoke check
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Post-deploy smoke check: fetch the rendered docs and assert all
+      # expected operations / signals / sections appear in the HTML.
+      # Catches the silent-render-drop class of bug — same family as
+      # PR #189 (sendFinalize missing for 5+ weeks despite all green CI).
+      #
+      # The Fern publish above kicks off a CDN deploy that takes ~30-60s to
+      # propagate; we wait, then retry with backoff up to 5 minutes total.
+      - name: Wait for CDN propagation, then smoke-check rendered docs
+        run: |
+          set +e
+          for attempt in 1 2 3 4 5 6 7 8; do
+            echo "::group::Smoke attempt $attempt"
+            sleep 45
+            python3 scripts/spec-live-tests/docs_render_smoke.py
+            rc=$?
+            echo "::endgroup::"
+            if [ "$rc" = "0" ]; then
+              echo "✓ rendered docs match every expected marker"
+              exit 0
+            fi
+          done
+          echo "::error title=Docs render smoke failed::Markers expected by scripts/spec-live-tests/docs_render_smoke.py are missing from the rendered docs after deploy. See PR #189 — same class of bug."
+          exit 1

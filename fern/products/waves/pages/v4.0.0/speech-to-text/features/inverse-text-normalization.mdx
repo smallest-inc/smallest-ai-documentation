@@ -23,11 +23,13 @@ Since ITN normalizes only finalized transcripts, it is recommended that you cont
 
 1. Set `finalize_on_words=false` so the server does not finalize internally based on word count.
 2. Set `eou_timeout_ms` to match your VAD (Voice Activity Detection) silence threshold.
-3. When your VAD detects the user has stopped speaking, choose the control message that matches your session shape:
-   - **`{"type": "finalize"}`** — for **multi-turn voice agents**. Flushes the current buffer, runs ITN over the full utterance, and emits an `is_final: true` transcript while **keeping the WebSocket open** for the next user turn. Use this between every turn of a conversation.
-   - **`{"type": "close_stream"}`** — for **single-shot transcription** (or at the end of a multi-turn session). Flushes any remaining audio, emits the terminal `is_final: true` + `is_last: true` transcript, then closes the session.
+3. When your VAD detects the user has stopped speaking, send the control message that matches the lifecycle of your session:
 
-**Rule of thumb:** if the same user will speak again on the same WebSocket, use `finalize`. If the session is over, use `close_stream`. A typical voice agent sends many `finalize` messages and a single `close_stream` at the end.
+   - **Turn-boundary signal — `{"type": "finalize"}`.** Flushes the current audio buffer, runs ITN over the full utterance, and emits one `is_final: true` transcript for that turn. The WebSocket stays open and accepts audio for the next turn. Send this once per user turn in any multi-turn flow.
+
+   - **Session-end signal — `{"type": "close_stream"}`.** Flushes any remaining buffered audio, emits the terminal `is_final: true` + `is_last: true` transcript, then closes the WebSocket. Send this once at the actual end of the session — end of call, app shutdown, or after the buffer of a single-shot transcription is fully streamed.
+
+A multi-turn voice agent typically fires many `finalize` messages and exactly one `close_stream` per session. A one-off transcription of a fixed audio buffer fires only `close_stream` after the last chunk.
 
 This approach gives you clean, fully-normalized utterances for downstream LLM processing without paying the WebSocket-reconnect cost between turns.
 </Note>
