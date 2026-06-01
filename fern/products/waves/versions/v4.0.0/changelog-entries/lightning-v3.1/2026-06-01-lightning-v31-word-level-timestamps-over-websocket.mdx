@@ -1,0 +1,41 @@
+---
+title: Lightning v3.1 — word-level timestamps over WebSocket
+date: 2026-06-01
+description: Lightning v3.1 now returns word-level timestamps over WebSocket. Set `word_timestamps: true` in your message and you'll receive one new frame per word — alongside the audio chunks you already get — with the exact start and end time of each 
+---
+
+Lightning v3.1 now returns word-level timestamps over WebSocket. Set `word_timestamps: true` in your message and you'll receive one new frame per word — alongside the audio chunks you already get — with the exact start and end time of each word in the generated speech. The `word` strings match your input verbatim ("$100", "Dec 25th") instead of the model's internal expansion ("one hundred dollars", "December twenty fifth"), so you can build caption, karaoke and lip-sync UIs without any post-processing.
+
+```
+// Send on the existing v3.1 TTS WebSocket
+ws.send(JSON.stringify({
+  text: "I bought 3 cats for $100 on Dec 25th",
+  voice_id: "meher",
+  language: "en",
+  sample_rate: 24000,
+  output_format: "pcm",
+  word_timestamps: true,        // opt-in flag (default: false)
+}));
+
+// You receive existing audio frames as before:
+{ "status": "chunk", "data": { "audio": "<base64>" }, ... }
+
+// Plus new word frames interleaved between them:
+{
+  "status": "word_timestamp",
+  "session_id": "...",
+  "request_id": "...",
+  "data": { "id": 5, "word": "$100", "start": 0.96, "end": 1.36 }
+}
+
+// And finally the usual completion:
+{ "status": "complete", ... }
+```
+
+
+**Migration:** no action — existing clients unchanged; opt in with `word_timestamps: true` when you want the alignment data.
+**Category:** 🚀 New — entirely new capability
+
+*— Prajwal Pawar*
+
+<sub>Auto-generated from [smallest-inc/waves-platform#839](https://github.com/smallest-inc/waves-platform/pull/839) via the PR-merged → docs changelog automation.</sub>
