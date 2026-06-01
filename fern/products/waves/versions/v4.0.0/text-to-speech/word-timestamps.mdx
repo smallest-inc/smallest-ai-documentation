@@ -87,7 +87,70 @@ Each `word_timestamp` frame:
 
 ## Example
 
-```javascript
+<CodeGroup>
+
+```python Python
+# Requires: pip install websocket-client
+# Opt into word_timestamps on the v3.1 WebSocket, save the audio to WAV,
+# and dump every received word event with its timing.
+import base64
+import json
+import os
+import wave
+from websocket import WebSocketApp
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+WS_URL = "wss://api.smallest.ai/waves/v1/tts/live"
+SAMPLE_RATE = 44100
+TEXT = "I bought 3 cats for $100 on Dec 25th"
+VOICE_ID = "meher"
+
+audio_chunks: list[str] = []
+word_events: list[dict] = []
+
+
+def on_open(ws):
+    ws.send(json.dumps({
+        "voice_id": VOICE_ID,
+        "text": TEXT,
+        "sample_rate": SAMPLE_RATE,
+        "model": "lightning_v3.1",
+        "word_timestamps": True,
+    }))
+
+
+def on_message(ws, raw):
+    msg = json.loads(raw)
+    status = msg.get("status")
+    if status == "chunk":
+        audio_chunks.append(msg["data"]["audio"])
+    elif status == "word_timestamp":
+        w = msg["data"]
+        word_events.append(w)
+        print(f"  id={w['id']:<2}  {w['word']!r:<15}  {w['start']:.3f}s → {w['end']:.3f}s")
+    elif status == "complete":
+        ws.close()
+
+
+def on_close(_ws, *_):
+    pcm = b"".join(base64.b64decode(c) for c in audio_chunks)
+    with wave.open("out.wav", "wb") as f:
+        f.setnchannels(1); f.setsampwidth(2); f.setframerate(SAMPLE_RATE)
+        f.writeframes(pcm)
+    print(f"\nsaved out.wav  ({len(audio_chunks)} chunks, {len(word_events)} word events)")
+
+
+WebSocketApp(
+    WS_URL,
+    header=[f"Authorization: Bearer {API_KEY}"],
+    on_open=on_open,
+    on_message=on_message,
+    on_close=on_close,
+).run_forever()
+```
+
+```javascript JavaScript
+// Requires: npm install ws
 const WebSocket = require("ws");
 
 const API_KEY = process.env.SMALLEST_API_KEY;
@@ -127,6 +190,8 @@ ws.on("message", (raw) => {
   }
 });
 ```
+
+</CodeGroup>
 
 ## Backward compatibility
 
