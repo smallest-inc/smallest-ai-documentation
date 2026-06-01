@@ -90,22 +90,35 @@ The STT service connects to the Pulse real-time WebSocket endpoint (`wss://api.s
 ### `SmallestTTSService`
 
 ```python
-from pipecat.services.smallest.tts import SmallestTTSService
+from pipecat.services.smallest.tts import SmallestTTSService, SmallestTTSModel
 
 tts = SmallestTTSService(
     api_key=os.getenv("SMALLEST_API_KEY"),
+    output_format="pcm",
     settings=SmallestTTSService.Settings(
-        voice="sophia",
+        model=SmallestTTSModel.LIGHTNING_V3_1_PRO,
+        voice="meher",
     ),
 )
 ```
 
-| Parameter | Type  | Default  | Description                         |
-| --------- | ----- | -------- | ----------------------------------- |
-| `api_key` | `str` | —        | Your Smallest AI API key (required) |
-| `voice`   | `str` | `sophia` | Voice ID for synthesis              |
+**Constructor parameters:**
 
-The TTS service uses WebSocket streaming for low-latency, real-time audio delivery.
+| Parameter       | Type  | Default | Description                                              |
+| --------------- | ----- | ------- | -------------------------------------------------------- |
+| `api_key`       | `str` | —       | Your Smallest AI API key (required)                      |
+| `output_format` | `str` | `pcm`   | Audio output format: `pcm`, `mp3`, `wav`, `ulaw`, `alaw` |
+
+**Settings (`SmallestTTSService.Settings`):**
+
+| Parameter  | Type               | Default              | Description                                                                                 |
+| ---------- | ------------------ | -------------------- | ------------------------------------------------------------------------------------------- |
+| `model`    | `SmallestTTSModel` | `lightning_v3.1_pro` | TTS model. One of `lightning_v3.1`, `lightning_v3.1_pro`                                    |
+| `voice`    | `str`              | model-dependent      | Voice ID. Plugin defaults: `meher` for `lightning_v3.1_pro`, `sophia` for `lightning_v3.1` |
+| `language` | `Language`         | `Language.EN`        | Language for synthesis                                                                      |
+| `speed`    | `float`            | `None`               | Speech speed multiplier (0.5–2.0)                                                           |
+
+The TTS service connects to `wss://api.smallest.ai/waves/v1/tts/live` and uses WebSocket streaming for low-latency, real-time audio delivery. The `model` field is sent per-message, so switching models takes effect on the next utterance without reconnecting.
 
 ---
 
