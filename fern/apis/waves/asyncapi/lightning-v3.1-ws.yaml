@@ -123,6 +123,11 @@ channels:
               description: Optional client-provided request identifier for correlation. Only alphanumeric characters, hyphens, underscores, and dots allowed. Max 128 characters. Echoed back in responses as `external_request_id`.
               maxLength: 128
               pattern: ^[a-zA-Z0-9_\-.]+$
+            word_timestamps:
+              type: boolean
+              default: false
+              description: |
+                Opt in to per-word timing events for the synthesized audio. When `true`, the server interleaves `status: "word_timestamp"` frames with the audio `chunk` frames; each carries `data: { id, word, start, end }` where `start`/`end` are floats in seconds relative to the start of the audio stream, and `word` is verbatim from the input text (un-normalized — `"$100"` stays `"$100"`, not `"one hundred dollars"`). Supported on base-queue English + Hindi voices (`meher`, `devansh`, `kartik`, `maithili`, `liam`, `avery`); other voice families silently emit no word events (audio still works). Defaults to `false` so existing integrations see no change.
         examples:
         - name: basicTts
           payload:
@@ -153,14 +158,32 @@ channels:
               type: string
               enum:
               - chunk
+              - word_timestamp
               - complete
-              description: Status of the TTS request, `chunk` indicates incoming audio chunk, `complete` indicates completion.
+              description: |
+                Frame type discriminator:
+                - `chunk` — base64-encoded audio chunk in `data.audio`.
+                - `word_timestamp` — per-word timing event in `data.{id,word,start,end}`. Only emitted when the request set `word_timestamps: true` and the voice family supports it.
+                - `complete` — terminal frame; the server closes the WebSocket after this.
             data:
               type: object
+              description: Frame-specific payload. Shape depends on `status` — see the per-frame examples below.
               properties:
                 audio:
                   type: string
-                  description: Base64-encoded audio chunk
+                  description: 'Base64-encoded audio chunk (present on `status: "chunk"` frames).'
+                id:
+                  type: integer
+                  description: '0-indexed position of the word within the input text (present on `status: "word_timestamp"` frames).'
+                word:
+                  type: string
+                  description: 'Exact substring from the input text, un-normalized — `"$100"` stays `"$100"`, `"25th"` stays `"25th"` (present on `status: "word_timestamp"` frames).'
+                start:
+                  type: number
+                  description: 'Start of the word in seconds, relative to the start of the audio stream (present on `status: "word_timestamp"` frames).'
+                end:
+                  type: number
+                  description: 'End of the word in seconds, relative to the start of the audio stream (present on `status: "word_timestamp"` frames).'
         examples:
         - name: audioChunk
           payload:
@@ -171,6 +194,18 @@ channels:
             status: chunk
             data:
               audio: SGVsbG8gV29ybGQ=
+        - name: wordTimestampEvent
+          payload:
+            session_id: ws_550e8400-e29b
+            request_id: task_6ba7b810-9dad
+            external_session_id: my-session-123
+            external_request_id: my-request-456
+            status: word_timestamp
+            data:
+              id: 2
+              word: "$100"
+              start: 1.12
+              end: 1.92
         - name: completionStatus
           payload:
             session_id: ws_550e8400-e29b
