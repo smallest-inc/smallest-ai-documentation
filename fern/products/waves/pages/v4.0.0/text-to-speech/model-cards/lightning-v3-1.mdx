@@ -366,10 +366,131 @@ Need something not in this short-list? Call `GET /waves/v1/lightning-v3.1/get_vo
 | `language` | string | No | `"auto"` | Language code or `"auto"` for automatic detection |
 | `output_format` | string | No | `"pcm"` | Audio format |
 | `pronunciation_dicts` | array | No | — | Custom pronunciation IDs (WebSocket only) |
+| `word_timestamps` | boolean | No | `false` | Opt in to per-word timing events. WebSocket only. See [Word-level timestamps](#word-level-timestamps). |
 
 <Card title="Quickstart" icon="rocket" href="/waves/documentation/text-to-speech-lightning/quickstart">
   Generate your first audio in under a minute with a single API call.
 </Card>
+
+---
+
+## Word-level timestamps
+
+<Badge color="purple">Real-Time</Badge>
+
+Pass `word_timestamps: true` on a WebSocket request to receive per-word timing events interleaved with the audio stream. Each event tells you exactly when a word starts and ends in the generated audio — useful for captioning, karaoke-style highlighting, avatar lip-sync, and word-level analytics.
+
+### Request
+
+```json
+{
+  "voice_id": "meher",
+  "text": "I bought 3 cats for $100 on Dec 25th",
+  "model": "lightning_v3.1",
+  "sample_rate": 44100,
+  "word_timestamps": true
+}
+```
+
+### Response frames
+
+The server interleaves `word_timestamp` frames with `chunk` frames in audio-time order, followed by a single `complete`:
+
+```
+chunk → chunk → word_timestamp{id:0} → chunk → word_timestamp{id:1} → … → complete
+```
+
+Each `word_timestamp` frame:
+
+```json
+{
+  "session_id": "...",
+  "request_id": "...",
+  "status": "word_timestamp",
+  "data": {
+    "id": 5,
+    "word": "$100",
+    "start": 1.12,
+    "end": 1.92
+  }
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `data.id` | integer | 0-indexed position of the word within the input text. |
+| `data.word` | string | Exact substring from the input — un-normalized. `"$100"` stays `"$100"`, `"25th"` stays `"25th"`, `"3"` stays `"3"`. Non-Latin scripts are preserved verbatim (e.g. Devanagari for Hindi). |
+| `data.start` | float (seconds) | Start of the word in the audio stream. |
+| `data.end` | float (seconds) | End of the word. |
+
+### Voice + language support matrix
+
+Word events are emitted only when the chosen voice family has the aligner checkpoint baked in.
+
+| Language | Voice family | Word events |
+|---|---|---|
+| English (`en`) | Base-queue voices — `meher`, `devansh`, `kartik`, `maithili`, `liam`, `avery` | ✅ |
+| Hindi (`hi`) | Base-queue voices (same list) | ✅ |
+| Marathi / Bengali / Gujarati / Punjabi / Odia | north-Indic family | ❌ |
+| Tamil / Telugu / Kannada / Malayalam | south-Indic family | ❌ |
+
+For unsupported voice families the flag is **accepted** — audio works normally, but no `word_timestamp` frames are emitted. Detect this client-side by counting received `word_timestamp` frames after `complete` arrives.
+
+### Backward compatibility
+
+`word_timestamps` defaults to `false`. Clients that don't set the flag see no behavior change — same audio chunks, same completion frame, no new event type to handle.
+
+### JavaScript example
+
+```javascript
+const ws = new WebSocket('wss://api.smallest.ai/waves/v1/tts/live', {
+  headers: { Authorization: `Bearer ${API_KEY}` },
+});
+
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    voice_id: "meher",
+    text: "I bought 3 cats for $100 on Dec 25th",
+    model: "lightning_v3.1",
+    sample_rate: 44100,
+    output_format: "pcm",
+    word_timestamps: true,   // ← opt in
+  }));
+};
+
+const captionTrack = [];
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  switch (msg.status) {
+    case "chunk": {
+      const pcm = Buffer.from(msg.data.audio, 'base64');
+      audioPlayer.push(pcm);
+      break;
+    }
+    case "word_timestamp": {
+      const { id, word, start, end } = msg.data;
+      captionTrack.push({ id, word, startSec: start, endSec: end });
+      break;
+    }
+    case "complete":
+      audioPlayer.end();
+      finalizeCaptionTrack(captionTrack);
+      break;
+  }
+};
+```
+
+### Where it works
+
+| Surface | Word timestamps |
+|---|---|
+| `WSS /waves/v1/tts/live` (unified) | ✅ |
+| `WSS /waves/v1/lightning-v3.1/get_speech/stream` (legacy, retiring 2026-07-14) | ✅ |
+| `POST /waves/v1/tts` (sync HTTP) | ❌ — flag accepted, silently ignored |
+| `POST /waves/v1/tts/live` (HTTP SSE) | ❌ — same |
+
+If you need word timing, use the WebSocket path.
 
 ---
 
@@ -544,6 +665,6 @@ For compliance documentation (GDPR, SOC2, HIPAA), contact [support@smallest.ai](
 | Channel | Details |
 |---------|---------|
 | **Support** | [support@smallest.ai](mailto:support@smallest.ai) |
-| **Documentation** | [docs.smallest.ai/waves](https://docs.smallest.ai/waves) |
+| **Documentation** | [docs.smallest.ai/waves](https://docs.smallest.ai/waves/documentation/getting-started/introduction) |
 | **Console** | [app.smallest.ai](https://app.smallest.ai) |
 | **Community** | [Discord](https://discord.gg/9WtSXv26WE) |

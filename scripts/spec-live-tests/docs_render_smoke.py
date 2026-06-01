@@ -59,6 +59,23 @@ PAGES = [
         ],
     },
     {
+        # Lightning v3.1 model card — must surface the new word-timestamp section
+        # after PR-#feat-lightning-v31-word-timestamps deploys.
+        "path": "/waves/model-cards/text-to-speech/lightning-v-3-1",
+        "name": "Lightning v3.1 model card",
+        "markers": [
+            "word_timestamps",
+            "word_timestamp",
+        ],
+    },
+    {
+        "path": "/waves/api-reference/api-reference/text-to-speech/tts",
+        "name": "Unified TTS API reference",
+        "markers": [
+            "word_timestamps",
+        ],
+    },
+    {
         "path": "/waves/v-4-0-0/documentation/speech-to-text-pulse/realtime-web-socket/response-format",
         "name": "Pulse STT response-format page",
         "markers": [
