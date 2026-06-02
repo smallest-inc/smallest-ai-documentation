@@ -1,13 +1,13 @@
 ---
 title: "Prefix Caching"
-description: "Cached input tokens are billed at $0.10/M (75% off). Structure your prompts to reuse stable prefixes — system prompts, RAG context, conversation history — and pay less."
+description: "Cached input tokens are billed at a discounted rate. Structure your prompts to reuse stable prefixes (system prompts, RAG context, conversation history) and pay less."
 icon: "bolt"
 ---
 
 Electron caches stable prompt prefixes across requests. When a new request shares a prefix with a recent one, those tokens are served from cache:
 
 - **Faster** — fewer tokens to process means lower time-to-first-token.
-- **Cheaper** — cached input tokens are billed at `$0.10 / 1M` vs `$0.40 / 1M` for normal input. A **75% discount**.
+- **Cheaper** — cached input tokens are billed at a discounted rate vs normal input. Contact your Smallest AI account manager for the current rate card.
 
 No flag or knob — caching is automatic. Your job is to **structure prompts so the prefix is stable across requests**.
 
@@ -28,7 +28,7 @@ Every response includes `usage.prompt_tokens_details.cached_tokens`:
 }
 ```
 
-In this example, 1024 of 1200 input tokens were served from cache. You're billed for 176 fresh tokens at the normal rate plus 1024 cached tokens at the discounted rate.
+In this example, 1024 of 1200 input tokens were served from cache. The fresh 176 tokens bill at the normal input rate; the 1024 cached tokens bill at the discounted rate.
 
 ## How to maximize cache hits
 
@@ -108,23 +108,11 @@ messages = [
 ]
 ```
 
-## Cost math
+## Where the savings come from
 
-Assume a typical agent turn with a 1000-token system prompt, 500 tokens of conversation history, and a 50-token user question — 1550 input tokens, 200 output tokens.
+A typical voice-agent turn carries a long stable prefix (system prompt + retrieved context + conversation history) and a short tail (the new user message). Once that prefix is warm in the cache, every subsequent turn pays the cached rate on the prefix and the normal rate on just the tail. The longer your stable prefix, the bigger the saving.
 
-| | Tokens | Rate | Cost |
-|---|---:|---:|---:|
-| **No cache hit (first turn)** | | | |
-| Input | 1,550 | $0.40/M | $0.00062 |
-| Output | 200 | $1.60/M | $0.00032 |
-| | | **Total** | **$0.00094** |
-| **Cache hit on the prefix (subsequent turns)** | | | |
-| Cached input | 1,500 | $0.10/M | $0.00015 |
-| Fresh input | 50 | $0.40/M | $0.00002 |
-| Output | 200 | $1.60/M | $0.00032 |
-| | | **Total** | **$0.00049** |
-
-**~48% cheaper per turn** on a typical chat workload. The savings get more pronounced as your system prompt + history grows.
+Contact your Smallest AI account manager for the current rate card and to model the savings against your workload.
 
 ## What invalidates the cache
 
