@@ -1,0 +1,17 @@
+---
+title: New endpoint — prompt scoring
+---
+
+**`POST /atoms/v1/prompt-scoring/score`** scores a single-prompt agent's system prompt across 11 quality dimensions using Gemini-based analysis and returns an overall score (0–100), grade, token-density band, estimated first-token latency overhead, and per-dimension breakdowns.
+
+| Field | Description |
+| --- | --- |
+| `overall_score` | 0–100 quality score |
+| `overall_grade` | `Excellent` / `Good` / `Needs Work` / `Poor` |
+| `band` | Token density: `lean` (under 4K tokens) / `normal` (4K–9.9K) / `heavy` (10K–14.9K) / `overweight` (15K+) |
+| `estimated_ttft_overhead_ms` | Estimated first-token latency overhead from prompt length |
+| `dimensions[]` | 11 scored dimensions with `tier`, `level`, `title`, `description`, and `evidence_span` |
+
+Pass exactly one of `versionId` (published version) or `draftId` (agent draft) in the request body. The endpoint requires a minimum Member role and deducts 1 credit per call. Re-submitting an unchanged prompt returns a `400` — retrieve the cached result via `GET /agent/{id}` instead. Only `single_prompt` agents are supported; workflow-graph agents return `400`.
+
+→ [Prompt Scoring reference](/atoms/api-reference/api-reference/prompt-scoring/score-a-prompt)
