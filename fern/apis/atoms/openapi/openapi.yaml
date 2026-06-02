@@ -5552,6 +5552,241 @@ paths:
   # which merges _resolvedConfig into the agent DTO. Marked for backend
   # removal in tasks/09-backend-misc-cleanup.md.
 
+  /prompt-scoring/score:
+    post:
+      summary: Score a prompt
+      description: |
+        Scores an agent's prompt across 11 quality dimensions using Gemini-based analysis. Requires the prompt to have changed since the last scoring.
+
+        **Input:** Provide exactly one of `versionId` (published agent version) or `draftId` (agent draft). Providing both or neither returns a 400.
+
+        **Credit usage:** 1 credit is deducted per successful call.
+
+        **Idempotency:** Re-submitting the same prompt without changes returns a 400 — retrieve the cached score via the GET agent endpoint instead.
+
+        **Supported agent types:** Only `single_prompt` agents are supported. Workflow-graph agents return a 400.
+
+        **Scoring model:** Two sequential Gemini calls — a Platform Analyst pass followed by a Rubric Judge pass.
+
+        ### Scored Dimensions
+
+        | Tier | Dimension | Notes |
+        |------|-----------|-------|
+        | 1 | Role & Objective | |
+        | 1 | Personality & Voice | |
+        | 1 | Conversation Structure | |
+        | 1 | Tool Integration | |
+        | 1 | Constraints & Safety | |
+        | 2 | Conversational Naturalness | |
+        | 2 | Failure-Mode Coverage | |
+        | 3 | Information Integrity | Gating — if Weak/Missing, score capped at 70 |
+        | 3 | Variable & Tool Hygiene | Gating — if Weak/Missing, score capped at 50 |
+        | 3 | Internal Consistency | |
+        | 3 | Density | Computed from token analysis |
+      tags:
+        - Prompt Scoring
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Exactly one of `versionId` or `draftId` must be provided.
+              oneOf:
+                - required: [versionId]
+                  properties:
+                    versionId:
+                      type: string
+                      description: Published agent version ID (MongoDB ObjectId).
+                      example: "6a1589b75e048394eb37bc47"
+                - required: [draftId]
+                  properties:
+                    draftId:
+                      type: string
+                      description: Agent draft ID (MongoDB ObjectId).
+                      example: "6a1589b75e048394eb37bc48"
+      responses:
+        "200":
+          description: Prompt scored successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      overall_score:
+                        type: integer
+                        description: 0–100 quality score.
+                        example: 82
+                      overall_grade:
+                        type: string
+                        description: Human-readable grade.
+                        enum: ["Excellent", "Good", "Needs Work", "Poor"]
+                        example: "Good"
+                      band:
+                        type: string
+                        description: |
+                          Token density band based on prompt length:
+                          - `lean` — fewer than 4K tokens
+                          - `normal` — 4K–9.9K tokens
+                          - `heavy` — 10K–14.9K tokens
+                          - `overweight` — 15K or more tokens
+                        enum: ["lean", "normal", "heavy", "overweight"]
+                        example: "normal"
+                      estimated_ttft_overhead_ms:
+                        type: number
+                        description: Estimated first-token latency overhead in milliseconds introduced by the prompt length.
+                        example: 420
+                      dimensions:
+                        type: array
+                        description: Per-dimension scoring results across 11 quality dimensions.
+                        items:
+                          type: object
+                          properties:
+                            tier:
+                              type: integer
+                              description: "Priority tier: 1 (highest), 2, or 3."
+                              enum: [1, 2, 3]
+                              example: 1
+                            level:
+                              type: string
+                              description: Quality level for this dimension.
+                              enum: ["Strong", "Adequate", "Weak", "Missing", "Not Applicable"]
+                              example: "Strong"
+                            evidence_span:
+                              type: string
+                              description: Quote from the prompt supporting the assessment. Empty string if no relevant content was found.
+                              example: "You are a helpful support agent..."
+                            title:
+                              type: string
+                              description: Short dimension name.
+                              example: "Role & Objective"
+                            description:
+                              type: string
+                              description: Explanation of the score for this dimension.
+                              example: "Prompt clearly defines the agent's role and primary objective."
+              example:
+                status: true
+                data:
+                  overall_score: 56
+                  overall_grade: "Needs Work"
+                  band: "lean"
+                  estimated_ttft_overhead_ms: 12.9
+                  dimensions:
+                    - tier: 1
+                      level: "Adequate"
+                      evidence_span: "You are a friendly and helpful weather assistant. Your role is to provide accurate, real-time weather information to users."
+                      title: "Clear but basic role definition"
+                      description: "The role is clearly defined but lacks specific success criteria or scope boundaries."
+                    - tier: 1
+                      level: "Weak"
+                      evidence_span: "Use the get_weather function to fetch real-time data"
+                      title: "Undeclared tool reference"
+                      description: "The 'get_weather' tool is referenced but not defined, and failure paths are missing."
+                    - tier: 2
+                      level: "Missing"
+                      evidence_span: "no relevant content found"
+                      title: "No failure mode coverage"
+                      description: "The prompt contains no instructions for handling errors, tool failures, or unclear user input."
+        "400":
+          description: |
+            Bad request. Possible reasons:
+            - Neither or both of `versionId`/`draftId` provided
+            - Organization has no credits available
+            - Agent is a conversational/workflow-graph type (not supported)
+            - Prompt unchanged since last scoring — retrieve the existing score via GET agent
+            - No prompt found on the version or draft
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Prompt has not changed since last scoring — retrieve the existing score via GET agent"]
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Not a member of the organization or insufficient role (minimum Member required).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["You are not a member of this organization"]
+        "404":
+          description: Version or draft not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Version not found"]
+        "429":
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Rate limit exceeded"
+                  rateLimit:
+                    type: object
+                    properties:
+                      routeClass:
+                        type: string
+                        example: "prompt-scoring"
+                      limit:
+                        type: integer
+                        example: 10
+                      retryAfterSec:
+                        type: integer
+                        description: Seconds to wait before retrying.
+                        example: 60
+        "500":
+          description: Gemini scoring failed after retries.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Prompt scoring failed"]
+
 components:
   securitySchemes:
     BearerAuth:
@@ -7797,6 +8032,8 @@ components:
             $ref: "#/components/schemas/InternalServerErrorResponse"
 
 tags:
+  - name: Prompt Scoring
+    description: Score and analyse agent prompts across quality dimensions
   - name: Agent Templates
     description: Operations related to agent templates
   - name: Agents
