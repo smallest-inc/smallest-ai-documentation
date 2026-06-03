@@ -30,6 +30,7 @@ jobs:
   diff:
     name: Diff docs spec against platform Zod schemas
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: write   # for the diff comment
@@ -52,7 +53,6 @@ jobs:
         run: |
           if [ -z "$GH_TOKEN" ]; then
             echo "::warning::UPSTREAM_PR_READ_TOKEN not set — cannot clone waves-platform. Skipping diff."
-            echo "skipped=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # Sparse, shallow clone — we only need one file. Saves time and
@@ -64,9 +64,11 @@ jobs:
             cd "$RUNNER_TEMP/waves-platform"
             git sparse-checkout set \
               apps/main-backend/src/routes/speech/asr/pulse
+            # Strip the embedded PAT from .git/config so a follow-up shell
+            # step on the same runner can't read it out of band.
+            git remote set-url origin https://github.com/smallest-inc/waves-platform.git
           )
           echo "platform_path=$RUNNER_TEMP/waves-platform" >> "$GITHUB_ENV"
-        id: clone
 
       - name: Run the probe (advisory)
         if: env.platform_path != ''
@@ -90,8 +92,18 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const body = fs.readFileSync('/tmp/diff-clean.txt', 'utf8');
+            const raw = fs.readFileSync('/tmp/diff-clean.txt', 'utf8');
             const marker = '<!-- platform-spec-diff -->';
+
+            // Skip commenting on clean runs — avoids cluttering PRs with
+            // "✅ in sync" noise. A previously-created marker comment for
+            // this PR is updated to a tiny "✅ in sync" stub instead of
+            // being left stale, so reviewers see the latest state.
+            const hasFindings = /❌|ℹ️/.test(raw);
+            const CAP = 60000;
+            const truncated = raw.length > CAP;
+            const bodyForBlock = truncated ? raw.slice(0, CAP) + '\n\n…[truncated — full output in workflow logs]' : raw;
+
             const wrapped = [
               marker,
               '## Platform spec diff (advisory)',
@@ -99,30 +111,54 @@ jobs:
               'Compares this PR\'s docs spec against the waves-platform Zod schemas. **Advisory only** — does not fail the PR.',
               '',
               '```',
-              body.slice(0, 60000),
+              bodyForBlock,
               '```',
               '',
               '_Update or expand the ignore list in `scripts/spec-live-tests/platform_spec_diff.py` if a flagged param is a known false positive (e.g. inherited but not functional on the protocol)._'
             ].join('\n');
-            // Upsert: replace any prior comment from this workflow.
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const prior = comments.find(c => c.body && c.body.includes(marker));
-            if (prior) {
+            const stub = [
+              marker,
+              '## Platform spec diff (advisory)',
+              '',
+              '✅ in sync — every platform-supported param is in the docs spec, and no docs param is platform-unknown.'
+            ].join('\n');
+
+            // Paginate to find any prior marker comment — PRs with many
+            // comments (reviewer bots, changelog templates) overflow page 1.
+            const allComments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                per_page: 100,
+              }
+            );
+            const prior = allComments.find(c => c.body && c.body.includes(marker));
+
+            if (hasFindings) {
+              if (prior) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: prior.id,
+                  body: wrapped,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: wrapped,
+                });
+              }
+            } else if (prior) {
+              // Findings cleared since last run; collapse the comment to a stub.
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 comment_id: prior.id,
-                body: wrapped,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: wrapped,
+                body: stub,
               });
             }
+            // else: no prior comment, no findings — stay silent.

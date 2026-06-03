@@ -10,8 +10,9 @@ Compares query parameter coverage between:
 Reports any param the platform accepts but the docs spec does not declare,
 and any param the docs spec declares that the platform schema does not have.
 This catches the class of regression that PR #187 (unified-spec rewrite)
-introduced: the new spec dropped 11 platform-supported params silently and
-no existing probe could see the gap.
+introduced: the new spec dropped a batch of platform-supported params (10
+on WS, 4 on REST, restored in PR #198) silently and no existing probe
+could see the gap.
 
 Usage:
   python3 platform_spec_diff.py [--source-of-truth-path PATH] [--mode {advisory,strict}]
@@ -267,6 +268,16 @@ def diff_param_set(
     return missing, extra
 
 
+# Minimum params we expect to find in each schema. Tripwire for parser
+# breakage: if waves-platform refactors and our regex stops matching,
+# we'd otherwise silently report "in sync" and miss real regressions.
+# Bump these floors when the platform genuinely adds params.
+MIN_PARAMS = {
+    "lightningAsrQuerySchema": 10,           # actual: 14 as of 2026-06-04
+    "lightningAsrWebsocketQuerySchema": 15,  # actual: 20 as of 2026-06-04
+}
+
+
 def run_stt_diff(platform_path: Path) -> list[DiffReport]:
     schema_file = (
         platform_path
@@ -281,6 +292,18 @@ def run_stt_diff(platform_path: Path) -> list[DiffReport]:
 
     if not rest_schema or not ws_schema:
         raise SystemExit("could not find expected Pulse schemas in the source file")
+
+    # Sanity floor — if the parser regressed (waves-platform refactor, syntax change,
+    # etc.), bail loudly instead of silently green.
+    for sname, schema in (("lightningAsrQuerySchema", rest_schema),
+                          ("lightningAsrWebsocketQuerySchema", ws_schema)):
+        floor = MIN_PARAMS[sname]
+        if len(schema) < floor:
+            raise SystemExit(
+                f"parser sanity check failed: parsed only {len(schema)} params from {sname} "
+                f"(expected ≥ {floor}). The Zod regex likely needs an update — "
+                f"inspect {schema_file} for syntax that doesn't match PARAM_LINE_RE."
+            )
 
     reports: list[DiffReport] = []
 
