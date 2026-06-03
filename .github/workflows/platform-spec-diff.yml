@@ -1,0 +1,128 @@
+name: Platform spec diff (advisory)
+
+# Probe: compares the docs spec query params against waves-platform's
+# source-of-truth Zod schemas and comments on the PR with the diff.
+#
+# Catches the class of regression that PR #187 introduced when the
+# unified-spec rewrite silently dropped 11 platform-supported params from
+# the API reference. The pre-existing spec-drift check only compared base
+# vs override within this repo; it had no way to see the platform schema
+# as a third source of truth.
+#
+# Mode: advisory only — the workflow comments on the PR but never fails it.
+# Promote to strict (`--mode=strict` + remove the `|| true` guard below)
+# once the docs spec has reached zero unexplained diff against platform.
+#
+# Trigger: PRs that touch the Waves spec files. Manual dispatch is also
+# allowed for one-off audits.
+
+on:
+  pull_request:
+    paths:
+      - 'fern/apis/waves/openapi/stt-*.yaml'
+      - 'fern/apis/waves/asyncapi/stt-*.yaml'
+      - 'fern/apis/waves-v4/overrides/stt-*'
+      - 'scripts/spec-live-tests/platform_spec_diff.py'
+      - '.github/workflows/platform-spec-diff.yml'
+  workflow_dispatch:
+
+jobs:
+  diff:
+    name: Diff docs spec against platform Zod schemas
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # for the diff comment
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install probe deps
+        run: pip install pyyaml
+
+      - name: Clone waves-platform (shallow, just the file we need)
+        env:
+          # Read-Contents PAT scoped to the upstream private repos.
+          # Reused from the existing pr-drift-detector workflow's secret.
+          GH_TOKEN: ${{ secrets.UPSTREAM_PR_READ_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::UPSTREAM_PR_READ_TOKEN not set — cannot clone waves-platform. Skipping diff."
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Sparse, shallow clone — we only need one file. Saves time and
+          # keeps the public workflow logs from revealing the repo's tree.
+          git clone --depth 1 --filter=blob:none --sparse \
+            "https://x-access-token:${GH_TOKEN}@github.com/smallest-inc/waves-platform.git" \
+            "$RUNNER_TEMP/waves-platform"
+          (
+            cd "$RUNNER_TEMP/waves-platform"
+            git sparse-checkout set \
+              apps/main-backend/src/routes/speech/asr/pulse
+          )
+          echo "platform_path=$RUNNER_TEMP/waves-platform" >> "$GITHUB_ENV"
+        id: clone
+
+      - name: Run the probe (advisory)
+        if: env.platform_path != ''
+        id: probe
+        run: |
+          set +e
+          python3 scripts/spec-live-tests/platform_spec_diff.py \
+            --source-of-truth-path "$platform_path" \
+            --mode advisory \
+            --scope stt \
+            > /tmp/diff.txt 2>&1
+          RC=$?
+          cat /tmp/diff.txt
+          echo "exit_code=$RC" >> "$GITHUB_OUTPUT"
+          # Strip ANSI codes so the markdown is clean.
+          sed -E 's/\x1b\[[0-9;]*m//g' /tmp/diff.txt > /tmp/diff-clean.txt
+
+      - name: Comment diff on the PR
+        if: env.platform_path != '' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('/tmp/diff-clean.txt', 'utf8');
+            const marker = '<!-- platform-spec-diff -->';
+            const wrapped = [
+              marker,
+              '## Platform spec diff (advisory)',
+              '',
+              'Compares this PR\'s docs spec against the waves-platform Zod schemas. **Advisory only** — does not fail the PR.',
+              '',
+              '```',
+              body.slice(0, 60000),
+              '```',
+              '',
+              '_Update or expand the ignore list in `scripts/spec-live-tests/platform_spec_diff.py` if a flagged param is a known false positive (e.g. inherited but not functional on the protocol)._'
+            ].join('\n');
+            // Upsert: replace any prior comment from this workflow.
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const prior = comments.find(c => c.body && c.body.includes(marker));
+            if (prior) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: prior.id,
+                body: wrapped,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: wrapped,
+              });
+            }
