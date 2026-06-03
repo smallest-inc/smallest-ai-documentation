@@ -28,7 +28,7 @@ Activate it:
   ```
 - On Windows:
   ```bash
-  .venv\Scriptsctivate
+  .venv\Scripts\activate
   ```
 
 ### 2. Install Pipecat with Smallest AI support
@@ -104,10 +104,11 @@ tts = SmallestTTSService(
 
 **Constructor parameters:**
 
-| Parameter       | Type  | Default | Description                                              |
-| --------------- | ----- | ------- | -------------------------------------------------------- |
-| `api_key`       | `str` | —       | Your Smallest AI API key (required)                      |
-| `output_format` | `str` | `pcm`   | Audio output format: `pcm`, `mp3`, `wav`, `ulaw`, `alaw` |
+| Parameter         | Type   | Default | Description                                                                                                                                                                                                                                                                                                    |
+| ----------------- | ------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api_key`         | `str`  | —       | Your Smallest AI API key (required)                                                                                                                                                                                                                                                                            |
+| `output_format`   | `str`  | `pcm`   | Audio output format: `pcm`, `mp3`, `wav`, `ulaw`, `alaw`                                                                                                                                                                                                                                                      |
+| `word_timestamps` | `bool` | `True`  | Emit per-word `TTSTextFrame`s aligned to audio playback. Enabled by default. Supported on base-queue English + Hindi voices (`meher`, `devansh`, `kartik`, `maithili`, `liam`, `avery`); other voices silently emit no word events, so leaving this on is safe. Pass `word_timestamps=False` to fall back to whole-text frames. |
 
 **Settings (`SmallestTTSService.Settings`):**
 
@@ -117,7 +118,6 @@ tts = SmallestTTSService(
 | `voice`    | `str`              | model-dependent      | Voice ID. Plugin defaults: `meher` for `lightning_v3.1_pro`, `sophia` for `lightning_v3.1` |
 | `language` | `Language`         | `Language.EN`        | Language for synthesis                                                                      |
 | `speed`    | `float`            | `None`               | Speech speed multiplier (0.5–2.0)                                                           |
-| `word_timestamps` | `bool` | `None` | Opt in to per-word timing events on WebSocket streaming. Supported on base-queue English + Hindi voices (`meher`, `devansh`, `kartik`, `maithili`, `liam`, `avery`). Other voices silently emit no word events. |
 
 The TTS service connects to `wss://api.smallest.ai/waves/v1/tts/live` and uses WebSocket streaming for low-latency, real-time audio delivery. The `model` field is sent per-message, so switching models takes effect on the next utterance without reconnecting.
 
