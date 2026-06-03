@@ -58,6 +58,37 @@ servers:
             eou_timeout_ms:
               type: integer
               description: End-of-utterance silence timeout in milliseconds.
+            keywords:
+              type: string
+              example: "I:20,smiling:26"
+              description: |
+                Boost recognition of specific words or phrases for this session.
+                Useful for product names, jargon, proper nouns, and other
+                domain-specific terms the model might otherwise mis-transcribe.
+
+                **Format:** a single comma-separated string (not a JSON array).
+                Each entry is a word or phrase, optionally followed by
+                `:INTENSIFIER` — a numeric boost multiplier. Defaults to `1.0`
+                when omitted.
+
+                **Example:** `I:20,smiling:26`
+
+                - Phrases can include spaces (`small language model:3.5`).
+                - Intensifier accepts integers or decimals (`2`, `2.5`, `0.5`).
+                - Mixing entries with and without intensifiers is fine.
+                - Maximum 100 keywords per session.
+
+                **INTENSIFIER range:** `0` to `20`. Recommended value is `6`.
+                Higher values bias recognition more aggressively toward the
+                keyword, but also **increase the risk of hallucination and
+                repetition** in the transcript. Values of `10` or above are
+                not recommended — the model may insert the keyword even when
+                it was not spoken. Start around `3–6` and tune from there.
+
+                **Wire format:** pass as a query-string parameter, URL-encoded.
+                `URLSearchParams` in JavaScript and `urlencode()` in Python
+                handle the encoding for you — pass the raw string, not a
+                JSON-encoded array.
 channels:
   transcription:
     address: /waves/v1/stt/live
