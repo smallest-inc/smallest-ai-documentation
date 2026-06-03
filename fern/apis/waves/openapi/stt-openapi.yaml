@@ -164,6 +164,52 @@ paths:
         schema:
           type: string
         description: Arbitrary metadata returned to the webhook in addition to the transcription payload. Pulse Pro only.
+      - name: redact_pii
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: ['true', 'false']
+          default: 'false'
+        description: |
+          Redact personally identifiable information from the transcript.
+          Names → `[FIRSTNAME_*]` / `[LASTNAME_*]`, phone numbers →
+          `[PHONENUMBER_*]`, addresses → `[ADDRESS_*]`, etc. The redaction
+          tokens use sequential indices so multiple occurrences of the same
+          entity get distinct labels (`[FIRSTNAME_1]`, `[FIRSTNAME_2]`).
+      - name: redact_pci
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: ['true', 'false']
+          default: 'false'
+        description: |
+          Redact payment card information (credit-card numbers, CVV, account
+          numbers, etc.). Replaces matches with `[ACCOUNTNUMBER_*]` tokens.
+          Use alongside `redact_pii=true` for full PCI-compliant transcript
+          handling.
+      - name: emotion_detection
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: ['true', 'false']
+          default: 'false'
+        description: |
+          When `true`, the response adds an `emotions` object mapping detected
+          emotion labels to confidence scores. Useful for voice-of-customer
+          analytics on call recordings.
+      - name: gender_detection
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: ['true', 'false']
+          default: 'false'
+        description: |
+          When `true`, the response adds a `gender` field with the detected
+          speaker gender label. Pulse pre-recorded only.
       requestBody:
         required: true
         content:
@@ -307,6 +353,15 @@ components:
             filename:           { type: string, description: "Pulse responses include this when sent via URL.", example: audio.wav }
             fileSize:           { type: number, description: "Bytes received (Pulse responses).", example: 268844 }
         request_id:    { type: string, example: 87dd36c1-4267-472d-96ee-4113e0a770a6 }
+        gender:
+          type: string
+          description: "Detected speaker gender label. Present when `gender_detection=true` was set on the request."
+          example: female
+        emotions:
+          type: object
+          description: "Detected emotion labels mapped to confidence scores. Present when `emotion_detection=true` was set on the request."
+          additionalProperties: { type: number }
+          example: { neutral: 0.72, happy: 0.18, calm: 0.10 }
     AsyncAccepted:
       type: object
       description: Returned by Pulse Pro when `webhook_url` is set. The transcription arrives on the webhook when ready.
