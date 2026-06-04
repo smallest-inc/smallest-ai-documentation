@@ -152,30 +152,50 @@ jobs:
         if: env.manifest_dir != '' && github.event_name == 'schedule'
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          # Resolve the channel here so the Python script only reads env vars
+          # (no GH Actions template substitution inside the heredoc — that mix
+          # is hard to reason about and breaks on quotes in resolved values).
+          SLACK_CHANNEL: ${{ vars.DOCS_DRIFT_CHANNEL_ID || 'C0B5Q3EHU07' }}
         run: |
-          if grep -qE "❌|🚨" /tmp/diff.txt; then
-            echo "Drift detected on the scheduled cron — posting to Slack."
-            # Minimal Slack post; reuse the SLACK_BOT_TOKEN pattern from
-            # the existing pr-drift-detector workflow.
-            python3 -c "
-            import os, json, urllib.request
-            with open('/tmp/diff.txt') as f:
-                body = f.read()[:3500]
-            payload = {
-                'channel': '${{ vars.DOCS_DRIFT_CHANNEL_ID || 'C0B5Q3EHU07' }}',
-                'text': 'Weekly contract diff — drift detected',
-                'blocks': [
-                    {'type': 'header', 'text': {'type': 'plain_text', 'text': 'Weekly contract diff — drift detected'}},
-                    {'type': 'section', 'text': {'type': 'mrkdwn', 'text': '\`\`\`' + body + '\`\`\`'}}
-                ],
-            }
-            req = urllib.request.Request(
-                'https://slack.com/api/chat.postMessage',
-                data=json.dumps(payload).encode(),
-                headers={'Authorization': 'Bearer ' + os.environ['SLACK_BOT_TOKEN'], 'Content-Type': 'application/json'},
-            )
-            urllib.request.urlopen(req).read()
-            "
-          else
+          if ! grep -qE "❌|🚨" /tmp/diff.txt; then
             echo "No drift — silent."
+            exit 0
           fi
+          if [ -z "${SLACK_BOT_TOKEN:-}" ]; then
+            echo "::warning::Drift detected but SLACK_BOT_TOKEN not configured; skipping Slack post."
+            exit 0
+          fi
+          echo "Drift detected on the scheduled cron — posting to Slack."
+          # Inline Python — reads env vars only, raises on non-OK Slack response.
+          python3 <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          with open('/tmp/diff.txt') as f:
+              body = f.read()[:3500]
+          payload = {
+              'channel': os.environ['SLACK_CHANNEL'],
+              'text': 'Weekly contract diff — drift detected',
+              'blocks': [
+                  {'type': 'header', 'text': {'type': 'plain_text', 'text': 'Weekly contract diff — drift detected'}},
+                  {'type': 'section', 'text': {'type': 'mrkdwn', 'text': '```\n' + body + '\n```'}},
+              ],
+          }
+          req = urllib.request.Request(
+              'https://slack.com/api/chat.postMessage',
+              data=json.dumps(payload).encode(),
+              headers={
+                  'Authorization': 'Bearer ' + os.environ['SLACK_BOT_TOKEN'],
+                  'Content-Type': 'application/json; charset=utf-8',
+              },
+          )
+          with urllib.request.urlopen(req, timeout=10) as resp:
+              raw = resp.read()
+          parsed = json.loads(raw)
+          if not parsed.get('ok'):
+              print(f'Slack rejected the post: {parsed}', file=sys.stderr)
+              sys.exit(1)
+          print('Slack post acknowledged.')
+          PY
