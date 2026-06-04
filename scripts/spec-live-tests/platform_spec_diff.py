@@ -152,11 +152,17 @@ def _parse_param_body(body: str) -> ParamSummary:
     m = ENUM_VALUES_RE.search(body)
     if m:
         raw = m.group("vals")
-        enum_vals = [
-            v.strip().strip('"').strip("'")
-            for v in raw.split(",")
-            if v.strip() and not v.strip().startswith("Pulse")  # filter ts enum refs
-        ]
+        # Only keep quoted string literals — drop TypeScript enum references
+        # like `PulseAsrLanguage.MULTI` or spread vars like `languageValues`.
+        # Those aren't useful as schema enum values for the docs spec diff.
+        enum_vals = []
+        for v in raw.split(","):
+            v = v.strip()
+            if not v:
+                continue
+            if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                enum_vals.append(v[1:-1])
+            # else: TS identifier / enum ref / spread — skip silently
     default_val: str | None = None
     m = DEFAULT_RE.search(body)
     if m:
