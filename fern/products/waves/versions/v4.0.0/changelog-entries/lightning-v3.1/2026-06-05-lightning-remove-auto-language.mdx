@@ -1,0 +1,19 @@
+---
+title: Lightning v3.1 — `auto` language removed from docs and spec enums
+---
+
+**Docs change, not a server change.** The customer-facing docs and API ref no longer advertise `language: "auto"` on Lightning v3.1 or Lightning v3.1 Pro. The server still tolerates the value today; we just stopped recommending it.
+
+**Why:** code-switching guidance now lives where it belongs — on the voice. Each voice in the catalog has a `tags.language` set returned by `GET /waves/v1/lightning-v3.1/get_voices`; pass a language that matches what the voice was trained on for the result you want. Asking the model to "auto-detect" when the voice itself encodes the supported pairs added a layer of ambiguity without buying anything.
+
+**What changed:**
+- Lightning v3.1 + Pro OpenAPI/AsyncAPI `language` enum no longer lists `auto`.
+- Default value flipped from `"auto"` to `"en"` across the four specs (tts-openapi, lightning-v3.1-openapi, tts-ws, lightning-v3.1-ws).
+- "Automatic Language Detection & Code-Switching" Tip removed from the v3.1 model card; the Auto-detect table row removed from Supported Languages.
+- Pro model card: Languages row simplified to `English (en), Hindi (hi)`; the code-switching cell now points to `tags.language` rather than `auto`.
+- All guides (quickstart, how-to-tts, stream-tts, overview, eval script) drop `auto` from their `language` parameter rows.
+- Voice-cloning spec prose updated: the "fallback when caller sends `auto`" hint is gone; the same recommendation (match the reference audio's language) stands on its own.
+
+**Compatibility:** existing integrations that send `language: "auto"` keep working today. Plan to switch to an explicit code in the next maintenance window — a future server-side enum trim will eventually reject it.
+
+**Related:** [2026-05-08 — Lightning v3.1 language list corrected to 12](/waves/changelogs/general#2026-05-08).
