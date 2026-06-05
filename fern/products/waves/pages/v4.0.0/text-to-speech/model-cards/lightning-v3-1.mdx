@@ -4,7 +4,7 @@ description: "Model card for Lightning v3.1. High-fidelity, low-latency text-to-
 icon: "sparkles"
 ---
 
-Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering natural, expressive, and realistic speech at 44 kHz. Optimized for real-time applications with ultra-low latency and voice cloning support, it delivers broadcast-quality audio with genuinely conversational characteristics. Supports 12 languages plus `auto` for automatic detection and code-switching.
+Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering natural, expressive, and realistic speech at 44 kHz. Optimized for real-time applications with ultra-low latency and voice cloning support, it delivers broadcast-quality audio with genuinely conversational characteristics. Supports 12 languages across English, Hindi, Spanish, and 9 Indian languages.
 
 <CardGroup cols={4}>
   <Card title="44.1 kHz" icon="waveform-lines">
@@ -165,13 +165,10 @@ Want to reproduce these results? See the [TTS evaluation script](/waves/model-ca
 
 ## Supported Languages
 
-<Note>
-  **Automatic Language Detection & Code-Switching:** Set `language` to `"auto"` (default) and Lightning v3.1 will automatically detect the language from input text. The model also supports code-switching within a single session without requiring a restart or reconnection.
-</Note>
+Pass the language code on each request to match the language of your input text. Each voice supports a subset of these languages — check `tags.language` on the voice via `GET /waves/v1/lightning-v3.1/get_voices`.
 
 | Language | Code | Voice count |
 |----------|------|-------------|
-| Auto-detect | `auto` | — |
 | English | `en` | 176 |
 | Hindi | `hi` | 115 |
 | Tamil | `ta` | 13 |
@@ -186,7 +183,7 @@ Want to reproduce these results? See the [TTS evaluation script](/waves/model-ca
 | Bengali | `bn` | 4 |
 
 <Note>
-The list above reflects the **voice catalog** as the source of truth — i.e. languages for which Lightning v3.1 has at least one trained voice. Pass `language="auto"` to let the model code-switch across this set.
+The list above reflects the **voice catalog** as the source of truth — languages for which Lightning v3.1 has at least one trained voice.
 </Note>
 
 ---
@@ -363,7 +360,7 @@ Need something not in this short-list? Call `GET /waves/v1/lightning-v3.1/get_vo
 | `model` | string | No | `lightning_v3.1` | TTS pool to use. Pass `lightning_v3.1_pro` to route to the [Pro pool](/waves/model-cards/text-to-speech/lightning-v-3-1-pro). |
 | `sample_rate` | integer | No | 44100 | Output sample rate (Hz) |
 | `speed` | float | No | 1.0 | Speech speed (0.5-2.0) |
-| `language` | string | No | `"auto"` | Language code or `"auto"` for automatic detection |
+| `language` | string | No | `"en"` | Language code matching the voice (`en`, `hi`, `ta`, `es`, `kn`, `mr`, `te`, `or`, `pa`, `ml`, `gu`, `bn`). |
 | `output_format` | string | No | `"pcm"` | Audio format |
 | `pronunciation_dicts` | array | No | — | Custom pronunciation IDs (WebSocket only) |
 | `word_timestamps` | boolean | No | `false` | Opt in to per-word timing events. WebSocket only. See [Word-level timestamps](#word-level-timestamps). |
