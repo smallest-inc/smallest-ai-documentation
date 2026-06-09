@@ -72,7 +72,7 @@ print("Call started:", response.json()["data"]["conversationId"])
 
 ## Personalization (passing per-call variables)
 
-Most production outbound flows need to drop the caller's name, the lead source, the product they were browsing, or a balance amount into the agent's opening line. Pass those values via `variables`:
+Pass `variables` to carry caller-specific values into the conversation — names, lead source, amounts, anything the agent should reference.
 
 ```python
 response = client.atoms.calls.start_an_outbound_call(
@@ -87,20 +87,10 @@ response = client.atoms.calls.start_an_outbound_call(
 )
 ```
 
-In the agent's system prompt, reference them with double-brace syntax:
+- **Scalar values only.** `string`, `number`, `boolean`. Nested objects are rejected with `HTTP 400` (`"Invalid input"`) — flatten the payload client-side (`address_city` instead of `address: { city: ... }`).
+- **Variables are persisted with the call.** They appear on the conversation log at `data.variables` and can be retrieved via `GET /conversation/{id}`.
 
-```text
-Hi {{customer_name}}, this is Arya calling about your {{package}} subscription.
-```
-
-A few things to know:
-
-- **Override semantics.** `variables` wins over the agent's `defaultVariables` for that one call. Variables you don't pass fall back to the default.
-- **Scalar values only.** `string`, `number`, `boolean`. If you have nested data, flatten it before sending (`address_city` instead of `address: { city: ... }`).
-- **Same field as the WebSocket realtime agent.** The Realtime Agent WebSocket accepts the same `variables` argument as a query parameter, so a flow that works on REST will work on WS with no schema changes.
-- **Variables flow into webhooks.** The `post-conversation` webhook payload includes the resolved variables under `metadata.variables`, so your CRM ingestion can correlate the call against the row that triggered it.
-
-See [Variables](/atoms/atoms-platform/features/variables) for the full guide to defining variables on the agent side.
+See [Variables](/atoms/atoms-platform/features/variables) for the agent-side guide to defining and referencing variables.
 
 ## Response
 
