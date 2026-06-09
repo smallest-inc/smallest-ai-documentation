@@ -32,15 +32,43 @@ print(f"Call started: {response.data.conversation_id}")
 
 ## Parameters
 
+These are the parameters the Python SDK's `start_an_outbound_call()` method accepts today.
+
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `agent_id` | string | Yes | ID of your agent (from the [dashboard](https://app.smallest.ai/dashboard)). |
 | `phone_number` | string | Yes | E.164 format phone number (e.g. `+14155551234`, `+919876543210`). |
 | `variables` | object | No | Per-call values that override the agent's `defaultVariables` for this conversation. Keys are variable names; values must be `string`, `number`, or `boolean`. Nested objects are not supported. See [Personalization](#personalization-passing-per-call-variables) below. |
 | `from_product_id` | string | No | ID of the phone-number product to dial from. Use this to rotate caller IDs or pin a specific number per call. Get IDs via `GET /product/phone-numbers`. Omit to use the agent's default. |
-| `version_id` | string | No | Pin the call to a specific published agent version. The call log is attributed to that version so you can A/B-test versions in production. |
-| `operator_id` | string | No | Integration operator identifier (e.g. `"webengage"`) to trigger an operator-specific flow. |
-| `operator_data` | object | No | Arbitrary payload forwarded to the operator. Used for journey/userId context in operator integrations. |
+
+### REST-only parameters
+
+The underlying `POST /conversation/outbound` endpoint accepts three additional parameters that are not yet exposed by the Python SDK. To use them today, call the REST API directly with `requests` or `httpx`:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `versionId` | string | Pin the call to a specific published agent version. The call log is attributed to that version so you can A/B-test versions in production. |
+| `operatorId` | string | Integration operator identifier (e.g. `"webengage"`) to trigger an operator-specific flow. |
+| `operatorData` | object | Arbitrary payload forwarded to the operator. Used for `userId` / `journeyId` context in operator integrations. |
+
+```python
+import os, requests
+
+response = requests.post(
+    "https://api.smallest.ai/atoms/v1/conversation/outbound",
+    headers={"Authorization": f"Bearer {os.environ['SMALLEST_API_KEY']}"},
+    json={
+        "agentId": "your-agent-id",
+        "phoneNumber": "+14155551234",
+        "variables": {"customer_name": "Sarah Johnson", "package": "Gold"},
+        "versionId": "your-version-id",
+        "operatorId": "webengage",
+        "operatorData": {"userId": "u_123", "journeyId": "j_abc"},
+    },
+)
+response.raise_for_status()
+print("Call started:", response.json()["data"]["conversationId"])
+```
 
 ## Personalization (passing per-call variables)
 

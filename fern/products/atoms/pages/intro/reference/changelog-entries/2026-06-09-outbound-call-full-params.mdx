@@ -4,15 +4,22 @@ title: "Outbound Calls — document all production parameters, clarify vs test-c
 
 The [Outbound Calls](/atoms/dev/build/phone-calling/outbound-calls) developer page was previously listing only `agent_id` and `phone_number` in its Parameters table. The underlying REST endpoint (`POST /conversation/outbound` / SDK `start_an_outbound_call()`) has supported additional parameters since launch; the docs just weren't surfacing them.
 
-**Now documented:**
+**Now documented for the Python SDK:**
 
 | Parameter | What it does |
 |---|---|
 | `variables` | Per-call values that override the agent's `defaultVariables` (string / number / boolean keys). The primary mechanism for personalization — pass `customer_name`, `package`, `lead_source`, etc. |
 | `from_product_id` | Pin the call to a specific phone-number product, e.g. for caller-ID rotation. |
-| `version_id` | Pin the call to a specific published agent version. |
-| `operator_id` | Trigger an integration operator flow (e.g. `"webengage"`). |
-| `operator_data` | Arbitrary payload forwarded to the operator. |
+
+**Documented as REST-only (not yet on the Python SDK):**
+
+| Parameter | What it does |
+|---|---|
+| `versionId` | Pin the call to a specific published agent version. |
+| `operatorId` | Trigger an integration operator flow (e.g. `"webengage"`). |
+| `operatorData` | Arbitrary payload forwarded to the operator. |
+
+A `requests`-based example is included on the page for the REST-only parameters.
 
 The page now includes a **Personalization** section with a worked `customer_name` / `package` / `lead_source` example, the `{{...}}` template syntax to reference variables from the agent's system prompt, and notes on the override semantics, scalar-only constraint, parity with the Realtime Agent WebSocket's `variables` query parameter, and how variables flow into the `post-conversation` webhook payload under `metadata.variables`.
 
