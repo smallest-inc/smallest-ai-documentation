@@ -20,19 +20,17 @@ The CLI comes bundled with the SDK:
 pip install smallestai
 ```
 
-<Warning>
-  **`Session not initialized` ERROR at boot is harmless — keep reading.**
-
-  From `smallestai>=4.4.7`, you'll see this at startup:
+<Note>
+  **Expected boot output on `smallestai>=4.4.7`.** Startup includes a validation routine that exercises your `setup_handler` against a placeholder WebSocket to surface init-time errors. This dry-run reaches `await session.start()` before any client has connected and logs:
 
   ```
   ERROR | Startup validation failed — pod will not accept sessions. ValueError: Session not initialized
   ```
 
-  The message is misleading: **the pod does accept sessions and your agent runs normally.** It's an SDK startup dry-run that exercises your `setup_handler` against a null WebSocket; it always trips on `await session.start()` and logs the traceback. Verified on `smallestai==4.4.7` with the cookbook's `getting_started` — `Application startup complete.` follows the ERROR, `Uvicorn` binds, and `agent-crew chat` handshakes cleanly.
+  The server proceeds past this point — `Application startup complete.` follows, `Uvicorn` binds on `:8080`, and real client connections handshake normally.
 
-  **If the ERROR mentions a missing API key** (e.g. `OpenAIError: Missing credentials`) rather than `Session not initialized` — that one **is** real. Set `OPENAI_API_KEY` (or use Electron, see below) before booting.
-</Warning>
+  A different error at the same point in startup — for example `OpenAIError: Missing credentials` — indicates a real configuration issue. Set `OPENAI_API_KEY` (or configure Electron, below) before booting.
+</Note>
 
 Verify the installation:
 
