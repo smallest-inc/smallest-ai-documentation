@@ -17,11 +17,19 @@ The `smallestai agent-crew` CLI is built for rapid iteration. Test your crew loc
 The CLI comes bundled with the SDK:
 
 ```bash
-pip install "smallestai>=4.4.6,<4.4.7"
+pip install smallestai
 ```
 
 <Warning>
-  **Version pin required (temporary).** `smallestai==4.4.7` ships a startup-validation hook that fails before any client connects when your `setup_handler` calls `await session.start()` — which every documented example does. Tracked as a regression to be fixed; until it's reverted, pin to `<4.4.7`. The cookbook examples below also need this pin.
+  **Heads-up on a noisy boot log.** From `smallestai>=4.4.7`, you'll see this scary line at startup:
+
+  ```
+  ERROR | Startup validation failed — pod will not accept sessions. ValueError: Session not initialized
+  ```
+
+  Despite the message, **the pod does accept sessions and your agent works normally.** This is a SDK startup dry-run that runs your `setup_handler` against a null WebSocket to surface init-time errors; it always trips on `await session.start()` and logs the traceback. Real client connections handshake fine and your agent runs end-to-end. Verified on `smallestai==4.4.7` against the cookbook's `getting_started` example: `Application startup complete.` follows the ERROR, `Uvicorn` binds, `agent-crew chat` connects, session completes cleanly.
+
+  If the ERROR mentions a missing API key (e.g. `OpenAIError: Missing credentials`) rather than `Session not initialized`, that **is** real — set `OPENAI_API_KEY` (or use Electron, see below) before booting.
 </Warning>
 
 Verify the installation:
@@ -55,9 +63,6 @@ A minimal, single-node crew that streams chat completions from an LLM and greets
 curl -sL https://github.com/smallest-inc/cookbook/archive/refs/heads/main.tar.gz \
   | tar -xz --strip-components=2 cookbook-main/voice-agents/getting_started
 cd getting_started
-
-# Pin to a working SDK version (see Installation warning above)
-sed -i.bak 's/smallestai.*/smallestai>=4.4.6,<4.4.7/' requirements.txt
 pip install -r requirements.txt
 ```
 
@@ -71,14 +76,12 @@ A two-node example from [`background_agent`](https://github.com/smallest-inc/coo
 curl -sL https://github.com/smallest-inc/cookbook/archive/refs/heads/main.tar.gz \
   | tar -xz --strip-components=2 cookbook-main/voice-agents/background_agent
 cd background_agent
-
-# Multi-node example needs 4.4.7+ — DON'T pin below it
 pip install -r requirements.txt
 ```
 
-<Warning>
-  **Multi-node uses `smallestai>=4.4.7`** because `sentiment_analyzer.py` imports `SDKAgentLogEvent`, which was added in 4.4.7. On boot you'll see a `Startup validation failed — pod will not accept sessions` ERROR in logs from the SDK's `_validate_startup` hook. **The error is misleading — the pod does accept sessions and the agent works.** Tracked for an SDK fix; safe to ignore in the meantime.
-</Warning>
+<Info>
+  Multi-node uses `smallestai>=4.4.7` because `sentiment_analyzer.py` imports `SDKAgentLogEvent` (introduced in 4.4.7). Same boot-log caveat as the Installation section applies — you'll see the `Session not initialized` ERROR; the pod still serves.
+</Info>
 
 `app.py` wires both nodes into a single `CrewSession`. `support_agent.py` is the user-facing `OutputCrewNode`; it can query the sibling sentiment node mid-conversation. `sentiment_analyzer.py` is a `BackgroundCrewNode` — it listens to every transcript event, classifies sentiment, and updates state the support agent reads.
 
