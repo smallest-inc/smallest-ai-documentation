@@ -36,10 +36,41 @@ You'll need a Smallest API key (from [app.smallest.ai/dashboard/api-keys](https:
 export SMALLEST_API_KEY=sk_...
 ```
 
-Plus an LLM API key for the example below — pick one:
+Plus an LLM for the example below. The `OpenAIClient` in the SDK accepts any OpenAI-compatible endpoint — pick one:
 
-- **Electron** (Smallest's own LLM, OpenAI-compatible) — reuses `SMALLEST_API_KEY`. Set `base_url="https://api.smallest.ai/waves/v1"` and `model="electron"` in `OpenAIClient`. No extra key needed.
-- **OpenAI** — `export OPENAI_API_KEY=sk-...` if you'd rather use GPT models.
+<Tabs>
+  <Tab title="Electron (Smallest)">
+    Smallest's voice-optimized SLM. Reuses `SMALLEST_API_KEY` — no separate LLM key required.
+
+    ```python
+    from smallestai.atoms.crew.clients.openai import OpenAIClient
+    import os
+
+    llm = OpenAIClient(
+        model="electron",
+        api_key=os.getenv("SMALLEST_API_KEY"),
+        base_url="https://api.smallest.ai/waves/v1",
+    )
+    ```
+  </Tab>
+  <Tab title="OpenAI">
+    Bring your own OpenAI key.
+
+    ```bash
+    export OPENAI_API_KEY=sk-...
+    ```
+
+    ```python
+    from smallestai.atoms.crew.clients.openai import OpenAIClient
+    import os
+
+    llm = OpenAIClient(
+        model="gpt-4o-mini",
+        api_key=os.getenv("OPENAI_API_KEY"),
+    )
+    ```
+  </Tab>
+</Tabs>
 
 ---
 
