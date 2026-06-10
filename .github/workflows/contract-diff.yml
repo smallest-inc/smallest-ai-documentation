@@ -1,0 +1,201 @@
+name: Contract diff (docs vs platform)
+
+# Fetches the latest API-contract release from smallest-inc/waves-platform
+# and compares against this PR's docs spec (or main's docs spec, on the
+# weekly cron). Posts findings as a PR comment in advisory mode.
+#
+# Two trigger modes:
+#
+#   - pull_request — runs on every PR that touches fern/apis/waves/**.yaml
+#     or the probe itself. Compares PR-branch docs ↔ platform manifest
+#     AND PR-branch docs ↔ origin/main docs (catches deletions on the PR).
+#
+#   - schedule (Mon 09:00 IST = 03:30 UTC) — runs against main alone to
+#     surface drift that no in-flight PR is addressing. Posts to Slack
+#     #docs-drift if anything's flagged.
+#
+# Source: scripts/spec-live-tests/contract_diff.py.
+
+on:
+  pull_request:
+    paths:
+      - "fern/apis/waves/openapi/**.yaml"
+      - "fern/apis/waves/asyncapi/**.yaml"
+      - "fern/apis/waves-v4/overrides/**"
+      - "scripts/spec-live-tests/contract_diff.py"
+      - ".github/workflows/contract-diff.yml"
+  schedule:
+    - cron: "30 3 * * 1"   # Mon 03:30 UTC = 09:00 IST
+  workflow_dispatch:
+
+jobs:
+  diff:
+    name: Diff docs spec against the platform manifest
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      pull-requests: write   # for the diff comment
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history needed so the deletion check can read origin/main.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install pyyaml
+
+      - name: Download latest contract release from waves-platform
+        id: download
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_PR_READ_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::UPSTREAM_PR_READ_TOKEN not set. Probe can't fetch manifests. Skipping."
+            exit 0
+          fi
+          mkdir -p "$RUNNER_TEMP/contracts"
+          # Find the latest release whose tag begins with `contract-`.
+          # `gh release list` is sorted newest-first by default.
+          TAG=$(gh release list --repo smallest-inc/waves-platform --limit 50 \
+            --json tagName --jq '.[] | select(.tagName | startswith("contract-")) | .tagName' \
+            | head -n 1)
+          if [ -z "$TAG" ]; then
+            echo "::warning::No contract-* release found on smallest-inc/waves-platform. Probe can't run."
+            exit 0
+          fi
+          echo "Using release tag: $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          # Download every JSON asset on this release.
+          gh release download "$TAG" \
+            --repo smallest-inc/waves-platform \
+            --dir "$RUNNER_TEMP/contracts" \
+            --pattern '*.json'
+          ls -la "$RUNNER_TEMP/contracts"
+          echo "manifest_dir=$RUNNER_TEMP/contracts" >> "$GITHUB_ENV"
+
+      - name: Run contract diff
+        if: env.manifest_dir != ''
+        id: diff
+        run: |
+          set +e
+          BASELINE=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASELINE="--baseline-ref origin/main"
+          fi
+          python3 scripts/spec-live-tests/contract_diff.py \
+            --manifest-dir "$manifest_dir" \
+            $BASELINE \
+            --mode advisory \
+            --out-markdown /tmp/diff.md \
+            | tee /tmp/diff.txt
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Comment diff on the PR
+        if: env.manifest_dir != '' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- contract-diff-probe -->';
+            const body = fs.existsSync('/tmp/diff.md') ? fs.readFileSync('/tmp/diff.md', 'utf8') : '';
+
+            // Skip commenting when the diff is fully clean — collapse any prior
+            // comment to a stub instead of leaving a stale red report.
+            const hasFindings = /❌|🚨/.test(body);
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const prior = comments.find(c => c.body && c.body.includes(marker));
+
+            if (hasFindings) {
+              if (prior) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: prior.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body,
+                });
+              }
+            } else if (prior) {
+              const stub = [
+                marker,
+                '## Contract diff (docs ↔ platform)',
+                '',
+                '✅ in sync — no missing platform params, no deletions on this PR.',
+              ].join('\n');
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: prior.id,
+                body: stub,
+              });
+            }
+
+      - name: Slack notify on scheduled drift
+        if: env.manifest_dir != '' && github.event_name == 'schedule'
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          # Resolve the channel here so the Python script only reads env vars
+          # (no GH Actions template substitution inside the heredoc — that mix
+          # is hard to reason about and breaks on quotes in resolved values).
+          SLACK_CHANNEL: ${{ vars.DOCS_DRIFT_CHANNEL_ID || 'C0B5Q3EHU07' }}
+        run: |
+          if ! grep -qE "❌|🚨" /tmp/diff.txt; then
+            echo "No drift — silent."
+            exit 0
+          fi
+          if [ -z "${SLACK_BOT_TOKEN:-}" ]; then
+            echo "::warning::Drift detected but SLACK_BOT_TOKEN not configured; skipping Slack post."
+            exit 0
+          fi
+          echo "Drift detected on the scheduled cron — posting to Slack."
+          # Inline Python — reads env vars only, raises on non-OK Slack response.
+          python3 <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          with open('/tmp/diff.txt') as f:
+              body = f.read()[:3500]
+          payload = {
+              'channel': os.environ['SLACK_CHANNEL'],
+              'text': 'Weekly contract diff — drift detected',
+              'blocks': [
+                  {'type': 'header', 'text': {'type': 'plain_text', 'text': 'Weekly contract diff — drift detected'}},
+                  {'type': 'section', 'text': {'type': 'mrkdwn', 'text': '```\n' + body + '\n```'}},
+              ],
+          }
+          req = urllib.request.Request(
+              'https://slack.com/api/chat.postMessage',
+              data=json.dumps(payload).encode(),
+              headers={
+                  'Authorization': 'Bearer ' + os.environ['SLACK_BOT_TOKEN'],
+                  'Content-Type': 'application/json; charset=utf-8',
+              },
+          )
+          with urllib.request.urlopen(req, timeout=10) as resp:
+              raw = resp.read()
+          parsed = json.loads(raw)
+          if not parsed.get('ok'):
+              print(f'Slack rejected the post: {parsed}', file=sys.stderr)
+              sys.exit(1)
+          print('Slack post acknowledged.')
+          PY
