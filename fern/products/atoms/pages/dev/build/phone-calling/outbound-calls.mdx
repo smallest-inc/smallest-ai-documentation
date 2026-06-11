@@ -43,13 +43,11 @@ These are the parameters the Python SDK's `start_an_outbound_call()` method acce
 
 ### REST-only parameters
 
-The underlying `POST /conversation/outbound` endpoint accepts three additional parameters that are not yet exposed by the Python SDK. To use them today, call the REST API directly with `requests` or `httpx`:
+The underlying `POST /conversation/outbound` endpoint accepts one additional parameter that is not yet exposed by the Python SDK. To use it today, call the REST API directly with `requests` or `httpx`:
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `versionId` | string | Pin the call to a specific published agent version. The call log is attributed to that version so you can A/B-test versions in production. |
-| `operatorId` | string | Integration operator identifier (e.g. `"webengage"`) to trigger an operator-specific flow. |
-| `operatorData` | object | Arbitrary payload forwarded to the operator. Used for `userId` / `journeyId` context in operator integrations. |
 
 ```python
 import os, requests
@@ -62,8 +60,6 @@ response = requests.post(
         "phoneNumber": "+14155551234",
         "variables": {"customer_name": "Sarah Johnson", "package": "Gold"},
         "versionId": "your-version-id",
-        "operatorId": "webengage",
-        "operatorData": {"userId": "u_123", "journeyId": "j_abc"},
     },
 )
 response.raise_for_status()
