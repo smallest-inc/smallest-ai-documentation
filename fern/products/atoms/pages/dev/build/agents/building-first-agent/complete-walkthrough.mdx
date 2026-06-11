@@ -100,8 +100,6 @@ This code defines an agent with:
 Tools let your agent perform actions. Add a tool to look up order status:
 
 ```python
-import json
-
 from smallestai.atoms.crew.nodes import OutputCrewNode
 from smallestai.atoms.crew.clients.openai import OpenAIClient
 from smallestai.atoms.crew.tools import ToolRegistry, function_tool
@@ -185,15 +183,10 @@ class OrderAssistant(OutputCrewNode):
                 tool_calls=tool_calls, parallel=True
             )
             for tc, result in zip(tool_calls, results):
-                content = (
-                    result.content
-                    if isinstance(result.content, str)
-                    else json.dumps(result.content)
-                )
                 self.context.add_message({
                     "role": "tool",
                     "tool_call_id": tc.id,
-                    "content": content,
+                    "content": result.content,
                 })
 ```
 

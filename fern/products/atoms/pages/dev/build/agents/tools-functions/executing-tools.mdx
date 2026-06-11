@@ -48,7 +48,6 @@ The LLM may respond with text, tool calls, or both.
 A turn may take multiple LLM calls: the model may call a tool, then — once it sees the result — decide to call another tool before producing the final spoken response. Wrap the LLM call in a loop and exit when the model stops requesting tools.
 
 ```python
-import json
 from typing import List
 from smallestai.atoms.crew.clients.types import ToolCall
 
@@ -85,15 +84,10 @@ async def generate_response(self):
         # Execute tools and feed each result back as a tool message
         results = await self.tool_registry.execute(tool_calls=tool_calls, parallel=True)
         for tc, result in zip(tool_calls, results):
-            content = (
-                result.content
-                if isinstance(result.content, str)
-                else json.dumps(result.content)
-            )
             self.context.add_message({
                 "role": "tool",
                 "tool_call_id": tc.id,
-                "content": content,
+                "content": result.content,
             })
 
         # Loop back: ask the LLM what to do given the new tool results
@@ -102,7 +96,7 @@ async def generate_response(self):
 Key points:
 
 - `tc.to_dict()` returns the canonical OpenAI-format tool-call dict — no need to construct it field by field.
-- `result.content` can be a string or a dict depending on what your `@function_tool` returned; the JSON fallback keeps the message valid in either case.
+- `result.content` is a string. The registry runs your `@function_tool` return value through `json.dumps` (for dicts, lists) or `str()` (for everything else) before populating it.
 - `MAX_TOOL_ROUNDS` caps the loop so a misbehaving LLM can't run away calling tools forever. Four rounds covers every realistic conversation; raise it only if you have a concrete reason.
 
 ## ToolRegistry API
