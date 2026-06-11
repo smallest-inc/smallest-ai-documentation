@@ -44,10 +44,68 @@ You'll need a Smallest API key (from [app.smallest.ai/dashboard/api-keys](https:
 export SMALLEST_API_KEY=sk_...
 ```
 
-Plus an LLM API key for the example below — pick one:
+Plus an LLM for the example below. The Atoms Crews SDK ships an `OpenAIClient` that accepts any OpenAI-compatible endpoint — pick one:
 
-- **Electron** (Smallest's own LLM, OpenAI-compatible) — reuses `SMALLEST_API_KEY`. Set `base_url="https://api.smallest.ai/waves/v1"` and `model="electron"` in `OpenAIClient`. No extra key needed.
-- **OpenAI** — `export OPENAI_API_KEY=sk-...` if you'd rather use GPT models.
+<Tabs>
+  <Tab title="Electron (Smallest)">
+    Smallest's voice-optimized SLM. Reuses `SMALLEST_API_KEY` — no separate LLM key required.
+
+    ```python
+    from smallestai.atoms.crew.clients.openai import OpenAIClient
+    import os
+
+    llm = OpenAIClient(
+        model="electron",
+        api_key=os.getenv("SMALLEST_API_KEY"),
+        base_url="https://api.smallest.ai/waves/v1",
+    )
+    ```
+  </Tab>
+  <Tab title="OpenAI">
+    Bring your own OpenAI key.
+
+    ```bash
+    export OPENAI_API_KEY=sk-...
+    ```
+
+    ```python
+    from smallestai.atoms.crew.clients.openai import OpenAIClient
+    import os
+
+    llm = OpenAIClient(
+        model="gpt-4o-mini",
+        api_key=os.getenv("OPENAI_API_KEY"),
+    )
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The Atoms Crews `OpenAIClient` is **async** — call sites use `await llm.chat(messages=[...])` inside a crew node's `generate_response()` method (which already runs in an event loop). It does **not** expose the OpenAI-Python-SDK shape `llm.chat.completions.create(...)`; the call surface is `await llm.chat(messages, stream=False, tools=None, ...)` returning a `ChatResponse` with `.content` and `.tool_calls`.
+</Note>
+
+### Test connectivity outside a crew
+
+For a one-off sanity check (verify your key works, the endpoint responds), use the standard `openai` Python SDK — Electron is OpenAI-compatible, so the official client works as a drop-in by overriding `base_url`:
+
+```python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ["SMALLEST_API_KEY"],
+    base_url="https://api.smallest.ai/waves/v1",
+)
+
+resp = client.chat.completions.create(
+    model="electron",
+    messages=[{"role": "user", "content": "Respond with a one-sentence greeting."}],
+    max_tokens=50,
+)
+print(resp.choices[0].message.content)
+```
+
+Same code works against OpenAI itself by dropping `base_url` and swapping `model` to `gpt-4o-mini` (and using `OPENAI_API_KEY`). Use this pattern for backend scripts or smoke tests that aren't inside a crew node.
 
 ---
 
