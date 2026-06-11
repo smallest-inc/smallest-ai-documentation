@@ -259,8 +259,9 @@ from smallestai.atoms.crew.server import AtomsCrewApp
 from smallestai.atoms.crew.session import CrewSession
 from smallestai.atoms.crew.nodes import OutputCrewNode
 from smallestai.atoms.crew.clients.openai import OpenAIClient
-from smallestai.atoms.crew.tools.decorator import function_tool
-from smallestai.atoms.crew.tools.registry import ToolRegistry
+from smallestai.atoms.crew.tools import ToolRegistry, function_tool
+
+MAX_TOOL_ROUNDS = 4  # safety cap on the tool-call loop
 
 
 class OrderAssistant(OutputCrewNode):
@@ -268,13 +269,12 @@ class OrderAssistant(OutputCrewNode):
 
     def __init__(self):
         super().__init__(name="order-assistant")
-        
+
         self.llm = OpenAIClient(model="gpt-4o-mini")
-        
+
         self.tool_registry = ToolRegistry()
         self.tool_registry.discover(self)
-        self.tool_schemas = self.tool_registry.get_schemas()
-        
+
         self.context.add_message({
             "role": "system",
             "content": (
@@ -300,61 +300,47 @@ class OrderAssistant(OutputCrewNode):
             "ORD-12345": {"status": "shipped", "eta": "Tomorrow"},
             "ORD-67890": {"status": "processing", "eta": "3-5 days"},
         }
-        
+
         if order_id in orders:
             return orders[order_id]
         return {"status": "not_found", "message": "Order not found"}
 
     async def generate_response(self):
-        """Generate a response, handling tool calls if needed."""
-        response = await self.llm.chat(
-            messages=self.context.messages,
-            stream=True,
-            tools=self.tool_schemas
-        )
-        
-        tool_calls = []
-        
-        async for chunk in response:
-            if chunk.content:
-                yield chunk.content
-            if chunk.tool_calls:
-                tool_calls.extend(chunk.tool_calls)
-        
-        if tool_calls:
-            results = await self.tool_registry.execute(tool_calls, parallel=True)
-            
-            # Add assistant tool_calls and results to context
-            self.context.add_messages([
-                {
-                    "role": "assistant",
-                    "content": "",
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.name,
-                                "arguments": str(tc.arguments),
-                            },
-                        }
-                        for tc in tool_calls
-                    ],
-                },
-                *[
-                    {"role": "tool", "tool_call_id": tc.id, "content": result.content}
-                    for tc, result in zip(tool_calls, results)
-                ],
-            ])
-            
-            followup = await self.llm.chat(
+        """Generate a response. Loops if the LLM calls tools then needs another turn."""
+        for _ in range(MAX_TOOL_ROUNDS):
+            response = await self.llm.chat(
                 messages=self.context.messages,
-                stream=True
+                stream=True,
+                tools=self.tool_registry.get_schemas(),
             )
-            
-            async for chunk in followup:
+
+            text_parts: list[str] = []
+            tool_calls = []
+
+            async for chunk in response:
                 if chunk.content:
+                    text_parts.append(chunk.content)
                     yield chunk.content
+                if chunk.tool_calls:
+                    tool_calls.extend(chunk.tool_calls)
+
+            assistant_msg = {"role": "assistant", "content": "".join(text_parts)}
+            if tool_calls:
+                assistant_msg["tool_calls"] = [tc.to_dict() for tc in tool_calls]
+            self.context.add_message(assistant_msg)
+
+            if not tool_calls:
+                return
+
+            results = await self.tool_registry.execute(
+                tool_calls=tool_calls, parallel=True
+            )
+            for tc, result in zip(tool_calls, results):
+                self.context.add_message({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result.content,
+                })
 
 
 async def setup(session: CrewSession):
