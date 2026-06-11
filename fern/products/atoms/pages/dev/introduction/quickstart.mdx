@@ -284,6 +284,55 @@ Deployments are not live by default. This gives you a safety buffer.
 
 ---
 
+## Running the CLI in CI / non-interactive environments
+
+A few commands prompt you for input (an agent picker, a build picker, a password field). These only work in a real terminal. The table below shows which commands work non-interactively and how to substitute for the ones that don't.
+
+| Command | Works in CI? | Notes |
+|---|---|---|
+| `smallestai auth login` | Yes | Pipe the key on stdin: `echo "$SMALLEST_API_KEY" \| smallestai auth login`. |
+| `smallestai agent-crew init` | No | Opens an interactive picker over your agents. In CI, write the config directly instead — see below. |
+| `smallestai agent-crew deploy` | Yes | Fully non-interactive. Reads `agent_id` from `.smallestai/config.toml`, the API key from stored credentials, prints a deploy summary, and exits non-zero on failure. |
+| `smallestai agent-crew builds` | No | Lists builds, then prompts you to pick one and choose **Make Live** / **Take Down**. For CI promotion or rollback, call the API directly — see below. |
+| `smallestai agent-crew chat` | No | Interactive WebSocket REPL against `ws://localhost:8080/ws`. For local development only. |
+
+### Skipping `init` in CI
+
+`init` exists to write `.smallestai/config.toml` with your agent ID. In CI you can write the same file yourself before running `deploy`:
+
+```bash
+mkdir -p .smallestai
+cat > .smallestai/config.toml <<EOF
+agent_id = "$ATOMS_AGENT_ID"
+EOF
+```
+
+### Promoting and rolling back builds in CI
+
+`builds` calls the same endpoint for both **Make Live** and **Take Down**. You can call it directly:
+
+```bash
+# Promote a build (Make Live)
+curl -X PATCH "https://api.smallest.ai/atoms/v1/sdk/agents/$ATOMS_AGENT_ID/builds/$BUILD_ID" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"isLive": true}'
+
+# Roll back (Take Down)
+curl -X PATCH "https://api.smallest.ai/atoms/v1/sdk/agents/$ATOMS_AGENT_ID/builds/$BUILD_ID" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"isLive": false}'
+```
+
+The build ID is printed by `deploy` on success, and is also available from `GET /atoms/v1/sdk/agents/{agentId}/builds`.
+
+<Note>
+  Only one build per agent can be live at a time. Setting `isLive: true` on a new build automatically takes down the previously-live one.
+</Note>
+
+---
+
 ## Error handling
 
 When deployed code raises, the SDK auto-records the error on the call (in `calllog.errors[]`, the Events tab, and webhooks) — you don't need to wire anything up to get this. The `deploy` command also warns about env vars your code references before zip upload, and the pod's `/ready` endpoint blocks traffic until your crew's `__init__` succeeds. See [Error Handling](./agent-crew-error-handling) for severity semantics, graceful-fallback patterns, and how to emit your own application-level errors.
