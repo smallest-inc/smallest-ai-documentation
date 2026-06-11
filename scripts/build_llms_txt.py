@@ -44,17 +44,37 @@ NAV_SOURCES: list[tuple[Path, str, str]] = [
 # Tabs whose pages are *not* surfaced in llms.txt. Reasons:
 #   - api-reference: rendered from OpenAPI/AsyncAPI, no .mdx page = no description.
 #   - changelog: dated entries are noisy in an index; deep-link from llms-full.txt instead.
-#   - ai-tools, integrations, mcp: thin index pages with no real content.
-SKIP_TABS = {"api-reference", "changelog", "ai-tools", "integrations", "mcp"}
+#   - ai-tools: 2 thin index pages (Overview, Context7).
+# mcp (6 pages) and integrations (10 partner pages) are kept — they have
+# real content that AI agents may want to recommend.
+SKIP_TABS = {"api-reference", "changelog", "ai-tools"}
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
 
 def slugify(label: str) -> str:
-    """Match Fern's URL slug derivation: lowercase, strip "and",
-    non-alphanum → hyphen, collapse repeats, trim."""
-    s = label.lower()
-    s = re.sub(r"\s*&\s*|\s+and\s+", " ", s)  # drop "&" and "and"
+    """Match Fern's URL slug derivation:
+    - split on lowercase→uppercase transitions (camelCase: 'WebSocket' → 'web-socket')
+    - split on letter↔digit transitions ('lightning v3' → 'lightning-v-3')
+    - strip 'and' / '&' connectors
+    - lowercase, non-alphanum → hyphen, collapse, trim
+
+    Verified empirically against live docs.smallest.ai for:
+      'WebSocket SDK' → 'web-socket-sdk'
+      'ElevenLabs' → 'eleven-labs'
+      'iOS Swift' → 'i-os-swift'
+      'Lightning v3.1 Pro' → 'lightning-v-3-1-pro'
+      'Testing & Debugging' → 'testing-debugging'
+    """
+    s = label
+    # Insert space at camelCase boundaries before lowercasing.
+    s = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", s)
+    # Insert space at letter↔digit boundaries in either direction.
+    s = re.sub(r"([A-Za-z])([0-9])", r"\1 \2", s)
+    s = re.sub(r"([0-9])([A-Za-z])", r"\1 \2", s)
+    s = s.lower()
+    # Drop 'and' / '&' connectors.
+    s = re.sub(r"\s*&\s*|\s+and\s+", " ", s)
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = re.sub(r"-+", "-", s).strip("-")
     return s
