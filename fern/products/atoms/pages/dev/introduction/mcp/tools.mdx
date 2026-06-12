@@ -26,18 +26,20 @@ You never call these directly — just describe what you want and the AI picks t
 |---|---|
 | `get_agent_prompt` | Read an agent's current system prompt and configured tools. Works for both single-prompt and conversation flow agents. |
 | `update_agent_config` | Update agent settings — name, voice, model, language, STT transcriber (Pulse / Pulse-Legacy), first message, timeouts, and more. For versioned agents, creates a draft automatically. |
-| `update_agent_prompt` | Update an agent's system prompt. For versioned agents, creates a draft automatically. |
-| `publish_draft` | Publish a draft to make changes live on a versioned agent, or discard it. Optionally add a version label and changelog. |
+| `update_agent_prompt` | Update an agent's system prompt and optionally the first message. For versioned agents, creates a draft automatically — or pass a `draft_id` to stack the change onto an existing draft. |
+| `publish_draft` | Publish a draft as a new version and activate it to make it live, or discard it. Publishing triggers an automatic security check on the prompt; the tool waits for it to pass before activating and reports the real outcome (activated, still pending, or failed). Optionally add a version label and changelog. |
 
 ### Tools & pre-call API
 
 | Tool | What it does |
 |---|---|
-| `add_agent_tool` | Add or update an API-call tool on a single-prompt agent — an HTTP request the agent invokes during a call (e.g. look up an order, book an appointment). Upserts by name and preserves existing tools. For versioned agents, creates a draft automatically. |
-| `remove_agent_tool` | Remove a tool from an agent by name. For versioned agents, creates a draft automatically. |
-| `set_pre_call_api` | Configure or disable an agent's pre-call API — one HTTP request made before the call connects to enrich the agent with variables (e.g. fetch a customer record by phone number). For versioned agents, creates a draft automatically. |
+| `add_agent_tool` | Add or update one or more API-call tools on a single-prompt agent — HTTP requests the agent invokes during a call (e.g. look up an order, book an appointment). Pass one tool or a whole batch in a single call. Upserts by name and preserves existing tools. For versioned agents, creates a draft automatically — or pass a `draft_id` to stack onto an existing draft. |
+| `remove_agent_tool` | Remove a tool from an agent by name. For versioned agents, creates a draft automatically — or pass a `draft_id` to stack onto an existing draft. |
+| `set_pre_call_api` | Configure or disable an agent's pre-call API — one HTTP request made before the call connects to enrich the agent with variables (e.g. fetch a customer record by phone number). For versioned agents, creates a draft automatically — or pass a `draft_id` to stack onto an existing draft. |
 
 ## Drafts
+
+On versioned agents, every config edit lands in a draft rather than going live directly. Edit tools (`update_agent_prompt`, `add_agent_tool`, `set_pre_call_api`, `remove_agent_tool`) accept an optional `draft_id` so multiple changes — prompt, pre-call API, and a full toolset — can be stacked into **one** draft and shipped with a single `publish_draft`. When adding several API-call tools to the same draft, pass them as one batch: the draft's tools section is written wholesale, so the last write defines the full set.
 
 | Tool | What it does |
 |---|---|
