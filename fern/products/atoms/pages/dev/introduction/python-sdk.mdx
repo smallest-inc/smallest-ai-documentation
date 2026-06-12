@@ -23,12 +23,10 @@ Use the `SmallestAI` client to do anything the platform dashboard does, from Pyt
 
 ```python
 from smallestai import SmallestAI
-import os
 
-# Pass token= explicitly — the client otherwise looks for SMALLEST_AI_TOKEN,
-# not SMALLEST_API_KEY. (Yes, the names diverge. The CLI and helpers use
-# SMALLEST_API_KEY; only this generated REST client uses SMALLEST_AI_TOKEN.)
-client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
+# Reads SMALLEST_API_KEY from the environment automatically.
+# To pass explicitly: SmallestAI(api_key="sk_...")
+client = SmallestAI()
 
 # Create an agent — response.data is the agent id (a string)
 response = client.atoms.agents.create_a_new_agent(name="my-test-agent")
@@ -106,7 +104,7 @@ export SMALLEST_API_KEY=sk_...
 
 | Surface | How it picks up the key |
 |---------|-------------------------|
-| `SmallestAI(token=...)` | Pass it explicitly: `SmallestAI(token=os.getenv("SMALLEST_API_KEY"))` |
+| `SmallestAI()` | Reads `SMALLEST_API_KEY` from env automatically. Pass explicitly with `SmallestAI(api_key="sk_...")` if needed. |
 | `smallestai.atoms.Call/KB/Campaign/Audience` | Reads `SMALLEST_API_KEY` from env automatically |
 | `smallestai` CLI (`auth login`) | Interactive prompt; or pipe: `echo $SMALLEST_API_KEY \| smallestai auth login` |
 
