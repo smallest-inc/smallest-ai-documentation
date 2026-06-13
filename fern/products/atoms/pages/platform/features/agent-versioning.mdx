@@ -171,13 +171,23 @@ requests.patch(
     },
 ).raise_for_status()
 
-# 4. Publish as a new version and activate it
+# 4. Publish the draft as a new version
 published = requests.post(
     f"{BASE}/agent/{AGENT_ID}/drafts/{draft_id}/publish",
     headers=HEADERS,
-    json={"label": "v2 - friendlier prompt", "description": "Softened tone", "activate": True},
+    json={"label": "v2 - friendlier prompt", "description": "Softened tone"},
 ).json()
-print("New active version:", published["data"]["version"]["_id"])
+version_id = published["data"]["_id"]
+
+# 5. Activate the new version (publish does NOT auto-activate, even with `activate: True`)
+# A security check runs immediately after publish; wait ~6 s for it to complete.
+import time
+time.sleep(6)
+requests.patch(
+    f"{BASE}/agent/{AGENT_ID}/versions/{version_id}/activate",
+    headers=HEADERS,
+).raise_for_status()
+print("New active version:", version_id)
 ```
 
 ### Common operations
@@ -190,12 +200,13 @@ print("New active version:", published["data"]["version"]["_id"])
 | Discard a draft | `DELETE /agent/{id}/drafts/{draftId}` |
 | Update draft config | `PATCH /agent/{id}/drafts/{draftId}/config` |
 | Diff draft vs version | `GET /agent/{id}/drafts/{draftId}/diff?versionId=...` |
-| Publish a draft | `POST /agent/{id}/drafts/{draftId}/publish` |
+| Publish a draft | `POST /agent/{id}/drafts/{draftId}/publish` (creates a new version; does **not** activate — call activate explicitly) |
 | List published versions | `GET /agent/{id}/versions` |
 | Get one version | `GET /agent/{id}/versions/{versionId}` |
 | Diff two versions | `GET /agent/{id}/versions/diff?baseId=...&compareId=...` |
-| Activate a version | `PATCH /agent/{id}/versions/{versionId}/activate` |
+| Activate a version | `PATCH /agent/{id}/versions/{versionId}/activate` (security check runs immediately after publish; wait ~6 s if you just published) |
 | Update version metadata | `PATCH /agent/{id}/versions/{versionId}` (label, description, isPinned) |
+| Archive (delete) an agent | `DELETE /agent/{id}/archive` (note: `/archive` suffix; plain `DELETE /agent/{id}` returns 404) |
 
 See the full schema in the [API Reference](/atoms/api-reference).
 
@@ -222,10 +233,13 @@ curl -H "Authorization: Bearer $SMALLEST_API_KEY" \
 ## Related
 
 <CardGroup cols={2}>
+  <Card title="Versioning Lifecycle (Developer Guide)" icon="code-branch" href="/atoms/developer-guide/build/agents/versioning-lifecycle">
+    Same flow in curl + Python with copy-pasteable snippets.
+  </Card>
   <Card title="Post-Call Metrics" icon="chart-line" href="/atoms/atoms-platform/features/post-call-metrics">
-    Configure metrics through the draft flow
+    Configure metrics through the draft flow.
   </Card>
   <Card title="API Reference" icon="code" href="/atoms/api-reference">
-    Full list of draft and version endpoints
+    Full list of draft and version endpoints.
   </Card>
 </CardGroup>
