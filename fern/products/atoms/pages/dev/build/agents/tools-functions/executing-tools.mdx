@@ -45,80 +45,59 @@ The LLM may respond with text, tool calls, or both.
 
 ## Handling Tool Calls
 
-Collect `chunk.tool_calls` during streaming, then run `tool_registry.execute()`.
+A turn may take multiple LLM calls: the model may call a tool, then — once it sees the result — decide to call another tool before producing the final spoken response. Wrap the LLM call in a loop and exit when the model stops requesting tools.
 
 ```python
 from typing import List
 from smallestai.atoms.crew.clients.types import ToolCall
 
+MAX_TOOL_ROUNDS = 4  # safety cap; most turns complete in 1–2 rounds
+
 async def generate_response(self):
-    response = await self.llm.chat(
-        messages=self.context.messages,
-        stream=True,
-        tools=self.tool_registry.get_schemas()
-    )
-    
-    tool_calls: List[ToolCall] = []
-    
-    # Stream response and collect tool calls
-    async for chunk in response:
-        if chunk.content:
-            yield chunk.content
-        if chunk.tool_calls:
-            tool_calls.extend(chunk.tool_calls)
-    
-    # Execute tools if any were called
-    if tool_calls:
-        results = await self.tool_registry.execute(
-            tool_calls=tool_calls,
-            parallel=True
+    for _ in range(MAX_TOOL_ROUNDS):
+        response = await self.llm.chat(
+            messages=self.context.messages,
+            stream=True,
+            tools=self.tool_registry.get_schemas(),
         )
-        
-        # Add to context and get final response
-        # (see below)
+
+        text_parts: List[str] = []
+        tool_calls: List[ToolCall] = []
+
+        async for chunk in response:
+            if chunk.content:
+                text_parts.append(chunk.content)
+                yield chunk.content
+            if chunk.tool_calls:
+                tool_calls.extend(chunk.tool_calls)
+
+        # Record this turn's assistant message (text + any tool_calls it requested)
+        assistant_msg = {"role": "assistant", "content": "".join(text_parts)}
+        if tool_calls:
+            assistant_msg["tool_calls"] = [tc.to_dict() for tc in tool_calls]
+        self.context.add_message(assistant_msg)
+
+        # No tools requested → final response, we're done
+        if not tool_calls:
+            return
+
+        # Execute tools and feed each result back as a tool message
+        results = await self.tool_registry.execute(tool_calls=tool_calls, parallel=True)
+        for tc, result in zip(tool_calls, results):
+            self.context.add_message({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": result.content,
+            })
+
+        # Loop back: ask the LLM what to do given the new tool results
 ```
 
-## Feeding Results Back
+Key points:
 
-After executing tools, add the results to context and call the LLM again:
-
-```python
-if tool_calls:
-    results = await self.tool_registry.execute(tool_calls=tool_calls, parallel=True)
-    
-    # Add tool calls and results to context
-    self.context.add_messages([
-        {
-            "role": "assistant",
-            "content": "",
-            "tool_calls": [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {
-                        "name": tc.name,
-                        "arguments": str(tc.arguments),
-                    },
-                }
-                for tc in tool_calls
-            ],
-        },
-        *[
-            {"role": "tool", "tool_call_id": tc.id, "content": result.content}
-            for tc, result in zip(tool_calls, results)
-        ],
-    ])
-    
-    # Call LLM again with tool results
-    final_response = await self.llm.chat(
-        messages=self.context.messages,
-        stream=True
-    )
-    
-    async for chunk in final_response:
-        if chunk.content:
-            yield chunk.content
-```
+- `tc.to_dict()` returns the canonical OpenAI-format tool-call dict — no need to construct it field by field.
+- `result.content` is a string. The registry runs your `@function_tool` return value through `json.dumps` (for dicts, lists) or `str()` (for everything else) before populating it.
+- `MAX_TOOL_ROUNDS` caps the loop so a misbehaving LLM can't run away calling tools forever. Four rounds covers every realistic conversation; raise it only if you have a concrete reason.
 
 ## ToolRegistry API
 

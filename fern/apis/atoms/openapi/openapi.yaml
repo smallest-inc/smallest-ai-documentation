@@ -357,7 +357,19 @@ paths:
         - Agents
       security:
         - BearerAuth: []
-      description: You can create a new agent by passing the name of the agent in the request body. You can use update-workflow endpoint next to assign custom workflow to the agent.
+      description: |
+        Create a new agent by passing the agent name in the request body.
+
+        New agents have versioning enabled by default. To set the prompt,
+        `firstMessage`, tools, or any runtime config, fork a draft from the
+        auto-created initial version, edit it, publish, and activate — see
+        the [Versioning Lifecycle](/atoms/developer-guide/build/agents/versioning-lifecycle)
+        guide for the full flow.
+
+        The legacy `PATCH /workflow/{workflowId}` endpoint writes directly to
+        the underlying workflow document and bypasses the version lifecycle;
+        edits made that way are not captured as a version and may not
+        propagate to live calls. Use the drafts flow above.
       requestBody:
         required: true
         content:
@@ -1499,6 +1511,32 @@ paths:
       summary: Start an outbound call
       description: |
         Initiates an outbound telephony call with a specified agent and phone number.
+
+        ## Caller-ID resolution
+
+        When `fromProductId` is omitted **and** the agent has no telephony
+        product attached, the call dispatches from a Smallest-managed Plivo
+        trunk using a default caller-ID number (chosen by destination
+        country). The call still places and the response is still
+        `200 + conversationId`, but the recipient sees the default Smallest
+        number rather than your own. For production traffic, either:
+
+        - pass `fromProductId` explicitly (look up your owned numbers via
+          `GET /product/phone-numbers`), or
+        - attach a phone-number product to the agent.
+
+        ## Resolved-config check
+
+        The call uses the agent's currently-active version. If your most
+        recent prompt change went through `PATCH /workflow/{workflowId}` and
+        the agent has versioning enabled, that change may not have
+        propagated to the active version — and the call will play the
+        platform-default greeting instead of your prompt. Before placing a
+        production call, fetch `GET /agent/{agentId}` and confirm
+        `_resolvedConfig.firstMessage` (and related fields) match what you
+        intended. The
+        [Versioning Lifecycle](/atoms/developer-guide/build/agents/versioning-lifecycle)
+        guide covers the correct edit flow.
 
         **400 is returned for:**
         - Invalid `agentId` format (`"Invalid agent id"`)
