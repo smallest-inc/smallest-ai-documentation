@@ -51,6 +51,31 @@ channels:
       Supported on English + Hindi base-queue voices. See
       [Word-level timestamps](/waves/documentation/text-to-speech-lightning/word-timestamps).
 
+      ## Connection timeout
+
+      The server closes idle WebSocket connections to free resources. The
+      default idle timeout is **60 seconds** — if your client does not send
+      a message within that window the server closes the connection with:
+
+      ```json
+      {"status": "error", "message": "Connection timed out after 60 seconds of inactivity"}
+      ```
+
+      Override the value with the `timeout` query parameter on the URL:
+
+      ```
+      wss://api.smallest.ai/waves/v1/tts/live?timeout=120
+      ```
+
+      Pass any positive integer (seconds). Smaller values are honored
+      verbatim (e.g. `?timeout=5` closes after 5 s of silence). Use a larger
+      value when your application has known pauses between turns — voice
+      agents with long human-thinking windows, agentic pipelines waiting on
+      an LLM round-trip, etc.
+
+      The timeout is reset on every message you send (binary audio in, JSON
+      control in), so keep-alive traffic restarts the clock.
+
       ## Migrating from `/waves/v1/lightning-v3.1/get_speech/stream`
 
       Same protocol, same payload shape — only the URL changes. Existing
