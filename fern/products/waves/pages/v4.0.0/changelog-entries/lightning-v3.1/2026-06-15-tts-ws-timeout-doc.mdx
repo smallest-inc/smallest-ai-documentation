@@ -1,0 +1,24 @@
+---
+title: Lightning TTS WebSocket — documented `?timeout=N` connection-timeout knob
+date: 2026-06-15
+description: 'The Stream Speech (WebSocket) API ref now documents the `?timeout=N` query parameter for overriding the 60-second default idle-close behavior on `WSS /waves/v1/tts/live`. Wire behavior unchanged.'
+---
+
+The Lightning TTS WebSocket ([Stream Speech (WebSocket)](/waves/api-reference/api-reference/text-to-speech/tts)) API ref now documents the `?timeout=N` query parameter that has been available on the endpoint all along but wasn't surfaced in the developer-facing docs.
+
+## What changed
+
+Purely a docs change — no protocol or wire-level change. The new section in the API ref clarifies:
+
+- The default idle timeout on `WSS /waves/v1/tts/live` is **60 seconds**, not the 20 seconds the legacy "WebSocket Support for TTS" page used to claim.
+- Override the value with `?timeout=N` on the connection URL (positive integer seconds, e.g. `wss://api.smallest.ai/waves/v1/tts/live?timeout=120`).
+- Custom values are honored verbatim, including small ones (`?timeout=5` closes after 5 seconds of silence) and large ones (verified up to `?timeout=999`).
+- The timeout resets on every message you send (binary audio in, JSON control in), so keep-alive traffic restarts the clock.
+
+## Why this matters
+
+Voice agents with long human-thinking windows, agentic pipelines that round-trip to an LLM between TTS bursts, and any workflow with extended natural pauses now have a documented way to keep the WebSocket open past 60 seconds without resorting to dummy keep-alive frames.
+
+## Cleanup
+
+The standalone `/waves/api-reference/api-references/web-socket` page (which previously held this info, with a stale 20-second default and a reference to the deprecated `/waves/v1/lightning-v3.1/get_speech/stream` URL) has been removed. A redirect from the old URL points at the new home.
