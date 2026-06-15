@@ -2805,6 +2805,59 @@ paths:
           description: Knowledge base not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
+    post:
+      summary: Update a knowledge base (name + description)
+      description: |
+        Updates the metadata of a knowledge base. **Note**: the platform uses `POST` (not `PATCH`) on this path — preserved here as-is.
+
+        Only `name` and `description` are mutable through this endpoint. To add or remove content (files, URLs, text snippets), use the items endpoints.
+      tags:
+        - Knowledge Base
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: 24-char hex ObjectId of the knowledge base.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 40
+                  description: Display name. 1–40 characters; trimmed server-side.
+                  example: "Q4 Pricing Updates"
+                description:
+                  type: string
+                  description: Optional free-text description shown in the dashboard.
+      responses:
+        "200":
+          description: Knowledge base updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Knowledge base not found in your organization.
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
 
   /knowledgebase/{id}/items:
     get:
@@ -2919,6 +2972,344 @@ paths:
       responses:
         "201":
           description: Knowledge base item created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /knowledgebase/get-presigned-url:
+    post:
+      summary: Get a presigned S3 URL for direct file upload
+      description: |
+        Two-step file upload flow that bypasses Atoms' API for the file bytes themselves — useful when files exceed the multipart upload limit on `POST /knowledgebase/{id}/items/upload-media` or when you want to upload from the browser without round-tripping through your backend.
+
+        **Step 1**: Call this endpoint with file metadata. Atoms returns a presigned URL + a storage `key`.
+        **Step 2**: `PUT` the file bytes directly to the presigned URL (set `Content-Type` to the same value you sent here).
+        **Step 3**: Call [`POST /knowledgebase/compelete-file-upload`](#operation/completeKnowledgeBaseFileUpload) with the same `key` to commit the upload and start processing.
+
+        Same end result as `POST /knowledgebase/{id}/items/upload-media`, just without the multipart-through-our-API hop.
+      tags:
+        - Knowledge Base
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, fileSize, contentType, knowledgeBaseId]
+              properties:
+                fileName:
+                  type: string
+                  description: Original filename — used for display in the Atoms dashboard. Doesn't have to match the S3 key.
+                  example: "company-handbook.pdf"
+                fileSize:
+                  type: integer
+                  minimum: 1
+                  description: Size in bytes. Atoms uses this to enforce per-file limits before issuing the URL.
+                  example: 2457600
+                contentType:
+                  type: string
+                  description: MIME type. You must send this EXACT value as `Content-Type` on the subsequent PUT to the presigned URL.
+                  example: "application/pdf"
+                knowledgeBaseId:
+                  type: string
+                  description: 24-char hex ObjectId of the target knowledge base (from `GET /knowledgebase`).
+                  example: "6867ca76d0f8f2e0f4201281"
+      responses:
+        "200":
+          description: Presigned URL ready — upload directly to it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                        format: uri
+                        description: Time-limited presigned URL. PUT the file bytes here with `Content-Type` matching what you sent above.
+                      key:
+                        type: string
+                        description: S3 storage key — pass this back in `POST /knowledgebase/compelete-file-upload`.
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /knowledgebase/compelete-file-upload:
+    post:
+      summary: Complete a presigned-URL upload and start processing
+      description: |
+        Step 3 of the presigned-URL upload flow. Commits a file that was uploaded directly to S3 via `POST /knowledgebase/get-presigned-url`, registers it as a knowledge-base item, and triggers async processing.
+
+        **Note**: The path includes `compelete` (sic) — that's the actual route name on the platform. Don't fix the spelling in your client; it's a stable URL.
+      tags:
+        - Knowledge Base
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, contentType, knowledgeBaseId, key, fileSize]
+              properties:
+                fileName:
+                  type: string
+                  description: Filename — pass the same value used in `get-presigned-url`.
+                  example: "company-handbook.pdf"
+                contentType:
+                  type: string
+                  example: "application/pdf"
+                knowledgeBaseId:
+                  type: string
+                  description: Target knowledge base ID.
+                  example: "6867ca76d0f8f2e0f4201281"
+                key:
+                  type: string
+                  description: S3 storage key returned by `get-presigned-url`.
+                fileSize:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          description: File registered as a knowledge-base item. Processing runs async — poll `GET /knowledgebase/{id}/items` for the item to surface with the desired processing status.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: Created knowledge-base item record.
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /knowledgebase/get-sitemap-urls:
+    post:
+      summary: Extract URLs from a sitemap.xml
+      description: |
+        Fetches a website's `sitemap.xml`, parses it, and returns the list of URLs inside. Use this before calling `POST /knowledgebase/{id}/scrape-urls` to let the customer pick which URLs they actually want indexed.
+
+        Returns `422` if the URL doesn't return a fetchable sitemap or if the XML is malformed.
+      tags:
+        - Knowledge Base
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [siteUrl, knowledgeBaseId]
+              properties:
+                siteUrl:
+                  type: string
+                  format: uri
+                  description: URL of the sitemap.xml file (or a homepage that links to one).
+                  example: "https://example.com/sitemap.xml"
+                knowledgeBaseId:
+                  type: string
+                  description: Target knowledge base ID — used for ownership validation only. The endpoint doesn't write any URLs at this stage.
+                  example: "6867ca76d0f8f2e0f4201281"
+      responses:
+        "200":
+          description: Extracted URLs, ready to be filtered + passed to `/scrape-urls`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      urls:
+                        type: array
+                        items:
+                          type: string
+                          format: uri
+                        description: All URLs discovered in the sitemap.
+                      extractedAt:
+                        type: string
+                        format: date-time
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Knowledge base not found in your organization.
+        "422":
+          description: Could not fetch sitemap, or the sitemap XML is malformed.
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /knowledgebase/{id}/scrape-urls:
+    post:
+      summary: Scrape a list of URLs into a knowledge base
+      description: |
+        Adds one or more URLs to a knowledge base by scraping each page's content, chunking it, and indexing for retrieval. Typical flow:
+
+        1. Discover candidate URLs (`POST /knowledgebase/get-sitemap-urls` or paste your own list).
+        2. Call this endpoint with the curated list — scraping runs async.
+        3. Poll `GET /knowledgebase/{id}/scraped-urls` for the per-URL status.
+
+        Returns `400` if your account's KB billing precheck fails (quota or plan limits). Returns `404` if the KB doesn't belong to your organization.
+      tags:
+        - Knowledge Base
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: 24-char hex ObjectId of the target knowledge base.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [urls]
+              properties:
+                urls:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+                    format: uri
+                  example: ["https://example.com/pricing", "https://example.com/faq"]
+      responses:
+        "200":
+          description: Scrape job(s) queued. Poll `/scraped-urls` for per-URL status.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: Async job acknowledgement. Inspect `/scraped-urls` for per-URL progress.
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Knowledge base not found in your organization.
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /knowledgebase/{id}/scraped-urls:
+    get:
+      summary: List scraped URLs in a knowledge base + their status
+      description: |
+        Returns every URL added to the knowledge base via `POST /knowledgebase/{id}/scrape-urls`, with its current scrape/index status. Poll this after kicking off a scrape job to track progress.
+      tags:
+        - Knowledge Base
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: 24-char hex ObjectId of the knowledge base.
+      responses:
+        "200":
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        url:
+                          type: string
+                          format: uri
+                        status:
+                          type: string
+                          description: Current scrape/index status (e.g. `pending`, `scraping`, `indexed`, `failed`).
+                        createdAt:
+                          type: string
+                          format: date-time
+                        updatedAt:
+                          type: string
+                          format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /knowledgebase/{knowledgeBaseId}/scraped-urls/{knowledgeBaseScrapedUrlsId}:
+    delete:
+      summary: Delete a scraped URL from a knowledge base
+      description: |
+        Removes a previously-scraped URL (and its indexed content) from the knowledge base. Permanent — there is no undo.
+      tags:
+        - Knowledge Base
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: knowledgeBaseId
+          required: true
+          schema:
+            type: string
+          description: 24-char hex ObjectId of the knowledge base.
+        - in: path
+          name: knowledgeBaseScrapedUrlsId
+          required: true
+          schema:
+            type: string
+          description: 24-char hex ObjectId of the scraped-URL row to delete (from `GET /{id}/scraped-urls`).
+      responses:
+        "200":
+          description: URL removed.
           content:
             application/json:
               schema:
