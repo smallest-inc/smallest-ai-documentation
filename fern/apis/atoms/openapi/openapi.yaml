@@ -1506,6 +1506,202 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
+  /conversation/{id}/recording/download-url:
+    get:
+      summary: Get a time-limited recording download URL
+      description: |
+        Returns a presigned S3 URL for the call's recording. Hand the URL straight to the customer or pull bytes server-side. The presigned URL is **time-limited** — typically usable for a few minutes — so don't cache it; request a fresh one each time you need the recording.
+
+        Returns `404` if the call has no recording (call hasn't started, was cancelled before audio captured, or was deleted by the platform's retention policy).
+      tags:
+        - Conversations
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The `callId` of the conversation (e.g. `CALL-1778226705739-7e4c17`).
+      responses:
+        "200":
+          description: Successful response — presigned URL ready to fetch.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      presignedUrl:
+                        type: string
+                        format: uri
+                        description: Time-limited HTTPS URL pointing at the recording in S3. The URL expires after a short window; request a fresh one if needed.
+        "400":
+          description: Invalid call ID format.
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: No recording found for this call.
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /conversation/{callId}/retries:
+    get:
+      summary: List retry attempts for a call
+      description: |
+        Returns the **parent call** plus every retry attempt that branched from it, ordered by attempt index. Use this when a customer asks "did the platform retry this call?" — typically driven by an outbound agent's auto-retry configuration (`maxRetries`, `retryDelay`).
+
+        - If the `callId` you pass is the original (parent), the response contains that parent plus all child retries.
+        - If the `callId` you pass is itself a retry, the response still includes the parent and every sibling retry — the API resolves to the family root automatically.
+
+        Returns `404` if no call exists with that ID in your organization.
+      tags:
+        - Conversations
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: callId
+          required: true
+          schema:
+            type: string
+          description: Any `callId` in the retry family (parent or any retry).
+      responses:
+        "200":
+          description: Successful response — full retry family.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      retries:
+                        type: array
+                        description: All calls in the retry family — parent first, then retries in attempt order. Each entry has the same shape as a single call log returned by `GET /conversation`.
+                        items:
+                          type: object
+                          description: A call log entry. Mirrors the per-row shape in `GET /conversation`.
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Access denied — the call belongs to a different organization.
+        "404":
+          description: No call exists with that ID.
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /conversation/cancel:
+    post:
+      summary: Cancel an in-flight call
+      description: |
+        Cancels an outbound call that has been queued or is in progress. Use the body form to look the call up by `callId`; the path-param form (`POST /conversation/{conversationId}/cancel`) is the equivalent for REST conventions.
+
+        Returns `404` if no call with that ID exists in your organization. Returns `400` if the call is already in a terminal state (completed / failed / cancelled).
+      tags:
+        - Conversations
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [callId]
+              properties:
+                callId:
+                  type: string
+                  description: The `callId` returned by `POST /conversation/outbound` or visible in `GET /conversation`.
+                  example: "CALL-1778226705739-7e4c17"
+                reason:
+                  type: string
+                  description: Optional free-text reason for cancellation. Logged for support / audit.
+      responses:
+        "200":
+          description: Call cancelled.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      callId:
+                        type: string
+                      status:
+                        type: string
+                        example: "cancelled"
+                      previousStatus:
+                        type: string
+                        description: The call's status immediately before cancellation (e.g. `queued`, `ringing`, `in-progress`).
+        "400":
+          description: Call is already in a terminal state and cannot be cancelled.
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: No call found with that callId in your organization.
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /conversation/{conversationId}/cancel:
+    post:
+      summary: Cancel an in-flight call (path-param form)
+      description: |
+        REST-conventional path-param variant of [`POST /conversation/cancel`](#operation/cancelCallByBody). Identical behavior — use whichever form fits your client style.
+      tags:
+        - Conversations
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema:
+            type: string
+          description: The `callId` of the conversation to cancel.
+      responses:
+        "200":
+          description: Call cancelled.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      callId:
+                        type: string
+                      status:
+                        type: string
+                        example: "cancelled"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: No call found with that callId in your organization.
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
   /conversation/outbound:
     post:
       summary: Start an outbound call
