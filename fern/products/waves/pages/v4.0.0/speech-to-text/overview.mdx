@@ -6,14 +6,14 @@ icon: 'microphone'
 
 The Speech-to-Text API transcribes audio via the unified endpoint `https://api.smallest.ai/waves/v1/stt/`. The model is selected via the `?model=` query parameter:
 
-- **`?model=pulse`**: multilingual (15 languages), supports streaming and pre-recorded transcription.
+- **`?model=pulse`**: multilingual (38 languages), supports streaming and pre-recorded transcription.
 - **`?model=pulse-pro`**: leaderboard-ranked English accuracy (5.42% ESB avg WER, tied #2 on the public Open ASR Leaderboard). Pre-recorded HTTP only; no streaming worker yet.
 
 Live streaming runs on `WS /waves/v1/stt/live?model=pulse`. Pulse Pro on the live path returns `400` with a directive to use HTTP.
 
 <CardGroup cols={2}>
   <Card title="Pulse model card" icon="microphone" href="/waves/model-cards/speech-to-text/pulse">
-    Multilingual streaming + non-streaming. 15 languages plus `multi-eu` / `multi-indic` aggregators.
+    Multilingual streaming + non-streaming. 38 languages.
   </Card>
   <Card title="Pulse Pro model card" icon="sparkles" href="/waves/model-cards/speech-to-text/pulse-pro">
     English-only, leaderboard-ranked accuracy. Pre-recorded HTTP only.
@@ -42,8 +42,8 @@ We offer two transcription modes to cover a wide range of use cases. Choose the 
 Our models specialize in processing audio to preserve information that is often lost during conventional speech to text conversion.
 
 <AccordionGroup>
-  <Accordion title="15 Languages & Multi-language Aggregators">
-    Support for 15 languages — English, Hindi (with English code-switching), German, Spanish, Russian, Italian, French, Dutch, Portuguese, Mandarin, Cantonese, Japanese, Korean, Gujarati, Marathi. Pass ISO 639-1 codes (`en`, `hi`, `de`, etc.) or use `language=multi-eu` (en + de + es + it + pt + nl + ru + fr) or `language=multi-indic` (en + hi + gu + mr) for mixed-language audio.
+  <Accordion title="38 Languages & Automatic Language Detection">
+    Support for 38 languages with automatic language detection or ISO 639-1 codes (`en`, `hi`, etc.). Use `language=multi` to enable automatic language detection across all supported languages.
   </Accordion>
   
   <Accordion title="Word Timestamps">
@@ -77,34 +77,85 @@ Our models specialize in processing audio to preserve information that is often 
 
 ## Supported languages
 
-Pulse supports the same 15 individual languages in both pre-recorded (HTTP) and real-time (WebSocket) modes, plus two multi-language aggregators.
+Pulse supports the same individual languages in both modes; the difference between streaming and non-streaming is the request transport and the available multi-language aggregator codes (see the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for aggregators).
+
+### Streaming (Real-Time, WebSocket)
+
+Use these codes on `WS /waves/v1/stt/live?model=pulse`.
 
 | Language | Code |
 |---|---|
 | English | `en` |
-| Hindi (with English code-switching) | `hi` |
-| German | `de` |
+| Hindi | `hi` |
 | Spanish | `es` |
-| Russian | `ru` |
+| Portuguese | `pt` |
 | Italian | `it` |
 | French | `fr` |
+| German | `de` |
 | Dutch | `nl` |
-| Portuguese | `pt` |
-| Mandarin | `zh` |
-| Cantonese | `yue` |
-| Japanese | `ja` |
-| Korean | `ko` |
-| Gujarati | `gu` |
+| Russian | `ru` |
+| Ukrainian | `uk` |
+| Polish | `pl` |
+| Czech | `cs` |
+| Slovak | `sk` |
+| Romanian | `ro` |
+| Bulgarian | `bg` |
+| Hungarian | `hu` |
+| Danish | `da` |
+| Finnish | `fi` |
+| Swedish | `sv` |
+| Lithuanian | `lt` |
+| Latvian | `lv` |
+| Estonian | `et` |
+| Maltese | `mt` |
 | Marathi | `mr` |
+| Gujarati | `gu` |
+| Bengali | `bn` |
+| Punjabi | `pa` |
+| Tamil | `ta` |
+| Telugu | `te` |
+| Kannada | `kn` |
+| Malayalam | `ml` |
+| Oriya (Odia) | `or` |
 
-### Multi-language aggregators
+### Non-Streaming (Pre-Recorded, HTTP)
 
-For mixed-language audio, pass an aggregator instead of an individual code. Pulse routes to the right model internally.
+Use these codes on `POST /waves/v1/stt/?model=pulse`.
 
-| Code | Covers |
+| Language | Code |
 |---|---|
-| `multi-eu` | en + de + es + it + pt + nl + ru + fr |
-| `multi-indic` | en + hi + gu + mr |
+| English | `en` |
+| Hindi | `hi` |
+| Spanish | `es` |
+| Portuguese | `pt` |
+| Italian | `it` |
+| French | `fr` |
+| German | `de` |
+| Dutch | `nl` |
+| Russian | `ru` |
+| Ukrainian | `uk` |
+| Polish | `pl` |
+| Czech | `cs` |
+| Slovak | `sk` |
+| Romanian | `ro` |
+| Bulgarian | `bg` |
+| Hungarian | `hu` |
+| Danish | `da` |
+| Finnish | `fi` |
+| Swedish | `sv` |
+| Lithuanian | `lt` |
+| Latvian | `lv` |
+| Estonian | `et` |
+| Maltese | `mt` |
+| Marathi | `mr` |
+| Gujarati | `gu` |
+| Bengali | `bn` |
+| Punjabi | `pa` |
+| Tamil | `ta` |
+| Telugu | `te` |
+| Kannada | `kn` |
+| Malayalam | `ml` |
+| Oriya (Odia) | `or` |
 
 ## Next steps
 
