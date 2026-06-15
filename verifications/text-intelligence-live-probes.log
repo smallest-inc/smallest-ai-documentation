@@ -1,0 +1,208 @@
+=== Test 1: All features enabled ===
+{
+  "label": "full",
+  "url": "https://api.smallest.ai/waves/v1/text-intelligence",
+  "http": 200,
+  "elapsed_s": 1.77,
+  "body": {
+    "topics": [
+      {
+        "topic": "Order Issue",
+        "confidence": 0.95
+      },
+      {
+        "topic": "Shipping/Delivery",
+        "confidence": 0.9
+      },
+      {
+        "topic": "Refund Request",
+        "confidence": 0.85
+      }
+    ],
+    "intents": [
+      {
+        "intent": "Inquire about Order Status",
+        "confidence": 0.98
+      },
+      {
+        "intent": "Request Refund",
+        "confidence": 0.95
+      },
+      {
+        "intent": "Express Dissatisfaction",
+        "confidence": 0.8
+      },
+      {
+        "intent": "Offer Resolution/Action",
+        "confidence": 0.9
+      }
+    ],
+    "sentiment": {
+      "overall": "neutral",
+      "shift": "The sentiment starts negative due to the customer's frustration but shifts to neutral/positive as the agent offers a clear resolution."
+    },
+    "request_id": "45dd3c60-e227-4749-a095-0c7c2406b095"
+  }
+}
+
+=== Test 2: Only summary ===
+{
+  "label": "summary-only",
+  "url": "https://api.smallest.ai/waves/v1/text-intelligence",
+  "http": 400,
+  "elapsed_s": 0.28,
+  "body": {
+    "error": {
+      "message": "Invalid input data",
+      "type": "invalid_request_error",
+      "details": [
+        {
+          "code": "custom",
+          "message": "enable at least one feature",
+          "path": [
+            "features"
+          ]
+        }
+      ],
+      "request_id": "132807a2-d174-450c-8197-c7b491fad3da"
+    }
+  }
+}
+
+=== Test 3: Hindi input, all features ===
+{
+  "label": "hindi-in",
+  "url": "https://api.smallest.ai/waves/v1/text-intelligence",
+  "http": 200,
+  "elapsed_s": 1.16,
+  "body": {
+    "topics": [
+      {
+        "topic": "Order Status Inquiry",
+        "confidence": 0.95
+      },
+      {
+        "topic": "Refund Request",
+        "confidence": 0.9
+      }
+    ],
+    "intents": [
+      {
+        "intent": "Complaint",
+        "confidence": 0.95
+      },
+      {
+        "intent": "Request for Action (Refund)",
+        "confidence": 0.9
+      }
+    ],
+    "sentiment": {
+      "overall": "negative",
+      "shift": "No sentiment shift detected."
+    },
+    "request_id": "1fb35336-fbcf-4e57-864f-932c375e75db"
+  }
+}
+
+=== Test 4: Empty text — expect 400/422 ===
+{
+  "label": "empty",
+  "url": "https://api.smallest.ai/waves/v1/text-intelligence",
+  "http": 400,
+  "elapsed_s": 0.19,
+  "body": {
+    "error": {
+      "message": "Invalid input data",
+      "type": "invalid_request_error",
+      "details": [
+        {
+          "code": "too_small",
+          "minimum": 1,
+          "type": "string",
+          "inclusive": true,
+          "exact": false,
+          "message": "text is required",
+          "path": [
+            "text"
+          ]
+        },
+        {
+          "code": "custom",
+          "message": "enable at least one feature",
+          "pat
+
+=== Test 5: Legacy /api/v1 path ===
+{
+  "label": "legacy-path",
+  "url": "https://api.smallest.ai/api/v1/text-intelligence",
+  "http": 404,
+  "elapsed_s": 0.11,
+  "body": ""
+}
+
+=== Test 6: 16,500-char input — limit probe ===
+HTTP 400 after 0.25s
+{
+  "error": {
+    "message": "Invalid input data",
+    "type": "invalid_request_error",
+    "details": [
+      {
+        "code": "too_big",
+        "maximum": 16000,
+        "type": "string",
+        "inclusive": true,
+        "exact": false,
+        "message": "text too large (max 16000 characters)",
+        "path": [
+          "text"
+        ]
+      },
+      {
+        "code": "custom",
+        
+HTTP 200
+{
+  "topics": [
+    {
+      "topic": "Shipping Delay",
+      "confidence": 0.95
+    },
+    {
+      "topic": "Customer Service Resolution",
+      "confidence": 0.9
+    }
+  ],
+  "intents": [
+    {
+      "intent": "Complaint",
+      "confidence": 0.9
+    },
+    {
+      "intent": "Apology",
+      "confidence": 0.85
+    },
+    {
+      "intent": "Offer Resolution",
+      "confidence": 0.9
+    },
+    {
+      "intent": "Acceptance",
+      "confidence": 0.8
+    }
+  ],
+  "sentiment": {
+    "overall": "neutral",
+    "shift": "The sentiment started negative due to the delay, shifted to apologetic/problem-solving, and ended neutrally/positively upon customer acceptance of the resolution."
+  },
+  "request_id": "bc6a6133-099e-408f-a09b-d1f3270801ef"
+}
+
+=== summary alone? ===
+HTTP 400: {"error":{"message":"Invalid input data","type":"invalid_request_error","details":[{"code":"custom","message":"enable at least one feature","path":["features"]}],"request_id":"fa14f642-1f5a-4c4d-9908-ba3e657fd700"}}
+  All 4 with summary=True: 200 → response keys: ['intents', 'request_id', 'sentiment', 'topics']
+  3 without summary key: 200 → response keys: ['intents', 'request_id', 'sentiment', 'topics']
+  Only topics: 200 → response keys: ['request_id', 'topics']
+  Only sentiment: 200 → response keys: ['request_id', 'sentiment']
+  Only intents: 200 → response keys: ['intents', 'request_id']
+  nonsense key: 400 → enable at least one feature

@@ -1,0 +1,249 @@
+openapi: 3.0.1
+info:
+  title: Text Intelligence API
+  description: >
+    Run topic, intent, and sentiment analysis on a piece of conversation
+    text in one request. Each feature is opt-in and returned as its own
+    field; you only pay for the features you enable.
+  version: 1.0.0
+servers:
+  - url: https://api.smallest.ai
+    description: Waves API server
+    x-fern-server-name: waves
+paths:
+  /waves/v1/text-intelligence:
+    post:
+      operationId: textIntelligence
+      summary: Analyze conversation text
+      description: |
+        Returns structured insights for a conversation transcript or any
+        piece of text. Pick the features you need — `topics`, `intents`,
+        and `sentiment` are each independently opt-in. The response only
+        contains the fields you requested.
+
+        ## When to use this
+
+        - **Post-call analytics** on a transcript collected from a Pulse
+          STT session.
+        - **Triage / routing** an inbound customer message by intent
+          before handing it to a downstream system.
+        - **Trend tracking** — aggregate the `topics` field across many
+          conversations to surface what customers talk about most.
+
+        ## Notes
+
+        - **Input language**: any. Hindi, English, or mixed input all
+          work. The API normalises output topics, intents, and
+          sentiment-shift commentary to English so they're usable as
+          dashboard labels and join keys across languages.
+        - **Length cap**: 16,000 characters. Longer text returns
+          `400 too_big`.
+        - **At least one feature required**: an empty `features` object
+          (or one with only unsupported keys) returns `400`.
+        - **Confidence**: floats in `[0.0, 1.0]`. Use a threshold around
+          `0.7` for downstream routing; below that, treat as low-confidence.
+
+        ## Examples
+
+        **cURL — all three features**
+        ```bash
+        curl -X POST "https://api.smallest.ai/waves/v1/text-intelligence" \
+          -H "Authorization: Bearer $SMALLEST_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "text": "Customer: my order is 5 days late and I want a refund. Agent: sorry, expediting now.",
+            "features": {
+              "topics": true,
+              "intents": true,
+              "sentiment": true
+            }
+          }'
+        ```
+
+        **Python**
+        ```python
+        import os
+        import requests
+
+        response = requests.post(
+            "https://api.smallest.ai/waves/v1/text-intelligence",
+            headers={
+                "Authorization": f"Bearer {os.environ['SMALLEST_API_KEY']}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "text": transcript,
+                "features": {"topics": True, "intents": True, "sentiment": True},
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        result = response.json()
+
+        print("Topics:", [t["topic"] for t in result.get("topics", [])])
+        print("Sentiment:", result.get("sentiment", {}).get("overall"))
+        ```
+
+        **JavaScript**
+        ```javascript
+        const response = await fetch("https://api.smallest.ai/waves/v1/text-intelligence", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.SMALLEST_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: transcript,
+            features: { topics: true, intents: true, sentiment: true },
+          }),
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const result = await response.json();
+        console.log("Topics:", result.topics?.map(t => t.topic));
+        console.log("Sentiment:", result.sentiment?.overall);
+        ```
+      tags:
+        - Text Intelligence
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - text
+                - features
+              properties:
+                text:
+                  type: string
+                  minLength: 1
+                  maxLength: 16000
+                  description: >
+                    The text to analyze. Can be a single message, a full
+                    conversation transcript, or any free-form prose. Any
+                    input language is accepted; output is normalised to
+                    English.
+                  example: "Customer: my order is 5 days late. Agent: I'm sorry, let me expedite that now."
+                features:
+                  type: object
+                  description: >
+                    Which analyses to run. At least one feature must be
+                    set to `true`. Unrecognised keys are ignored and do
+                    NOT count toward the at-least-one requirement.
+                  required:
+                    - topics
+                  properties:
+                    topics:
+                      type: boolean
+                      description: Extract the high-level conversation topics.
+                      default: false
+                    intents:
+                      type: boolean
+                      description: Extract speaker intents (e.g. complaint, refund request, confirmation).
+                      default: false
+                    sentiment:
+                      type: boolean
+                      description: Overall emotional tone of the conversation plus shift commentary.
+                      default: false
+      responses:
+        "200":
+          description: Analysis succeeded. Response contains only the fields you requested.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  topics:
+                    type: array
+                    description: 'Present only when `features.topics: true`.'
+                    items:
+                      type: object
+                      required: [topic, confidence]
+                      properties:
+                        topic:
+                          type: string
+                          description: Short English label, e.g. "Shipping Delay", "Refund Request".
+                        confidence:
+                          type: number
+                          format: float
+                          minimum: 0
+                          maximum: 1
+                          description: Confidence score for this topic.
+                  intents:
+                    type: array
+                    description: 'Present only when `features.intents: true`.'
+                    items:
+                      type: object
+                      required: [intent, confidence]
+                      properties:
+                        intent:
+                          type: string
+                          description: Short English label, e.g. "Complaint", "Request for Refund", "Acceptance".
+                        confidence:
+                          type: number
+                          format: float
+                          minimum: 0
+                          maximum: 1
+                  sentiment:
+                    type: object
+                    description: 'Present only when `features.sentiment: true`.'
+                    properties:
+                      overall:
+                        type: string
+                        enum: [negative, neutral, positive]
+                        description: Aggregate sentiment for the full input.
+                      shift:
+                        type: string
+                        description: One-sentence English description of how sentiment evolved across the conversation. Use this when you care about trajectory (e.g. "started negative, ended positive after the agent offered a resolution").
+                  request_id:
+                    type: string
+                    format: uuid
+                    description: Per-request identifier — include in support tickets if you hit an error.
+              example:
+                topics:
+                  - topic: "Shipping Delay"
+                    confidence: 0.95
+                  - topic: "Refund Request"
+                    confidence: 0.85
+                intents:
+                  - intent: "Complaint"
+                    confidence: 0.95
+                  - intent: "Request for Resolution"
+                    confidence: 0.9
+                sentiment:
+                  overall: "neutral"
+                  shift: "Started negative due to the delay, ended neutral after the agent offered a resolution."
+                request_id: "bc6a6133-099e-408f-a09b-d1f3270801ef"
+        "400":
+          description: |
+            Invalid input. Common causes:
+
+            - Empty `text` → `"text is required"` / `too_small`.
+            - `text` longer than 16000 characters → `"text too large (max 16000 characters)"` / `too_big`.
+            - All `features` omitted or unsupported → `"enable at least one feature"`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      message: { type: string }
+                      type: { type: string, example: "invalid_request_error" }
+                      details:
+                        type: array
+                        items:
+                          type: object
+                      request_id: { type: string, format: uuid }
+        "401":
+          description: Missing or invalid API key.
+        "500":
+          description: Server error. Retry with exponential backoff.
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
