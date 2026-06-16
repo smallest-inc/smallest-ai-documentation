@@ -1,0 +1,26 @@
+---
+title: Pulse STT — streaming now supports Japanese, Cantonese, Mandarin, Korean (US region)
+---
+
+The Pulse streaming Speech-to-Text API now supports four Asian languages: Japanese (`ja`), Cantonese (`yue`), Mandarin (`zh`), and Korean (`ko`).
+
+These four languages are served from the US region only — connect to `wss://api.us.smallest.ai/waves/v1/stt/live?model=pulse` (or the legacy `wss://api.us.smallest.ai/waves/v1/pulse/get_text`) instead of the default `wss://api.smallest.ai/...` host. Requesting an Asian language on the default (ap-south-1) host closes the connection without a transcription frame.
+
+All other Pulse streaming parameters work as before: `punctuate`, `capitalize`, `numerals`, `word_timestamps`, `diarize`, `redact_pii`, `redact_pci`, sample rates 8000/16000/22050/24000/44100/48000, encodings `linear16` (default) / `linear32` / `alaw` / `mulaw` / `opus` / `ogg_opus`.
+
+**Pre-recorded (batch) is unchanged.** Cantonese (`yue`) is not enabled on the batch endpoint at all; Japanese, Mandarin, and Korean behave separately from streaming and are not formally supported on batch — use the streaming endpoint for these four languages.
+
+Example response frame:
+
+```json
+{
+  "type": "transcription",
+  "transcript": "讀書要從薄到厚再從厚到薄",
+  "is_final": true,
+  "is_last": false,
+  "language": "zh"
+}
+```
+
+→ [Pulse model card — Supported Languages](/waves/model-cards/speech-to-text/pulse)
+→ [Speech-to-Text overview](/waves/documentation/speech-to-text-pulse/overview)

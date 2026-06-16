@@ -27,7 +27,7 @@ Pulse is a high-accuracy, low-latency speech-to-text model built for real-time t
 |---|---|
 | **Developed by** | Smallest AI |
 | **Model type** | Speech-to-Text |
-| **Languages** | 38 supported (plus `multi`, `multi-eu`, `multi-indic`, `multi-asian` aggregators) |
+| **Languages** | 39 supported on streaming (35 on batch); `multi-eu` and `multi-indic` aggregators for unknown audio |
 | **License** | Proprietary |
 | **Model format (non-streaming)** | `pulse_offline_<lang>_<version>.smlst` |
 | **Model format (streaming)** | `pulse_streaming_<lang>_<version>.smlst` |
@@ -356,13 +356,13 @@ Not a public dataset. Hindi audio sliced by perturbation type to isolate model w
 | Danish | `da` | Yes |
 | Lithuanian | `lt` | Yes |
 | Maltese | `mt` | Yes |
-| Japanese | `ja` | Yes |
-| Cantonese | `yue` | Yes |
-| Mandarin | `zh` | Yes |
-| Korean | `ko` | Yes |
 | Tagalog | `tl` | Yes |
 | Indonesian | `id` | Yes |
 | Malay | `ms` | Yes |
+
+<Note>
+Non-streaming (batch) currently does not officially support `ja`, `yue`, `zh`, or `ko`. Cantonese (`yue`) is not enabled at all for batch; the behaviour of `ja`, `zh`, `ko` on the batch endpoint is separate from streaming and not formally supported — use the streaming endpoint for these four languages.
+</Note>
 
 ## Supported Languages — Streaming
 
@@ -400,13 +400,15 @@ Not a public dataset. Hindi audio sliced by perturbation type to isolate model w
 | Danish | `da` | Yes |
 | Lithuanian | `lt` | Yes |
 | Maltese | `mt` | Yes |
-| Japanese | `ja` | Yes |
-| Cantonese | `yue` | Yes |
-| Mandarin | `zh` | Yes |
-| Korean | `ko` | Yes |
+| Japanese | `ja` | Yes &mdash; US region only \[1] |
+| Cantonese | `yue` | Yes &mdash; US region only \[1] |
+| Mandarin | `zh` | Yes &mdash; US region only \[1] |
+| Korean | `ko` | Yes &mdash; US region only \[1] |
 | Tagalog | `tl` | Yes |
 | Indonesian | `id` | Yes |
 | Malay | `ms` | Yes |
+
+\[1] These four languages are served from the US region only. Connect to `wss://api.us.smallest.ai/waves/v1/pulse/get_text` (or `/waves/v1/stt/live`) instead of the default `wss://api.smallest.ai/...` host. Requesting them on the default (ap-south-1) host closes the connection without a transcription frame.
 
 ---
 
