@@ -1,0 +1,210 @@
+---
+title: "Versioning Lifecycle"
+sidebarTitle: "Versioning Lifecycle"
+description: "Create, edit, publish, and activate agent versions from code — the full lifecycle in curl and Python."
+---
+
+Every Atoms agent's runtime config — prompt, tools, voice, language, post-call metrics — is managed as **versions**. You don't edit the live config directly; you fork a **draft**, change what you need, publish it as a new version, and activate that version. This guide walks the full lifecycle from code.
+
+For the dashboard equivalent and a deeper conceptual overview, see [Agent Versioning](/atoms/atoms-platform/features/versioning).
+
+<Note>
+  All examples assume `BASE="https://api.smallest.ai/atoms/v1"` and `SMALLEST_API_KEY` is set in your environment.
+</Note>
+
+---
+
+## The flow
+
+```
+1. Create the agent              POST   /agent
+2. Read its current version      GET    /agent/{agentId}
+3. Fork a draft                  POST   /agent/{agentId}/drafts
+4. Edit the draft                PATCH  /agent/{agentId}/drafts/{draftId}/config
+5. Publish the draft             POST   /agent/{agentId}/drafts/{draftId}/publish
+6. Activate the new version      PATCH  /agent/{agentId}/versions/{versionId}/activate
+7. (Optional) place a call       POST   /conversation/outbound
+8. Verify the active config      GET    /agent/{agentId}
+```
+
+Steps 5 and 6 are separate. **`POST .../publish` does not activate the new version, even if you pass `activate: true` in the body.** Always call activate explicitly.
+
+---
+
+## Full walkthrough (curl)
+
+```bash
+export BASE=https://api.smallest.ai/atoms/v1
+export AUTH="Authorization: Bearer $SMALLEST_API_KEY"
+export CT="Content-Type: application/json"
+
+# 1. Create the agent. `language` is optional, but if you pass it the
+#    `switching` object is required (otherwise the request rejects with
+#    400 "Invalid Input: Required").
+AGENT_ID=$(curl -s -X POST "$BASE/agent" -H "$AUTH" -H "$CT" \
+  -d '{"name": "lifecycle-demo", "language": {"switching": {"isEnabled": false}}}' \
+  | jq -r '.data')
+echo "agent: $AGENT_ID"
+
+# 2. Read the auto-populated active version id.
+ACTIVE_VERSION_ID=$(curl -s "$BASE/agent/$AGENT_ID" -H "$AUTH" \
+  | jq -r '.data.activeVersionId')
+
+# 3. Fork a draft from the active version. The body must include either
+#    `sourceVersionId` or `sourceDraftId` — an empty body returns 400.
+DRAFT_ID=$(curl -s -X POST "$BASE/agent/$AGENT_ID/drafts" -H "$AUTH" -H "$CT" \
+  -d "{\"sourceVersionId\": \"$ACTIVE_VERSION_ID\"}" \
+  | jq -r '.data.draftId')
+
+# 4. Patch the draft's config. Any subset of fields is allowed.
+curl -s -X PATCH "$BASE/agent/$AGENT_ID/drafts/$DRAFT_ID/config" \
+  -H "$AUTH" -H "$CT" \
+  -d '{"firstMessage": "Hello, this is the lifecycle demo agent."}' \
+  > /dev/null
+
+# 5. Publish the draft. Returns the new version id.
+VERSION_ID=$(curl -s -X POST "$BASE/agent/$AGENT_ID/drafts/$DRAFT_ID/publish" \
+  -H "$AUTH" -H "$CT" \
+  -d '{"label": "v2 - greeting added"}' \
+  | jq -r '.data._id')
+
+# 6. Activate. A security check runs after publish; if you activate too
+#    quickly you'll get a "security check pending" error. Sleep 6 s.
+sleep 6
+curl -s -X PATCH "$BASE/agent/$AGENT_ID/versions/$VERSION_ID/activate" \
+  -H "$AUTH" > /dev/null
+
+# 7. (Optional) Place an outbound call to verify the new prompt is live.
+CONV_ID=$(curl -s -X POST "$BASE/conversation/outbound" -H "$AUTH" -H "$CT" \
+  -d "{\"agentId\": \"$AGENT_ID\", \"phoneNumber\": \"+1...\", \"fromProductId\": \"...\"}" \
+  | jq -r '.data.conversationId')
+
+# 8. Verify _resolvedConfig.firstMessage matches what you set in step 4.
+curl -s "$BASE/agent/$AGENT_ID" -H "$AUTH" \
+  | jq '.data._resolvedConfig.firstMessage'
+```
+
+---
+
+## Python (using the SDK + raw requests)
+
+The agent CRUD endpoints are exposed through the `SmallestAI` REST client. The draft/version endpoints are not yet first-class in the Python SDK, so they're called directly:
+
+```python
+import os, time, requests
+from smallestai import SmallestAI
+
+BASE = "https://api.smallest.ai/atoms/v1"
+KEY = os.environ["SMALLEST_API_KEY"]
+HEADERS = {"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"}
+client = SmallestAI(api_key=KEY)  # only used for create + delete here
+
+# 1. Create the agent (via SDK)
+agent_id = client.atoms.agents.create_a_new_agent(
+    name="lifecycle-demo",
+    language={"switching": {"isEnabled": False}},
+).data  # response.data is the agent id (string)
+
+# 2. Read active version id
+agent = requests.get(f"{BASE}/agent/{agent_id}", headers=HEADERS).json()
+active_version_id = agent["data"]["activeVersionId"]
+
+# 3. Fork a draft from the active version
+draft_id = requests.post(
+    f"{BASE}/agent/{agent_id}/drafts",
+    headers=HEADERS,
+    json={"sourceVersionId": active_version_id},
+).json()["data"]["draftId"]
+
+# 4. Patch the draft config
+requests.patch(
+    f"{BASE}/agent/{agent_id}/drafts/{draft_id}/config",
+    headers=HEADERS,
+    json={"firstMessage": "Hello, this is the lifecycle demo agent."},
+).raise_for_status()
+
+# 5. Publish — returns the new version
+version_id = requests.post(
+    f"{BASE}/agent/{agent_id}/drafts/{draft_id}/publish",
+    headers=HEADERS,
+    json={"label": "v2 - greeting added"},
+).json()["data"]["_id"]
+
+# 6. Activate (after security-check delay)
+time.sleep(6)
+requests.patch(
+    f"{BASE}/agent/{agent_id}/versions/{version_id}/activate",
+    headers=HEADERS,
+).raise_for_status()
+print(f"agent {agent_id} now serving version {version_id}")
+```
+
+---
+
+## Common pitfalls
+
+<AccordionGroup>
+  <Accordion title="Publish does NOT auto-activate, even with activate: true">
+    The publish endpoint accepts `activate` in its body, but the field is not honored — the new version comes back with `isActive: false`. Always call `PATCH /versions/{versionId}/activate` explicitly. Confirmed against the live API on 2026-06-11.
+  </Accordion>
+
+  <Accordion title="Activate immediately after publish returns a security-check error">
+    Each publish triggers a backend security check that takes ~6 seconds. Activating before it completes returns an error. The simplest fix is `sleep 6` between publish and activate; for production, poll `GET /agent/{id}/versions/{versionId}` and wait for `securityCheck.status: "passed"`.
+  </Accordion>
+
+  <Accordion title="POST /drafts requires a source — empty body returns 400">
+    The body must include either `sourceVersionId` (fork from a published version) or `sourceDraftId` (fork from another draft). An empty `{}` returns `400 "Either sourceVersionId or sourceDraftId is required"`.
+  </Accordion>
+
+  <Accordion title="PATCH on the draft config does not echo the patched fields">
+    The response body returns the new `draftRevision` counter and a few rotated block ids, but not the fields you sent in the PATCH. To confirm a value persisted, fetch the draft after with `GET /agent/{id}/drafts/{draftId}`.
+  </Accordion>
+
+  <Accordion title="POST /agent with `language` but no `switching` returns 400">
+    If you include the `language` object in the create body, it must contain a `switching` object — even an empty one (`"switching": {"isEnabled": false}`) is enough. Omitting `language` entirely is also fine.
+  </Accordion>
+
+  <Accordion title="DELETE /agent/{id} returns 404 — use /archive">
+    The agent delete endpoint is `DELETE /agent/{id}/archive`, not plain `DELETE /agent/{id}`. Plain DELETE returns 404.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## What about `PATCH /workflow/{workflowId}`?
+
+A legacy endpoint, `PATCH /workflow/{workflowId}` (the `workflowId` is on the agent document, not the agent id), writes directly to the underlying workflow document. On a versioned agent it bypasses the version lifecycle — the change isn't captured as a version and fields missing from the payload can be silently overwritten. Always go through the drafts → publish → activate flow above.
+
+---
+
+## API endpoint reference
+
+| Step | Endpoint |
+|---|---|
+| Create agent | `POST /agent` |
+| Read agent + active version | `GET /agent/{agentId}` |
+| List drafts | `GET /agent/{agentId}/drafts` |
+| Fork a draft | `POST /agent/{agentId}/drafts` — body `{sourceVersionId}` or `{sourceDraftId}` |
+| Rename a draft | `PATCH /agent/{agentId}/drafts/{draftId}` |
+| Discard a draft | `DELETE /agent/{agentId}/drafts/{draftId}` |
+| Patch draft config | `PATCH /agent/{agentId}/drafts/{draftId}/config` |
+| Diff draft vs version | `GET /agent/{agentId}/drafts/{draftId}/diff?versionId=...` |
+| Publish a draft | `POST /agent/{agentId}/drafts/{draftId}/publish` |
+| List versions | `GET /agent/{agentId}/versions` |
+| Get one version | `GET /agent/{agentId}/versions/{versionId}` |
+| Diff two versions | `GET /agent/{agentId}/versions/diff?baseId=...&compareId=...` |
+| Activate a version | `PATCH /agent/{agentId}/versions/{versionId}/activate` |
+| Archive the agent | `DELETE /agent/{agentId}/archive` |
+
+---
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Dashboard Walkthrough" icon="browser" href="/atoms/atoms-platform/features/versioning">
+    Same lifecycle through the visual editor, with screenshots.
+  </Card>
+  <Card title="Outbound Calls" icon="phone" href="/atoms/developer-guide/build/calling/outbound-calls">
+    Trigger a call against the activated version.
+  </Card>
+</CardGroup>
