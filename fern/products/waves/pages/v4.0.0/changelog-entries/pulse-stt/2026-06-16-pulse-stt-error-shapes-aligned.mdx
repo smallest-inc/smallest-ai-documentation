@@ -1,0 +1,17 @@
+---
+title: Pulse STT — REST error responses corrected to match live behaviour
+---
+
+The OpenAPI spec for `POST /waves/v1/pulse/get_text` previously described error responses that didn't match what the server actually returns. Updated based on live probes against prod on 2026-06-16:
+
+**HTTP 413 was documented but does not exist.** Oversized files (>250 MB) return HTTP 400 with `{errors: "Audio data too large", status: "error", message: "Error handling audio data"}`. If your client treats 413 as a special case (file-size guard), switch to checking the `errors` field on 400.
+
+**HTTP 401 has two distinct shapes.** Missing `Authorization` header returns `{message: string}`; an invalid Bearer token returns `{error: string}`. The spec now documents both via `oneOf` and includes example payloads for each.
+
+**HTTP 400 covers more error classes than previously documented.** Four example payloads now ship under 400: invalid file format, oversized upload (replacing the false 413), missing/invalid `url` field, and `LANGUAGE_NOT_ENABLED_IN_REGION`. The body shape is consistent across all of them: `{status: "error", message: string}` plus either `errors: string` (generic validation) or `error_code: string` (discriminated class with optional `language` + `region` fields).
+
+**HTTP 429** entries have been removed from the spec until the shape is captured from prod. If you're hitting rate limits, you'll still get an HTTP-level response — file a ticket with the exact body and we'll update the spec.
+
+Schema renamed `ErrorResponse` → `PulseSttErrorResponse` (and `PulseSttErrorResponseLegacy` for the singular-`error` variant). This clears a long-standing schema-collision warning that was masking the shape mismatches.
+
+→ [Pulse STT API reference](/waves/v-4-0-0/api-reference/api-reference/speech-to-text/speech-to-text)
