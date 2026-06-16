@@ -77,60 +77,12 @@ Our models specialize in processing audio to preserve information that is often 
 
 ## Supported languages
 
-Pulse currently supports the same core set of languages in both transcription modes. The tables below mirror the [Pulse model card](/waves/model-cards/speech-to-text/pulse) — keep it as the source of truth.
+The full per-mode language matrix — including which codes are streaming-only, US-region-only, and batch-quality-limited — lives on the [Pulse model card](/waves/model-cards/speech-to-text/pulse#supported-languages---non-streaming). The model card is the single source of truth; this page only summarises the high-level shape so the matrix doesn't drift across two places.
 
-### Streaming (Real-Time, WebSocket)
-
-Use these codes on `WS /waves/v1/stt/live?model=pulse`. For unknown audio, pick the regional aggregator: `multi-eu` (European set), `multi-indic` (Indic set), or `multi-asian` (East Asian set, US region only).
-
-| Language | Code |
-|---|---|
-| English | `en` |
-| Hindi (+ English code-switching) | `hi` |
-| German | `de` |
-| Spanish | `es` |
-| Russian | `ru` |
-| Italian | `it` |
-| French | `fr` |
-| Dutch | `nl` |
-| Portuguese | `pt` |
-| Mandarin | `zh` &mdash; US region only \[1] |
-| Cantonese | `yue` &mdash; US region only \[1] |
-| Japanese | `ja` &mdash; US region only \[1] |
-| Korean | `ko` &mdash; US region only \[1] |
-| Gujarati | `gu` |
-| Marathi | `mr` |
-| Multi-Indic aggregator | `multi-indic` &mdash; auto-detects across `en`, `hi`, `gu`, `mr` |
-| Multi-EU aggregator | `multi-eu` &mdash; auto-detects across `en`, `de`, `es`, `it`, `pt`, `nl`, `ru`, `fr` |
-| Multi-Asian aggregator | `multi-asian` &mdash; auto-detects across `en`, `ja`, `ko`, `zh`, `yue`; US region only \[1] |
-
-\[1] `ja`, `yue`, `zh`, `ko`, and the `multi-asian` aggregator are served from the US region only. Connect to `wss://api.us.smallest.ai/waves/v1/stt/live?model=pulse` (or the legacy `wss://api.us.smallest.ai/waves/v1/pulse/get_text`) instead of the default `wss://api.smallest.ai/...` host. Requesting them on the default host closes the connection without a transcription frame.
-
-### Non-Streaming (Pre-Recorded, HTTP)
-
-Use these codes on `POST /waves/v1/stt/?model=pulse`.
-
-| Language | Code |
-|---|---|
-| English | `en` |
-| Hindi (+ English code-switching) | `hi` |
-| German | `de` |
-| Spanish | `es` |
-| Russian | `ru` |
-| Italian | `it` |
-| French | `fr` |
-| Dutch | `nl` |
-| Portuguese | `pt` |
-| Mandarin | `zh` &mdash; accepted but unreliable \[2] |
-| Cantonese | `yue` &mdash; not supported on batch (returns `400 LANGUAGE_NOT_ENABLED_IN_REGION`) |
-| Japanese | `ja` &mdash; accepted but unreliable \[2] |
-| Korean | `ko` &mdash; accepted but unreliable \[2] |
-| Gujarati | `gu` |
-| Marathi | `mr` |
-| Multi-Indic aggregator | `multi-indic` &mdash; auto-detects across `en`, `hi`, `gu`, `mr` |
-| Multi-EU aggregator | `multi-eu` &mdash; auto-detects across `en`, `de`, `es`, `it`, `pt`, `nl`, `ru`, `fr` |
-
-\[2] `ja`, `zh`, `ko`, and the `multi-asian` aggregator are accepted by batch (HTTP 200) but transcripts are unreliable — the batch model lacks proper checkpoints for East Asian audio and tends to return garbled CJK-mixed output. Cantonese (`yue`) is the one exception: batch returns `400 LANGUAGE_NOT_ENABLED_IN_REGION`. For accurate Asian-language transcription, use the streaming endpoint on `wss://api.us.smallest.ai/waves/v1/stt/live`.
+At a glance:
+- **15 documented languages** across both modes: `en`, `hi`, `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `zh`, `yue`, `ja`, `ko`, `gu`, `mr`.
+- **3 regional auto-detect aggregators** for unknown audio: `multi-eu`, `multi-indic`, `multi-asian` (multi-asian is streaming + US-region only).
+- East Asian codes (`ja`, `yue`, `zh`, `ko`, `multi-asian`) are streaming-only on the US-region host. See the model card for the host + caveat per code.
 
 ## Next steps
 
