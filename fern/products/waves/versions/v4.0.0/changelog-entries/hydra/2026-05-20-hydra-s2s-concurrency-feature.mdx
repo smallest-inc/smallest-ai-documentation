@@ -1,0 +1,15 @@
+---
+title: Hydra S2S — concurrency limits + per-org rate metering
+date: 2026-05-20
+description: Hydra speech-to-speech sessions are now governed by a per-org concurrency feature with rate metering tied to the billing service.
+---
+
+Hydra S2S sessions now route through a per-org **concurrency feature** in the billing service. This puts an explicit ceiling on simultaneous live voice sessions per org and meters usage for billing.
+
+**What changed:**
+
+- New `feature-waves-hydra-concurrency` plan feature: caps the number of concurrent open WebSocket sessions to `wss://api.smallest.ai/waves/v1/s2s` per org.
+- Sessions opened beyond the cap receive an `error` event with `code: "server_full"` followed by close code `1013`. Back off with jitter and retry.
+- Usage is metered against your billing entitlement; check the `usage` field on `response.done` for per-turn token counts.
+
+**Migration:** no action — existing Hydra integrations keep working. If you hit `server_full` repeatedly, contact your account manager to lift the concurrency cap.

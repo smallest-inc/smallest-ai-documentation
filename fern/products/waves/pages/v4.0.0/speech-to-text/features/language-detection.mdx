@@ -1,13 +1,18 @@
 ---
 title: 'Language detection'
-description: 'Automatically detect and transcribe 30+ languages with Pulse STT'
+description: 'Automatically detect and transcribe across the European or Indic Pulse STT language sets'
 ---
 
 <Badge color="green">Pre-Recorded</Badge> <Badge color="purple">Real-Time</Badge>
 
 ## Enabling language detection
 
-Set the `language` query parameter to `multi` when calling the API. It will auto-detect the spoken language across 30+ ISO 639-1 language codes.
+Set the `language` query parameter to a regional aggregator when calling the API. Pulse will auto-detect the spoken language across the codes covered by that aggregator:
+
+- `multi-eu` — European set: `de`, `en`, `fr`, `it`, `nl`, `pt`, `ru`, `es`.
+- `multi-indic` — Indic set: `en`, `hi`, `mr`, `pa`, `gu`, `or`, `kn`, `ta`, `te`, `ml`, `bn`.
+
+Pick the aggregator that matches the audio you expect; `multi-eu` is the safer default for unknown European audio. When you already know the source language, pass the explicit code (`en`, `hi`, `es`, etc.) for the best accuracy.
 
 <Note>
 View the full list of [supported languages](../overview#supported-languages).
@@ -20,7 +25,7 @@ View the full list of [supported languages](../overview#supported-languages).
 curl -sL -o audio.wav "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
 
 curl --request POST \
-  --url "https://api.smallest.ai/waves/v1/pulse/get_text?language=multi&word_timestamps=true" \
+  --url "https://api.smallest.ai/waves/v1/stt/?model=pulse&language=multi-eu&word_timestamps=true" \
   --header "Authorization: Bearer $SMALLEST_API_KEY" \
   --header "Content-Type: audio/wav" \
   --data-binary "@audio.wav"
@@ -29,8 +34,8 @@ curl --request POST \
 ### Real-Time WebSocket API
 
 ```javascript
-const url = new URL("wss://api.smallest.ai/waves/v1/pulse/get_text");
-url.searchParams.append("language", "multi");
+const url = new URL("wss://api.smallest.ai/waves/v1/stt/live?model=pulse");
+url.searchParams.append("language", "multi-eu");
 url.searchParams.append("encoding", "linear16");
 url.searchParams.append("sample_rate", "16000");
 
@@ -79,4 +84,3 @@ When language detection is enabled, the `transcription` (or `transcript` for rea
 <Note>
 The `language` field is only returned when `is_final=true` in real-time API responses. The `languages` array lists all languages detected in the audio and is also only included when `is_final=true`.
 </Note>
-

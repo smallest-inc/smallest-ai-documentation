@@ -1,0 +1,57 @@
+---
+title: "Quickstart"
+description: "Talk to Hydra in under a minute — a one-clone browser client with multi-agent presets, tool execution, and a live wire log."
+icon: "rocket"
+---
+
+Hydra is realtime, full-duplex, speech-to-speech. The fastest way to feel that is to **talk to it**. The reference client below is single-clone and ships with multiple agent presets so you can hear barge-in, tool calls, and persona switching live.
+
+## 1. Get an API key
+
+In the [Smallest AI Console](https://app.smallest.ai/dashboard/api-keys), create an API key. You'll paste it into the demo in the next step.
+
+## 2. Run the reference client
+
+A production-grade Next.js app with multi-agent presets, local tool execution, and a live wire log.
+
+```bash
+git clone https://github.com/smallest-inc/hydra_agents.git
+cd hydra_agents && npm install && npm run dev
+```
+
+Open `http://localhost:3000`, paste your API key into the right-hand panel, pick an agent preset, click **Connect**, and talk. Speak over Hydra to interrupt — barge-in is automatic.
+
+## What just happened
+
+| Step | Event |
+|---|---|
+| WebSocket opens | Server emits `session.created` |
+| Client configures | Client sends `session.configure` once |
+| Server confirms | Server emits `session.configured` with the negotiated audio sample rate |
+| Client streams audio | Client sends `input_audio_buffer.append` continuously, base64-encoded PCM16 |
+| User speaks / pauses | Server emits `input_audio_buffer.speech_started` / `speech_stopped` |
+| Model replies | Server emits `response.output_audio.delta` chunks until `response.done` |
+| User barges in | In-flight response cancels with `status: "cancelled"`, `reason: "interrupted"` |
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="WebSocket connection" icon="plug" href="/waves/documentation/speech-to-speech-hydra/web-socket-connection">
+    Auth, query params, idle timeout, close codes.
+  </Card>
+  <Card title="Managing sessions" icon="diagram-project" href="/waves/documentation/speech-to-speech-hydra/managing-sessions">
+    Voices, persona, mid-session updates, conversation items.
+  </Card>
+  <Card title="Audio I/O" icon="waveform-lines" href="/waves/documentation/speech-to-speech-hydra/audio-i-o">
+    Input PCM16, output rate negotiation, browser AudioWorklet.
+  </Card>
+  <Card title="Turn detection & barge-in" icon="wave-square" href="/waves/documentation/speech-to-speech-hydra/turn-detection-barge-in">
+    Server-side VAD events and how to flush scheduled audio on the client.
+  </Card>
+  <Card title="Tool calling" icon="screwdriver-wrench" href="/waves/documentation/speech-to-speech-hydra/tool-calling">
+    Declare tools, run them locally, narrate the result.
+  </Card>
+  <Card title="Model card" icon="id-card" href="/waves/model-cards/speech-to-speech/hydra">
+    Capabilities, voices, performance, pricing.
+  </Card>
+</CardGroup>

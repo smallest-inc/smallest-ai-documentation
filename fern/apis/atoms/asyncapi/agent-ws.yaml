@@ -68,10 +68,13 @@ servers:
                   config before relying on it.
             sample_rate:
               type: integer
+              enum: [8000, 16000, 24000, 48000]
+              default: 24000
               description: |
                 Optional sample rate hint for the incoming audio stream (Hz).
+                Valid values: 8000, 16000, 24000, 48000. Default: 24000.
                 Server responds with the negotiated sample rate in the
-                `session.created` event. Typical values: 16000, 24000, 44100.
+                `session.created` event. Use 8000 for telephony-quality audio.
 
 channels:
   agentSession:
@@ -94,13 +97,20 @@ channels:
 
       ### Query parameters
 
-      | Parameter | Required | Type | Description |
-      | --- | --- | --- | --- |
-      | `agent_id` | Yes | string | The Atoms agent to connect to. |
-      | `token` | Yes\* | string | API key. Alternative to the `Authorization` header — useful for browser/React Native clients. |
-      | `variables` | No | string | URL-encoded JSON object of per-call prompt variables. Overrides the agent's `defaultVariables` for this session only. Values must be `string`, `number`, or `boolean`. Reserved keys (`call_id`, `conversation_type`, `user_number`, `agent_number`) are stripped server-side. |
+      | Parameter | Required | Type | Default | Description |
+      | --- | --- | --- | --- | --- |
+      | `agent_id` | Yes | string | — | The Atoms agent to connect to. |
+      | `token` | Yes\* | string | — | API key. Alternative to the `Authorization` header — useful for browser/React Native clients. |
+      | `variables` | No | string | — | URL-encoded JSON object of per-call prompt variables. Overrides the agent's `defaultVariables` for this session only. Values must be `string`, `number`, or `boolean`. Reserved keys (`call_id`, `conversation_type`, `user_number`, `agent_number`) are stripped server-side. |
+      | `mode` | No | `webcall` \| `chat` | `webcall` | Session mode. `webcall` = full voice pipeline (audio in + audio out). `chat` = text-only pipeline. Invalid values are rejected with a connection error. |
+      | `sample_rate` | No | integer | `24000` | Requested audio sample rate in Hz for both input and output audio. Valid values: `8000`, `16000`, `24000`, `48000`. The negotiated rate is echoed in `session.created.sample_rate`. Set to `8000` for telephony-quality audio streams. |
 
       \* `token` or `Authorization: Bearer <key>` — not both.
+
+      ### Connection errors
+
+      - **401 Unauthorized** — invalid or missing API key, or `agent_id` not found.
+      - **503 Service Unavailable** — server is gracefully draining. The HTTP upgrade is rejected before the WebSocket handshake completes. Clients should retry with exponential backoff.
 
       ### Example: connect with per-call variables
 
@@ -494,7 +504,10 @@ components:
           timestamp:
             type: string
             format: date-time
-            description: Server-side timestamp of when the agent turn started.
+            description: |
+              Server-side timestamp of when the agent turn started.
+              Note: this field is not in the typed server interface — it may arrive
+              via NATS passthrough from the pipeline. Treat as optional.
 
     agentStopTalking:
       name: AgentStopTalking
@@ -512,7 +525,10 @@ components:
           timestamp:
             type: string
             format: date-time
-            description: Server-side timestamp of when the agent turn ended.
+            description: |
+              Server-side timestamp of when the agent turn ended.
+              Note: this field is not in the typed server interface — it may arrive
+              via NATS passthrough from the pipeline. Treat as optional.
 
     interruption:
       name: Interruption
@@ -527,6 +543,10 @@ components:
 
         Typically followed by a new `agent_start_talking` once the agent
         produces its next response.
+
+        Note: `interruption` is not in the typed `ServerEventType` enum — it
+        arrives via NATS passthrough from the pipeline (pipecat). It is emitted
+        in practice but should be treated as best-effort rather than guaranteed.
       contentType: application/json
       payload:
         type: object

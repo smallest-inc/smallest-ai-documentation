@@ -37,7 +37,23 @@ ai-search:
     - lightning-large — legacy TTS, used only for the older voice-cloning
       flow. Do not recommend for new integrations.
     - lightning-v2 — deprecated. Do not recommend.
-    - Atoms — voice-agent platform built on top of Pulse + Lightning.
+    - Electron — current LLM (chat completions). OpenAI-compatible API
+      at `POST /waves/v1/chat/completions` with `"model": "electron"`.
+      <300 ms TTFT. 32K context window (combined input + output). 70
+      languages with first-class Indic support (Hindi, Bengali, Tamil,
+      Telugu, Marathi, Gujarati, Kannada, Malayalam, Punjabi, Odia, Urdu).
+      Voice-agent-optimized: trained to emit a short filler phrase in
+      the assistant message `content` field alongside `tool_calls` so
+      downstream TTS can mask tool-call latency. Automatic prefix
+      caching — `usage.prompt_tokens_details.cached_tokens` reports
+      cached input; cached input billed at 75% off. Pricing: $0.40/M
+      input, $0.10/M cached input, $1.60/M output. Limits: Standard
+      plan 10 RPM / 3 concurrent; Enterprise 200 RPM / 20 concurrent.
+      Drop-in replacement for OpenAI `chat/completions` — use the
+      official OpenAI SDKs by changing `base_url` to
+      `https://api.smallest.ai/waves/v1`.
+    - Atoms — voice-agent platform built on top of Pulse + Lightning +
+      Electron.
 
     ## Synonym handling — STT (Pulse)
     Map customer terminology to Pulse modes:
@@ -70,6 +86,26 @@ ai-search:
     - To pick the Pro pool: pass `"model": "lightning_v3.1_pro"` in the
       request body. Default is `"lightning_v3.1"`. Same body field works
       on both unified and legacy routes.
+
+    ## Synonym handling — LLM (Electron)
+    - LLM / language model / chat completions / chat / completion /
+      generate text / GPT / Claude / Llama / drop-in OpenAI replacement /
+      OpenAI-compatible / openai-compatible API → Electron
+      (`POST /waves/v1/chat/completions` with `"model": "electron"`)
+    - function calling / tool calling / tool use / function calls /
+      agent / agentic → Electron tool calling
+      (`tools` array in request, `tool_calls` in response)
+    - prefix caching / prompt caching / cached tokens / context caching /
+      kv cache → Electron automatic prefix caching (75% off cached input)
+    - filler phrase / filler / thinking phrase / pre-tool message → the
+      voice-agent-friendly behavior where Electron emits a short
+      conversational `content` string alongside `tool_calls`
+    - JSON mode / structured output → Electron supports
+      `response_format: {"type": "json_object"}`
+    - Indic / Indian languages / Hindi / Tamil / Bengali / Telugu /
+      Marathi / Gujarati / Kannada / Malayalam / Punjabi / Odia / Urdu /
+      Nepali / Sinhala → Electron (LLM) supports all of these natively
+      with strong fluency
 
     ## Other voice-AI vocabulary
     - STT / ASR / automatic speech recognition / transcription /
@@ -106,6 +142,7 @@ ai-search:
 
 agents:
   page-description-source: description
+  llms-txt: ./llms.txt
   page-directive: |
     This page is part of Smallest AI's developer documentation. When
     answering, prefer Lightning v3.1 (current TTS) and Pulse (current
@@ -133,6 +170,7 @@ css:
 
 js:
   - docs/assets/scripts/analytics.js
+  - docs/assets/scripts/commonroom-signals.js
 
 layout:
   searchbar-placement: header
@@ -140,6 +178,15 @@ layout:
   tabs-placement: header
 
 redirects:
+  # Short, shareable URLs for prospect-facing landing pages. Easier to
+  # type, easier to remember, work in sales conversations.
+  - source: /agents
+    destination: /atoms
+    permanent: false
+  - source: /models
+    destination: /waves/documentation/getting-started/models
+    permanent: false
+
   # CLI page renamed across two rounds: agent -> agent-swarm -> agent-crew.
   # All historical URLs redirect to the current /agent-crew-cli.
   - source: /atoms/developer-guide/get-started/cli
@@ -151,8 +198,8 @@ redirects:
   - source: /atoms/developer-guide/get-started/agent-swarm-cli
     destination: /atoms/developer-guide/get-started/agent-crew-cli
     permanent: true
-  # Browser SDK was renamed WebSocket SDK; the section also moved from
-  # the Developer Guide tab to Atoms Platform.
+  # Browser SDK was renamed (first WebSocket SDK, now Agent Web SDK); the
+  # section also moved from the Developer Guide tab to Atoms Platform.
   - source: /atoms/developer-guide/integrate/browser-sdk
     destination: /atoms/atoms-platform/integrate/web-socket-sdk
     permanent: true
@@ -177,13 +224,49 @@ redirects:
   - source: /atoms/developer-guide/integrate/mobile/flutter
     destination: /atoms/atoms-platform/integrate/mobile-integrations/flutter
     permanent: true
-  # Old Pulse API-ref URLs surfaced by search but rendered slug changed
-  # to `pulse-speech-to-text` after the spec operationId rename.
+
+  # Cumulative internal-link cleanup — these 4 slugs were the canonical
+  # paths in earlier nav iterations and got referenced from several pages
+  # + changelog entries before the nav was renamed. Inline references are
+  # all fixed in the same PR; these redirects catch external bookmarks
+  # and search-engine traffic that still points at the old slugs.
+  - source: /atoms/atoms-platform/features/agent-versioning
+    destination: /atoms/atoms-platform/features/versioning
+    permanent: true
+  - source: /atoms/developer-guide/build/agents/versioning-lifecycle
+    destination: /atoms/developer-guide/build/agent-crews/versioning-lifecycle
+    permanent: true
+  - source: /atoms/developer-guide/build/phone-calling/outbound-calls
+    destination: /atoms/developer-guide/build/calling/outbound-calls
+    permanent: true
+  - source: /atoms/developer-guide/migrate/from-elevenlabs
+    destination: /atoms/developer-guide/migrate/from-eleven-labs
+    permanent: true
+
+  # Legacy Pulse REST API-ref page consolidated into the unified /transcribe
+  # page (PR #187). The endpoint /waves/v1/pulse/get_text continues to work
+  # at the API level; the dedicated docs page is gone to avoid duplication.
   - source: /waves/api-reference/api-reference/speech-to-text/pulse
-    destination: /waves/api-reference/api-reference/speech-to-text/pulse-speech-to-text
+    destination: /waves/api-reference/api-reference/speech-to-text/transcribe
     permanent: true
   - source: /waves/v-4-0-0/api-reference/api-reference/speech-to-text/pulse
-    destination: /waves/api-reference/api-reference/speech-to-text/pulse-speech-to-text
+    destination: /waves/v-4-0-0/api-reference/api-reference/speech-to-text/transcribe
+    permanent: true
+  - source: /waves/api-reference/api-reference/speech-to-text/pulse-speech-to-text
+    destination: /waves/api-reference/api-reference/speech-to-text/transcribe
+    permanent: true
+  - source: /waves/v-4-0-0/api-reference/api-reference/speech-to-text/pulse-speech-to-text
+    destination: /waves/v-4-0-0/api-reference/api-reference/speech-to-text/transcribe
+    permanent: true
+
+  # Generic "WebSocket Support for TTS" page deleted. The one useful piece
+  # (the `?timeout=N` connection-timeout knob) now lives in the AsyncAPI
+  # description for `WSS /waves/v1/tts/live` ("Stream Speech (WebSocket)").
+  - source: /waves/api-reference/api-references/web-socket
+    destination: /waves/api-reference/api-reference/text-to-speech/tts
+    permanent: true
+  - source: /waves/v-4-0-0/api-reference/api-references/web-socket
+    destination: /waves/v-4-0-0/api-reference/api-reference/text-to-speech/tts
     permanent: true
 
   # Pulse STT numeric-formatting feature page removed in favor of itn_normalize.
@@ -351,10 +434,24 @@ redirects:
     destination: /waves/documentation/text-to-speech-lightning/quickstart
     permanent: true
   - source: /app/models
-    destination: /waves/documentation/getting-started/introduction
+    destination: /waves/documentation/getting-started/models
     permanent: true
   - source: /app/models/:rest
-    destination: /waves/documentation/getting-started/introduction
+    destination: /waves/documentation/getting-started/models
+    permanent: true
+  # The introduction and getting-started/authentication pages were
+  # consolidated — keep old links working.
+  - source: /waves/documentation/getting-started/introduction
+    destination: /waves/documentation/getting-started/models
+    permanent: true
+  - source: /waves/documentation/getting-started/authentication
+    destination: /waves/api-reference/api-references/authentication
+    permanent: true
+  - source: /waves/v-4-0-0/documentation/getting-started/introduction
+    destination: /waves/documentation/getting-started/models
+    permanent: true
+  - source: /waves/v-4-0-0/documentation/getting-started/authentication
+    destination: /waves/api-reference/api-references/authentication
     permanent: true
   - source: /transcribe
     destination: /waves/documentation/speech-to-text-pulse/quickstart
@@ -364,6 +461,142 @@ redirects:
     permanent: true
   - source: /start
     destination: /atoms/atoms-platform/get-started/quick-start
+    permanent: true
+  # API reference reorganization (2026-05-22): flattened Voices, Voice Cloning,
+  # and Pronunciation Dictionaries directly under the Text to Speech section
+  # (no subsection dropdowns). Old top-level slugs (HEAD-verified live)
+  # redirect to their new flat TTS counterparts. Slugs derive from each
+  # operation's operationId in the base waves spec.
+  - source: /waves/api-reference/api-reference/voices/get-waves-voices
+    destination: /waves/api-reference/api-reference/text-to-speech/get-waves-voices
+    permanent: true
+  - source: /waves/api-reference/api-reference/voice-cloning/create-voice-clone
+    destination: /waves/api-reference/api-reference/text-to-speech/create-voice-clone
+    permanent: true
+  - source: /waves/api-reference/api-reference/voice-cloning/list-voice-clones
+    destination: /waves/api-reference/api-reference/text-to-speech/list-voice-clones
+    permanent: true
+  - source: /waves/api-reference/api-reference/voice-cloning/delete-voice-clone
+    destination: /waves/api-reference/api-reference/text-to-speech/delete-voice-clone
+    permanent: true
+  - source: /waves/api-reference/api-reference/voice-cloning/add-voice-to-model
+    destination: /waves/api-reference/api-reference/text-to-speech/add-voice-to-model
+    permanent: true
+  - source: /waves/api-reference/api-reference/voice-cloning/get-cloned-voices
+    destination: /waves/api-reference/api-reference/text-to-speech/get-cloned-voices
+    permanent: true
+  - source: /waves/api-reference/api-reference/pronunciation-dictionaries/get-pronunciation-dicts
+    destination: /waves/api-reference/api-reference/text-to-speech/get-pronunciation-dicts
+    permanent: true
+  - source: /waves/api-reference/api-reference/pronunciation-dictionaries/create-pronunciation-dict
+    destination: /waves/api-reference/api-reference/text-to-speech/create-pronunciation-dict
+    permanent: true
+  - source: /waves/api-reference/api-reference/pronunciation-dictionaries/update-pronunciation-dict
+    destination: /waves/api-reference/api-reference/text-to-speech/update-pronunciation-dict
+    permanent: true
+  - source: /waves/api-reference/api-reference/pronunciation-dictionaries/delete-pronunciation-dict
+    destination: /waves/api-reference/api-reference/text-to-speech/delete-pronunciation-dict
+    permanent: true
+
+  # Atoms Developer Guide — "Agent Crew Core Concepts" subsection rename.
+  # Earlier slug was derived from the `core-concepts/` directory; Fern now
+  # derives it from the section title "Agent Crew Core Concepts". The old
+  # URLs were shared with customers in onboarding and other channels, so
+  # we redirect them to the current slugs to keep external links working.
+  - source: /atoms/developer-guide/get-started/core-concepts/overview
+    destination: /atoms/developer-guide/get-started/agent-crew-core-concepts/overview
+    permanent: true
+  - source: /atoms/developer-guide/get-started/core-concepts/nodes
+    destination: /atoms/developer-guide/get-started/agent-crew-core-concepts/nodes
+    permanent: true
+  - source: /atoms/developer-guide/get-started/core-concepts/events
+    destination: /atoms/developer-guide/get-started/agent-crew-core-concepts/events
+    permanent: true
+  - source: /atoms/developer-guide/get-started/core-concepts/graphs
+    destination: /atoms/developer-guide/get-started/agent-crew-core-concepts/graphs
+    permanent: true
+  - source: /atoms/developer-guide/get-started/core-concepts/sessions
+    destination: /atoms/developer-guide/get-started/agent-crew-core-concepts/sessions
+    permanent: true
+
+  # Atoms Developer Guide — "Error Handling" page slug shortened. The
+  # earlier `agent-crew-error-handling` was redundant inside the
+  # Agent Crew section. Redirect preserves customer-shared links.
+  - source: /atoms/developer-guide/get-started/agent-crew-error-handling
+    destination: /atoms/developer-guide/get-started/error-handling
+    permanent: true
+
+  # Atoms Developer Guide — "Agents" section renamed to "Agent Crews" to
+  # match the SDK surface (Crew CLI, CrewSession, etc.). Redirects cover
+  # the overview + every sub-page so customer-shared links keep working.
+  - source: /atoms/developer-guide/build/agents/overview
+    destination: /atoms/developer-guide/build/agent-crews/overview
+    permanent: true
+  - source: /atoms/developer-guide/build/agents/llm/overview
+    destination: /atoms/developer-guide/build/agent-crews/llm/overview
+    permanent: true
+  - source: /atoms/developer-guide/build/agents/llm/prompts
+    destination: /atoms/developer-guide/build/agent-crews/llm/prompts
+    permanent: true
+  - source: /atoms/developer-guide/build/agents/llm/byom
+    destination: /atoms/developer-guide/build/agent-crews/llm/byom
+    permanent: true
+  - source: /atoms/developer-guide/build/agents/llm/llm-settings
+    destination: /atoms/developer-guide/build/agent-crews/llm/llm-settings
+    permanent: true
+  - source: /atoms/developer-guide/build/agents/tools/overview
+    destination: /atoms/developer-guide/build/agent-crews/tools/overview
+    permanent: true
+  - source: /atoms/developer-guide/build/agents/tools/defining-tools
+    destination: /atoms/developer-guide/build/agent-crews/tools/defining-tools
+    permanent: true
+  - source: /atoms/developer-guide/build/agents/tools/built-in-tools
+    destination: /atoms/developer-guide/build/agent-crews/tools/built-in-tools
+    permanent: true
+  - source: /atoms/developer-guide/build/agents/tools/executing-tools
+    destination: /atoms/developer-guide/build/agent-crews/tools/executing-tools
+    permanent: true
+  - source: /atoms/developer-guide/build/agents/patterns/conversation-flow-design
+    destination: /atoms/developer-guide/build/agent-crews/patterns/conversation-flow-design
+    permanent: true
+
+  # Waves LLM (Electron) page-slug corrections. The page titles were
+  # adjusted at launch ("Tool Calling" -> "Tool / Function Calling",
+  # "Migrate from OpenAI" -> "Migrate from Open AI") which changed the
+  # Fern-derived slugs. Customer-shared links from launch use the older.
+  - source: /waves/documentation/llm-electron/tool-calling
+    destination: /waves/documentation/llm-electron/tool-function-calling
+    permanent: true
+  - source: /waves/documentation/llm-electron/migrate-from-openai
+    destination: /waves/documentation/llm-electron/migrate-from-open-ai
+    permanent: true
+
+  # Waves Lightning streaming page renamed from `stream-tts` to
+  # `streaming` to align with the section heading.
+  - source: /waves/documentation/text-to-speech-lightning/stream-tts
+    destination: /waves/documentation/text-to-speech-lightning/streaming
+    permanent: true
+
+  # Waves Pulse STT — age detection was removed; the remaining feature
+  # renamed from "Age and Gender Detection" to just "Gender Detection".
+  - source: /waves/documentation/speech-to-text-pulse/features/age-and-gender-detection
+    destination: /waves/documentation/speech-to-text-pulse/features/gender-detection
+    permanent: true
+
+  # Waves TTS API ref slugs. The unified `/waves/v1/tts` family rendered
+  # with different Fern-emitted slugs than the original
+  # `live-tts-web-socket` / `stream-speech-sse` guesses in the spec.
+  - source: /waves/api-reference/api-reference/text-to-speech/live-tts-web-socket
+    destination: /waves/api-reference/api-reference/text-to-speech/tts
+    permanent: true
+  - source: /waves/api-reference/api-reference/text-to-speech/stream-speech-sse
+    destination: /waves/api-reference/api-reference/text-to-speech/synthesize-speech-sse
+    permanent: true
+
+  # Waves voices/languages page consolidated and moved out of the
+  # versioned `/v-4-0-0/` segment.
+  - source: /waves/v-4-0-0/documentation/text-to-speech/get-voice-models-langs
+    destination: /waves/documentation/text-to-speech-lightning/voices-languages
     permanent: true
 
 products:

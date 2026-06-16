@@ -146,9 +146,76 @@ def index(spec):
 # counterpart to compare against. CLAUDE.md documents this contract.
 
 
+# Known-deprecated spec overrides that have pre-existing key-parity drift.
+# Listed here explicitly with rationale so the check goes green for the
+# active surface, while still failing loudly on any NEW occurrence of the
+# same bug. Each entry should link to a tracking issue / cleanup PR.
+#
+# The bug class is real on each of these files — they would render
+# incorrectly if anyone tried to use the rendered docs for them — but the
+# underlying products are deprecated and slated for spec removal, so a
+# message-key rename here would touch SDK gen surfaces that are also
+# scheduled for removal. Cleanup tracked separately.
+KEY_PARITY_ALLOWLIST = {
+    # Lightning v2 was retired by waves-platform PR #801 (2026-05-19).
+    # Spec + override files are kept alive only until the SDK strips them.
+    # See changelog: pulse-stt-pro-launch / lightning-v2-and-large-retired
+    "fern/apis/waves/asyncapi/lightning-v2-ws-overrides.yml",
+    # Legacy `/waves/v1/streaming-tts/stream` superseded by unified
+    # `/waves/v1/tts/live`. Old SDK methods (synthesize_streaming) kept
+    # alive until the next SDK major release.
+    "fern/apis/waves/asyncapi/stream-tts-ws-overrides.yml",
+}
+
+
+def check_asyncapi_key_parity(base: dict, ovr: dict) -> list[tuple[str, str, str]]:
+    """Catch the silent-render-drop class of bug.
+
+    For AsyncAPI specs, the override's `channels.<chan>.messages.<KEY>` and
+    `operations.<KEY>` names MUST be a subset of the base spec's. When override
+    declares a KEY that doesn't exist in base, Fern's merger creates an orphan
+    message/operation and may silently drop a sibling operation from the
+    rendered docs — exactly what happened with `sendFinalize` on Pulse STT WS
+    in May 2026 (PR #189 fixed it; this check locks the convention in).
+
+    Returns a list of (kind, channel_or_root, key) tuples for keys present in
+    override but not in base. Empty = OK.
+    """
+    issues: list[tuple[str, str, str]] = []
+
+    # asyncapi key only present on AsyncAPI specs; skip OpenAPI
+    if not (isinstance(base, dict) and base.get("asyncapi")):
+        return issues
+    if not isinstance(ovr, dict):
+        return issues
+
+    # channels.<chan>.messages.<KEY>
+    base_channels = (base.get("channels") or {}) if isinstance(base.get("channels"), dict) else {}
+    ovr_channels = (ovr.get("channels") or {}) if isinstance(ovr.get("channels"), dict) else {}
+    for chan_name, ovr_chan in ovr_channels.items():
+        if not isinstance(ovr_chan, dict):
+            continue
+        ovr_msgs = ovr_chan.get("messages") or {}
+        base_chan = base_channels.get(chan_name) or {}
+        base_msgs = base_chan.get("messages") or {}
+        for msg_key in ovr_msgs:
+            if msg_key not in base_msgs:
+                issues.append(("message", chan_name, msg_key))
+
+    # operations.<KEY>
+    base_ops = (base.get("operations") or {}) if isinstance(base.get("operations"), dict) else {}
+    ovr_ops = (ovr.get("operations") or {}) if isinstance(ovr.get("operations"), dict) else {}
+    for op_key in ovr_ops:
+        if op_key not in base_ops:
+            issues.append(("operation", "<root>", op_key))
+
+    return issues
+
+
 def main() -> int:
     grand_drift = 0
     grand_orphan = 0
+    grand_keyparity = 0
     print("=" * 78)
     print("Spec drift check — fern/apis/waves-v4/overrides vs fern/apis/waves base")
     print("=" * 78)
@@ -195,15 +262,46 @@ def main() -> int:
                 print(f"    override: {os_}")
                 grand_drift += 1
 
+        # AsyncAPI key-parity check (catches the sendFinalize-class bug)
+        key_issues = check_asyncapi_key_parity(base, ovr)
+        if key_issues:
+            allowlisted = label in KEY_PARITY_ALLOWLIST
+            tag = "[KEY PARITY — WARN, allowlisted]" if allowlisted else "[KEY PARITY]"
+            print(f"\n{label}  {tag}")
+            for kind, parent, key in key_issues:
+                if kind == "message":
+                    print(f"  KEY DRIFT  channels.{parent}.messages.{key}")
+                    print(f"    override defines this message key but base does not.")
+                    if not allowlisted:
+                        print(f"    Fern may silently drop a sibling operation from the rendered docs.")
+                        print(f"    Fix: rename to match the base spec's key (e.g. add the expected prefix),")
+                        print(f"    or remove the entry from the override.")
+                else:
+                    print(f"  KEY DRIFT  operations.{key}")
+                    print(f"    override defines this operation key but base does not.")
+                    if not allowlisted:
+                        print(f"    Fix: rename to match the base, or move the definition into the base spec.")
+                if not allowlisted:
+                    grand_keyparity += 1
+            if allowlisted:
+                print(f"  (allowlisted in KEY_PARITY_ALLOWLIST — known deprecated spec, cleanup tracked separately)")
+
     print()
     print("=" * 78)
-    if grand_drift == 0:
+    if grand_drift == 0 and grand_keyparity == 0:
         print(f"PASS — no drift between waves base specs and waves-v4 docs overrides")
         return 0
-    print(f"FAIL — {grand_drift} drift fields found")
-    print()
-    print("Each drift means editing the base spec alone will not show up on docs.")
-    print("Update both files in lockstep, or remove the override decoration.")
+    if grand_drift:
+        print(f"FAIL — {grand_drift} drift fields found")
+        print()
+        print("Each drift means editing the base spec alone will not show up on docs.")
+        print("Update both files in lockstep, or remove the override decoration.")
+    if grand_keyparity:
+        print(f"FAIL — {grand_keyparity} override key(s) not present in base")
+        print()
+        print("Override channel.messages and operations keys MUST exist in the base spec.")
+        print("When override defines an orphan key, Fern's merger can silently drop a sibling")
+        print("operation from the rendered docs (see PR #189 — sendFinalize dropped this way).")
     print("=" * 78)
     return 1
 

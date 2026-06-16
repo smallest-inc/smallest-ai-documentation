@@ -1,0 +1,124 @@
+---
+title: "Best Practices"
+description: "How to get the best out of Electron — prompt structure, caching, tool calling, streaming patterns, error handling, and cost control."
+icon: "lightbulb"
+---
+
+A short, opinionated guide to using Electron well.
+
+## Prompt structure for cache hits
+
+**Stable content first, variable content last.** The prefix cache matches identical token prefixes — if you put a per-request value early in the prompt, nothing after it can match the cache.
+
+```python
+# ✅ stable prefix → caches well
+messages = [
+    {"role": "system", "content": SYSTEM_PROMPT_VERBATIM},     # identical across users
+    {"role": "user",   "content": RAG_CONTEXT_BLOCK},          # identical across the session
+    {"role": "user",   "content": user_question},              # varies — last
+]
+
+# ❌ per-request value in system prompt → no cache hits
+messages = [
+    {"role": "system", "content": f"You're helping {user_name}. {SYSTEM_PROMPT}"},
+    ...
+]
+```
+
+See [Prefix Caching](/waves/documentation/llm-electron/prefix-caching) for the full guide.
+
+## Always pass `stream_options.include_usage` when streaming
+
+```python
+client.chat.completions.create(
+    model="electron",
+    messages=[...],
+    stream=True,
+    stream_options={"include_usage": True},
+)
+```
+
+Without it, you can't tell how many tokens were generated when the client disconnects mid-stream. With it, the server appends a final usage chunk so your accounting is exact.
+
+## Tool calls in voice agents — speak the filler
+
+If you're streaming Electron's output into a TTS engine for a voice agent:
+
+1. As soon as `delta.content` chunks arrive, feed them to TTS.
+2. When `delta.tool_calls` chunks arrive, kick off the actual tool execution in **parallel** with TTS — don't wait for the filler to finish speaking.
+3. Append `tool` role messages with results and continue.
+
+The user hears *"Let me check the weather for you…"* while your weather API resolves in the background. Perceived latency drops by hundreds of milliseconds. See [Tool Calling: voice-agent pattern](/waves/documentation/llm-electron/tool-function-calling#voice-agent-pattern-the-reason-this-exists).
+
+## Concurrency
+
+Electron's plan limits cap concurrent in-flight requests. If you're firing many parallel requests:
+
+- **Standard plan**: 3 concurrent. Burst-safe up to this; over the limit returns `HTTP 429` with `Concurrency limit reached`.
+- **Enterprise plan**: 20 concurrent.
+
+If you need to fire more in parallel, batch with a semaphore or queue:
+
+```python
+import asyncio
+sem = asyncio.Semaphore(3)   # match your plan's concurrency
+
+async def safe_chat(messages):
+    async with sem:
+        return await async_client.chat.completions.create(model="electron", messages=messages)
+```
+
+## Retry on `502` / `503` only
+
+| Status | Retry? |
+|---|---|
+| `400` | ❌ — bad request, fix the input |
+| `401` / `403` | ❌ — credential or access issue |
+| `429` | ⚠️ — back off then retry (rate limit or concurrency hit) |
+| `502` | ✅ — upstream blip, retry with backoff |
+| `503` | ✅ — upstream overloaded, retry with backoff |
+
+Use exponential backoff (start ~250 ms, double up to ~8 s, cap at ~5 attempts). Always carry the `request_id` from the failed response so support can trace it if you escalate.
+
+## Use `request_id` in every log line
+
+Every response sets an `X-Request-Id` header and includes `request_id` in error envelopes. Capture and log it on every call — it's the only way support can trace a specific request through the system.
+
+```python
+resp = client.with_raw_response.chat.completions.create(model="electron", messages=[...])
+request_id = resp.http_response.headers.get("x-request-id")
+logger.info("chat completion", extra={"request_id": request_id, "user_id": ...})
+```
+
+## Keep tool descriptions short
+
+Every tool description and parameter schema gets sent as input tokens on every turn. A 200-token tool catalog gets re-billed (at cache rates after the first turn) every time you call the model. Aim for:
+
+- One sentence of intent per tool.
+- Tight parameter `description` fields — name + brief purpose.
+- Don't include examples in the tool definition unless they materially improve calling behavior. Put examples in the system prompt where they cache once.
+
+## Use `seed` for reproducibility — but don't over-rely
+
+Electron honors `seed` for best-effort determinism. Same seed + same input usually yields the same output, but it's not a hard guarantee — model deployments, batching, and version updates can cause drift. For test fixtures, prefer `temperature: 0` over relying solely on `seed`.
+
+## Cost control
+
+- **Prefix caching** is the single biggest lever. Put stable content first.
+- **`max_tokens`** caps output cost. Set it to the smallest value that still lets the model finish naturally.
+- **`stop` sequences** can end generation early when the model emits a known terminator.
+- For agent workflows, **bound tool-call chains** — a runaway agent that calls itself in a loop can blow through your budget.
+- Monitor `usage.prompt_tokens_details.cached_tokens` in your logs to confirm caching is working.
+
+## When to choose another product
+
+Electron is the right call for:
+- OpenAI-compatible chat/agent workloads
+- Voice-agent backends (especially with tool calling)
+- Indic-language workloads
+- Cost-conscious migrations from frontier models
+
+Look elsewhere on the Smallest stack for:
+- **Voice transcription** → [Pulse](/waves/documentation/speech-to-text-pulse/overview)
+- **Speech synthesis** → [Lightning](/waves/documentation/text-to-speech-lightning/overview)
+- **Full voice-agent platform with built-in workflow tooling** → [Atoms](/atoms/atoms-platform/get-started/quick-start). Electron is the LLM behind many Atoms agents; Atoms is the right choice when you want the platform-level scaffolding (campaigns, knowledge base, telephony) rather than building it yourself.

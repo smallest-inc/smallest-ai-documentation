@@ -1,0 +1,164 @@
+---
+title: "Migrate from OpenAI"
+description: "Drop-in replacement for OpenAI's Chat Completions API. Two strings change: the base URL and the API key."
+icon: "arrow-right-arrow-left"
+---
+
+Electron speaks the OpenAI Chat Completions wire format. To migrate an existing OpenAI integration, change exactly **two strings**:
+
+1. `base_url` → `https://api.smallest.ai/waves/v1`
+2. `api_key` → your Smallest AI key
+3. `model` → `"electron"`
+
+That's it. Streaming, tool calling, JSON mode, multi-turn — all work identically because Electron implements the same protocol.
+
+## Side-by-side: Python
+
+<CodeGroup>
+
+```python OpenAI
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ["OPENAI_API_KEY"],
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[
+        {"role": "user", "content": "Hello!"},
+    ],
+)
+
+print(response.choices[0].message.content)
+```
+
+```python Electron
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.smallest.ai/waves/v1",   # new
+    api_key=os.environ["SMALLEST_API_KEY"],         # new
+)
+
+response = client.chat.completions.create(
+    model="electron",                                # new
+    messages=[
+        {"role": "user", "content": "Hello!"},
+    ],
+)
+
+print(response.choices[0].message.content)
+```
+
+</CodeGroup>
+
+## Side-by-side: JavaScript
+
+<CodeGroup>
+
+```javascript OpenAI
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const response = await client.chat.completions.create({
+  model: "gpt-4o",
+  messages: [{ role: "user", content: "Hello!" }],
+});
+
+console.log(response.choices[0].message.content);
+```
+
+```javascript Electron
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "https://api.smallest.ai/waves/v1",      // new
+  apiKey: process.env.SMALLEST_API_KEY,             // new
+});
+
+const response = await client.chat.completions.create({
+  model: "electron",                                 // new
+  messages: [{ role: "user", content: "Hello!" }],
+});
+
+console.log(response.choices[0].message.content);
+```
+
+</CodeGroup>
+
+## What works identically
+
+- **Messages** — same `system`, `user`, `assistant`, `tool` role conventions.
+- **Streaming** — same SSE format, same `[DONE]` marker, same delta chunks. With `stream_options.include_usage: true`, you get the final usage chunk just like OpenAI.
+- **Tool calling** — same `tools` array, same `tool_calls` in response, same multi-turn pattern. (Electron adds a voice-friendly filler in `content` alongside `tool_calls` — see [Tool Calling](/waves/documentation/llm-electron/tool-function-calling).)
+- **Error envelope** — `{"error": {"message", "type", "details", "request_id"}}`. (Electron uses `details: [{code, message, path}]` for validation errors where OpenAI uses `param`; otherwise the envelope shape is the same.)
+- **OpenAI SDKs** — Python, JavaScript, Go, Java, Ruby, etc. All work without code changes beyond the two strings above.
+
+## Differences to be aware of
+
+| | OpenAI | Electron |
+|---|---|---|
+| `n > 1` | Supported | **Rejected** — make multiple requests if you need multiple completions |
+| `prompt_logprobs` | Supported on some models | **Rejected** |
+| `content` on tool-call turns | `null` | Often a short natural-language filler (see [Tool Calling](/waves/documentation/llm-electron/tool-function-calling)) |
+| Model IDs | `gpt-4o`, `gpt-4-turbo`, etc. | `electron` (only public model today) |
+| Pricing | Per model, varies | Single Electron rate; contact your Smallest AI account manager |
+| Prefix caching | Automatic on some models | Automatic — see `usage.prompt_tokens_details.cached_tokens` |
+| Context window | Varies | 32,768 tokens combined input + output |
+| Rate limits | Per-tier OpenAI tiers | Standard: 10 RPM / 3 concurrent. Enterprise: 200 RPM / 20 concurrent. See [Concurrency and Limits](/waves/api-reference/api-references/concurrency-and-limits). |
+
+## Common migration questions
+
+<AccordionGroup>
+  <Accordion title="Will my fine-tuned OpenAI model work?">
+    No — Electron is a separate model. There is no migration path for OpenAI fine-tunes today. For most use cases, careful system-prompt engineering on Electron achieves comparable behavior; reach out to support if you want help replicating a specific fine-tune.
+  </Accordion>
+
+  <Accordion title="What about function-calling formats — does it work with my existing tool definitions?">
+    Yes. Pass your existing `tools` array unchanged. Electron returns `tool_calls` in the same JSON shape as OpenAI. The only behavioral difference: Electron may also populate `content` with a short filler phrase on tool-call turns — see [Tool Calling](/waves/documentation/llm-electron/tool-function-calling).
+  </Accordion>
+
+  <Accordion title="Does `response_format: {type: 'json_object'}` work?">
+    Yes. JSON mode is supported and follows OpenAI's semantics — instruct the model to produce JSON in the system or user message, set `response_format`, and the output will be JSON.
+  </Accordion>
+
+  <Accordion title="How do I get the equivalent of OpenAI's tier-1/2/3 rate limits?">
+    Electron uses per-plan limits documented in [Concurrency and Limits](/waves/api-reference/api-references/concurrency-and-limits). Contact sales for higher limits if your workload needs more than 200 RPM / 20 concurrent.
+  </Accordion>
+
+  <Accordion title="Are there any prompts that work on OpenAI but don't work on Electron?">
+    Electron is competitive with frontier models on most tasks, including in 70 languages with first-class Indic support. If you find a specific prompt that performs worse on Electron, please share it with support — we use real customer prompts to drive ongoing improvements.
+  </Accordion>
+</AccordionGroup>
+
+## Reverse compatibility
+
+Some teams want to keep the option to fall back to OpenAI. Because Electron uses the same SDK, you can wire both clients with a simple factory and select per-request:
+
+```python
+import os
+from openai import OpenAI
+
+CLIENTS = {
+    "electron": OpenAI(
+        base_url="https://api.smallest.ai/waves/v1",
+        api_key=os.environ["SMALLEST_API_KEY"],
+    ),
+    "openai": OpenAI(
+        api_key=os.environ["OPENAI_API_KEY"],
+    ),
+}
+
+def chat(provider: str, **kwargs):
+    return CLIENTS[provider].chat.completions.create(**kwargs)
+
+# usage:
+chat("electron", model="electron", messages=[...])
+chat("openai", model="gpt-4o", messages=[...])
+```

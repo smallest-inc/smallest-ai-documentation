@@ -12,6 +12,7 @@ info:
 servers:
 - url: https://api.smallest.ai
   description: Waves API server
+  x-fern-server-name: waves
 paths:
   /waves/v1/tts:
     post:
@@ -168,7 +169,7 @@ paths:
         Pick the model with the `model` body parameter, same as the sync route.
 
         <Note>
-          **The same URL serves the WebSocket endpoint.** `wss://api.smallest.ai/waves/v1/tts/live` accepts a WebSocket upgrade for streaming-text scenarios (LLM token streams, live captioning). The HTTP `POST` documented on this page returns SSE; use `wss://` to use the WebSocket protocol instead. See the [WebSocket reference](/waves/api-reference/api-reference/text-to-speech/live-tts-web-socket).
+          **The same URL serves the WebSocket endpoint.** `wss://api.smallest.ai/waves/v1/tts/live` accepts a WebSocket upgrade for streaming-text scenarios (LLM token streams, live captioning). The HTTP `POST` documented on this page returns SSE; use `wss://` to use the WebSocket protocol instead. See the [WebSocket reference](/waves/api-reference/api-reference/text-to-speech/tts).
         </Note>
 
         ## When to use this
@@ -331,12 +332,10 @@ components:
             API but produces English-pronounced output.
 
             On `lightning_v3.1`, the full 12-language catalog applies. On
-            `lightning_v3.1_pro`, Indian voices speak `en` and `hi` (with
-            `auto` for code-switching); British and American voices speak
-            English only.
+            `lightning_v3.1_pro`, Indian voices speak `en` and `hi`; British
+            and American voices speak English only.
           default: en
           enum:
-          - auto
           - en
           - hi
           - mr
@@ -371,6 +370,11 @@ components:
             type: string
             description: The ID of the pronunciation dictionary to use for speech generation.
           description: The IDs of the pronunciation dictionaries to use for speech generation. Available on both `lightning_v3.1` and `lightning_v3.1_pro`.
+        word_timestamps:
+          type: boolean
+          default: false
+          description: |
+            **WebSocket-only feature.** Accepted on this endpoint but ignored — no per-word timing information is returned in the sync HTTP or SSE response shape. To receive `status: "word_timestamp"` frames with per-word `{ id, word, start, end }` data, use the WebSocket endpoint `wss://api.smallest.ai/waves/v1/tts/live`. See [Word-level timestamps](/waves/documentation/text-to-speech-lightning/word-timestamps).
         session_id:
           type: string
           description: Optional client-provided session identifier for correlation. Only alphanumeric characters, hyphens, underscores, and dots are allowed. Max 128 characters. Echoed back in response headers as `X-External-Session-Id`.

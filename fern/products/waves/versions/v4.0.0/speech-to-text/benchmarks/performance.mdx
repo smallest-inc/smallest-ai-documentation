@@ -1,9 +1,73 @@
 ---
 title: 'Performance'
-description: 'Pulse STT latency and accuracy benchmarks against the FLEURS, ESB, and WildASR datasets'
+description: 'Pulse and Pulse Pro accuracy and latency benchmarks across FLEURS, ESB, WildASR, and the public Open ASR Leaderboard.'
 ---
 
-Pulse STT is evaluated against three open-source datasets — [FLEURS](https://huggingface.co/datasets/google/fleurs), [ESB](https://huggingface.co/datasets/esb/datasets), and [WildASR](https://huggingface.co/datasets/bosonai/WildASR) — and one internal English perturbation suite. Word Error Rate (WER) by language. Lower is better. `NA` = not available or not supported by that provider.
+Smallest STT models are evaluated against three open-source datasets, [FLEURS](https://huggingface.co/datasets/google/fleurs), [ESB](https://huggingface.co/datasets/esb/datasets), and [WildASR](https://huggingface.co/datasets/bosonai/WildASR), plus an internal English perturbation suite. Word Error Rate (WER) by language. Lower is better. `NA` = not available or not supported by that provider.
+
+This page covers both models:
+
+- **Pulse Pro** (English only) sits in the leaderboard-accuracy band. Benchmarks are on the [Open ASR Leaderboard](https://huggingface.co/spaces/hf-audio/open_asr_leaderboard) ESB suite and FLEURS English.
+- **Pulse** (38 languages, streaming + non-streaming) is evaluated on FLEURS, ESB, WildASR, and our internal perturbation suite below.
+
+## Pulse Pro: Open ASR Leaderboard
+
+Pulse Pro is tied for **#2 on the public Open ASR Leaderboard** at 5.42% average WER across eight ESB datasets. Whisper EnglishTextNormalizer applied, normalized WER. Lower is better.
+
+### Head-to-head vs leaderboard top-3
+
+| Dataset | Pulse Pro | Granite 4.1 2B | Cohere Transcribe |
+|---|---:|---:|---:|
+| AMI (meetings) | **7.32** | 8.09 | 8.13 |
+| Earnings22 | 9.04 | **8.37** | 10.86 |
+| GigaSpeech | 9.52 | 9.80 | **9.34** |
+| LibriSpeech clean | 1.73 | 1.33 | **1.25** |
+| LibriSpeech other | 3.74 | 2.50 | **2.37** |
+| SPGISpeech (financial) | **2.04** | 3.78 | 3.08 |
+| TED-LIUM | 3.68 | **3.07** | 2.49 |
+| VoxPopuli | 6.32 | **5.70** | 5.87 |
+| **Average (8 datasets)** | **5.42** | **5.33** | **5.42** |
+| **Open ASR rank** | **🥈 #2 (tied)** | 🥇 #1 | 🥈 #2 (tied) |
+
+Pulse Pro leads on conversational (AMI) and financial (SPGISpeech) workloads. Cohere edges ahead on read speech (LibriSpeech, TED-LIUM).
+
+### Position on the public leaderboard
+
+Sorted by ESB average WER. Lower is better. Commercial APIs in our accuracy band:
+
+| Rank | Model | ESB Avg WER ↓ |
+|---|---|---:|
+| 1 | IBM Granite Speech 4.1 2B | 5.33 |
+| **2** | **Pulse Pro** | **5.42** |
+| 2 | Cohere Labs Transcribe (tied) | 5.42 |
+| 3 | Zoom Scribe v1 | 5.47 |
+| 5 | NVIDIA Canary Qwen 2.5B | 5.63 |
+| 8 | ElevenLabs Scribe v2 | 5.83 |
+| 12 | AssemblyAI Universal-3 Pro | 6.21 |
+| 18 | Speechmatics Enhanced | 6.91 |
+| 23 | OpenAI Whisper Large v3 | 7.44 |
+
+### FLEURS English
+
+| Metric | Pulse Pro |
+|---|---:|
+| WER (FLEURS en_us) | 3.92% |
+| CER (FLEURS en_us) | 1.73% |
+
+### Throughput
+
+Measured on 1× NVIDIA L40S (48 GB), long-form audio.
+
+| Mode | Throughput (RTFx) |
+|---|---|
+| No word timestamps | **250–300×** |
+| With word timestamps | **~200×** |
+
+L4 is the recommended production GPU and runs at lower throughput than the L40S reference. See [Cloud deployment](/waves/self-host/docker-setup/stt-deployment/cloud-deployment) for sizing.
+
+---
+
+## Pulse: multilingual benchmarks
 
 ## Latency
 
@@ -33,6 +97,24 @@ TTFT measures the latency between when a user stops speaking and when the model 
     </tr>
   </tbody>
 </table>
+
+## FLEURS Streaming — English
+
+WER on the English subset of FLEURS across providers in streaming mode. Lower is better.
+
+| Provider | Smallest Pulse | Assembly Universal 3 Pro | AWS Transcribe | Azure | Deepgram Nova 3 | Grok | Sarvam Saras V3 | ElevenLabs Scribe V2 |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **WER** | 6.03% | 3.13% | 6.54% | 13.79% | 11.59% | 60.00% | 6.34% | 3.88% |
+
+### A note on audio amplitude normalization
+
+Audio amplitude normalization materially changes WER on FLEURS. Most competitors benchmark on raw FLEURS — which has variable, often low amplitude — without normalizing peak audio to −10 dBFS. This makes some models look much better than they actually are. Pulse is stable across all amplitude regimes.
+
+| Model | Raw FLEURS | −10 dBFS | −20 dBFS | Stable across regimes? |
+| :--- | :---: | :---: | :---: | :--- |
+| **Smallest Pulse** | 6.03% | 6.06% | 5.81% | Yes |
+| **Deepgram Nova 3** | 11.59% | 6.57% | 6.51% | Partial — 1.8× degradation on raw |
+| **Grok** | 60.00% | 7.58% | 8.59% | Collapses on raw |
 
 ## Pre-recorded — FLEURS
 
@@ -84,7 +166,7 @@ Google's multilingual speech dataset covering 102 languages, built on the FLoRes
 | Language | Smallest Pulse | Deepgram Nova 2 | Deepgram Nova 3 |
 | ----- | :---: | :---: | :---: |
 | **Italian** | **4.41** | 11.05 | 6.99 |
-| **English** | **4.5** | 15.59 | 11.21 |
+| **English** | **6.03** | 15.59 | 11.59 |
 | **Spanish** | **5.99** | 10.67 | 7.52 |
 | **Portuguese** | **8.32** | 14.15 | 11.46 |
 | **German** | **9.5** | 11.1 | 10.15 |
@@ -105,74 +187,79 @@ Google's multilingual speech dataset covering 102 languages, built on the FLoRes
 
 ## English STT — ESB Dataset (Streaming)
 
-A Hugging Face benchmark suite aggregating 8 English speech datasets across diverse domains (audiobooks, parliament, meetings, finance, etc.) to test STT generalization.
+A Hugging Face benchmark suite aggregating 9 English speech datasets across diverse domains (audiobooks, parliament, meetings, finance, etc.) to test STT generalization. Lower WER is better.
 
-*Evaluated on the open-source Hugging Face ESB datasets. Smallest Pulse numbers from internal evaluation.*
+*Evaluated on the open-source Hugging Face ESB datasets. Numbers from internal evaluation.*
 
-| Dataset | Smallest Pulse | Deepgram Nova 2 | Deepgram Nova 3 |
-| ----- | :---: | :---: | :---: |
-| **LibriSpeech Clean** | **1.80** | 4.35 | 3.71 |
-| **LibriSpeech Other** | **3.94** | 9.36 | 7.72 |
-| **Common Voice** | **9.20** | 17.79 | 14.59 |
-| **VoxPopuli** | **3.17** | 9.95 | 9.38 |
-| **TEDELIUM** | **2.36** | 4.35 | 3.57 |
-| **GigaSpeech** | **4.74** | 11.63 | 10.05 |
-| **SPGISpeech** | **2.67** | 5.26 | 3.28 |
-| **Earnings22** | **8.73** | 18.98 | 15.34 |
-| **AMI** | **11.93** | 19.86 | 16.06 |
-| **Overall** | **5.39** | 11.28 | 9.30 |
+| Dataset | Smallest Pulse | Assembly Universal 3 Pro| AWS Transcribe | Azure | Deepgram Nova 3| Grok | Sarvam Saras V3 | ElevenLabs Scribe V2 |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **LibriSpeech Clean** | 2.46 | 1.65 | 2.16 | 2.48 | 3.20 | 3.61 | 3.09 | 1.97 |
+| **LibriSpeech Other** | 5.31 | 2.86 | 4.88 | 5.74 | 6.60 | 7.28 | 6.85 | 4.45 |
+| **Common Voice** | 10.89 | 6.73 | 10.69 | 47.28 | 14.22 | 43.46 | 11.37 | 9.83 |
+| **VoxPopuli** | 7.16 | 7.28 | 7.07 | 14.10 | 9.55 | 11.49 | 7.77 | 7.91 |
+| **TED-LIUM** | 4.07 | 2.95 | 2.66 | 3.81 | 3.59 | 6.90 | 2.89 | 3.16 |
+| **GigaSpeech** | 10.43 | 9.12 | 10.09 | 5.35 | 10.05 | 10.05 | 9.57 | 9.66 |
+| **SPGISpeech** | 2.86 | 1.74 | 4.18 | 3.53 | 2.99 | 9.70 | 3.89 | 4.40 |
+| **Earnings22** | 12.25 | 11.52 | 12.21 | 8.54 | 15.79 | 27.02 | 11.97 | 12.20 |
+| **AMI** | 10.58 | 14.60 | 13.19 | 8.46 | 17.04 | 19.19 | 13.08 | 12.23 |
+| **Aggregate** | 7.33 | 6.49 | 7.46 | 11.03 | 9.23 | 15.41 | 7.83 | 7.31 |
 
 ## Hindi — multi-dataset (Streaming)
 
-WER across seven Hindi speech datasets covering read speech (FLEURS), conversational speech (Kathbath, Common Voice), telephony / contact-center audio (Mucs, Gramvaani), TTS-derived audio (Indic-TTS), and a noise-augmented variant (Kathbath noisy). Compared against the strongest Hindi STT baselines: IndicWhisper, Sarvam Saaras v3, and Deepgram Nova-3.
+WER across seven Hindi speech datasets covering read speech (FLEURS), conversational speech (Kathbath, Common Voice), telephony / contact-center audio (Mucs, Gramvaani), TTS-derived audio (Indic-TTS), and a noise-augmented variant (Kathbath noisy). Compared against the strongest Hindi STT baselines: IndicWhisper, Sarvam Saaras v3, scribe v2, and Deepgram Nova-3.
 
 *Evaluated on the open-source datasets. Smallest Pulse numbers from internal evaluation. Lower is better.*
 
-| Dataset | Smallest Pulse | IndicWhisper | Sarvam Saaras v3 | Deepgram Nova-3 |
-| ----- | :---: | :---: | :---: | :---: |
-| **FLEURS** | 9.03 | 15.00 | 7.31 | 14.09 |
-| **Kathbath** | **7.63** | 10.30 | 8.15 | 16.22 |
-| **Kathbath (noisy)** | **8.52** | 12.00 | 8.85 | 17.06 |
-| **Common Voice** | **8.58** | 11.40 | 10.36 | 23.55 |
-| **Indic-TTS** | 6.38 | 7.60 | 6.29 | 10.72 |
-| **MUCS** | **3.61** | 12.00 | 8.15 | 16.20 |
-| **Gramvaani** | **19.77** | 26.80 | 20.80 | 31.44 |
+| Dataset | Smallest Pulse | IndicWhisper | Sarvam Saaras v3 | scribe v2 | Deepgram Nova-3 |
+| ----- | :---: | :---: | :---: | :---: | :---: |
+| **FLEURS** | 9.03 | 15.00 | 7.31 | 8.96 | 14.09 |
+| **Kathbath** | **7.63** | 10.30 | 8.15 | 8.67 | 16.22 |
+| **Kathbath (noisy)** | **8.52** | 12.00 | 8.85 | 10.11 | 17.06 |
+| **Common Voice** | **8.58** | 11.40 | 10.36 | 13.61 | 23.55 |
+| **Indic-TTS** | 6.38 | 7.60 | 6.29 | 8.75 | 10.72 |
+| **MUCS** | **3.61** | 12.00 | 8.15 | 8.15 | 16.20 |
+| **Gramvaani** | **19.77** | 26.80 | 20.80 | 24.09 | 31.44 |
+| **AVERAGE** | **8.78** | 13.59 | 10.69 | 11.76 | 18.47 |
 
 ## ASR Robustness — WildASR Dataset (Streaming)
 
-An open-source robustness benchmark designed to stress-test STT under real-world degraded conditions: clipping, far-field capture, background noise, phone codec compression, reverberation, and accented speech.
+An open-source robustness benchmark designed to stress-test STT under real-world degraded conditions: clipping, far-field capture, background noise, phone codec compression, reverberation, and accented speech. Lower WER is better. `n/a` = not supported by that provider.
 
-*Evaluated on the open-source WildASR dataset. Smallest Pulse numbers from internal evaluation.*
+*Evaluated on the open-source WildASR dataset. Numbers from internal evaluation.*
 
-| Dataset | Smallest Pulse | Deepgram Nova 2 | Deepgram Nova 3 |
-| ----- | :---: | :---: | :---: |
-| **Clean** | **4.41** | 15.28 | 10.76 |
-| **Clipping** | **12.93** | 70.41 | 43.15 |
-| **Far Field** | **12.09** | 74.52 | 58.72 |
-| **Noise Gap** | **9.03** | 21.91 | 14.19 |
-| **Phone Codec** | **5.71** | 12.22 | 9.27 |
-| **Reverberation** | **7.91** | 40.71 | 27.21 |
-| **Accent** | **5.35** | 9.17 | 7.23 |
-| **Overall** | **8.76** | 34.89 | 24.36 |
+| Dataset | Smallest Pulse | Assembly Universal 3 Pro | AWS Transcribe | Azure | Deepgram Nova 3 | Sarvam Saras V3 | ElevenLabs Scribe V2 |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Clean** | 5.98 | 3.33 | 7.01 | 11.11 | 11.62 | 7.02 | 4.24 |
+| **Clipping** | 14.03 | 6.59 | 42.10 | 4.35 | 47.35 | 28.74 | 11.20 |
+| **Far-field** | 13.38 | 26.07 | 38.76 | n/a | 62.99 | 21.27 | 7.38 |
+| **Noise Gap** | 8.90 | 4.04 | 9.77 | n/a | 15.04 | 9.74 | 6.30 |
+| **Phone Codec** | 7.19 | 3.45 | 8.70 | n/a | 9.13 | 10.64 | 4.98 |
+| **Reverberation** | 9.06 | 23.50 | 14.83 | n/a | 27.27 | 4.35 | 6.48 |
+| **Accent** | 5.82 | 2.80 | 4.45 | n/a | 7.31 | n/a | 4.01 |
+| **Aggregate** | 9.63 | 12.52 | 18.35 | 8.82 | 28.17 | 17.75 | 6.47 |
 
 ## Internal English Perturbation Benchmark
 
-Not a public dataset. The English audio is sliced by perturbation type (Emotion, Entity, Disfluency, Noise, Accent, Silence, Speaker Diversity, Speed, Boundary, Pitch, Audio Quality, Volume) to isolate model weaknesses.
+Not a public dataset. The English audio is sliced by perturbation type (Noise, Silence, Telephony 911, Boundary, Disfluency, Long Audios, Repetition, Entity, Accent, Emotion, Speaker Diversity, Speed, Pitch, Volume, Audio Quality) to isolate model weaknesses. Lower WER is better.
 
-| Category | Pulse English (Streaming) | Deepgram Nova 3 (en) |
-| :--- | :---: | :---: |
-| **Emotion** | **15.43%** | 19.42% |
-| **Entity** | 12.14% | 11.80% |
-| **Disfluency** | 11.91% | 8.64% |
-| **Noise** | **11.57%** | 14.61% |
-| **Accent** | **9.13%** | 10.43% |
-| **Silence** | **8.99%** | 13.17% |
-| **Speaker Diversity** | **7.77%** | 9.91% |
-| **Speed** | **3.54%** | 6.85% |
-| **Boundary** | **3.02%** | 6.30% |
-| **Pitch** | **2.60%** | 4.04% |
-| **Audio Quality** | **2.45%** | 4.05% |
-| **Volume** | **2.11%** | 3.59% |
+| Category | Pulse | Assembly | AWS | Deepgram | Scribe |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Noise** | 10.53 | 11.93 | 14.19 | 14.58 | 10.05 |
+| **Silence** | 5.81 | 4.22 | 8.22 | 13.28 | 10.61 |
+| **Telephony 911** | 21.03 | 23.93 | 27.88 | 28.43 | 20.29 |
+| **Boundary** | 2.83 | 3.09 | 3.18 | 3.66 | 1.73 |
+| **Disfluency** | 7.68 | 7.81 | 9.23 | 8.62 | 9.29 |
+| **Long Audios** | 12.81 | 8.58 | 11.66 | 11.16 | 9.25 |
+| **Repetition** | 11.38 | 9.82 | 10.39 | 9.57 | 10.81 |
+| **Entity** | 12.43 | 10.13 | 13.35 | 11.69 | 9.48 |
+| **Accent** | 8.68 | 7.89 | 9.51 | 10.42 | 7.25 |
+| **Emotion** | 13.92 | 16.34 | 18.57 | 18.07 | 11.84 |
+| **Speaker Diversity** | 7.33 | 6.72 | 8.81 | 9.48 | 5.95 |
+| **Speed** | 4.32 | 3.63 | 4.40 | 6.88 | 3.74 |
+| **Pitch** | 2.93 | 3.07 | 3.21 | 4.07 | 1.61 |
+| **Volume** | 2.37 | 3.05 | 2.41 | 3.67 | 1.47 |
+| **Audio Quality** | 2.73 | 2.86 | 3.03 | 4.08 | 1.60 |
+| **Average WER** | 8.45 | 8.20 | 9.87 | 10.51 | 7.66 |
 
 
 ## Internal Hindi Perturbation Benchmark

@@ -230,6 +230,14 @@ def main() -> int:
         '--pending-base', default='origin/main',
         help='Git ref to diff against when detecting pages added in this branch. A 404 on a URL whose last segment matches a newly-added MDX stem is reported as PENDING rather than broken. Default: origin/main.',
     )
+    ap.add_argument(
+        '--strict', action='store_true',
+        help='Disable the pending-stems reclassification — any 404 is broken. Use on push-to-main where all merged PRs should have deployed by now (otherwise pending false-positives mask real link rot indefinitely).',
+    )
+    ap.add_argument(
+        '--deploy-wait', type=int, default=0, metavar='SECONDS',
+        help='When a 404 lands, re-probe it later in case the docs deploy is still propagating. Total wait budget split across three attempts with exponential backoff. Recommended on push-to-main (e.g. 240s); irrelevant on PR runs since pending-stems already handles that case.',
+    )
     args = ap.parse_args()
 
     # v2.2.0 and v3.0.1 are deprecated, frozen, and explicitly off-limits per
@@ -287,7 +295,11 @@ def main() -> int:
 
     print(f'Checking {len(url_sources)} unique internal URL(s) across {len(targets)} file(s) against {args.base} ...')
 
-    pending_stems = newly_registered_mdx_stems(args.pending_base)
+    # In strict mode (push-to-main full audit), any 404 is broken — no pending
+    # reclassification. This catches the gap where a URL whose last segment
+    # coincidentally matches an MDX stem stays "pending" forever even though
+    # Fern's actual derived slug is different (e.g. tag/section-name-based).
+    pending_stems = set() if args.strict else newly_registered_mdx_stems(args.pending_base)
 
     broken: list[tuple[str, int, list[str]]] = []
     pending: list[tuple[str, int, list[str]]] = []
@@ -302,6 +314,40 @@ def main() -> int:
                     pending.append((url, code, url_sources[url]))
                 else:
                     broken.append((url, code, url_sources[url]))
+
+    # Deploy-lag retry: post-merge CI commonly hits the link checker before
+    # the CDN has finished publishing the just-merged pages. Re-probe any 404
+    # within the configured wait budget — anything still 404 after that is
+    # genuinely broken, not just slow to propagate.
+    if args.deploy_wait > 0 and broken:
+        retry_urls = [url for url, code, _ in broken if code == 404]
+        if retry_urls:
+            still_broken: set[str] = set(retry_urls)
+            # Three attempts, geometric pacing: 1/6, 1/3, 1/2 of the budget.
+            # Total ≈ budget. Most deploys land in the first or second wait.
+            schedule = [args.deploy_wait // 6, args.deploy_wait // 3,
+                        args.deploy_wait - (args.deploy_wait // 6 + args.deploy_wait // 3)]
+            for i, wait in enumerate(schedule):
+                if not still_broken:
+                    break
+                print(f'⏳ {len(still_broken)} URL(s) still 404; '
+                      f'waiting {wait}s for CDN propagation (attempt {i + 1}/3)...')
+                time.sleep(wait)
+                next_round: set[str] = set()
+                with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+                    futures = {pool.submit(probe, url, args.base): url
+                               for url in still_broken}
+                    for fut in as_completed(futures):
+                        url, code, _ = fut.result()
+                        if code < 200 or code >= 400:
+                            next_round.add(url)
+                still_broken = next_round
+            # Re-classify any 404s that resolved during retry.
+            resolved_after_wait = set(retry_urls) - still_broken
+            if resolved_after_wait:
+                print(f'✓ {len(resolved_after_wait)} URL(s) resolved after deploy-wait.')
+                broken = [(url, code, src) for url, code, src in broken
+                          if url not in resolved_after_wait]
 
     if pending:
         print()

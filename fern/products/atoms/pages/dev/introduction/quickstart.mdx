@@ -17,12 +17,20 @@ The `smallestai agent-crew` CLI is built for rapid iteration. Test your crew loc
 The CLI comes bundled with the SDK:
 
 ```bash
-pip install "smallestai>=4.4.6,<4.4.7"
+pip install smallestai
 ```
 
-<Warning>
-  **Version pin required (temporary).** `smallestai==4.4.7` ships a startup-validation hook that fails before any client connects when your `setup_handler` calls `await session.start()` — which every documented example does. Tracked as a regression to be fixed; until it's reverted, pin to `<4.4.7`. The cookbook examples below also need this pin.
-</Warning>
+<Note>
+  **Expected boot output on `smallestai>=4.4.7`.** Startup includes a validation routine that exercises your `setup_handler` against a placeholder WebSocket to surface init-time errors. This dry-run reaches `await session.start()` before any client has connected and logs:
+
+  ```
+  ERROR | Startup validation failed — pod will not accept sessions. ValueError: Session not initialized
+  ```
+
+  The server proceeds past this point — `Application startup complete.` follows, `Uvicorn` binds on `:8080`, and real client connections handshake normally.
+
+  A different error at the same point in startup — for example `OpenAIError: Missing credentials` — indicates a real configuration issue. Set `OPENAI_API_KEY` (or configure Electron, below) before booting.
+</Note>
 
 Verify the installation:
 
@@ -36,10 +44,68 @@ You'll need a Smallest API key (from [app.smallest.ai/dashboard/api-keys](https:
 export SMALLEST_API_KEY=sk_...
 ```
 
-Plus an LLM API key for the example below — pick one:
+Plus an LLM for the example below. The Atoms Crews SDK ships an `OpenAIClient` that accepts any OpenAI-compatible endpoint — pick one:
 
-- **Electron** (Smallest's own LLM, OpenAI-compatible) — reuses `SMALLEST_API_KEY`. Set `base_url="https://api.smallest.ai/waves/v1"` and `model="electron"` in `OpenAIClient`. No extra key needed.
-- **OpenAI** — `export OPENAI_API_KEY=sk-...` if you'd rather use GPT models.
+<Tabs>
+  <Tab title="Electron (Smallest)">
+    Smallest's voice-optimized SLM. Reuses `SMALLEST_API_KEY` — no separate LLM key required.
+
+    ```python
+    from smallestai.atoms.crew.clients.openai import OpenAIClient
+    import os
+
+    llm = OpenAIClient(
+        model="electron",
+        api_key=os.getenv("SMALLEST_API_KEY"),
+        base_url="https://api.smallest.ai/waves/v1",
+    )
+    ```
+  </Tab>
+  <Tab title="OpenAI">
+    Bring your own OpenAI key.
+
+    ```bash
+    export OPENAI_API_KEY=sk-...
+    ```
+
+    ```python
+    from smallestai.atoms.crew.clients.openai import OpenAIClient
+    import os
+
+    llm = OpenAIClient(
+        model="gpt-4o-mini",
+        api_key=os.getenv("OPENAI_API_KEY"),
+    )
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The Atoms Crews `OpenAIClient` is **async** — call sites use `await llm.chat(messages=[...])` inside a crew node's `generate_response()` method (which already runs in an event loop). It does **not** expose the OpenAI-Python-SDK shape `llm.chat.completions.create(...)`; the call surface is `await llm.chat(messages, stream=False, tools=None, ...)` returning a `ChatResponse` with `.content` and `.tool_calls`.
+</Note>
+
+### Test connectivity outside a crew
+
+For a one-off sanity check (verify your key works, the endpoint responds), use the standard `openai` Python SDK — Electron is OpenAI-compatible, so the official client works as a drop-in by overriding `base_url`:
+
+```python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ["SMALLEST_API_KEY"],
+    base_url="https://api.smallest.ai/waves/v1",
+)
+
+resp = client.chat.completions.create(
+    model="electron",
+    messages=[{"role": "user", "content": "Respond with a one-sentence greeting."}],
+    max_tokens=50,
+)
+print(resp.choices[0].message.content)
+```
+
+Same code works against OpenAI itself by dropping `base_url` and swapping `model` to `gpt-4o-mini` (and using `OPENAI_API_KEY`). Use this pattern for backend scripts or smoke tests that aren't inside a crew node.
 
 ---
 
@@ -55,9 +121,6 @@ A minimal, single-node crew that streams chat completions from an LLM and greets
 curl -sL https://github.com/smallest-inc/cookbook/archive/refs/heads/main.tar.gz \
   | tar -xz --strip-components=2 cookbook-main/voice-agents/getting_started
 cd getting_started
-
-# Pin to a working SDK version (see Installation warning above)
-sed -i.bak 's/smallestai.*/smallestai>=4.4.6,<4.4.7/' requirements.txt
 pip install -r requirements.txt
 ```
 
@@ -71,14 +134,12 @@ A two-node example from [`background_agent`](https://github.com/smallest-inc/coo
 curl -sL https://github.com/smallest-inc/cookbook/archive/refs/heads/main.tar.gz \
   | tar -xz --strip-components=2 cookbook-main/voice-agents/background_agent
 cd background_agent
-
-# Multi-node example needs 4.4.7+ — DON'T pin below it
 pip install -r requirements.txt
 ```
 
-<Warning>
-  **Multi-node uses `smallestai>=4.4.7`** because `sentiment_analyzer.py` imports `SDKAgentLogEvent`, which was added in 4.4.7. On boot you'll see a `Startup validation failed — pod will not accept sessions` ERROR in logs from the SDK's `_validate_startup` hook. **The error is misleading — the pod does accept sessions and the agent works.** Tracked for an SDK fix; safe to ignore in the meantime.
-</Warning>
+<Info>
+  Multi-node uses `smallestai>=4.4.7` because `sentiment_analyzer.py` imports `SDKAgentLogEvent` (introduced in 4.4.7). Same boot-log caveat as the Installation section applies — you'll see the `Session not initialized` ERROR; the pod still serves.
+</Info>
 
 `app.py` wires both nodes into a single `CrewSession`. `support_agent.py` is the user-facing `OutputCrewNode`; it can query the sibling sentiment node mid-conversation. `sentiment_analyzer.py` is a `BackgroundCrewNode` — it listens to every transcript event, classifies sentiment, and updates state the support agent reads.
 
@@ -135,11 +196,9 @@ When you're ready for production, deploy to Smallest AI's managed infrastructure
 
   ```python
   from smallestai import SmallestAI
-  import os
 
-  # Pass token= explicitly — the client otherwise looks for SMALLEST_AI_TOKEN,
-  # not SMALLEST_API_KEY.
-  client = SmallestAI(token=os.getenv("SMALLEST_API_KEY"))
+  # Reads SMALLEST_API_KEY from the environment, or pass api_key="sk_..." explicitly.
+  client = SmallestAI()
   response = client.atoms.agents.create_a_new_agent(name="my-test-agent")
   agent_id = response.data   # the agent id is a string at .data
   print(agent_id)
@@ -278,6 +337,55 @@ Deployments are not live by default. This gives you a safety buffer.
 1. Run `smallestai agent-crew builds`
 2. Select the **LIVE** build
 3. Choose **Take Down**
+
+---
+
+## Running the CLI in CI / non-interactive environments
+
+A few commands prompt you for input (an agent picker, a build picker, a password field). These only work in a real terminal. The table below shows which commands work non-interactively and how to substitute for the ones that don't.
+
+| Command | Works in CI? | Notes |
+|---|---|---|
+| `smallestai auth login` | Yes | Pipe the key on stdin: `echo "$SMALLEST_API_KEY" \| smallestai auth login`. |
+| `smallestai agent-crew init` | No | Opens an interactive picker over your agents. In CI, write the config directly instead — see below. |
+| `smallestai agent-crew deploy` | Yes | Fully non-interactive. Reads `agent_id` from `.smallestai/config.toml`, the API key from stored credentials, prints a deploy summary, and exits non-zero on failure. |
+| `smallestai agent-crew builds` | No | Lists builds, then prompts you to pick one and choose **Make Live** / **Take Down**. For CI promotion or rollback, call the API directly — see below. |
+| `smallestai agent-crew chat` | No | Interactive WebSocket REPL against `ws://localhost:8080/ws`. For local development only. |
+
+### Skipping `init` in CI
+
+`init` exists to write `.smallestai/config.toml` with your agent ID. In CI you can write the same file yourself before running `deploy`:
+
+```bash
+mkdir -p .smallestai
+cat > .smallestai/config.toml <<EOF
+agent_id = "$ATOMS_AGENT_ID"
+EOF
+```
+
+### Promoting and rolling back builds in CI
+
+`builds` calls the same endpoint for both **Make Live** and **Take Down**. You can call it directly:
+
+```bash
+# Promote a build (Make Live)
+curl -X PATCH "https://api.smallest.ai/atoms/v1/sdk/agents/$ATOMS_AGENT_ID/builds/$BUILD_ID" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"isLive": true}'
+
+# Roll back (Take Down)
+curl -X PATCH "https://api.smallest.ai/atoms/v1/sdk/agents/$ATOMS_AGENT_ID/builds/$BUILD_ID" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"isLive": false}'
+```
+
+The build ID is printed by `deploy` on success, and is also available from `GET /atoms/v1/sdk/agents/{agentId}/builds`.
+
+<Note>
+  Only one build per agent can be live at a time. Setting `isLive: true` on a new build automatically takes down the previously-live one.
+</Note>
 
 ---
 

@@ -11,7 +11,7 @@ Word timestamps provide precise timing information for each word in the transcri
 
 ### Pre-Recorded API
 
-Add `word_timestamps=true` to your Pulse STT query parameters. This works for both raw-byte uploads (`Content-Type: audio/wav`) and JSON requests with hosted audio URLs.
+Add `word_timestamps=true` to your query parameters. Pulse Pro accepts raw-byte uploads only (`Content-Type: application/octet-stream`); Pulse also accepts JSON requests with a hosted audio URL.
 
 #### Sample request
 
@@ -20,9 +20,9 @@ Add `word_timestamps=true` to your Pulse STT query parameters. This works for bo
 curl -sL -o audio.wav "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
 
 curl --request POST \
-  --url "https://api.smallest.ai/waves/v1/pulse/get_text?language=en&word_timestamps=true" \
+  --url "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en&word_timestamps=true" \
   --header "Authorization: Bearer $SMALLEST_API_KEY" \
-  --header "Content-Type: audio/wav" \
+  --header "Content-Type: application/octet-stream" \
   --data-binary "@audio.wav"
 ```
 
@@ -31,7 +31,7 @@ curl --request POST \
 Add `word_timestamps=true` to your WebSocket connection query parameters when connecting to the Pulse STT WebSocket API.
 
 ```javascript
-const url = new URL("wss://api.smallest.ai/waves/v1/pulse/get_text");
+const url = new URL("wss://api.smallest.ai/waves/v1/stt/live?model=pulse");
 url.searchParams.append("language", "en");
 url.searchParams.append("encoding", "linear16");
 url.searchParams.append("sample_rate", "16000");
@@ -50,6 +50,24 @@ Responses include a `words` array with `word`, `start`, `end`, and `confidence` 
 
 ### Pre-Recorded API Response
 
+Pulse Pro response — `words` array with per-word timing and confidence; no `utterances` field:
+
+```json
+{
+  "status": "success",
+  "transcription": "Hello world.",
+  "words": [
+    { "word": "Hello", "start": 0.0, "end": 0.5, "confidence": 0.98 },
+    { "word": "world.", "start": 0.6, "end": 0.9, "confidence": 0.96 }
+  ],
+  "language": "en",
+  "metadata": { "duration": 0.9, "processing_time_ms": 42.5, "rtfx": 21.2, "num_chunks": 1 },
+  "request_id": "8c355f4d-bd45-48ee-aa83-d00e4670f6bb"
+}
+```
+
+Pulse response — also includes an `utterances` array with sentence-level timestamps:
+
 ```json
 {
   "status": "success",
@@ -63,8 +81,6 @@ Responses include a `words` array with `word`, `start`, `end`, and `confidence` 
   ]
 }
 ```
-
-The response of Pre-Recorded API includes the utterances field, which includes sentence level timestamps.
 
 ### Real-Time WebSocket API Response
 
@@ -143,8 +159,8 @@ When `diarize=true` is enabled, the `words` array also includes `speaker` (integ
     <tr>
       <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>`confidence`</td>
       <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>number</td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>`word_timestamps=true` (realtime only)</td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Confidence score for the word (0.0 to 1.0)</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>`word_timestamps=true`</td>
+      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Confidence score for the word (0.0 to 1.0). Returned by both pre-recorded and realtime.</td>
     </tr>
     <tr>
       <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>`speaker`</td>

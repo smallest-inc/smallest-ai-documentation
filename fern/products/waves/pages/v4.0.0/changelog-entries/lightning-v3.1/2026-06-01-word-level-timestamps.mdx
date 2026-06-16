@@ -1,0 +1,70 @@
+---
+title: Lightning v3.1 — per-word timestamps on WebSocket streaming
+date: 2026-06-01
+description: 'Opt in with `word_timestamps` on a WebSocket request to receive interleaved `word_timestamp` frames with per-word `{id, word, start, end}` timing — verbatim from input text, supported on Lightning v3.1 and v3.1 Pro base-queue English + Hindi voices.'
+---
+
+Lightning v3.1 now exposes per-word timing events to WebSocket clients. Opt in with one flag — useful for captioning UIs, karaoke-style word highlighting, avatar lip-sync, and word-level analytics.
+
+## What changed
+
+Two changes to a WebSocket request: add `word_timestamps: true` and handle the new `status: "word_timestamp"` frame.
+
+```js
+ws.send(JSON.stringify({
+  text: "I bought 3 cats for $100 on Dec 25th",
+  voice_id: "meher",
+  model: "lightning_v3.1_pro",
+  sample_rate: 44100,
+  output_format: "pcm",
+  word_timestamps: true,        // ← ADDED
+}));
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  switch (msg.status) {
+    case "chunk":
+      audioPlayer.push(Buffer.from(msg.data.audio, 'base64'));
+      break;
+    case "word_timestamp":       // ← NEW CASE
+      const { id, word, start, end } = msg.data;
+      captionTrack.push({ id, word, startSec: start, endSec: end });
+      break;
+    case "complete":
+      audioPlayer.end();
+      break;
+  }
+};
+```
+
+`word` is the exact substring from the input text — un-normalized. `"$100"` stays `"$100"`, `"25th"` stays `"25th"`, `"3"` stays `"3"`. Non-Latin scripts come back verbatim (e.g., Devanagari for Hindi).
+
+`start` and `end` are floats in seconds, relative to the start of the audio stream. Frames interleave with `chunk` in audio-time order, then a single `complete` terminates the session.
+
+## Where it works
+
+| Surface | Word timestamps |
+|---|---|
+| `WSS /waves/v1/tts/live` (unified) | ✅ |
+| `WSS /waves/v1/lightning-v3.1/get_speech/stream` (legacy, retiring 2026-07-14) | ✅ |
+| `POST /waves/v1/tts` (sync HTTP) | ❌ — flag accepted, silently ignored |
+| `POST /waves/v1/tts/live` (HTTP SSE) | ❌ — same |
+
+## Voice + language support
+
+| Language | Voice family | Word events |
+|---|---|---|
+| English (`en`) | Base-queue voices — `meher`, `devansh`, `kartik`, `maithili`, `liam`, `avery` | ✅ |
+| Hindi (`hi`) | Base-queue voices (same list) | ✅ |
+| Marathi / Bengali / Gujarati / Punjabi / Odia | north-Indic family | ❌ |
+| Tamil / Telugu / Kannada / Malayalam | south-Indic family | ❌ |
+
+For unsupported voice families the flag is accepted — audio works normally, but no `word_timestamp` frames are emitted. Detect this client-side by counting received word events after `complete` arrives.
+
+## Backward compatibility
+
+`word_timestamps` defaults to `false`. Clients that don't set the flag see no behavior change — same audio chunks, same completion frame, no new event type to handle. Purely opt-in.
+
+**Migration:** none — pure addition. Existing integrations keep working untouched.
+
+→ [Word-level timestamps on the Lightning v3.1 model card](/waves/model-cards/text-to-speech/lightning-v-3-1#word-level-timestamps) — full wire spec, JS example, support matrix.

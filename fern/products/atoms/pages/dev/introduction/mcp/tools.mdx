@@ -1,7 +1,7 @@
 ---
 title: Available Tools
-subtitle: All 71 tools the Smallest MCP server provides.
-description: 'Reference for all 71 tools the Smallest MCP server exposes. The AI editor picks the right tool from your natural-language prompt — you do not call these directly.'
+subtitle: All 74 tools the Smallest MCP server provides.
+description: 'Reference for all 74 tools the Smallest MCP server exposes. The AI editor picks the right tool from your natural-language prompt — you do not call these directly.'
 ---
 
 You never call these directly — just describe what you want and the AI picks the right tool. This page is a reference.
@@ -10,19 +10,36 @@ You never call these directly — just describe what you want and the AI picks t
 
 ## Agents
 
+### Manage agents
+
 | Tool | What it does |
 |---|---|
 | `get_agents` | List all agents in your org with voice, model, language, and call stats. Supports filtering by name, workflow type, and sorting. |
 | `get_agent` | Get full details for a single agent — voice config, model, prompt, language, call behavior, timeouts, and version info. |
-| `get_agent_prompt` | Read an agent's current system prompt and configured tools. Works for both single-prompt and conversation flow agents. |
 | `create_agent` | Create a new voice agent with model, voice, language, and behavior settings. Defaults to gpt-4.1 with daniel voice. |
-| `update_agent_config` | Update agent settings — name, voice, model, language, first message, timeouts, and more. For versioned agents, creates a draft automatically. |
-| `update_agent_prompt` | Update an agent's system prompt. For versioned agents, creates a draft automatically. |
-| `delete_agent` | Archive or unarchive an agent. Archived agents are inactive but recoverable. |
 | `duplicate_agent` | Duplicate an existing agent into your org (or another org). Useful for creating variants or A/B testing. |
-| `publish_draft` | Publish a draft to make changes live on a versioned agent, or discard it. Optionally add a version label and changelog. |
+| `delete_agent` | Archive or unarchive an agent. Archived agents are inactive but recoverable. |
+
+### Configure agents
+
+| Tool | What it does |
+|---|---|
+| `get_agent_prompt` | Read an agent's current system prompt and configured tools. Works for both single-prompt and conversation flow agents. |
+| `update_agent_config` | Update agent settings — name, voice, model, language, STT transcriber (Pulse / Pulse-Legacy), first message, timeouts, and more. For versioned agents, creates a draft automatically. |
+| `update_agent_prompt` | Update an agent's system prompt and optionally the first message. For versioned agents, creates a draft automatically — or pass a `draft_id` to stack the change onto an existing draft. |
+| `publish_draft` | Publish a draft as a new version and activate it to make it live, or discard it. Publishing triggers an automatic security check on the prompt; the tool waits for it to pass before activating and reports the real outcome (activated, still pending, or failed). Optionally add a version label and changelog. |
+
+### Tools & pre-call API
+
+| Tool | What it does |
+|---|---|
+| `add_agent_tool` | Add or update one or more API-call tools on a single-prompt agent — HTTP requests the agent invokes during a call (e.g. look up an order, book an appointment). Pass one tool or a whole batch in a single call. Upserts by name and preserves existing tools. For versioned agents, creates a draft automatically — or pass a `draft_id` to stack onto an existing draft. |
+| `remove_agent_tool` | Remove a tool from an agent by name. For versioned agents, creates a draft automatically — or pass a `draft_id` to stack onto an existing draft. |
+| `set_pre_call_api` | Configure or disable an agent's pre-call API — one HTTP request made before the call connects to enrich the agent with variables (e.g. fetch a customer record by phone number). For versioned agents, creates a draft automatically — or pass a `draft_id` to stack onto an existing draft. |
 
 ## Drafts
+
+On versioned agents, every config edit lands in a draft rather than going live directly. Edit tools (`update_agent_prompt`, `add_agent_tool`, `set_pre_call_api`, `remove_agent_tool`) accept an optional `draft_id` so multiple changes — prompt, pre-call API, and a full toolset — can be stacked into **one** draft and shipped with a single `publish_draft`. When adding several API-call tools to the same draft, pass them as one batch: the draft's tools section is written wholesale, so the last write defines the full set.
 
 | Tool | What it does |
 |---|---|
@@ -56,13 +73,13 @@ You never call these directly — just describe what you want and the AI picks t
 
 | Tool | What it does |
 |---|---|
-| `get_voices` | List available voices with gender, language, and accent info. Use this to find voice IDs for agent configuration. |
+| `get_voices` | List available voices with gender, language, and accent info, plus the models each supports (a voice listing `lightning-v3.1-pro` is a Lightning V3.1 Pro voice). Use this to find voice IDs for agent configuration. |
 
 ## Text-to-Speech
 
 | Tool | What it does |
 |---|---|
-| `text_to_speech` | Convert text to speech audio. Supports multiple voices, languages, speeds, and output formats (wav, mp3). Saves the file and returns it inline. |
+| `text_to_speech` | Convert text to speech audio with Waves Lightning V3.1 (or V3.1 Pro). Supports multiple voices, languages, speeds, and output formats (wav, mp3, pcm, ulaw, alaw). Saves the file and returns it inline. |
 
 ## Speech-to-Text
 

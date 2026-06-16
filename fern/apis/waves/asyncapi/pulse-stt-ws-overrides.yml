@@ -138,17 +138,22 @@ servers:
 
 channels:
   pulseStream:
+    parameters:
+      Authorization:
     x-fern-sdk-group-name: Pulse STT Streaming
     servers:
       - $ref: "#/servers/waves-ws"
     messages:
-      audioData.message:
+      pulseAudioData.message:
         x-fern-type-name: PulseAudioData
         name: PulseAudioData
-      endSignal.message:
-        x-fern-type-name: PulseEndSignal
-        name: PulseEndSignal
-      transcriptionResponse:
+      pulseFinalizeSignal.message:
+        x-fern-type-name: PulseFinalizeSignal
+        name: PulseFinalizeSignal
+      pulseCloseStreamSignal.message:
+        x-fern-type-name: PulseCloseStreamSignal
+        name: PulseCloseStreamSignal
+      pulseTranscriptionResponse.message:
         x-fern-type-name: PulseTranscriptionResponse
         name: PulseTranscriptionResponse
 
@@ -156,9 +161,12 @@ operations:
   sendAudioData:
     action: send
     x-fern-sdk-method-name: transcribe_streaming_pulse_send_audio
-  sendEndSignal:
+  sendFinalizeSignal:
     action: send
-    x-fern-sdk-method-name: transcribe_streaming_pulse_send_end_signal
+    x-fern-sdk-method-name: transcribe_streaming_pulse_send_finalize
+  sendCloseStreamSignal:
+    action: send
+    x-fern-sdk-method-name: transcribe_streaming_pulse_send_close_stream
   receiveTranscription:
     action: receive
     x-fern-sdk-method-name: receive_transcribe_streaming_pulse

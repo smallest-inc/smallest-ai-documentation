@@ -14,7 +14,7 @@ Use webhooks to process Pulse STT jobs asynchronously—ideal for long recording
     Route an HTTPS URL (e.g., `https://api.example.com/webhooks/stt`) that accepts POST requests. Implement signature checks or HMAC validation inside this handler to guard against spoofed traffic.
   </Step>
   <Step title="Attach metadata">
-    Include `webhook_url` and optional `webhook_extra` query parameters when calling `POST /waves/v1/pulse/get_text`. `webhook_extra` accepts comma-separated `key:value` pairs that return verbatim in the webhook payload for correlation.
+    Include `webhook_url` and optional `webhook_extra` query parameters when calling `POST /waves/v1/stt/?model=pulse-pro` (or `?model=pulse`). `webhook_extra` accepts comma-separated `key:value` pairs that return verbatim in the webhook payload for correlation.
   </Step>
   <Step title="Submit audio">
     Make your transcription request as usual (raw bytes or audio URL). Pulse STT queues the job, streams to the model, and emits the webhook once `status=success` (or `failed`).
@@ -31,7 +31,7 @@ Use webhooks to process Pulse STT jobs asynchronously—ideal for long recording
 curl -sL -o audio.wav "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
 
 curl --request POST \
-  --url "https://api.smallest.ai/waves/v1/pulse/get_text?language=en&word_timestamps=true&webhook_url=https://api.example.com/webhooks/stt&webhook_extra=case_id:42,region:us-east" \
+  --url "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en&word_timestamps=true&webhook_url=https://api.example.com/webhooks/stt&webhook_extra=case_id:42,region:us-east" \
   --header "Authorization: Bearer $SMALLEST_API_KEY" \
   --header "Content-Type: audio/wav" \
   --data-binary "@audio.wav"

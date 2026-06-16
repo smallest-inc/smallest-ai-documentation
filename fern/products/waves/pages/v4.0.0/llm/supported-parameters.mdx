@@ -1,0 +1,78 @@
+---
+title: "Supported Parameters"
+description: "What flows through to Electron, what's rejected, and how Electron extends or restricts the OpenAI Chat Completions request body."
+icon: "sliders"
+---
+
+Electron implements the OpenAI Chat Completions wire format. Most request fields pass through to the model verbatim. This page is the authoritative list of which fields are supported, which are explicitly rejected, and which carry Electron-specific semantics.
+
+## Passthrough — works as OpenAI documents
+
+| Field | Notes |
+|---|---|
+| `model` | Must be `"electron"`. |
+| `messages` | Standard array of `{role, content, tool_calls?, tool_call_id?}`. Roles: `system`, `user`, `assistant`, `tool`. **Max 200 messages** per request. |
+| `temperature` | `0.0` and up. Standard OpenAI semantics. |
+| `top_p` | `0.0`–`1.0`. Standard nucleus sampling. |
+| `max_tokens` | Caps output. Combined input + output context ceiling: 32,768 tokens. |
+| `stream` | When `true`, response is SSE. See [Streaming](/waves/documentation/llm-electron/streaming). |
+| `stream_options.include_usage` | Strongly recommended with `stream: true`. Server appends a final usage chunk. |
+| `stop` | String or array of strings (up to 4). |
+| `seed` | Best-effort determinism. |
+| `response_format` | `{"type":"text"}` (default) or `{"type":"json_object"}`. |
+| `tools` | Standard OpenAI tools array. **Max 64 entries**. See [Tool Calling](/waves/documentation/llm-electron/tool-function-calling). |
+| `tool_choice` | `"auto"`, `"required"`, `"none"`, or `{"type":"function","function":{"name":"…"}}`. |
+| `logit_bias` | Per-token-id biases (`{"<token_id>": <bias>}`). |
+| `logprobs` | Boolean. |
+| `top_logprobs` | `0`–`20`. Requires `logprobs: true`. |
+| `presence_penalty` | `-2.0` to `2.0`. |
+| `frequency_penalty` | `-2.0` to `2.0`. |
+| `user` | Arbitrary opaque end-user identifier — useful for your own logs; not interpreted by Electron. |
+
+Unrecognized fields are accepted by the schema and forwarded to the model. They may be ignored if the model doesn't recognize them.
+
+## Explicitly rejected
+
+These return `HTTP 400` with `invalid_request_error`:
+
+| Field | Reason |
+|---|---|
+| `n` > 1 | Cost amplification with no use case in v1. Use multiple separate requests if you need multiple completions. |
+| `prompt_logprobs` | Response-size amplification with no billing impact. |
+
+## Schema hard limits
+
+| Limit | Value |
+|---|---:|
+| Max messages per request | 200 |
+| Max tools per request | 64 |
+| Max combined context (input + output) | 32,768 tokens |
+| Max stop sequences | 4 |
+| Max top_logprobs | 20 |
+
+Exceeding any of these returns `HTTP 400`. The `error.message` will name the offending field.
+
+## Response object — Electron extensions
+
+Beyond the standard OpenAI response shape, Electron returns these additional fields:
+
+| Path | Description |
+|---|---|
+| `usage.prompt_tokens_details.cached_tokens` | Subset of `prompt_tokens` served from prefix cache. Billed at the discounted rate. See [Prefix Caching](/waves/documentation/llm-electron/prefix-caching). |
+| HTTP header `X-Request-Id` | Unique request identifier. Echo this in support tickets so we can find the trace. |
+
+For tool calls, Electron's assistant message also typically includes a short filler phrase in `content` alongside `tool_calls` — see [Tool Calling: the filler-phrase pattern](/waves/documentation/llm-electron/tool-function-calling#response-shape-the-filler-phrase-pattern).
+
+## Differences from OpenAI
+
+| | OpenAI | Electron |
+|---|---|---|
+| Endpoint path | `/v1/chat/completions` | `/waves/v1/chat/completions` |
+| `model` value | `"gpt-4o"`, `"gpt-4-turbo"`, etc. | `"electron"` |
+| Auth header | `Authorization: Bearer sk-…` | `Authorization: Bearer sk_…` (Smallest API key) |
+| Multi-completion `n` | Supported (up to 128) | Rejected — `n=1` only |
+| `prompt_logprobs` | Supported on some models | Rejected |
+| `content` when tool calls present | `null` | Often a natural-language filler (see [Tool Calling](/waves/documentation/llm-electron/tool-function-calling)) |
+| Pricing | Per model, varies | Single Electron rate; contact your Smallest AI account manager |
+
+Everything else — request shape, response shape, streaming format, error envelope — matches OpenAI's. See [Migrate from OpenAI](/waves/documentation/llm-electron/migrate-from-open-ai) for the side-by-side code diff.

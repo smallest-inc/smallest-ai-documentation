@@ -1,0 +1,433 @@
+asyncapi: 3.0.0
+info:
+  title: Unified Speech-to-Text Live WebSocket API
+  version: 1.0.0
+  description: |
+    Unified WebSocket endpoint for live speech-to-text streaming. Path is `/waves/v1/stt/live`; the ASR model is selected via the `?model=` query parameter, mirroring the unified TTS shape.
+
+    Today only `?model=pulse` is supported. `?model=pulse-pro` is rejected with `400` before the WebSocket upgrades because Pulse Pro has no streaming worker yet; use `POST /waves/v1/stt/?model=pulse-pro` (HTTP) instead.
+
+    The existing `WS /waves/v1/pulse/get_text` continues to work alongside this unified path.
+  contact:
+    name: Waves API Support
+    email: support@smallest.ai
+  license:
+    name: Proprietary
+servers:
+  production:
+    host: api.smallest.ai
+    pathname: /waves/v1/stt/live
+    protocol: wss
+    description: Production WebSocket streaming STT endpoint
+    x-fern-server-name: waves-ws
+    security:
+    - $ref: '#/components/securitySchemes/bearerAuth'
+    bindings:
+      ws:
+        query:
+          type: object
+          required: [model, language]
+          properties:
+            model:
+              type: string
+              enum: [pulse]
+              description: |
+                Selects the ASR model. Today only `pulse` is supported on the streaming endpoint. `pulse-pro` returns `400` before WebSocket upgrade, use `POST /waves/v1/stt/?model=pulse-pro` (HTTP) for Pulse Pro.
+            language:
+              type: string
+              enum: [en, hi, es, pt, it, fr, de, nl, ru, uk, pl, cs, sk, ro, bg, hu, da, fi, sv, lt, lv, et, mt, mr, gu, bn, pa, ta, te, kn, ml, or, ja, yue, zh, ko, tl, id, ms, multi-eu, multi-indic]
+              description: |
+                Language code. This endpoint is **Streaming (Real-Time, WebSocket)** — for pre-recorded audio, use `POST /waves/v1/stt/` (same 39-language set). Pass any single-language code (e.g. `en`, `hi`) or the `multi-eu` / `multi-indic` aggregator for unknown audio. See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the full table with language names.
+            sample_rate:
+              type: integer
+              enum: [8000, 16000, 22050, 24000, 44100, 48000]
+              default: 16000
+              description: Audio sample rate in Hz.
+            encoding:
+              type: string
+              enum: [linear16, linear32, alaw, mulaw, opus, ogg_opus]
+              default: linear16
+              description: Audio encoding format.
+            word_timestamps:
+              type: string
+              enum: ['true', 'false']
+              default: 'false'
+              description: Include word-level timestamps in transcription events.
+            diarize:
+              type: string
+              enum: ['true', 'false']
+              default: 'false'
+              description: Speaker diarization.
+            eou_timeout_ms:
+              type: integer
+              description: End-of-utterance silence timeout in milliseconds.
+            format:
+              type: string
+              enum: ['true', 'false']
+              default: 'true'
+              description: |
+                Master formatting switch for transcript responses. When `false`,
+                forces `punctuate=false`, `capitalize=false`, and also disables
+                Inverse Text Normalization (ITN) so it cannot silently
+                reintroduce punctuation or casing.
+
+                When `true`, the `punctuate` and `capitalize` params take effect
+                independently. Leave `format=true` and use those two to fine-tune.
+            punctuate:
+              type: string
+              enum: ['true', 'false']
+              default: 'true'
+              description: |
+                When `false`, strips end-of-sentence punctuation (`.`, `,`, `?`, `!`)
+                from the final transcript, `words[].word`, and
+                `utterances[].transcript`. Does not affect casing — use `capitalize`
+                for that.
+
+                Overridden to `false` when `format=false`.
+            capitalize:
+              type: string
+              enum: ['true', 'false']
+              default: 'true'
+              description: |
+                When `false`, lowercases the entire transcript output (final
+                transcript, `words[].word`, and `utterances[].transcript`).
+                Does not affect punctuation — use `punctuate` for that.
+
+                Overridden to `false` when `format=false`.
+            itn_normalize:
+              type: string
+              enum: ['true', 'false']
+              default: 'false'
+              description: |
+                Enable Inverse Text Normalization to convert spoken-form entities
+                (numbers, dates, currencies, phone numbers, etc.) into written form
+                in finalized transcripts. Example: `five five five one two three`
+                becomes `5551234`.
+
+                Overridden to `false` when `format=false`.
+            finalize_on_words:
+              type: string
+              enum: ['true', 'false']
+              default: 'true'
+              description: |
+                When `false`, disables automatic word-count-based finalization.
+                Use with `itn_normalize=true` for agentic pipelines where you
+                control finalization explicitly via `{"type":"finalize"}` messages.
+            max_words:
+              type: integer
+              description: |
+                Maximum number of words before forced finalization. Useful for
+                keeping ITN chunks short and accurate, or for downstream LLM
+                pipelines that want bounded segment lengths.
+            redact_pii:
+              type: string
+              enum: ['true', 'false']
+              default: 'false'
+              description: |
+                Redact personally identifiable information from the transcript.
+                Names → `[FIRSTNAME_*]` / `[LASTNAME_*]`, phone numbers →
+                `[PHONENUMBER_*]`, addresses → `[ADDRESS_*]`, etc. The redaction
+                tokens use sequential indices so multiple occurrences of the same
+                entity get distinct labels (`[FIRSTNAME_1]`, `[FIRSTNAME_2]`).
+            redact_pci:
+              type: string
+              enum: ['true', 'false']
+              default: 'false'
+              description: |
+                Redact payment card information (credit-card numbers, CVV, account
+                numbers, etc.). Replaces matches with `[ACCOUNTNUMBER_*]` tokens.
+                Use alongside `redact_pii=true` for full PCI-compliant transcript
+                handling in voice-agent flows.
+            sentence_timestamps:
+              type: string
+              enum: ['true', 'false']
+              default: 'false'
+              description: |
+                Include sentence-level timing in the transcription event under a
+                new `utterances` array. Each entry carries `text`, `start`, `end`,
+                and (when diarization is on) `speaker`. Combine with
+                `word_timestamps=true` to get both word and sentence boundaries.
+            full_transcript:
+              type: string
+              enum: ['true', 'false']
+              default: 'false'
+              description: |
+                When `true`, every transcription event also carries a cumulative
+                `full_transcript` field containing the concatenated final
+                transcripts of all utterances so far in this session. Useful for
+                multi-turn voice agents that want the running transcript without
+                tracking turns client-side.
+            keywords:
+              type: string
+              example: "I:20,smiling:26"
+              description: |
+                Boost recognition of specific words or phrases for this session.
+                Useful for product names, jargon, proper nouns, and other
+                domain-specific terms the model might otherwise mis-transcribe.
+
+                **Format:** a single comma-separated string (not a JSON array).
+                Each entry is a word or phrase, optionally followed by
+                `:INTENSIFIER` — a numeric boost multiplier. Defaults to `1.0`
+                when omitted.
+
+                **Example:** `I:20,smiling:26`
+
+                - Phrases can include spaces (`small language model:3.5`).
+                - Intensifier accepts integers or decimals (`2`, `2.5`, `0.5`).
+                - Mixing entries with and without intensifiers is fine.
+                - Maximum 100 keywords per session.
+
+                **INTENSIFIER range:** `0` to `20`. Recommended value is `6`.
+                Higher values bias recognition more aggressively toward the
+                keyword, but also **increase the risk of hallucination and
+                repetition** in the transcript. Values of `10` or above are
+                not recommended — the model may insert the keyword even when
+                it was not spoken. Start around `3–6` and tune from there.
+
+                **Wire format:** pass as a query-string parameter, URL-encoded.
+                `URLSearchParams` in JavaScript and `urlencode()` in Python
+                handle the encoding for you — pass the raw string, not a
+                JSON-encoded array.
+channels:
+  transcription:
+    address: /waves/v1/stt/live
+    description: |
+      Real-time speech-to-text over a persistent WebSocket. The fit-for-purpose path for live captioning, voice agents, and any flow where you need partial transcripts as the user is still speaking.
+
+      ## When to use this
+
+      - **Use this** for live audio: microphone input, voice-agent turns, simultaneous interpretation, low-latency captioning. Partial results stream back while audio is still arriving.
+      - **Use `POST /waves/v1/stt/`** when you have a complete file. Single request, single response, less plumbing.
+
+      ## Model selection
+
+      Today only `?model=pulse` is supported on the streaming endpoint. `?model=pulse-pro` is rejected with `400` before WebSocket upgrade because Pulse Pro has no streaming worker; use `POST /waves/v1/stt/?model=pulse-pro` (HTTP) instead.
+
+      ## How it works
+
+      1. Open a WebSocket to `wss://api.smallest.ai/waves/v1/stt/live` with `Authorization: Bearer <key>` and the session params (`model`, `language`, `sample_rate`, `encoding`, etc.) as query string.
+      2. Stream raw PCM (or your chosen `encoding`) over the socket as binary frames.
+      3. The server pushes back JSON `transcription` messages with `is_final: false` partial results as audio streams and `is_final: true` when an utterance closes.
+      4. Send a control message when the user pauses or the session ends:
+         - **`{"type":"finalize"}`** — *turn-boundary signal*. Flushes the current audio buffer, emits one `is_final: true` transcript for that turn, and **keeps the WebSocket open** for the next user turn. Use this once per turn in a multi-turn voice agent.
+         - **`{"type":"close_stream"}`** — *session-end signal*. Flushes remaining audio, emits the terminal `is_final: true` + `is_last: true` transcript, then closes the WebSocket. Use this once, at the actual end of the session (call end, app shutdown, or after a single-shot transcription buffer is fully streamed).
+
+      A multi-turn voice agent typically fires many `finalize` messages and exactly one `close_stream`. A one-off transcription of a fixed audio buffer fires only `close_stream`.
+
+      ## Examples
+
+      **Python — multi-turn voice agent (recommended for Voice AI)**
+
+      Send `finalize` per user turn so the WebSocket stays open across the whole call — you pay the connection cost once, not per turn:
+
+      ```python
+      import asyncio, json, websockets
+
+      URL = "wss://api.smallest.ai/waves/v1/stt/live?model=pulse&language=en&sample_rate=16000&encoding=linear16&itn_normalize=true&finalize_on_words=false&eou_timeout_ms=1000"
+      HEADERS = {"Authorization": f"Bearer {API_KEY}"}
+
+      async def run_voice_agent(audio_source, llm_reply, stop_event):
+          async with websockets.connect(URL, additional_headers=HEADERS) as ws:
+              async def stream_audio():
+                  async for frame in audio_source:
+                      if stop_event.is_set(): return
+                      await ws.send(frame)
+
+              # Call this when your VAD detects end-of-turn (user paused)
+              async def end_of_turn():
+                  await ws.send(json.dumps({"type": "finalize"}))
+
+              async def consume():
+                  async for msg in ws:
+                      data = json.loads(msg)
+                      if data.get("is_last"): break          # only fires after close_stream
+                      if data.get("is_final"):
+                          await llm_reply(data["transcript"])  # ITN-normalized full turn
+
+              producer = asyncio.create_task(stream_audio())
+              consumer = asyncio.create_task(consume())
+              await stop_event.wait()                          # end of call
+
+              await ws.send(json.dumps({"type": "close_stream"}))
+              await consumer
+              producer.cancel()
+      ```
+
+      **Python — single-shot transcription**
+
+      For one-off transcription of a complete audio buffer (file, single utterance) where no further audio is coming, send `close_stream` directly after the last chunk:
+
+      ```python
+      import asyncio, json, websockets
+
+      URL = "wss://api.smallest.ai/waves/v1/stt/live?model=pulse&language=en&sample_rate=16000&encoding=linear16"
+      HEADERS = {"Authorization": f"Bearer {API_KEY}"}
+
+      async def transcribe_once(audio_bytes):
+          async with websockets.connect(URL, additional_headers=HEADERS) as ws:
+              for i in range(0, len(audio_bytes), 4096):
+                  await ws.send(audio_bytes[i:i+4096])
+              await ws.send(json.dumps({"type": "close_stream"}))
+              async for msg in ws:
+                  data = json.loads(msg)
+                  if data.get("is_final"):
+                      print(data["transcript"])
+                  if data.get("is_last"):
+                      break
+
+      asyncio.run(transcribe_once(open("audio.pcm", "rb").read()))
+      ```
+
+      ## Common gotchas
+
+      - **`model` is required.** Missing or invalid values return `400` before the WebSocket upgrades.
+      - **Match `sample_rate` to your audio.** The server does not resample; mismatched rates produce garbage transcripts.
+      - **Existing clients** on `wss://api.smallest.ai/waves/v1/pulse/get_text` continue to work alongside this unified path.
+    messages:
+      audioChunkOut:
+        $ref: '#/components/messages/AudioChunkOut'
+      finalizeSignal:
+        $ref: '#/components/messages/FinalizeSignal'
+      closeStream:
+        $ref: '#/components/messages/CloseStream'
+      transcriptionEvent:
+        $ref: '#/components/messages/TranscriptionEvent'
+      errorEvent:
+        $ref: '#/components/messages/ErrorEvent'
+operations:
+  sendAudio:
+    action: send
+    channel: { $ref: '#/channels/transcription' }
+    summary: Send a binary audio chunk to the server.
+    messages:
+    - $ref: '#/channels/transcription/messages/audioChunkOut'
+  sendFinalize:
+    action: send
+    channel: { $ref: '#/channels/transcription' }
+    summary: 'Turn-boundary signal — flush the current buffer, emit `is_final`, keep the session open'
+    description: 'Flush the current audio buffer, run ITN over the accumulated utterance, and emit one `is_final` transcript. The WebSocket stays open and accepts audio for the next user turn. Send this once per turn in any multi-turn flow (voice agents, conversational STT).'
+    messages:
+    - $ref: '#/channels/transcription/messages/finalizeSignal'
+  sendClose:
+    action: send
+    channel: { $ref: '#/channels/transcription' }
+    summary: 'Session-end signal — flush remaining audio, emit `is_last`, close the socket'
+    description: 'Flush any remaining buffered audio, emit the terminal `is_final` + `is_last` transcript, then close the WebSocket. Send this once at the end of the session — end of call, app shutdown, or after the entire buffer of a single-shot transcription is streamed.'
+    messages:
+    - $ref: '#/channels/transcription/messages/closeStream'
+  receiveTranscription:
+    action: receive
+    channel: { $ref: '#/channels/transcription' }
+    summary: Receive transcription events as the model processes audio.
+    messages:
+    - $ref: '#/channels/transcription/messages/transcriptionEvent'
+    - $ref: '#/channels/transcription/messages/errorEvent'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'API key authentication. Include your key in the `Authorization` header as `Bearer YOUR_API_KEY`.'
+  messages:
+    AudioChunkOut:
+      contentType: application/octet-stream
+      summary: Binary audio frame (PCM or encoded per `?encoding=`).
+      payload:
+        type: string
+        format: binary
+    FinalizeSignal:
+      contentType: application/json
+      summary: 'Force an immediate `is_final` transcript for buffered audio without ending the session.'
+      payload:
+        type: object
+        required: [type]
+        properties:
+          type:
+            type: string
+            enum: [finalize]
+            description: 'Flush the current audio buffer and emit one `is_final: true` transcript. The WebSocket stays open and accepts audio for the next user turn.'
+      examples:
+      - name: finalize
+        payload: { type: finalize }
+    CloseStream:
+      contentType: application/json
+      summary: Tell the server to flush remaining audio and close the connection.
+      payload:
+        type: object
+        required: [type]
+        properties:
+          type:
+            type: string
+            enum: [close_stream]
+            description: 'Flush remaining buffered audio, emit the terminal `is_final` + `is_last` transcript, then close the WebSocket. Send exactly once at the end of the session.'
+      examples:
+      - name: close
+        payload: { type: close_stream }
+    TranscriptionEvent:
+      contentType: application/json
+      summary: Streaming transcription event.
+      payload:
+        type: object
+        properties:
+          type:           { type: string, enum: [transcription] }
+          status:         { type: string, example: success }
+          transcription:  { type: string, example: "Hi, how are you doing?" }
+          transcript:     { type: string, description: 'Same content as `transcription`; the WebSocket DTO emits both fields for SDK compatibility.' }
+          full_transcript: { type: string, description: 'Cumulative transcript across all utterances in this session, when `full_transcript=true` is set on connect.' }
+          is_final:       { type: boolean, description: 'True when this segment will not be revised.' }
+          is_last:        { type: boolean, description: 'True on the terminal segment, fires only after the client sends `{"type":"close_stream"}`.' }
+          from_finalize:  { type: boolean, description: 'True when this `is_final` was produced by a client-sent `{"type":"finalize"}` rather than the server''s automatic finalizer. Useful in multi-turn flows for per-turn latency measurement.' }
+          session_id:     { type: string }
+          language:       { type: string, nullable: true, description: 'The language code Pulse detected or was pinned to for this segment.' }
+          languages:      { type: array, nullable: true, items: { type: string }, description: 'Populated when language detection emits multiple candidates.' }
+          words:
+            type: array
+            items:
+              type: object
+              properties:
+                word:    { type: string }
+                start:   { type: number }
+                end:     { type: number }
+                speaker: { type: string, description: 'Present when `diarize=true`.' }
+          utterances:
+            type: array
+            description: 'Sentence-level timestamps. Present when `sentence_timestamps=true` is set on connect.'
+            items:
+              type: object
+              properties:
+                text:    { type: string, description: 'The sentence text.' }
+                start:   { type: number, description: 'Start time in seconds.' }
+                end:     { type: number, description: 'End time in seconds.' }
+                speaker: { type: string, description: 'Speaker label. Present when `diarize=true`.' }
+      examples:
+      - name: partial
+        payload:
+          type: transcription
+          status: success
+          transcription: "Hi, how are you"
+          is_final: false
+          is_last: false
+          session_id: 4b5ae9cb-1234-5678-9abc-def012345678
+      - name: final
+        payload:
+          type: transcription
+          status: success
+          transcription: "Hi, how are you doing?"
+          is_final: true
+          is_last: false
+          session_id: 4b5ae9cb-1234-5678-9abc-def012345678
+    ErrorEvent:
+      contentType: application/json
+      summary: |
+        Error emitted as JSON before a forced close. Common closure scenarios:
+
+        - `HTTP 400` before upgrade: invalid `?model=` value. For `pulse-pro`: *"Pulse Pro has no streaming transport. Use POST /waves/v1/stt/?model=pulse-pro instead."*
+        - `HTTP 401` before upgrade: missing or invalid API key.
+        - WebSocket close `1008`: concurrency limit reached (org has too many open WS sessions).
+      payload:
+        type: object
+        properties:
+          type:    { type: string, enum: [error] }
+          status:  { type: string, example: error }
+          message: { type: string }

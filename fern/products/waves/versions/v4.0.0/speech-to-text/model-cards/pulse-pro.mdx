@@ -1,0 +1,302 @@
+---
+title: "Pulse Pro"
+description: "Model card for Pulse Pro. High-accuracy English speech-to-text positioned #2 on the public Open ASR Leaderboard. Pre-recorded only, HTTP transport."
+icon: "sparkles"
+---
+
+<Badge color="purple">Latest Release</Badge>
+
+Pulse Pro is the premium Speech-to-Text model in the Pulse family. Built for English transcription where accuracy matters more than streaming. Tied for **#2 on the public Open ASR Leaderboard** (5.42% average WER), beating ElevenLabs Scribe v2, AssemblyAI Universal-3 Pro, Speechmatics Enhanced, and every Whisper variant. Pre-recorded only, with no streaming worker. Use [standard Pulse](/waves/model-cards/speech-to-text/pulse) for live streaming or multilingual audio.
+
+<CardGroup cols={4}>
+  <Card title="5.42% WER" icon="bullseye">
+    Open ASR Leaderboard average, English
+  </Card>
+  <Card title="250–300× RTFx" icon="gauge-high">
+    Long-form transcription, no timestamps
+  </Card>
+  <Card title="English Only" icon="globe">
+    Pre-recorded HTTP transport
+  </Card>
+  <Card title="$0.004 / min" icon="tag">
+    Customer rate, non-streaming
+  </Card>
+</CardGroup>
+
+## Model Overview
+
+| | |
+|---|---|
+| **Developed by** | Smallest AI |
+| **Model type** | Speech-to-Text |
+| **Languages** | English (`en`) |
+| **License** | Proprietary |
+| **Version** | `pulse-large english_v4.1` (ckpt v13-11000) |
+| **Recommended GPU** | 1× NVIDIA L4 (24 GB VRAM). Larger GPUs (L40S, A100, H100) supported. |
+| **Transport** | HTTP only (no streaming worker) |
+| **Documentation** | [docs.smallest.ai/waves](https://docs.smallest.ai/waves) |
+| **Console** | [app.smallest.ai/dashboard](https://app.smallest.ai/dashboard) |
+| **Support** | support@smallest.ai |
+
+---
+
+## How to use it
+
+Pulse Pro is selected via the `model` query parameter on the unified Speech-to-Text endpoint.
+
+```bash
+curl -sL "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav" | \
+  curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en" \
+    -H "Authorization: Bearer $SMALLEST_API_KEY" \
+    -H "Content-Type: application/octet-stream" \
+    --data-binary @-
+```
+
+Replace the inline sample URL with `--data-binary "@./your.wav"` to send a local file.
+
+Sample response:
+
+```json
+{
+  "status": "success",
+  "transcription": "Hi, how are you doing? ...",
+  "words": [],
+  "language": "en",
+  "metadata": { "duration": 17.643, "processing_time_ms": 482.21, "rtfx": 36.6, "num_chunks": 1 },
+  "request_id": "8c355f4d-bd45-48ee-aa83-d00e4670f6bb"
+}
+```
+
+For long files where you do not want to hold the HTTP connection open, pass a `webhook_url`:
+
+```bash
+curl -sL "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav" | \
+  curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en&webhook_url=https://your-server.com/cb" \
+    -H "Authorization: Bearer $SMALLEST_API_KEY" \
+    -H "Content-Type: application/octet-stream" \
+    --data-binary @-
+```
+
+Returns `200` immediately with `{"status": "processing", "request_id": "..."}`. The webhook receives the full transcription payload when ready.
+
+<Warning>
+Pulse Pro has no streaming worker. Calls to `WS /waves/v1/stt/live?model=pulse-pro` return `400` with a clear message. For live transcription use [standard Pulse](/waves/model-cards/speech-to-text/pulse) (`?model=pulse`).
+</Warning>
+
+---
+
+## Key Capabilities
+
+<CardGroup cols={3}>
+  <Card title="Leaderboard-Ranked Accuracy" icon="trophy">
+    Tied for #2 on the public Open ASR Leaderboard at 5.42% average WER. Outranks every commercial English STT API in our accuracy band.
+  </Card>
+  <Card title="Domain Wins" icon="briefcase">
+    Best-in-class on AMI (meetings, 7.32% WER) and SPGISpeech (financial, 2.04% WER). These are workloads enterprise customers actually have.
+  </Card>
+  <Card title="High Throughput" icon="bolt">
+    250–300× real-time factor on long-form audio without timestamps. Around 200× with word timestamps enabled.
+  </Card>
+  <Card title="Word Timestamps" icon="clock">
+    Per-word timing on every response. Costs roughly one-third of throughput vs no-timestamps mode.
+  </Card>
+  <Card title="Speaker Diarization" icon="users">
+    Multi-speaker identification with per-word speaker labels.
+  </Card>
+  <Card title="Async via Webhook" icon="webhook">
+    Pass `webhook_url` to offload long-file transcription; receive results on your callback when ready.
+  </Card>
+</CardGroup>
+
+---
+
+## Performance & Benchmarks
+
+Pulse Pro is evaluated on the public Open ASR Leaderboard (ESB benchmark, Whisper EnglishTextNormalizer) and FLEURS English.
+
+### Open ASR Leaderboard, head-to-head
+
+WER % on the eight ESB datasets. **Bold** = winner per row. Whisper EnglishTextNormalizer, normalized.
+
+| Dataset | Pulse Pro | Granite 4.1 2B | Cohere Transcribe |
+|---|---:|---:|---:|
+| AMI | **7.32** | 8.09 | 8.13 |
+| Earnings22 | 9.04 | **8.37** | 10.86 |
+| GigaSpeech | 9.52 | 9.80 | **9.34** |
+| LibriSpeech clean | 1.73 | 1.33 | **1.25** |
+| LibriSpeech other | 3.74 | 2.50 | **2.37** |
+| SPGISpeech | **2.04** | 3.78 | 3.08 |
+| TED-LIUM | 3.68 | **3.07** | 2.49 |
+| VoxPopuli | 6.32 | **5.70** | 5.87 |
+| **Average (8 datasets)** | **5.42** | **5.33** | **5.42** |
+| **Open ASR rank** | **🥈 #2 (tied)** | 🥇 #1 | 🥈 #2 (tied) |
+
+Pulse Pro and Cohere Transcribe are a statistical tie on aggregate WER. Pulse Pro leads on conversational and financial workloads (AMI, SPGISpeech); Cohere edges ahead on read speech (LibriSpeech, TED-LIUM).
+
+### Position on the public leaderboard
+
+Sorted by ESB average WER. Source: HF Open ASR Leaderboard.
+
+| Rank | Model | ESB Avg WER ↓ | Pricing |
+|---|---|---:|---|
+| 1 | IBM Granite Speech 4.1 2B | 5.33 | self-host |
+| **2** | **Pulse Pro** | **5.42** | **$0.004 / min** |
+| 2 | Cohere Labs Transcribe (tied) | 5.42 | self-host |
+| 3 | Zoom Scribe v1 | 5.47 | API |
+| 4 | IBM Granite Speech 4.0 1B | 5.52 | self-host |
+| 5 | NVIDIA Canary Qwen 2.5B | 5.63 | API |
+| 8 | ElevenLabs Scribe v2 | 5.83 | API |
+| 12 | AssemblyAI Universal-3 Pro | 6.21 | API |
+| 18 | Speechmatics Enhanced | 6.91 | API |
+| 23 | OpenAI Whisper Large v3 | 7.44 | API |
+
+### FLEURS English
+
+| Metric | Pulse Pro |
+|---|---:|
+| **WER (FLEURS en_us)** | 3.92% |
+| **CER (FLEURS en_us)** | 1.73% |
+
+Per-language FLEURS tables for the broader European and Indic sets are tracked on standard [Pulse](/waves/model-cards/speech-to-text/pulse).
+
+<Note>
+**Performance notes.** Two caveats that matter for accurate expectation-setting:
+
+- **RTFx hardware reference:** the public leaderboard measures throughput on A100-80GB. Pulse Pro's published 250–300× was measured on L40S; the recommended L4 deployment delivers lower throughput than L40S, and A100 delivers higher. Re-benchmark on your target GPU before locking SLOs.
+- **Long-form single-file RTFx is lower than batched.** On a challenging 1.92-hour Earnings22 sample we measured 68×. The 250–300× headline assumes optimal batching of typical-length audio. Plan for the lower bound on single very-long-form files.
+</Note>
+
+---
+
+## Throughput, latency, and pricing
+
+| Mode | Throughput (RTFx, long-form) | 2 hr file latency |
+|---|---|---|
+| No word timestamps | 250–300× | ~24–29 sec |
+| With word timestamps | ~200× | ~36 sec |
+
+Customer pricing: **$0.004 per minute** of audio (Standard plan, non-streaming HTTP). Standard plan rate-limit defaults: 25 RPM per model. Enterprise tier is unlimited and configurable per-customer.
+
+---
+
+## Supported Languages
+
+Pulse Pro is English-only. For multilingual transcription, use standard [Pulse](/waves/model-cards/speech-to-text/pulse) (38 languages, streaming + non-streaming).
+
+| Language | Code | Available |
+|---|---|---|
+| English | `en` | Yes |
+
+---
+
+## API Reference
+
+### Endpoint
+
+| Endpoint | Method | Use case |
+|---|---|---|
+| `https://api.smallest.ai/waves/v1/stt/?model=pulse-pro` | POST | Synchronous (or async via `webhook_url`) transcription |
+
+### Query parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `model` | `pulse-pro` | Yes | Required selector. Omitting it or passing `pulse-pro` to the streaming endpoint returns `400`. |
+| `language` | `en` | Yes | English only. |
+| `word_timestamps` | boolean | No | Per-word timestamps. Costs roughly one-third of throughput. |
+| `diarize` | boolean | No | Speaker identification. |
+| `webhook_url` | URL | No | Receive the transcription asynchronously; endpoint returns `200` with `{"status": "processing", "request_id": "..."}` immediately. |
+| `webhook_method` | `GET` \| `POST` | No | Default `POST`. |
+| `webhook_extra` | string | No | Arbitrary metadata passed back on the webhook. |
+
+### Request body
+
+- Raw audio bytes: `Content-Type: application/octet-stream`
+- Audio-by-URL is not supported on Pulse Pro. For URL-based input use standard [Pulse](/waves/model-cards/speech-to-text/pulse).
+
+<Card title="Pre-recorded quickstart" icon="rocket" href="/waves/documentation/speech-to-text-pulse/pre-recorded/quickstart">
+  Pre-recorded STT setup, with both Pulse and Pulse Pro examples.
+</Card>
+
+---
+
+## Use Cases
+
+### Strong fit
+
+- High-volume English batch transcription (call center QA, meeting platforms, media archives, compliance audits)
+- Meeting and financial audio workloads where Pulse Pro leads the leaderboard (AMI, SPGISpeech)
+- Regulated industries needing on-prem or VPC deployment
+- Customers with budget pressure at scale (>1M minutes per month)
+
+### Not a fit
+
+- Multilingual workloads; use standard [Pulse](/waves/model-cards/speech-to-text/pulse) (38 languages)
+- Live streaming or sub-100ms conversational AI; use standard [Pulse](/waves/model-cards/speech-to-text/pulse) streaming
+- Audiobook or broadcast read-speech transcription where Cohere Transcribe and IBM Granite edge ahead on LibriSpeech and TED-LIUM
+
+---
+
+## FAQ
+
+<Accordion title="Why Pulse Pro over Whisper Large v3?">
+Whisper Large v3 ranks 23rd on the Open ASR Leaderboard at 7.44% WER. Pulse Pro is tied for #2 at 5.42%, roughly a 27% relative WER improvement. Pulse Pro is also cheaper per minute than every hosted Whisper API.
+</Accordion>
+
+<Accordion title="Why Pulse Pro over Cohere Transcribe?">
+Pulse Pro and Cohere Transcribe are tied on aggregate ESB WER (both 5.42%). Pulse Pro wins on AMI (meetings, 7.32 vs 8.13) and SPGISpeech (financial, 2.04 vs 3.08); Cohere wins on LibriSpeech and TED-LIUM (read speech). Pulse Pro ships as a managed API at $0.004/min; Cohere is open-weights and requires you to self-host.
+</Accordion>
+
+<Accordion title="Why Pulse Pro over IBM Granite Speech 4.1 2B?">
+Granite 4.1 2B is 0.09 WER points ahead on aggregate (5.33 vs 5.42). For most workloads the gap is operationally invisible. Pulse Pro is managed, hosted, and metered per minute. Granite is open-weights, with the same self-hosting cost basis as our infrastructure, but you take on the deployment, autoscaling, and operations cost.
+</Accordion>
+
+<Accordion title="Why Pulse Pro over ElevenLabs Scribe v2?">
+Scribe v2 ranks 8th on the Open ASR Leaderboard at 5.83% WER, behind Pulse Pro by 0.41 points. The "Scribe v2 is #1 for accuracy" talking point comes from a different (smaller) benchmark. On the public, reproducible ESB benchmark Pulse Pro is more accurate and ~1,500× cheaper per minute.
+</Accordion>
+
+<Accordion title="Why Pulse Pro over AssemblyAI Universal-3 Pro?">
+Universal-3 Pro ranks 12th on ESB at 6.21% WER, behind Pulse Pro by 0.79 points. AssemblyAI is $3.50 per 1,000 minutes; Pulse Pro is $0.004/min ($4 per 1,000 minutes). Pulse Pro is more accurate at a comparable price.
+</Accordion>
+
+<Accordion title="Why Pulse Pro over NVIDIA Parakeet TDT?">
+Parakeet TDT 0.6B v3 runs at ~3,300× RTFx on A100, roughly 10× the published Pulse Pro throughput. But it ranks 13th on ESB at 6.32% WER, behind Pulse Pro by 0.90 WER points. For pure overnight bulk transcription where throughput dominates, Parakeet is competitive. For accuracy-sensitive workloads (meetings, finance, compliance), the WER gap matters.
+</Accordion>
+
+<Accordion title="Why English only?">
+Pulse Pro v4.1 is trained exclusively on English. For multilingual transcription, use standard [Pulse](/waves/model-cards/speech-to-text/pulse) (38 languages with streaming + non-streaming). Pulse Pro and Pulse share the same `/waves/v1/stt/` endpoint, so adding multilingual capability is a one-line `?model=` swap.
+</Accordion>
+
+<Accordion title="Why are word timestamps slower than no-timestamps mode?">
+Word timestamps require an alignment pass after acoustic decoding. Pulse Pro currently runs alignment in the standard pipeline, which costs roughly one-third of overall throughput (~200× with timestamps vs 250–300× without). A vLLM-backed alignment port is in development to close this gap.
+</Accordion>
+
+<Accordion title="Why no streaming?">
+The streaming worker for Pulse Pro is on the roadmap but not yet deployed. Today, calls to `WS /waves/v1/stt/live?model=pulse-pro` return `400` before the WebSocket upgrades, with a message directing you to the HTTP endpoint. For streaming use the standard [Pulse](/waves/model-cards/speech-to-text/pulse) model (`?model=pulse`).
+</Accordion>
+
+---
+
+## Safety & Compliance
+
+Pulse Pro must not be used for:
+
+- Recording or transcribing individuals without their explicit consent
+- Surveillance, stalking, or any form of unauthorized monitoring
+- Any illegal or unethical purposes
+
+Additionally:
+
+- Usage is monitored for policy compliance
+- For compliance documentation (GDPR, SOC2, HIPAA), contact [support@smallest.ai](mailto:support@smallest.ai)
+
+---
+
+## Contact
+
+| | |
+|---|---|
+| **Support** | support@smallest.ai |
+| **Documentation** | [docs.smallest.ai/waves](https://docs.smallest.ai/waves) |
+| **Console** | [app.smallest.ai/dashboard](https://app.smallest.ai/dashboard) |
+| **Community** | [Discord](https://discord.gg/9WtSXv26WE) |

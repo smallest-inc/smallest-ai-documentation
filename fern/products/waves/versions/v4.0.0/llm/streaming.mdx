@@ -1,0 +1,137 @@
+---
+title: "Streaming"
+description: "Stream chat completion tokens via Server-Sent Events — the same wire format as OpenAI. Includes optional usage block for accurate billing on disconnects."
+icon: "bars-staggered"
+---
+
+Set `"stream": true` and the response becomes Server-Sent Events (SSE). Each token (or small group of tokens) arrives as a `data: {...}` line. The stream ends with a `data: [DONE]` marker.
+
+This is the same wire format OpenAI uses, so OpenAI client SDKs work without changes.
+
+## Request
+
+```json
+{
+  "model": "electron",
+  "messages": [{"role": "user", "content": "Tell me a one-sentence fun fact."}],
+  "stream": true,
+  "stream_options": { "include_usage": true }
+}
+```
+
+<Tip>
+Always send `stream_options.include_usage: true` if you bill or log per-token. With it, the server emits a final usage chunk so you get exact token counts even when the client disconnects mid-stream.
+</Tip>
+
+## SSE format
+
+Each delta chunk:
+
+```
+data: {"id":"chatcmpl-…","object":"chat.completion.chunk","created":1740000000,"model":"electron","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
+```
+
+Field-by-field:
+
+| Field | Meaning |
+|---|---|
+| `choices[0].delta.role` | Sent once, on the first chunk (`"assistant"`). |
+| `choices[0].delta.content` | Partial content. Concatenate across chunks to reconstruct the full message. |
+| `choices[0].delta.tool_calls` | Partial function-call payload — see [Tool Calling: Streaming](/waves/documentation/llm-electron/tool-function-calling#streaming). |
+| `choices[0].finish_reason` | `null` until the final content delta, then `"stop"` / `"length"` / `"tool_calls"`. |
+
+### Final usage chunk (with `include_usage: true`)
+
+After the final content delta and before `[DONE]`, the server emits one extra chunk with empty `choices` and a `usage` object:
+
+```
+data: {"id":"chatcmpl-…","object":"chat.completion.chunk","created":1740000000,"model":"electron","choices":[],"usage":{"prompt_tokens":20,"completion_tokens":8,"total_tokens":28,"prompt_tokens_details":{"cached_tokens":0}}}
+
+data: [DONE]
+```
+
+## Consuming the stream
+
+<CodeGroup>
+
+```python Python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.smallest.ai/waves/v1",
+    api_key=os.environ["SMALLEST_API_KEY"],
+)
+
+stream = client.chat.completions.create(
+    model="electron",
+    messages=[{"role": "user", "content": "Tell me a fun fact."}],
+    stream=True,
+    stream_options={"include_usage": True},
+)
+
+text = ""
+usage = None
+for chunk in stream:
+    if chunk.choices and chunk.choices[0].delta.content:
+        delta = chunk.choices[0].delta.content
+        print(delta, end="", flush=True)
+        text += delta
+    if chunk.usage is not None:
+        usage = chunk.usage
+
+print(f"\n\ntokens: {usage}")
+```
+
+```javascript JavaScript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "https://api.smallest.ai/waves/v1",
+  apiKey: process.env.SMALLEST_API_KEY,
+});
+
+const stream = await client.chat.completions.create({
+  model: "electron",
+  messages: [{ role: "user", content: "Tell me a fun fact." }],
+  stream: true,
+  stream_options: { include_usage: true },
+});
+
+let text = "";
+let usage;
+for await (const chunk of stream) {
+  const delta = chunk.choices[0]?.delta?.content;
+  if (delta) {
+    process.stdout.write(delta);
+    text += delta;
+  }
+  if (chunk.usage) usage = chunk.usage;
+}
+console.log("\n\ntokens:", usage);
+```
+
+```bash cURL (raw SSE)
+curl -N -X POST "https://api.smallest.ai/waves/v1/chat/completions" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "electron",
+    "messages": [{"role":"user","content":"Tell me a fun fact."}],
+    "stream": true,
+    "stream_options": {"include_usage": true}
+  }'
+```
+
+</CodeGroup>
+
+## Client disconnect behavior
+
+If the client closes the connection mid-stream, the server still finalizes usage and records the tokens that were actually generated. You're billed only for what the model produced before the disconnect — no double-charge on retry.
+
+## Latency profile
+
+- **Time to first token (TTFT):** typically under 300 ms warm.
+- Per-token interval after the first token: a few milliseconds; full sentences arrive in tens of milliseconds.
+
+For voice-agent pipelines, start your TTS engine on the first `delta.content` chunk to mask end-to-end latency. See [Best Practices](/waves/documentation/llm-electron/best-practices) and the [Voice Agent cookbook](/waves/documentation/cookbooks/voice-agent-electron-pulse-lightning).

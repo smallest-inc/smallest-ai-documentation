@@ -166,6 +166,24 @@ The model is selected via the `model` body field (`lightning_v3.1` default, or `
 - **Missing `x-fern-audiences`** on a Layer 3 channel override → Fern omits the endpoint from the docs sidebar entirely. Every AsyncAPI channel override must declare its audience.
 - **Forgetting the version mirror.** Every file under `fern/products/waves/pages/v4.0.0/...mdx` has a parallel copy under `fern/products/waves/versions/v4.0.0/...mdx`. The `v4 docs mirror` CI check fails if you touch one without the other. After editing in `pages/`, run `cp` to the matching path under `versions/`.
 - **`# ci:skip` for snippets that need extra deps** like `sounddevice` / `numpy` for audio playback — they're not installed in CI. Without the directive, `scripts/run_doc_python_snippets.py` runs the block and fails on the missing import.
+- **AsyncAPI override-key parity (HARD RULE).** Every `channels.<chan>.messages.<KEY>` and `operations.<KEY>` in a Layer 2 or Layer 3 override must use the **exact same key** as Layer 1 (base). Orphan keys cause Fern's merger to silently drop sibling operations from the rendered docs — that's how `sendFinalize` was missing from the Pulse STT API ref for 5+ weeks (PR #189). `spec_drift_check.py` enforces this; the `KEY_PARITY_ALLOWLIST` is reserved for retiring specs only, never active surfaces.
+- **Quote any YAML scalar whose value contains a colon (HARD RULE).** Both spec YAMLs (`fern/apis/...`) and MDX frontmatter blocks use real YAML parsers. Any unquoted scalar with `: ` (colon-space) anywhere in the value is a syntax bomb — the parser thinks it's a nested mapping and the entire build fails. Examples that have bitten us three times: `description: Send {"type": "finalize"} …`, `description: Set is_final: true on the response`, `description: Opt in with \`word_timestamps: true\` …`. Wrap the whole value in single quotes (`description: 'Set is_final: true on the response.'`) or split into a block scalar with `description: |` + indented body. Run `python -c "import yaml,re; yaml.safe_load(re.match(r'---\\n(.*?)\\n---', open(F).read(), re.S).group(1))"` on the file before commit if you've put any inline code in frontmatter.
+
+## Pre-flight checklist before you push
+
+The bugs we've shipped tend to share a pattern: the spec is on disk, `fern check` passes, but the rendered docs lose content during merge — or the prose drifts away from the section's promise. Before declaring a docs edit done:
+
+1. **Run all three gates.** They each catch a different class of bug:
+   ```bash
+   fern check                                                    # YAML structural validity
+   python3 scripts/spec-live-tests/spec_drift_check.py            # description + key-parity drift
+   python3 scripts/check_nav.py                                   # orphan pages + dangling links
+   ```
+2. **Verify behavior against source of truth.** For wire claims, the platform repos (`waves-platform`, `atoms-platform`) win over docs. For schema, Layer 1 (base spec) wins over override. Never document behavior you haven't either read in the source or live-tested.
+3. **Re-read every modified section against its heading.** If the heading is "Recommended Setup for Agentic Use Cases", does the body and code example actually deliver an agentic setup? Single-sentence correctness is not enough — section coherence matters more (PR #189 fixed a section whose heading promised an agentic setup but whose body recommended the single-shot pattern).
+4. **Live-test where possible.** `SMALLEST_API_KEY=… python3 scripts/spec-live-tests/<service>_live_test.py`.
+5. **Mirror parity.** `diff -rq fern/products/waves/pages/v4.0.0/ fern/products/waves/versions/v4.0.0/` should produce zero diff on any path you touched.
+6. **Trust the post-deploy smoke check.** `scripts/spec-live-tests/docs_render_smoke.py` runs after every push to `main` (see `.github/workflows/publish-docs.yml`) and fetches the rendered docs, asserting every expected operation / signal / section appears. If it fails on your change, the spec is correct on disk but Fern dropped something — investigate the override layering, don't just retry.
 
 ## Before you push
 

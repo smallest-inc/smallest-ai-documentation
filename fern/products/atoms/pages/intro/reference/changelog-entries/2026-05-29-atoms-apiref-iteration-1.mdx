@@ -1,0 +1,27 @@
+---
+title: Atoms API reference — iteration 1 updates
+---
+
+**Agent GET — draft and version config resolution.** `GET /agent/{id}` now accepts `?draftId=<id>` and `?versionId=<id>` to resolve `_resolvedConfig` from a specific draft or published version instead of the active config. The response includes `_configSource: "draft" | "version" | "active"` when either param is used.
+
+**Richer call log fields.** The List Calls and Get Call responses now include per-call latency statistics (average, median, min, max, per-turn array), auto-generated call summary, evaluated disposition metrics with confidence scores, discounted cost, agent version info (`versionId`, `versionNumber`), call type enum (`telephony_inbound`, `telephony_outbound`, `webcall`), and retry tracking fields (`retryCallId`, `retryAttemptNumber`).
+
+**Agent list filters expanded.** `GET /agent` accepts `type`, `sortField`, `sortOrder`, and `archived` query parameters.
+
+**Agent templates enriched.** Template objects now include `industry`, `useCase`, `callType`, `workflowType`, `region`, `trending`, and `defaultLanguage` fields. The list endpoint accepts a `region` filter.
+
+**New endpoint: archive / unarchive agent.** `PATCH /agent/{id}/archive` toggles an agent's archived state. Pass `?on=false` to unarchive.
+
+**Campaigns — filter and enriched response.** `GET /campaigns` now accepts `status` and `name` (search) query filters. Campaign objects include new fields: `pausedAt`, `cancelledCalls`, `errorMessage`, and `failedAt`. The start-campaign endpoint is now idempotent ("Start or resume a campaign").
+
+**Webhooks — replace semantics and single-fetch.** The webhook subscription endpoint now replaces all subscriptions for an agent (previously create-only). `GET /webhooks` accepts an optional `?id=` param to retrieve a single webhook by ID.
+
+**Audiences — enriched response.** Audience objects now include `currentMemberCount`, `hasActiveCampaigns`, and `activeCampaigns`. Error responses distinguish 403 (audience belongs to a different org) from 404 (not found).
+
+**Live transcripts SSE — lifecycle events documented.** `sse_init` and `sse_close` events are now documented alongside the existing transcript event types. Both include `event_type` and `event_time`; all other events include `event_type`, `event_id`, `timestamp`, and `call_id`.
+
+**WebSocket query parameters clarified.** `sample_rate` now documents its valid values (`8000`, `16000`, `24000`, `48000`) and default (`24000`). The `mode` parameter (`webcall` | `chat`, default `webcall`) is now included in the connection reference with valid-value enforcement. Connection error codes (401, 503) are documented.
+
+**Compliance — 502 errors documented.** All compliance endpoints now document a `502 Bad Gateway` response for cases where Plivo's compliance API is unavailable.
+
+→ [Realtime Agent reference](/atoms/api-reference/api-reference/realtime-agent/realtime-agent)

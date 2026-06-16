@@ -1,0 +1,140 @@
+---
+title: "Quickstart"
+description: "Make your first Electron chat completion in under 60 seconds — point the OpenAI SDK at Smallest AI and go."
+icon: "rocket"
+---
+
+Electron is **OpenAI-compatible**. If you can call the OpenAI Chat Completions API, you can call Electron — change the base URL and the API key, and your existing code works.
+
+## Step 1: Get Your API Key
+
+In the [Smallest AI Console](https://app.smallest.ai/dashboard/api-keys?utm_source=documentation&utm_medium=llm), go to **Settings → API Keys** and click **Create API Key**. Copy it and export:
+
+```bash
+export SMALLEST_API_KEY="your-api-key-here"
+```
+
+<Tip>New to Smallest AI? [Sign up here](https://app.smallest.ai?utm_source=documentation&utm_medium=llm) first.</Tip>
+
+## Step 2: Make Your First Call
+
+Paste this cURL — no install required:
+
+```bash
+curl -X POST "https://api.smallest.ai/waves/v1/chat/completions" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "electron",
+    "messages": [
+      {"role": "user", "content": "Write one sentence about why the sky is blue."}
+    ]
+  }'
+```
+
+You'll get back the standard OpenAI chat-completion shape:
+
+```json
+{
+  "id": "chatcmpl-...",
+  "object": "chat.completion",
+  "model": "electron",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "The sky appears blue because shorter blue wavelengths of sunlight scatter more than longer wavelengths when they pass through Earth's atmosphere."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 17,
+    "completion_tokens": 24,
+    "total_tokens": 41
+  }
+}
+```
+
+## Step 3: Use the OpenAI SDK
+
+Because Electron speaks the OpenAI wire format, you can use the official OpenAI SDKs verbatim — just override `base_url` (or `baseURL`) and `api_key`.
+
+Install the SDK if you don't already have it:
+
+```bash
+pip install openai          # Python
+# or
+npm install openai          # Node.js
+```
+
+<CodeGroup>
+
+```python Python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.smallest.ai/waves/v1",
+    api_key=os.environ["SMALLEST_API_KEY"],
+)
+
+response = client.chat.completions.create(
+    model="electron",
+    messages=[
+        {"role": "user", "content": "Write one sentence about why the sky is blue."}
+    ],
+)
+
+print(response.choices[0].message.content)
+```
+
+```javascript JavaScript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "https://api.smallest.ai/waves/v1",
+  apiKey: process.env.SMALLEST_API_KEY,
+});
+
+const response = await client.chat.completions.create({
+  model: "electron",
+  messages: [
+    { role: "user", content: "Write one sentence about why the sky is blue." },
+  ],
+});
+
+console.log(response.choices[0].message.content);
+```
+
+```bash cURL
+curl -X POST "https://api.smallest.ai/waves/v1/chat/completions" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "electron",
+    "messages": [
+      {"role": "user", "content": "Write one sentence about why the sky is blue."}
+    ]
+  }'
+```
+
+</CodeGroup>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Streaming" icon="bars-staggered" href="/waves/documentation/llm-electron/streaming">
+    Get tokens as they're generated. Set `stream: true` for SSE.
+  </Card>
+  <Card title="Tool Calling" icon="screwdriver-wrench" href="/waves/documentation/llm-electron/tool-function-calling">
+    Use Electron for agents — it returns OpenAI-style `tool_calls` and is trained to handle voice-agent flows.
+  </Card>
+  <Card title="Prefix Caching" icon="bolt" href="/waves/documentation/llm-electron/prefix-caching">
+    Cached input tokens are billed at a discounted rate. Structure your prompts to hit the cache.
+  </Card>
+  <Card title="Migrate from OpenAI" icon="arrow-right-arrow-left" href="/waves/documentation/llm-electron/migrate-from-open-ai">
+    Side-by-side diff: what changes when you switch from `api.openai.com`.
+  </Card>
+</CardGroup>
