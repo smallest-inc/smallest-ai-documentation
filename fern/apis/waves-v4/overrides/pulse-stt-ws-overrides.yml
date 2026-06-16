@@ -100,18 +100,19 @@ channels:
           Language code for transcription. Set explicitly to the known
           language for best accuracy.
 
-          Use `multi-eu` for unknown European-language audio (auto-detects
-          across the European set: de, en, fr, it, nl, pt, ru, es) or
-          `multi-indic` for unknown Indic audio (en, hi, mr, pa, gu, or,
-          kn, ta, te, ml, bn).
+          Use one of the regional aggregators for unknown audio:
+          - `multi-eu` — European set (de, en, fr, it, nl, pt, ru, es)
+          - `multi-indic` — Indic set (en, hi, mr, pa, gu, or, kn, ta, te, ml, bn)
+          - `multi-asian` — East Asian set (en, ja, ko, zh, yue) — US region only
 
           Omitting `language` routes to `multi-eu`, which can mis-detect on
           non-European audio (e.g., returning Russian for English input).
           Always pass `language` explicitly when the source language is known.
 
-          **Region note for Asian languages:** `ja`, `yue`, `zh`, `ko` are
-          served from the US region only — use the alternative base URL
-          `wss://api.us.smallest.ai/waves/v1/pulse/get_text` for these four
+          **Region note for Asian languages:** `ja`, `yue`, `zh`, `ko`, and the
+          `multi-asian` aggregator are served from the US region only — use the
+          alternative base URL
+          `wss://api.us.smallest.ai/waves/v1/pulse/get_text` for these
           languages. The default `wss://api.smallest.ai/...` host closes the
           connection without a transcription frame when an Asian language is
           requested.
@@ -154,6 +155,7 @@ channels:
           - ko
           - multi-eu
           - multi-indic
+          - multi-asian
         default: multi-eu
         required: false
         location: $message.header#/language
