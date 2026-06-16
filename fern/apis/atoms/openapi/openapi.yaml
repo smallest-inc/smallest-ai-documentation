@@ -3017,6 +3017,342 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
+  /product/all-numbers:
+    get:
+      summary: List all phone numbers (platform + SIP)
+      description: |
+        Returns every phone number owned by the organization in one response:
+
+        - `telephonyProducts` — numbers rented via the Atoms platform (Plivo / Twilio).
+        - `customProducts` — numbers imported via [`POST /product/import-phone-number`](#operation/importSipPhoneNumber) with your own SIP trunks.
+
+        Use this when you need a single combined view (e.g. a "Pick a number" dropdown). To list only platform-rented numbers, use [`GET /product/phone-numbers`](#operation/getAcquiredPhoneNumbers).
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      telephonyProducts:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Product"
+                      customProducts:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Product"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /product/get-available-numbers:
+    get:
+      summary: Search rentable phone numbers in inventory
+      description: |
+        Searches the telephony provider's inventory for available numbers matching the requested country (and optional area code). Returns up to 5 candidates per call.
+
+        Use the returned `phoneNumber` value in [`POST /product/rent-number`](#operation/rentPhoneNumber) to actually rent it.
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: countryCode
+          required: true
+          schema:
+            type: string
+          example: "US"
+          description: ISO 3166-1 alpha-2 country code (e.g. `US`, `IN`, `GB`).
+        - in: query
+          name: provider
+          required: true
+          schema:
+            type: string
+            enum: [plivo, twilio]
+          description: Telephony provider to search.
+        - in: query
+          name: areaCode
+          required: false
+          schema:
+            type: string
+          description: Optional area-code / region filter — provider-dependent (US area codes for plivo/twilio, etc.).
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        phoneNumber:
+                          type: string
+                          description: E.164-style number without the leading `+`. Pass exactly this value to `POST /product/rent-number`.
+                          example: "13183747513"
+                        countryCode:
+                          type: string
+                          example: "US"
+                        provider:
+                          type: string
+                          enum: [plivo, twilio]
+                          example: "plivo"
+                        areaCode:
+                          type: string
+                          description: Region / state / area-code label returned by the provider.
+                          example: "Louisiana"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /product/proration-amount:
+    get:
+      summary: Preview prorated rental cost for renting a phone number today
+      description: |
+        Returns the immediate prorated charge for renting one phone number from today through the end of the current billing cycle, plus the recurring monthly rate. Use this to show a "you'll be charged $X today" preview before calling [`POST /product/rent-number`](#operation/rentPhoneNumber).
+
+        Returns `400` if the organization doesn't have the phone-numbers feature configured (contact support) or if the org is currently locked (e.g. unpaid invoices — call [`GET /product/unpaid-invoices`](#operation/getUnpaidInvoices) first to check).
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      immediateCharge:
+                        type: number
+                        format: float
+                        description: Amount that will be charged today (USD).
+                        example: 5.3
+                      perNumberRecurringAmount:
+                        type: number
+                        format: float
+                        description: Monthly per-number recurring charge after the prorated first period (USD).
+                        example: 10
+                      monthlyRate:
+                        type: number
+                        format: float
+                        example: 10
+                      prorationAmount:
+                        type: number
+                        format: float
+                        example: 5.3
+                      daysRemaining:
+                        type: integer
+                        example: 16
+                      daysInMonth:
+                        type: integer
+                        example: 30
+                      proratedValue:
+                        type: number
+                        format: float
+                        description: Fraction of the month remaining (`daysRemaining / daysInMonth`).
+                        example: 0.53
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /product/rent-number:
+    post:
+      summary: Rent a phone number from the telephony inventory
+      description: |
+        Rents an available number returned by [`GET /product/get-available-numbers`](#operation/searchAvailablePhoneNumbers). Charges the organization the prorated amount returned by [`GET /product/proration-amount`](#operation/getProrationAmount) immediately, then the monthly rate on each billing cycle.
+
+        Always call `GET /product/proration-amount` first to surface the immediate charge to your customer. The endpoint may return `200` with a body containing `requiresAction: true` when payment requires customer interaction (3-D Secure, etc.) — handle that branch in your client.
+
+        Released later via [`POST /product/release-number`](#operation/releasePhoneNumber).
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phoneNumber, provider]
+              properties:
+                phoneNumber:
+                  type: string
+                  description: The number to rent — exactly as returned by `GET /product/get-available-numbers` (no leading `+`).
+                  example: "13183747513"
+                provider:
+                  type: string
+                  enum: [plivo, twilio]
+      responses:
+        "200":
+          description: Rental processed. Inspect `data.requiresAction` to determine whether the customer needs to complete a payment-method action.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      requiresAction:
+                        type: boolean
+                        description: If `true`, payment requires further customer action (3-D Secure / SCA). Surface the client-secret flow.
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /product/release-number:
+    post:
+      summary: Release a rented phone number
+      description: |
+        Releases a phone number previously rented via `POST /product/rent-number`. The number goes back into provider inventory and recurring charges stop.
+
+        Returns `400` if the number is still assigned to an agent — detach it from the agent first (`PATCH /agent/{agentId}` with `productId: null`).
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId]
+              properties:
+                productId:
+                  type: string
+                  description: 24-char hex MongoDB ObjectId of the phone-number product to release (the `_id` value returned by `GET /product/phone-numbers`).
+                  example: "6969109c84c74bed175f02a7"
+      responses:
+        "200":
+          description: Number released
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+        "400":
+          description: |
+            Number is still assigned to an agent (detach it first), or invalid product ID format.
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /product/manage-subscription:
+    get:
+      summary: Get Stripe Customer Portal URL
+      description: |
+        Returns a time-limited Stripe Customer Portal URL the user can open to manage their subscription (update payment method, view invoices, etc.). Returns an empty object if the organization isn't on a Stripe-backed plan.
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                        format: uri
+                        description: Time-limited Stripe Customer Portal URL. Empty object if not applicable.
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /product/unpaid-invoices:
+    get:
+      summary: Check whether the organization has unpaid invoices
+      description: |
+        Returns whether the org has unpaid invoices that would block destructive actions (renting numbers, etc.). Call this before any billable mutation to surface the "Pay outstanding balance" flow.
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      paymentRequired:
+                        type: boolean
+                        description: When `true`, the org has at least one unpaid invoice. Surface a "Pay balance" CTA before allowing further billable actions.
+                        example: false
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
   /product/import-phone-number:
     post:
       summary: Import a SIP phone number
@@ -5865,6 +6201,47 @@ components:
           type: boolean
         data:
           type: object
+    Product:
+      type: object
+      description: 'A phone-number product owned by the organization — either a platform-rented number (`productType: telephony`) or a SIP-imported number (`productType: custom-telephony`).'
+      properties:
+        _id:
+          type: string
+          description: 24-char MongoDB ObjectId. Use this as `productId` when releasing, or assign to an agent via `PATCH /agent/{agentId}`.
+          example: "6969109c84c74bed175f02a7"
+        productType:
+          type: string
+          enum: [telephony, custom-telephony]
+          description: |
+            - `telephony` — number rented via the Atoms platform (Plivo/Twilio).
+            - `custom-telephony` — number imported via `POST /product/import-phone-number` with the customer's own SIP trunk.
+          example: "telephony"
+        isActive:
+          type: boolean
+          description: Whether the number is currently billable / serving traffic.
+          example: true
+        attributes:
+          type: object
+          description: Provider-specific number metadata.
+          properties:
+            provider:
+              type: string
+              enum: [plivo, twilio]
+            phoneNumber:
+              type: string
+              description: E.164 format including `+`.
+              example: "+912268093636"
+        agentId:
+          type: string
+          nullable: true
+          description: 24-char MongoDB ObjectId of the agent this number is assigned to, if any. `null` when unassigned.
+          example: "69edad34780a67ce987d3f42"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     UnauthorizedErrorResponse:
       type: object
       properties:
