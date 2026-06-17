@@ -1506,24 +1506,25 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
-  /conversation/{id}/recording/download-url:
+  /conversation/{callId}/recording/download-url:
     get:
       summary: Get a time-limited recording download URL
       description: |
         Returns a presigned S3 URL for the call's recording. Hand the URL straight to the customer or pull bytes server-side. The presigned URL is **time-limited** — typically usable for a few minutes — so don't cache it; request a fresh one each time you need the recording.
 
-        Returns `404` if the call has no recording (call hasn't started, was cancelled before audio captured, or was deleted by the platform's retention policy).
+        Returns `404` if the call has no recording (call hasn't started, was cancelled before audio captured, or was deleted by the platform's retention policy). Returns `400 Invalid call ID format` if you pass a Mongo `_id` instead of the `callId` string.
       tags:
         - Conversations
       security:
         - BearerAuth: []
       parameters:
         - in: path
-          name: id
+          name: callId
           required: true
           schema:
             type: string
-          description: The `callId` of the conversation (e.g. `CALL-1778226705739-7e4c17`).
+            example: CALL-1781127346211-e765f7
+          description: The `callId` string for the conversation (e.g. `CALL-1778226705739-7e4c17`). This is the `callId` field returned by `GET /conversation`, **not** the Mongo `_id` — passing `_id` returns `400 Invalid call ID format`.
       responses:
         "200":
           description: Successful response — presigned URL ready to fetch.
@@ -1607,7 +1608,7 @@ paths:
     post:
       summary: Cancel an in-flight call
       description: |
-        Cancels an outbound call that has been queued or is in progress. Use the body form to look the call up by `callId`; the path-param form (`POST /conversation/{conversationId}/cancel`) is the equivalent for REST conventions.
+        Cancels an outbound call that has been queued or is in progress. Use the body form to look the call up by `callId`; the path-param form (`POST /conversation/{callId}/cancel`) is the equivalent for REST conventions, but only handles `IN_QUEUE` calls.
 
         Returns `404` if no call with that ID exists in your organization. Returns `400` if the call is already in a terminal state (completed / failed / cancelled).
       tags:
@@ -1660,24 +1661,27 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
-  /conversation/{conversationId}/cancel:
+  /conversation/{callId}/cancel:
     post:
       summary: Cancel a queued call (path-param form)
       description: |
         REST-conventional path-param variant of [`POST /conversation/cancel`](#operation/cancelCallByBody).
 
-        **Behavior differs from the body form.** This path-param endpoint only cancels calls that are still in the `IN_QUEUE` state — calls that have already started dialing or are in progress return `400 Bad Request`. Use the body form (`POST /conversation/cancel`) if you need to cancel an in-progress call.
+        **Behavior differs from the body form.** This path-param endpoint only cancels calls that are still in the `IN_QUEUE` state — calls that have already started dialing or are in progress return `400 Bad Request` with `errors: ["Conversation with ID ... is not in queue and cannot be cancelled"]`. Use the body form (`POST /conversation/cancel`) if you need to cancel an in-progress call.
+
+        The path param is the `callId` string (e.g. `CALL-1778226705739-7e4c17`), **not** the Mongo `_id`. Passing `_id` returns `404 No conversation found`.
       tags:
         - Conversations
       security:
         - BearerAuth: []
       parameters:
         - in: path
-          name: conversationId
+          name: callId
           required: true
           schema:
             type: string
-          description: The `callId` of the conversation to cancel.
+            example: CALL-1781127346211-e765f7
+          description: The `callId` string for the conversation to cancel.
       responses:
         "200":
           description: Call cancelled.
