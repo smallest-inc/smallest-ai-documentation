@@ -27,7 +27,7 @@ Pulse is a high-accuracy, low-latency speech-to-text model built for real-time t
 |---|---|
 | **Developed by** | Smallest AI |
 | **Model type** | Speech-to-Text |
-| **Languages** | 15 documented languages across both modes (Cantonese is streaming-only); `multi-eu`, `multi-indic`, and `multi-asian` aggregators for unknown audio (`multi-asian` is streaming + US region only) |
+| **Languages** | 15 documented languages across both modes (Cantonese is streaming-only); regional auto-detect aggregators: `multi-eu` (both modes), `multi-indic` on batch / `north_indic` on streaming, and `multi-asian` (streaming + US region only) |
 | **License** | Proprietary |
 | **Model format (non-streaming)** | `pulse_offline_<lang>_<version>.smlst` |
 | **Model format (streaming)** | `pulse_streaming_<lang>_<version>.smlst` |
@@ -44,7 +44,7 @@ Pulse is a high-accuracy, low-latency speech-to-text model built for real-time t
     Ultra-low latency architecture delivering 64ms TTFT at 1 concurrency and 300ms at 100 concurrent requests — designed for live transcription and conversational AI.
   </Card>
   <Card title="Multi-Language" icon="globe">
-    15 documented languages across streaming and non-streaming modes, with automatic language detection (`multi-eu` / `multi-indic` / `multi-asian` aggregators) and code-switching within a single session.
+    15 documented languages across streaming and non-streaming modes, with automatic language detection via regional aggregators (`multi-eu`, `multi-indic` / `north_indic`, `multi-asian`) and code-switching within a single session.
   </Card>
   <Card title="PII / PCI Redaction" icon="shield-halved">
     Built-in redaction of personal and payment card data across both streaming and non-streaming use cases.
@@ -338,7 +338,7 @@ Not a public dataset. Hindi audio sliced by perturbation type to isolate model w
 | Korean | `ko` | Yes &mdash; accepted but unreliable \[1] |
 | Gujarati | `gu` | Yes |
 | Marathi | `mr` | Yes |
-| Multi-Indic aggregator | `multi-indic` | Yes &mdash; auto-detects across `en`, `hi`, `gu`, `mr` |
+| Multi-Indic aggregator | `multi-indic` | Yes &mdash; auto-detects across `en`, `hi`, `gu`, `mr` (batch only; streaming uses `north_indic`) |
 | Multi-EU aggregator | `multi-eu` | Yes &mdash; auto-detects across `en`, `de`, `es`, `it`, `pt`, `nl`, `ru`, `fr` |
 
 \[1] **East Asian languages on batch — known quality limitation, verified live 2026-06-16.** `ja`, `zh`, `ko`, and the `multi-asian` aggregator are accepted by batch (HTTP 200) but transcripts are unreliable — the batch model lacks proper checkpoints for East Asian audio and tends to return garbled CJK-mixed output. For accurate Asian-language transcription, use the streaming endpoint on `api.us.smallest.ai`.
@@ -362,7 +362,7 @@ Not a public dataset. Hindi audio sliced by perturbation type to isolate model w
 | Korean | `ko` | Yes &mdash; US region only \[2] |
 | Gujarati | `gu` | Yes |
 | Marathi | `mr` | Yes |
-| Multi-Indic aggregator | `multi-indic` | Yes &mdash; auto-detects across `en`, `hi`, `gu`, `mr` |
+| North-Indic aggregator | `north_indic` | Yes &mdash; auto-detects across `en`, `hi`, `mr`, `gu`, `bn`, `or` (streaming-specific name; batch uses `multi-indic`) |
 | Multi-EU aggregator | `multi-eu` | Yes &mdash; auto-detects across `en`, `de`, `es`, `it`, `pt`, `nl`, `ru`, `fr` |
 | Multi-Asian aggregator | `multi-asian` | Yes &mdash; auto-detects across `en`, `ja`, `ko`, `zh`, `yue`; US region only \[2] |
 
