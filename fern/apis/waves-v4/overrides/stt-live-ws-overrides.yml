@@ -117,18 +117,40 @@ channels:
         description: |
           Selects the ASR model. Today only `pulse` is supported on the streaming endpoint. `pulse-pro` returns `400` before the WebSocket upgrade because Pulse Pro has no streaming worker yet; for Pulse Pro use the HTTP endpoint (`POST /waves/v1/stt/?model=pulse-pro`).
         enum:
-          - pulse
+          - en
+          - hi
+          - de
+          - es
+          - ru
+          - it
+          - fr
+          - nl
+          - pt
+          - zh
+          - yue
+          - ja
+          - ko
+          - gu
+          - mr
+          - or
+          - bn
+          - north_indic
+          - multi-asian
         required: true
         location: $message.header#/model
       language:
         description: |
-          Language code for transcription. This endpoint is **Streaming (Real-Time, WebSocket)** — for pre-recorded audio, use `POST /waves/v1/stt/` (same 39-language set).
+          Language code for transcription. This endpoint is **Streaming (Real-Time, WebSocket)** — for pre-recorded audio, use `POST /waves/v1/stt/` (different supported language set).
 
-          **Supported single-language codes (39):** `en`, `hi`, `es`, `pt`, `it`, `fr`, `de`, `nl`, `ru`, `uk`, `pl`, `cs`, `sk`, `ro`, `bg`, `hu`, `da`, `fi`, `sv`, `lt`, `lv`, `et`, `mt`, `mr`, `gu`, `bn`, `pa`, `ta`, `te`, `kn`, `ml`, `or`, `ja`, `yue`, `zh`, `ko`, `tl`, `id`, `ms`.
+          **Supported single-language codes (17):** `en`, `hi`, `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `zh`, `yue`, `ja`, `ko`, `gu`, `mr`, `or`, `bn`.
 
-          **Auto-detect aggregators:** `multi-eu` (European set: de, en, fr, it, nl, pt, ru, es) and `multi-indic` (Indic set: en, hi, mr, pa, gu, or, kn, ta, te, ml, bn).
+          **Auto-detect aggregators** for unknown audio:
+          - `north_indic` — auto-detects across `en`, `hi`, `gu`, `mr`, `bn`, `or`.
+          - `multi-asian` — auto-detects across `zh`, `yue`, `ko`, `ja`, `en`. Available on the US region only; contact sales for access in the India region.
 
-          For unknown audio, pick `multi-eu` for European audio or `multi-indic` for Indic audio. See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the full table with language names.
+          Set `language` explicitly to the known code for best accuracy. See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the full table with language names.
+
+          **Region note for East Asian languages:** `zh`, `yue`, `ja`, `ko`, and the `multi-asian` aggregator are served from the US region only — connect to `wss://api.us.smallest.ai/waves/v1/stt/live` for these. The default `wss://api.smallest.ai/...` host closes the connection without a transcription frame when an East Asian language is requested.
         enum:
           - en
           - hi
@@ -170,7 +192,8 @@ channels:
           - id
           - ms
           - multi-eu
-          - multi-indic
+          - north_indic
+          - multi-asian
         required: true
         location: $message.header#/language
       sample_rate:

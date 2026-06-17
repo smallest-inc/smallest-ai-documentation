@@ -6,14 +6,14 @@ icon: 'microphone'
 
 The Speech-to-Text API transcribes audio via the unified endpoint `https://api.smallest.ai/waves/v1/stt/`. The model is selected via the `?model=` query parameter:
 
-- **`?model=pulse`**: multilingual (38 languages), supports streaming and pre-recorded transcription.
+- **`?model=pulse`**: multilingual, supports streaming and pre-recorded transcription.
 - **`?model=pulse-pro`**: leaderboard-ranked English accuracy (5.42% ESB avg WER, tied #2 on the public Open ASR Leaderboard). Pre-recorded HTTP only; no streaming worker yet.
 
 Live streaming runs on `WS /waves/v1/stt/live?model=pulse`. Pulse Pro on the live path returns `400` with a directive to use HTTP.
 
 <CardGroup cols={2}>
   <Card title="Pulse model card" icon="microphone" href="/waves/model-cards/speech-to-text/pulse">
-    Multilingual streaming + non-streaming. 38 languages.
+    Multilingual streaming + non-streaming. 31 documented languages (17 streaming + 26 pre-recorded) + regional aggregators.
   </Card>
   <Card title="Pulse Pro model card" icon="sparkles" href="/waves/model-cards/speech-to-text/pulse-pro">
     English-only, leaderboard-ranked accuracy. Pre-recorded HTTP only.
@@ -42,8 +42,8 @@ We offer two transcription modes to cover a wide range of use cases. Choose the 
 Our models specialize in processing audio to preserve information that is often lost during conventional speech to text conversion.
 
 <AccordionGroup>
-  <Accordion title="38 Languages & Automatic Language Detection">
-    Support for 39 languages. Set `language` to a known code (`en`, `hi`, etc.) for best accuracy, or use the regional aggregator `multi-eu` / `multi-indic` for unknown audio.
+  <Accordion title="31 Languages & Automatic Language Detection">
+    31 documented languages across streaming + pre-recorded modes (17 on streaming, 26 on pre-recorded). Set `language` to a known code (`en`, `hi`, etc.) for best accuracy, or use a regional aggregator for unknown audio: `multi-eu` on batch, `north_indic` on streaming, and `multi-asian` (streaming + US region only on the WebSocket surface). See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the full list with regional notes.
   </Accordion>
   
   <Accordion title="Word Timestamps">
@@ -77,99 +77,17 @@ Our models specialize in processing audio to preserve information that is often 
 
 ## Supported languages
 
-Pulse currently supports the same set of 39 languages in both transcription modes. The tables below mirror the [Pulse model card](/waves/model-cards/speech-to-text/pulse) — keep it as the source of truth.
+The full per-mode language matrix lives on the [Pulse model card](/waves/model-cards/speech-to-text/pulse#supported-languages--streaming) — that page is the single source of truth, this page summarises the high-level shape.
 
-### Streaming (Real-Time, WebSocket)
+**Streaming (Real-Time, WebSocket) — 17 single-language codes + 2 regional aggregators:**
 
-Use these codes on `WS /waves/v1/stt/live?model=pulse`. For unknown audio, pick `multi-eu` (European set: de, en, fr, it, nl, pt, ru, es) or `multi-indic` (Indic set: en, hi, mr, pa, gu, or, kn, ta, te, ml, bn).
+`en`, `hi`, `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `zh`, `yue`, `ja`, `ko`, `gu`, `mr`, `or`, `bn`, plus `north_indic` (auto-detects across en/hi/gu/mr/bn/or) and `multi-asian` (auto-detects across zh/yue/ko/ja/en; US region only — contact sales for access in the India region).
 
-| Language | Code |
-|---|---|
-| English | `en` |
-| Italian | `it` |
-| Spanish | `es` |
-| Portuguese | `pt` |
-| Hindi | `hi` |
-| German | `de` |
-| French | `fr` |
-| Ukrainian | `uk` |
-| Russian | `ru` |
-| Kannada | `kn` |
-| Malayalam | `ml` |
-| Polish | `pl` |
-| Marathi | `mr` |
-| Gujarati | `gu` |
-| Czech | `cs` |
-| Slovak | `sk` |
-| Telugu | `te` |
-| Oriya (Odia) | `or` |
-| Dutch | `nl` |
-| Bengali | `bn` |
-| Latvian | `lv` |
-| Estonian | `et` |
-| Romanian | `ro` |
-| Punjabi | `pa` |
-| Finnish | `fi` |
-| Swedish | `sv` |
-| Bulgarian | `bg` |
-| Tamil | `ta` |
-| Hungarian | `hu` |
-| Danish | `da` |
-| Lithuanian | `lt` |
-| Maltese | `mt` |
-| Japanese | `ja` |
-| Cantonese | `yue` |
-| Mandarin | `zh` |
-| Korean | `ko` |
-| Tagalog | `tl` |
-| Indonesian | `id` |
-| Malay | `ms` |
+**Non-Streaming (Pre-Recorded, HTTP) — 26 single-language codes + 2 regional aggregators:**
 
-### Non-Streaming (Pre-Recorded, HTTP)
+`en`, `hi`, `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `uk`, `pl`, `cs`, `sk`, `lv`, `et`, `ro`, `fi`, `sv`, `bg`, `hu`, `da`, `lt`, `mt`, `zh`, `ja`, `ko`, plus `multi-eu` (auto-detects across all 21 European codes plus en) and `multi-asian` (auto-detects across zh/ko/ja/en).
 
-Use these codes on `POST /waves/v1/stt/?model=pulse`.
-
-| Language | Code |
-|---|---|
-| English | `en` |
-| Italian | `it` |
-| Spanish | `es` |
-| Portuguese | `pt` |
-| Hindi | `hi` |
-| German | `de` |
-| French | `fr` |
-| Ukrainian | `uk` |
-| Russian | `ru` |
-| Kannada | `kn` |
-| Malayalam | `ml` |
-| Polish | `pl` |
-| Marathi | `mr` |
-| Gujarati | `gu` |
-| Czech | `cs` |
-| Slovak | `sk` |
-| Telugu | `te` |
-| Oriya (Odia) | `or` |
-| Dutch | `nl` |
-| Bengali | `bn` |
-| Latvian | `lv` |
-| Estonian | `et` |
-| Romanian | `ro` |
-| Punjabi | `pa` |
-| Finnish | `fi` |
-| Swedish | `sv` |
-| Bulgarian | `bg` |
-| Tamil | `ta` |
-| Hungarian | `hu` |
-| Danish | `da` |
-| Lithuanian | `lt` |
-| Maltese | `mt` |
-| Japanese | `ja` |
-| Cantonese | `yue` |
-| Mandarin | `zh` |
-| Korean | `ko` |
-| Tagalog | `tl` |
-| Indonesian | `id` |
-| Malay | `ms` |
+**East Asian streaming languages** (`zh`, `yue`, `ja`, `ko`, `multi-asian`) are served from the US region only. Connect to `wss://api.us.smallest.ai/...` for these.
 
 ## Next steps
 
