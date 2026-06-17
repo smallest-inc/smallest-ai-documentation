@@ -29,7 +29,7 @@ Lightning v3.1 Pro is a premium 44.1 kHz text-to-speech pool with improved natur
 |---|---|
 | **Developed by** | Smallest AI |
 | **Model type** | Text-to-Speech / Speech Synthesis |
-| **Languages** | English (`en`), Hindi (`hi`) |
+| **Languages** | English (`en` → UK + American accent), Hindi (`hi` → Indian English + Hindi code-switching). Omit `language` → defaults to `en + hi`. |
 | **License** | Proprietary |
 | **Version** | v3.1 Pro |
 | **Model ID** | `lightning_v3.1_pro` |
@@ -45,7 +45,7 @@ Lightning v3.1 Pro is a premium 44.1 kHz text-to-speech pool with improved natur
     HTTP, SSE, and WebSocket support for real-time applications.
   </Card>
   <Card title="Multi-Language" icon="globe">
-    Indian voices speak English + Hindi with automatic code-switching. British and American voices speak English.
+    `language: en` → UK + American accented English. `language: hi` → Indian accented English + Hindi (code-switching). Omit → defaults to `en + hi`.
   </Card>
   <Card title="High Fidelity" icon="waveform-lines">
     Broadcast-quality 44.1 kHz audio with natural prosody, intonation, and conversational rhythm.
@@ -189,13 +189,15 @@ Want to reproduce these results? See the [TTS evaluation script](/waves/model-ca
 
 ## Supported Languages
 
-Pro language support varies per voice — Indian Pro voices speak English with native Hindi code-switching; British and American Pro voices speak English only. For languages outside these, use the standard [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1) model.
+Pass the `language` body parameter to steer the Pro pool's output:
 
-| Voice group | Languages | Code-switching |
-|---|---|---|
-| Indian Pro voices | English (`en`), Hindi (`hi`) | English ↔ Hindi mid-utterance handled natively when the voice's `tags.language` covers both |
-| British Pro voices | English (`en`) | — |
-| American Pro voices | English (`en`) | — |
+| `language` value | Behaviour |
+|---|---|
+| `en` | UK + American accented English. Best paired with British or American Pro voices. |
+| `hi` | Indian accented English + Hindi (mid-utterance code-switching). Best paired with Indian Pro voices. |
+| *omitted* | Defaults to `en + hi` — mixed Indian + Western English coverage. |
+
+For other languages, use the standard [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1) model (12 languages, full voice catalog).
 
 ---
 
@@ -301,7 +303,7 @@ Need a voice not in this list? Use the standard [Lightning v3.1](/waves/model-ca
 | `model` | string | No | `lightning_v3.1` | Pass `lightning_v3.1_pro` to route to the Pro pool. The field is optional, but the default routes to standard Lightning v3.1 — for Pro you must set it explicitly. |
 | `sample_rate` | integer | No | `44100` | Output sample rate (Hz) |
 | `speed` | float | No | `1.0` | Speech speed (0.5–2.0) |
-| `language` | string | No | `"en"` | `en` or `hi`, matching the voice's `tags.language`. |
+| `language` | string | No | *omit → `en + hi`* | `en` → UK + American accented English; `hi` → Indian accented English + Hindi (code-switching); omit → `en + hi`. |
 | `output_format` | string | No | `"pcm"` | `pcm`, `mp3`, `wav`, `ulaw`, `alaw` |
 | `pronunciation_dicts` | array | No | — | List of pronunciation dictionary IDs — works on REST sync, SSE, and WebSocket |
 | `word_timestamps` | boolean | No | `false` | Opt in to per-word timing events on WebSocket. See [Word-level timestamps on the standard v3.1 model card](/waves/model-cards/text-to-speech/lightning-v-3-1#word-level-timestamps) — same wire shape, same opt-in flag. Pro shares the Lightning v3.1 base-queue voices for English + Hindi (`meher`, `devansh`, `kartik`, `maithili`, `liam`, `avery`), so word events emit on those; other Pro-only voices fall back to silent graceful degradation (audio normal, no word events). |
@@ -353,7 +355,11 @@ Pair Pro voice IDs above with `"model": "lightning_v3.1_pro"`. The API does not 
 
 ### Language selection
 
-Each voice's supported languages live in `tags.language` on the voice catalog. Passing a `language` outside that list is accepted by the API but produces English-pronounced output, since the voice wasn't trained on it. Pick a voice whose `tags.language` matches your target language.
+- **`language: en`** → UK + American accented English. Pair with British or American Pro voices for best results.
+- **`language: hi`** → Indian accented English + Hindi with native code-switching mid-utterance. Pair with Indian Pro voices.
+- **Omit `language`** → defaults to `en + hi`. Sensible when you don't know the input language ahead of time.
+
+Per-voice metadata still lives in `tags.language` on the voice catalog (`GET /waves/v1/lightning-v3.1/get_voices`). The body parameter sets the *target* language for the synthesis pass; the voice ID controls the timbre and accent of the speaker.
 
 ### Text Formatting
 

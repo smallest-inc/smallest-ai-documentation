@@ -1,10 +1,10 @@
 ---
 title: Pulse
-description: High-accuracy, low-latency speech-to-text model built for real-time transcription across 15 documented languages, with streaming and non-streaming support.
+description: High-accuracy, low-latency speech-to-text model built for real-time transcription across 31 documented languages (17 streaming + 26 pre-recorded), with regional aggregators and both streaming and non-streaming support.
 icon: microphone
 ---
 
-Pulse is a high-accuracy, low-latency speech-to-text model built for real-time transcription across 15 documented languages, with streaming and non-streaming support.
+Pulse is a high-accuracy, low-latency speech-to-text model built for real-time transcription across 31 documented languages (17 on streaming + 26 on pre-recorded, with regional aggregators), supporting both streaming and non-streaming use cases.
 
 <CardGroup cols={4}>
   <Card title="64ms" icon="bolt">
@@ -13,8 +13,8 @@ Pulse is a high-accuracy, low-latency speech-to-text model built for real-time t
   <Card title="300ms" icon="gauge-high">
     TTFT at 100 concurrency
   </Card>
-  <Card title="15 Languages" icon="globe">
-    Streaming + Non-streaming
+  <Card title="31 Languages" icon="globe">
+    17 streaming + 26 pre-recorded
   </Card>
   <Card title="2 Modes" icon="arrows-split-up-and-left">
     Streaming + Non-streaming
@@ -27,7 +27,7 @@ Pulse is a high-accuracy, low-latency speech-to-text model built for real-time t
 |---|---|
 | **Developed by** | Smallest AI |
 | **Model type** | Speech-to-Text |
-| **Languages** | 15 documented languages across both modes (Cantonese is streaming-only); regional auto-detect aggregators: `multi-eu` (both modes), `multi-indic` on batch / `north_indic` on streaming, and `multi-asian` (streaming + US region only) |
+| **Languages** | Streaming: 17 single-language codes + `north_indic` and `multi-asian` aggregators. Non-streaming (batch): 26 single-language codes + `multi-eu` and `multi-asian` aggregators. East Asian codes (`zh`, `yue`, `ja`, `ko`, `multi-asian`) are streaming + US-region only. |
 | **License** | Proprietary |
 | **Model format (non-streaming)** | `pulse_offline_<lang>_<version>.smlst` |
 | **Model format (streaming)** | `pulse_streaming_<lang>_<version>.smlst` |
@@ -44,7 +44,7 @@ Pulse is a high-accuracy, low-latency speech-to-text model built for real-time t
     Ultra-low latency architecture delivering 64ms TTFT at 1 concurrency and 300ms at 100 concurrent requests — designed for live transcription and conversational AI.
   </Card>
   <Card title="Multi-Language" icon="globe">
-    15 documented languages across streaming and non-streaming modes, with automatic language detection via regional aggregators (`multi-eu`, `multi-indic` / `north_indic`, `multi-asian`) and code-switching within a single session.
+    31 documented languages across streaming and non-streaming modes (17 streaming + 26 pre-recorded), with automatic language detection via regional aggregators (`multi-eu` on batch, `north_indic` on streaming, `multi-asian` on both surfaces) and code-switching within a single session.
   </Card>
   <Card title="PII / PCI Redaction" icon="shield-halved">
     Built-in redaction of personal and payment card data across both streaming and non-streaming use cases.
@@ -319,54 +319,64 @@ Not a public dataset. Hindi audio sliced by perturbation type to isolate model w
 
 ---
 
-## Supported Languages — Non-streaming
-
-| Language | Code | Available |
-|---|---|---|
-| English | `en` | Yes |
-| Hindi (+ English code-switching) | `hi` | Yes |
-| German | `de` | Yes |
-| Spanish | `es` | Yes |
-| Russian | `ru` | Yes |
-| Italian | `it` | Yes |
-| French | `fr` | Yes |
-| Dutch | `nl` | Yes |
-| Portuguese | `pt` | Yes |
-| Mandarin | `zh` | Yes &mdash; accepted but unreliable \[1] |
-| Cantonese | `yue` | No &mdash; batch returns `400 LANGUAGE_NOT_ENABLED_IN_REGION` |
-| Japanese | `ja` | Yes &mdash; accepted but unreliable \[1] |
-| Korean | `ko` | Yes &mdash; accepted but unreliable \[1] |
-| Gujarati | `gu` | Yes |
-| Marathi | `mr` | Yes |
-| Multi-Indic aggregator | `multi-indic` | Yes &mdash; auto-detects across `en`, `hi`, `gu`, `mr` (batch only; streaming uses `north_indic`) |
-| Multi-EU aggregator | `multi-eu` | Yes &mdash; auto-detects across `en`, `de`, `es`, `it`, `pt`, `nl`, `ru`, `fr` |
-
-\[1] **East Asian languages on batch — known quality limitation, verified live 2026-06-16.** `ja`, `zh`, `ko`, and the `multi-asian` aggregator are accepted by batch (HTTP 200) but transcripts are unreliable — the batch model lacks proper checkpoints for East Asian audio and tends to return garbled CJK-mixed output. For accurate Asian-language transcription, use the streaming endpoint on `api.us.smallest.ai`.
-
 ## Supported Languages — Streaming
 
-| Language | Code | Available |
+| # | Language | Code |
 |---|---|---|
-| English | `en` | Yes |
-| Hindi (+ English code-switching) | `hi` | Yes |
-| German | `de` | Yes |
-| Spanish | `es` | Yes |
-| Russian | `ru` | Yes |
-| Italian | `it` | Yes |
-| French | `fr` | Yes |
-| Dutch | `nl` | Yes |
-| Portuguese | `pt` | Yes |
-| Mandarin | `zh` | Yes &mdash; US region only \[2] |
-| Cantonese | `yue` | Yes &mdash; US region only \[2] |
-| Japanese | `ja` | Yes &mdash; US region only \[2] |
-| Korean | `ko` | Yes &mdash; US region only \[2] |
-| Gujarati | `gu` | Yes |
-| Marathi | `mr` | Yes |
-| North-Indic aggregator | `north_indic` | Yes &mdash; auto-detects across `en`, `hi`, `mr`, `gu`, `bn`, `or` (streaming-specific name; batch uses `multi-indic`) |
-| Multi-EU aggregator | `multi-eu` | Yes &mdash; auto-detects across `en`, `de`, `es`, `it`, `pt`, `nl`, `ru`, `fr` |
-| Multi-Asian aggregator | `multi-asian` | Yes &mdash; auto-detects across `en`, `ja`, `ko`, `zh`, `yue`; US region only \[2] |
+| 1 | English | `en` |
+| 2 | Hindi | `hi` |
+| 3 | German | `de` |
+| 4 | Spanish | `es` |
+| 5 | Russian | `ru` |
+| 6 | Italian | `it` |
+| 7 | French | `fr` |
+| 8 | Dutch | `nl` |
+| 9 | Portuguese | `pt` |
+| 10 | Mandarin | `zh` &mdash; US region only \[*] |
+| 11 | Cantonese | `yue` &mdash; US region only \[*] |
+| 12 | Japanese | `ja` &mdash; US region only \[*] |
+| 13 | Korean | `ko` &mdash; US region only \[*] |
+| 14 | Gujarati | `gu` |
+| 15 | Marathi | `mr` |
+| 16 | Oriya | `or` |
+| 17 | Bengali | `bn` |
+| 18 | North-Indic aggregator | `north_indic` &mdash; auto-detects across `en`, `hi`, `gu`, `mr`, `bn`, `or` |
+| 19 | Multi-Asian aggregator | `multi-asian` &mdash; auto-detects across `zh`, `yue`, `ko`, `ja`, `en`. US region only \[*]. Contact sales for access. |
 
-\[2] **US-region-only languages.** `ja`, `yue`, `zh`, `ko`, and the `multi-asian` aggregator are served from the US region only. Connect to `wss://api.us.smallest.ai/waves/v1/pulse/get_text` (or `/waves/v1/stt/live`) instead of the default `wss://api.smallest.ai/...` host. Requesting them on the default (ap-south-1) host closes the connection without a transcription frame.
+\[*] East Asian languages (`zh`, `yue`, `ja`, `ko`, `multi-asian`) are served from the US region only. Connect to `wss://api.us.smallest.ai/waves/v1/pulse/get_text` (or `/waves/v1/stt/live`) instead of `wss://api.smallest.ai/...` for these.
+
+## Supported Languages — Non-Streaming (Pre-Recorded)
+
+| # | Language | Code |
+|---|---|---|
+| 1 | English | `en` |
+| 2 | Hindi | `hi` |
+| 3 | German | `de` |
+| 4 | Spanish | `es` |
+| 5 | Russian | `ru` |
+| 6 | Italian | `it` |
+| 7 | French | `fr` |
+| 8 | Dutch | `nl` |
+| 9 | Portuguese | `pt` |
+| 10 | Ukrainian | `uk` |
+| 11 | Polish | `pl` |
+| 12 | Czech | `cs` |
+| 13 | Slovak | `sk` |
+| 14 | Latvian | `lv` |
+| 15 | Estonian | `et` |
+| 16 | Romanian | `ro` |
+| 17 | Finnish | `fi` |
+| 18 | Swedish | `sv` |
+| 19 | Bulgarian | `bg` |
+| 20 | Hungarian | `hu` |
+| 21 | Danish | `da` |
+| 22 | Lithuanian | `lt` |
+| 23 | Maltese | `mt` |
+| 24 | Mandarin | `zh` |
+| 25 | Japanese | `ja` |
+| 26 | Korean | `ko` |
+| 27 | Multi-EU aggregator | `multi-eu` &mdash; auto-detects across all 21 European codes above plus `en` |
+| 28 | Multi-Asian aggregator | `multi-asian` &mdash; auto-detects across `zh`, `ko`, `ja`, `en` |
 
 ---
 

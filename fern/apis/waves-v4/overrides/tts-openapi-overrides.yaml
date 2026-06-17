@@ -12,6 +12,8 @@ paths:
 
         Pick the model with the `model` body parameter: default `lightning_v3.1`, or `lightning_v3.1_pro` for the Pro pool. Other request parameters are identical across models.
 
+        **Language behaviour on `lightning_v3.1_pro`:** pass `language: en` for UK + American accented English, pass `language: hi` for Indian accented English + Hindi (code-switching), or omit `language` to default to `en + hi` (mixed Indian + Western English coverage). On `lightning_v3.1` the full 12-language catalog applies (see voice catalog).
+
         ## When to use this
 
         - **Use this** for short utterances you can render before playback (notifications, prompts, batch jobs, audio file generation).
@@ -23,7 +25,7 @@ paths:
         - 44 kHz natural, expressive synthesis
         - Model selectable per request via `model` body parameter
         - Cloned voice IDs (`voice_*`) work on `lightning_v3.1` — same param as catalog voices
-        - 12 documented languages on `lightning_v3.1`; English + Hindi on `lightning_v3.1_pro`
+        - 12 documented languages on `lightning_v3.1`. On `lightning_v3.1_pro`: `language: en` → UK + American accented English; `language: hi` → Indian accented English + Hindi; omit `language` → defaults to `en + hi`.
         - Output formats: `pcm`, `mp3`, `wav`, `ulaw`, `alaw`
         - Sample rates: 8 kHz – 44.1 kHz
         - Speed: 0.5× – 2×
@@ -45,7 +47,7 @@ paths:
           }' --output speech.wav
         ```
 
-        **cURL — Lightning v3.1 Pro**
+        **cURL — Lightning v3.1 Pro (omit `language` → defaults to `en + hi`)**
         ```bash
         curl -X POST "https://api.smallest.ai/waves/v1/tts" \
           -H "Authorization: Bearer $SMALLEST_API_KEY" \
@@ -55,6 +57,38 @@ paths:
             "text": "Hello from the Lightning v3.1 Pro pool.",
             "voice_id": "meher",
             "model": "lightning_v3.1_pro",
+            "sample_rate": 24000,
+            "output_format": "wav"
+          }' --output speech.wav
+        ```
+
+        **cURL — Lightning v3.1 Pro with explicit `language: en` (UK + American accented English)**
+        ```bash
+        curl -X POST "https://api.smallest.ai/waves/v1/tts" \
+          -H "Authorization: Bearer $SMALLEST_API_KEY" \
+          -H "Content-Type: application/json" \
+          -H "Accept: audio/wav" \
+          -d '{
+            "text": "Good morning, this is a Pro voice speaking.",
+            "voice_id": "meher",
+            "model": "lightning_v3.1_pro",
+            "language": "en",
+            "sample_rate": 24000,
+            "output_format": "wav"
+          }' --output speech.wav
+        ```
+
+        **cURL — Lightning v3.1 Pro with explicit `language: hi` (Indian accented English + Hindi)**
+        ```bash
+        curl -X POST "https://api.smallest.ai/waves/v1/tts" \
+          -H "Authorization: Bearer $SMALLEST_API_KEY" \
+          -H "Content-Type: application/json" \
+          -H "Accept: audio/wav" \
+          -d '{
+            "text": "Namaste, this is an Indian-accented Pro voice.",
+            "voice_id": "meher",
+            "model": "lightning_v3.1_pro",
+            "language": "hi",
             "sample_rate": 24000,
             "output_format": "wav"
           }' --output speech.wav
