@@ -189,11 +189,14 @@ Long idle gaps. If a session sits idle long enough, the server worker may spin d
 
 ## Reference scripts
 
-Reference measurement scripts for both streaming and pre-recorded modes are in flight. They send audio, capture every signal Pulse emits, compute each metric per the formulas on this page, and report p50 and p95 distributions.
+Two reference scripts in the [Smallest AI Cookbook](https://github.com/smallest-inc/cookbook/tree/main/speech-to-text/benchmarks) implement the methodology on this page end-to-end. They take a folder of audio + a CSV of ground-truth transcripts, hit prod, and report WER alongside latency at p50, p90, and p95.
 
-<Note>
-Scripts are not yet public. Contact [support@smallest.ai](mailto:support@smallest.ai) or ask on [Discord](https://discord.gg/9WtSXv26WE) for the current versions while the public cookbook home is finalised.
-</Note>
+| Script | Endpoint | Reports |
+|---|---|---|
+| [`ping_pulse_offline.py`](https://github.com/smallest-inc/cookbook/blob/main/speech-to-text/benchmarks/ping_pulse_offline.py) | `POST /waves/v1/stt/` (pre-recorded HTTP) | WER, per-clip latency, RTF |
+| [`ping_pulse_streaming.py`](https://github.com/smallest-inc/cookbook/blob/main/speech-to-text/benchmarks/ping_pulse_streaming.py) | `WSS /waves/v1/stt/live` (real-time WebSocket) | WER, tail latency |
+
+See the [benchmarks README](https://github.com/smallest-inc/cookbook/tree/main/speech-to-text/benchmarks#readme) for dataset layout, install steps, and output format.
 
 ## Cross-references
 
