@@ -88,7 +88,7 @@ paths:
 
         ## Common gotchas
 
-        - **Max file size is 250 MB.** Larger files return HTTP `413`. Compress to mono 16 kHz PCM if you're close to the limit; quality is unaffected.
+        - **Max file size is 250 MB.** Larger files return HTTP `400` with `{errors: "Audio data too large", status: "error", message: "Error handling audio data"}`. Compress to mono 16 kHz PCM if you're close to the limit; quality is unaffected.
         - **Formatting flags (`format`, `punctuate`, `capitalize`)** are accepted at the wire level and exposed in the Python SDK as of `smallestai>=4.4.0`. Today they currently return the same transcript regardless of value — pass them in your integration so it works as the behavior changes.
         - **Webhook-driven flow**: pass `webhook_url` to receive the transcript asynchronously. The endpoint returns immediately; the transcript hits your webhook when ready. Useful for long files where you don't want to hold an HTTP connection open.
         - **Speaker diarization** (`diarize=true`) adds latency. Skip it if you only need the words.
@@ -443,49 +443,70 @@ paths:
                   duration: 1.7
                   fileSize: 1000000
         '400':
-          description: Bad request - Invalid parameters or file format
+          description: |
+            Bad request — validation error, malformed body, unreachable URL, or audio data too large.
+
+            Oversized uploads (>250 MB) return HTTP 400 with `errors: "Audio data too large"`
+            (not HTTP 413; the legacy 413 documentation was wrong).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error: 'Invalid file format. Supported formats: audio/*'
+                $ref: '#/components/schemas/PulseSttErrorResponse'
+              examples:
+                invalid_format:
+                  summary: Invalid file format
+                  value:
+                    errors: 'Invalid file format. Supported formats: audio/*'
+                    status: error
+                    message: Error handling audio data
+                audio_too_large:
+                  summary: Oversized upload (>250 MB)
+                  value:
+                    errors: Audio data too large
+                    status: error
+                    message: Error handling audio data
+                missing_url:
+                  summary: Missing or invalid `url` field in JSON body
+                  value:
+                    errors: "Invalid JSON data: missing or invalid 'url' field"
+                    status: error
+                    message: Error handling audio data
+                language_not_enabled:
+                  summary: Language not enabled in this region
+                  value:
+                    status: error
+                    error_code: LANGUAGE_NOT_ENABLED_IN_REGION
+                    message: "Language 'multi' has not been enabled in this region. Please contact support to request access."
+                    language: multi
+                    region: ap-south-1
         '401':
-          description: Unauthorized - Invalid or missing authentication
+          description: |
+            Unauthorized — missing or invalid Bearer token.
+
+            Two distinct shapes depending on what is wrong with auth:
+            - Missing `Authorization` header → `{message: string}`
+            - Invalid Bearer token → `{error: string}`
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error: Unauthorized - Invalid API key
-        '413':
-          description: Payload too large - File size exceeds limit
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error:
-                  code: '413'
-                  message: File size exceeds maximum limit of 250MB
-                status: error
-        '429':
-          description: Too many requests - Rate limit exceeded
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error:
-                  code: '429'
-                  message: Rate limit exceeded. Please try again later.
-                status: error
+                oneOf:
+                  - $ref: '#/components/schemas/PulseSttAuthMissingResponse'
+                  - $ref: '#/components/schemas/PulseSttErrorResponseLegacy'
+              examples:
+                no_auth_header:
+                  summary: No `Authorization` header
+                  value:
+                    message: 'Unauthorized: No tokens provided'
+                invalid_key:
+                  summary: Invalid Bearer key
+                  value:
+                    error: unauthorized
         '500':
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/PulseSttErrorResponseLegacy'
               example:
                 error: Internal server error
 components:
@@ -500,11 +521,69 @@ components:
 
         '
   schemas:
-    ErrorResponse:
+    PulseSttErrorResponse:
       type: object
+      description: |
+        Canonical error shape for 400-class responses from the Pulse STT REST
+        endpoint. Live-probed against prod 2026-06-16.
+
+        Two variants share the same envelope:
+        - Generic validation: `{errors, status, message}` (e.g. invalid params,
+          malformed body, oversized upload).
+        - Discriminated: `{status, error_code, message, language?, region?}`
+          for known classes such as `LANGUAGE_NOT_ENABLED_IN_REGION`.
+
+        Clients should treat `errors` and `error_code` as mutually exclusive —
+        exactly one will be present. `status` and `message` are always set.
+
+        Note: the platform's field naming is inconsistent — `errors` (plural)
+        on 400-class responses vs `error` (singular) on some 401 responses.
+        See `PulseSttErrorResponseLegacy` for the singular-`error` shape.
+      properties:
+        status:
+          type: string
+          enum: [error]
+          description: Always `"error"`.
+        message:
+          type: string
+          description: Generic error category (e.g. "Error handling audio data").
+        errors:
+          type: string
+          description: Human-readable error message (validation variant).
+        error_code:
+          type: string
+          description: Machine-readable error code (discriminated variant, e.g. `LANGUAGE_NOT_ENABLED_IN_REGION`).
+        language:
+          type: string
+          description: Echo of the requested language (present on `LANGUAGE_NOT_ENABLED_IN_REGION`).
+        region:
+          type: string
+          description: Region the request hit (present on `LANGUAGE_NOT_ENABLED_IN_REGION`).
+      required:
+      - status
+      - message
+    PulseSttErrorResponseLegacy:
+      type: object
+      description: |
+        Legacy singular-`error` shape returned by 401 bad-key and 500
+        responses. Distinct from `PulseSttErrorResponse` (the plural `errors`
+        shape used by 400-class responses) — the platform is inconsistent across
+        error paths. Live-probed 2026-06-16; see verifications/ log.
       properties:
         error:
           type: string
-          description: Error message describing what went wrong
+          description: Error message describing what went wrong.
       required:
       - error
+    PulseSttAuthMissingResponse:
+      type: object
+      description: |
+        Shape returned when the request omits the `Authorization` header
+        entirely. Distinct from invalid-token (which uses `PulseSttErrorResponseLegacy`).
+        Live-probed 2026-06-16.
+      properties:
+        message:
+          type: string
+          description: Human-readable explanation of why auth failed.
+      required:
+      - message
