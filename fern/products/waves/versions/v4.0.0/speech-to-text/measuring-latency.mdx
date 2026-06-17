@@ -1,16 +1,127 @@
 ---
 title: 'Measuring Latency'
-description: 'How to measure Pulse STT latency correctly — offline (pre-recorded) and streaming (real-time WebSocket) are different things, and a single "latency" number for streaming is misleading. This page defines each metric, shows how to calculate it from the wire signals Pulse emits, and lists common measurement pitfalls.'
+description: 'What streaming STT latency means, how to calculate each metric from the wire signals Pulse emits, and common measurement pitfalls.'
 icon: 'gauge-high'
 ---
 
-A single "latency" number for Pulse is misleading. **Pre-recorded** transcription has one obvious metric: how long does it take to turn a complete file into text. **Streaming** transcription has at least three, each answering a different product question. This page defines each one, shows the exact wire signals Pulse emits that you measure against, and lists the pitfalls that quietly inflate numbers.
+Streaming speech-to-text latency is the time between an event in the audio (a word spoken, an utterance ending) and the corresponding event in the transcript stream (the word appearing, the final transcript arriving). Because audio arrives incrementally, there isn't one number that captures the whole experience — different applications need different metrics.
 
-If you're building a voice agent, you almost always care about a streaming metric — usually **end-of-utterance latency**. If you're building a post-call analytics pipeline, you almost always care about the pre-recorded metric.
+For real-time applications like voice agents and live captioning, latency drives perceived responsiveness. A voice agent cares about how quickly the model returns a finalised transcript after the user stops speaking. A live captioning UI cares about how far behind the audio the transcript is at any moment. These are different measurements, and a single average can hide problems with either one.
 
-## Pre-recorded latency — one metric
+This page defines each metric, shows how to calculate it against the wire signals Pulse emits, and walks through the common mistakes that inflate the numbers.
 
-For `POST /waves/v1/stt/`, latency is **wall-clock time from request start to transcript received**, divided by the audio duration to normalise across file sizes.
+## Streaming metrics
+
+There are three useful metrics for `WSS /waves/v1/stt/live` (and the legacy `/waves/v1/pulse/get_text`). Choose the one that matches the product question you're answering.
+
+| Metric | Question it answers | Use case |
+|---|---|---|
+| Transcript latency | How far behind the audio cursor is the transcript cursor? | Live captioning, real-time analytics, conversation displays |
+| End-of-utterance latency | How long after the user stops speaking does the final transcript arrive? | Voice agents — drives perceived responsiveness |
+| Time to first partial | How long after audio starts does the first transcript text appear? | Session-startup health checks, first-paint UX |
+
+### Transcript latency
+
+Transcript latency tells you how far behind the audio the transcription is at any given moment. Sample it continuously across the session — every time an interim transcript (`is_final=false`) arrives, compute:
+
+```
+transcript_latency = audio_cursor_seconds - transcript_cursor_seconds
+```
+
+`audio_cursor_seconds` is the cumulative real-time duration the client has sent. Maintain it client-side by accumulating each chunk's duration as you send. `transcript_cursor_seconds` is how many seconds of audio the server has acknowledged transcribing. Pulse exposes this through the `end` timestamp on the last word of the most recent interim transcript, available when `word_timestamps=true` is on.
+
+```python
+import json
+
+audio_cursor = 0.0           # seconds of audio sent so far
+transcript_cursor = 0.0      # seconds of audio Pulse has transcribed
+
+# After sending each binary chunk
+def on_chunk_sent(num_bytes, sample_rate=16000, bytes_per_sample=2):
+    global audio_cursor
+    audio_cursor += num_bytes / (sample_rate * bytes_per_sample)
+
+# On every received transcription message
+def on_message(msg):
+    global transcript_cursor
+    j = json.loads(msg)
+    if j.get("type") != "transcription":
+        return
+    # Use ONLY interim transcripts. Finals are delayed by the server's
+    # internal accuracy buffer and don't reflect the real-time experience.
+    if j.get("is_final"):
+        return
+    words = j.get("words", [])
+    if words:
+        transcript_cursor = words[-1]["end"]
+    latency = audio_cursor - transcript_cursor
+    print(f"transcript_latency = {latency * 1000:.0f} ms")
+```
+
+Two things to get right when computing this metric.
+
+First, sample only on interim transcripts. Pulse emits `is_final=true` after an internal accuracy buffer fills, which trades a few hundred milliseconds for a better final transcript. Treating finals as a latency signal makes the number look worse than what users actually perceive. See the [Real-time response format](/waves/documentation/speech-to-text-pulse/realtime-web-socket/response-format) page for the buffer behaviour.
+
+Second, set `word_timestamps=true` on the connection. Without it the server doesn't tell you which audio position each transcript chunk corresponds to, and there's no way to compute `transcript_cursor`.
+
+### End-of-utterance latency
+
+End-of-utterance (EOU) latency is the time between when the user stops speaking and when the corresponding finalised transcript arrives. It's the metric voice agents are judged on.
+
+```
+eou_latency = t_final_arrived - t_audio_silence_started
+```
+
+The client doesn't natively know when the user stopped speaking, so you measure it one of three ways.
+
+Run a client-side voice activity detector. When the VAD detects silence, record the timestamp and wait for the next `is_final=true` to arrive. Subtract.
+
+```python
+import json, time, websocket
+
+silence_started_at = None
+
+# When client-side VAD says "user paused":
+silence_started_at = time.perf_counter()
+ws.send(json.dumps({"type": "finalize"}))
+
+def on_message(raw):
+    global silence_started_at
+    msg = json.loads(raw)
+    if msg.get("is_final") and silence_started_at is not None:
+        eou_latency_ms = (time.perf_counter() - silence_started_at) * 1000
+        print(f"eou_latency = {eou_latency_ms:.0f} ms")
+        silence_started_at = None
+```
+
+Or send `{"type":"finalize"}` immediately after your VAD detects silence and measure time until the next `is_final=true` lands. This is the recommended pattern for voice agents because it forces a finalisation rather than waiting for Pulse's internal silence timer.
+
+Or configure Pulse's silence timeout via `eou_timeout_ms`. The server emits `is_final=true` automatically after that many milliseconds of silence. EOU latency in this mode approximates `eou_timeout_ms + transcript_latency`.
+
+### Time to first partial
+
+Time to first partial is the elapsed time between the first audio chunk being sent and the first interim transcript arriving back. It's a session-startup health check, not a steady-state measure.
+
+```python
+import time, json
+
+t_start = time.perf_counter()
+got_first_partial = False
+
+def on_message(raw):
+    global got_first_partial
+    msg = json.loads(raw)
+    if msg.get("type") == "transcription" and not got_first_partial:
+        ttfp_ms = (time.perf_counter() - t_start) * 1000
+        print(f"time_to_first_partial = {ttfp_ms:.0f} ms")
+        got_first_partial = True
+```
+
+The first session on a fresh process pays a one-time cost from the WebSocket TLS handshake and server worker warm-up. Subsequent sessions on the same client reuse the connection. Exclude the first session from any average.
+
+## Pre-recorded latency
+
+For `POST /waves/v1/stt/`, the audio arrives in a single request body and the transcript comes back in a single response. The natural metric is wall-clock time from request start to transcript received, normalised by audio duration so file sizes don't dominate.
 
 ### RTFx — Real-Time Factor
 
@@ -18,11 +129,7 @@ For `POST /waves/v1/stt/`, latency is **wall-clock time from request start to tr
 RTFx = audio_duration_seconds / processing_time_seconds
 ```
 
-`RTFx = 50` means a 60-second file came back in 1.2 seconds. Higher is better. Pulse Pro typically hits **RTFx ≈ 50** on English in the steady state — see the [Pulse model card Performance section](/waves/model-cards/speech-to-text/pulse) for the per-model number on your audio type.
-
-`RTFx` is the only fair cross-vendor comparison metric for pre-recorded — it's audio-duration-normalised, so a 10-minute call and a 30-second voicemail produce comparable numbers.
-
-### Wall-clock end-to-end
+An `RTFx` of 50 means a 60-second file came back in 1.2 seconds. Higher is better. RTFx is the standard cross-vendor comparison metric for pre-recorded transcription because it normalises across audio length.
 
 ```python
 import time, requests, os
@@ -44,154 +151,32 @@ audio_duration = response.json()["metadata"]["duration"]
 print(f"RTFx = {audio_duration / elapsed:.1f}")
 ```
 
-The response includes a `metadata.processing_time_ms` field that's the server's *internal* measurement — it excludes network round-trip and request body upload time. Use it when you want to attribute slowdowns: if your wall-clock is much higher than `processing_time_ms`, the bottleneck is network or upload bandwidth, not the model.
+The response includes a `metadata.processing_time_ms` field. That's the server's internal measurement — it excludes network round-trip and request body upload. Use it to attribute slowdowns: if wall-clock RTFx is far worse than server `processing_time_ms` suggests, the bottleneck is network or upload bandwidth, not the model.
 
-## Streaming latency — three distinct metrics
+## Component breakdown
 
-For `WSS /waves/v1/stt/live` (or the legacy `/waves/v1/pulse/get_text`), a single number doesn't tell you what's slow. Define which question you're asking first.
+When a streaming latency number is higher than expected, the cause lives in one of four places. Measure each in isolation to attribute.
 
-| Metric | Question it answers | Use case |
+| Component | What it is | How to measure |
 |---|---|---|
-| **Transcript latency** | "How far behind the audio cursor is the transcript cursor?" | Live captioning, real-time analytics, anything where text needs to track speech continuously |
-| **End-of-utterance latency** | "How long after the user stops speaking does the final transcript arrive?" | Voice agents — drives perceived responsiveness |
-| **Time to first partial** | "How long after audio starts does ANY text appear?" | First-paint UX, debugging session startup |
+| Network connection | One-time TLS + WebSocket upgrade | Approximate with `curl -sSf -w "tls: %{time_appconnect} total: %{time_starttransfer}\n" -so /dev/null https://api.smallest.ai` |
+| Network per-message | TCP transit + server queue wait | Round-trip ≈ time from `ws.send()` to first echo back, divided by 2 |
+| Transcription | Server-side model inference | Total `transcript_latency` minus network transit |
+| Client | Encoding, send loop, recv loop, UI render | Wall-clock between `chunk_ready` and `ws.send()`, plus between `ws.recv()` and `on_transcript()` |
 
-### Transcript latency
-
-**How far behind the transcription is from the audio being sent.** Computed continuously across the session — sample whenever an `is_final=false` (interim) transcript arrives.
-
-```
-transcript_latency = audio_cursor_seconds - transcript_cursor_seconds
-```
-
-Where:
-- `audio_cursor_seconds` — cumulative audio (in real-time seconds, not bytes) the client has sent to the server. Maintain this client-side by accumulating each chunk's duration as you send.
-- `transcript_cursor_seconds` — how many seconds of audio the server has acknowledged transcribing. Pulse exposes this via the **last word's `end` timestamp** in the most recent interim transcript when `word_timestamps=true` is on.
-
-```python
-import time, json
-
-audio_cursor = 0.0           # seconds of audio sent so far
-transcript_cursor = 0.0      # seconds of audio Pulse has transcribed
-
-# After sending each binary chunk
-def on_chunk_sent(num_bytes, sample_rate=16000, bytes_per_sample=2):
-    global audio_cursor
-    duration_s = num_bytes / (sample_rate * bytes_per_sample)
-    audio_cursor += duration_s
-
-# On every received transcription message
-def on_message(msg):
-    global transcript_cursor
-    j = json.loads(msg)
-    if j.get("type") != "transcription":
-        return
-    # Use ONLY interim transcripts. Finals are delayed by the server's
-    # internal buffering for accuracy — they're not a fair latency signal.
-    if j.get("is_final"):
-        return
-    words = j.get("words", [])
-    if words:
-        transcript_cursor = words[-1]["end"]
-    latency = audio_cursor - transcript_cursor
-    print(f"transcript_latency = {latency * 1000:.0f} ms")
-```
-
-**Two non-obvious things matter for this calculation:**
-
-1. **Only sample on interim transcripts (`is_final=false`).** Pulse emits `is_final=true` after an internal buffer fills, which is a deliberate accuracy/latency trade-off. Treating those as a latency signal makes the number look worse than the real-time experience. The Pulse [Response Format guide](/waves/documentation/speech-to-text-pulse/realtime-web-socket/response-format) calls this out explicitly.
-2. **Set `word_timestamps=true`.** Without it, you have no way to know how much audio the server has actually processed — only that *some* transcript came back.
-
-### End-of-utterance latency
-
-**Time from when the user stops speaking to when an `is_final=true` transcript arrives** covering that utterance. This is the metric voice agents live and die by.
-
-```
-eou_latency = t_final_arrived - t_audio_silence_started
-```
-
-This one is harder because **the client doesn't natively know when the user stopped speaking** — you have to either:
-- Run a client-side VAD (voice activity detector) to detect silence start, then time until the next `is_final` arrives, OR
-- Send `{"type":"finalize"}` immediately after detecting silence client-side and measure time until the next `is_final=true` lands, OR
-- Configure the server's end-of-utterance timeout via `eou_timeout_ms` and time how long *after* that elapses before `is_final` arrives.
-
-```python
-# Pattern 1 — client-side VAD + finalize signal (recommended for agents)
-import json, time
-import websocket  # pip install websocket-client
-
-ws = ...  # connected WSS /waves/v1/stt/live with word_timestamps=true
-
-silence_started_at = None
-ws.send(b"\x00" * 16000)  # send audio chunks ...
-
-# When your client-side VAD says "user paused":
-silence_started_at = time.perf_counter()
-ws.send(json.dumps({"type": "finalize"}))
-
-# In your recv loop:
-def on_message(raw):
-    global silence_started_at
-    msg = json.loads(raw)
-    if msg.get("is_final") and silence_started_at is not None:
-        eou_latency_ms = (time.perf_counter() - silence_started_at) * 1000
-        print(f"eou_latency = {eou_latency_ms:.0f} ms")
-        silence_started_at = None
-```
-
-If you don't run a client-side VAD, you can use Pulse's `eou_timeout_ms` parameter — set it to a value like `300` (ms of silence to trigger end-of-utterance) and Pulse will emit `is_final=true` automatically. End-of-utterance latency is then the time from when the audio actually went silent to when the `is_final` arrived, which approximates `eou_timeout_ms + transcript_latency`.
-
-### Time to first partial
-
-**Time from session start (or end of session warm-up) to the first `is_final=false` transcript.** Useful as a session-startup health check; less interesting steady-state.
-
-```python
-t_start = time.perf_counter()
-# ... send first audio chunk ...
-
-def on_message(raw):
-    msg = json.loads(raw)
-    if msg.get("type") == "transcription" and not got_first_partial:
-        ttfp_ms = (time.perf_counter() - t_start) * 1000
-        print(f"time_to_first_partial = {ttfp_ms:.0f} ms")
-```
-
-Expect higher numbers on the very first session of a process — the WebSocket TLS handshake + server worker warmup adds a one-time cost. Subsequent sessions on the same process reuse the connection.
-
-## Component breakdown — where time goes
-
-When a streaming latency number is too high, the answer lives in one of these four buckets. Measure each in isolation to attribute.
-
-| Bucket | What it is | How to measure |
-|---|---|---|
-| **Network — connection** | One-time TLS + WebSocket upgrade | `curl -sSf -w "tls: %{time_appconnect} | total: %{time_starttransfer}\n" -so /dev/null https://api.smallest.ai` (approximate) |
-| **Network — per-message** | TCP transit + server queue delay | TCP round-trip ≈ `(send_time → first echo back)` divided by 2 |
-| **Transcription** | Server-side model inference | Total `transcript_latency` − network transit |
-| **Client** | Encoding, send loop, recv loop, UI render | Wall-clock between `chunk_ready` and `ws.send()`, plus between `ws.recv()` and `on_transcript()` |
-| **Buffer** | Audio chunked too small (many small messages) or too large (wait time) | Aim for 20–100 ms per chunk |
-
-### Network expectations
-
-Pulse runs in two regions and routes to the nearest. Round-trip transit numbers from common origins:
-
-| Customer location | Region served | One-way transit (typical) |
-|---|---|---|
-| India (any city) | Mumbai (ap-south-2) | 20–60 ms |
-| US West | Oregon (us-west-2) | 20–80 ms |
-| US East | Oregon (us-west-2) | 70–110 ms |
-| Europe | Mumbai (closer route) | 120–180 ms |
-
-If your transcript latency is well above these numbers + steady-state model time, network is the bottleneck — check for VPN routing, corporate proxies, or a customer-side WS library that doesn't keep the connection warm.
+Audio chunking matters too. Chunks below 10 ms flood the server with WebSocket frames and per-message overhead dominates. Chunks above 500 ms turn the stream into a batch and add their own buffer latency. 20 to 100 ms per chunk is the practical range for low-latency streaming.
 
 ## Common measurement pitfalls
 
-- **Measuring with finals only**. Finals are delayed by Pulse's accuracy/latency buffer. They look "slow" if you sample latency from them. Use interims.
-- **Forgetting `word_timestamps=true`**. Without it, you can't compute `transcript_cursor`. The measurement code above silently outputs `audio_cursor - 0` if you forget.
-- **Including the first session in averages**. WebSocket + TLS + worker warm-up adds a one-time tax. Use the second-and-onward sessions for averages.
-- **Tiny chunks**. Below ~10 ms per chunk you flood the server with WS frames and Pulse's per-message overhead dominates. 20–100 ms is the sweet spot.
-- **Huge chunks**. Above ~500 ms per chunk you're effectively batching — latency goes up by your buffer size before any model time is spent.
-- **Server warm-up**. The first request after a long idle period may pay a worker-spin-up cost. Don't include it.
-- **Comparing across networks**. RTFx on a US East ↔ Mumbai trip will look worse than the same audio measured from Mumbai. Pin the test region when comparing model performance vs. transport.
+Sampling latency from `is_final=true` transcripts. Finals are delayed by Pulse's accuracy buffer. They look slow if you measure latency from them. Use interim (`is_final=false`) transcripts instead.
+
+Forgetting to set `word_timestamps=true`. Without word timestamps, `transcript_cursor` is always zero and `transcript_latency` collapses to `audio_cursor`. The measurement code silently produces meaningless numbers.
+
+Including the first session in averages. The first session on a process pays a one-time TLS + worker warm-up tax. Average across the second-and-later sessions.
+
+Comparing across networks. The same audio file streamed from a different region will pick up extra transit time. Pin the test region when comparing model performance against transport.
+
+Long idle gaps. If a session sits idle long enough, the server worker may spin down. The next request after that pays a re-warm cost. Don't include it in averages.
 
 ## What to measure for which use case
 
@@ -200,19 +185,18 @@ If your transcript latency is well above these numbers + steady-state model time
 | Live captioning UI | Transcript latency (p50, p95) | Time to first partial |
 | Voice agent | End-of-utterance latency (p50, p95) | Transcript latency |
 | Post-call analytics on uploaded files | RTFx | Wall-clock end-to-end |
-| Real-time analytics dashboard | Transcript latency | EOU when conversation segments boundary |
+| Real-time analytics dashboard | Transcript latency | EOU at conversation segment boundaries |
 
 ## Reference scripts
 
-We're publishing two reference scripts — one for streaming, one for offline — that implement the measurement methodology above end-to-end. They send audio, capture every signal Pulse emits, compute each metric per the formulas on this page, and emit p50/p95 numbers.
+Reference measurement scripts for both streaming and pre-recorded modes are in flight. They send audio, capture every signal Pulse emits, compute each metric per the formulas on this page, and report p50 and p95 distributions.
 
 <Note>
-Scripts are in flight — see [Discord](https://discord.gg/9WtSXv26WE) or contact [support@smallest.ai](mailto:support@smallest.ai) for the current versions while we finalise the public-cookbook home for them.
+Scripts are not yet public. Contact [support@smallest.ai](mailto:support@smallest.ai) or ask on [Discord](https://discord.gg/9WtSXv26WE) for the current versions while the public cookbook home is finalised.
 </Note>
 
 ## Cross-references
 
-- [Pulse model card — Performance & Benchmarks](/waves/model-cards/speech-to-text/pulse) — published WER + RTFx numbers across datasets
 - [Real-time response format](/waves/documentation/speech-to-text-pulse/realtime-web-socket/response-format) — the wire signals this page measures against
 - [Realtime quickstart](/waves/documentation/speech-to-text-pulse/realtime-web-socket/quickstart) — minimum working WebSocket client
-- [Pre-recorded quickstart](/waves/documentation/speech-to-text-pulse/pre-recorded/quickstart) — `RTFx` measurement code's source endpoint
+- [Pre-recorded quickstart](/waves/documentation/speech-to-text-pulse/pre-recorded/quickstart) — source endpoint for the RTFx code
