@@ -1,0 +1,53 @@
+---
+title: "Dograh"
+description: "Build voice agents on Dograh using Smallest AI TTS and STT."
+icon: "microphone"
+---
+
+This guide walks you through configuring [Smallest AI](https://smallest.ai) as the TTS and STT provider in [Dograh](https://www.dograh.com), an open-source platform for building and deploying voice agents. Dograh lets you swap speech providers independently — you can use Smallest AI for both TTS and STT, or mix providers as needed.
+
+## Prerequisites
+
+- A [Dograh](https://www.dograh.com) account (self-hosted or cloud)
+- A Smallest AI API key — get one from the [Smallest AI dashboard](https://waves.smallest.ai)
+
+---
+
+## Configure TTS
+
+1. Open your agent's settings in the Dograh dashboard.
+2. Under **TTS Provider**, select **Smallest AI** from the dropdown.
+3. In the **Model** dropdown, choose one of:
+   - `lightning_v3.1` — standard pool with 217 voices across 12 languages
+   - `lightning_v3.1_pro` — premium model with curated American, British, and Indian voices at 44.1 kHz
+4. In the **Voice** dropdown, select the voice you want. Voices are scoped to the model — Pro voices must be used with `lightning_v3.1_pro` and standard voices with `lightning_v3.1`.
+5. Enter your **Smallest AI API key** in the provider credentials field.
+6. Save the agent configuration.
+
+### TTS Models
+
+| Model | Description |
+| --- | --- |
+| `lightning_v3.1` | Standard pool — 217 voices, 12 languages including English, Hindi, Spanish, French, and more |
+| `lightning_v3.1_pro` | Premium pool — curated voices, 44.1 kHz audio, supports English, Hindi, and auto-detect |
+
+---
+
+## Configure STT
+
+1. Open your agent's settings in the Dograh dashboard.
+2. Under **STT Provider**, select **Smallest AI** from the dropdown.
+3. The **Model** is set to `pulse` — Smallest AI's real-time streaming STT model with support for 38 languages and ~64ms TTFT.
+4. Enter your **Smallest AI API key** in the provider credentials field.
+5. Save the agent configuration.
+
+### Pulse STT
+
+Pulse connects over WebSocket to `wss://api.smallest.ai/waves/v1/pulse/get_text` and streams transcriptions in real time. It supports 38 languages including English, Hindi, Spanish, French, German, Japanese, Korean, Chinese, and Cantonese.
+
+---
+
+## Notes
+
+- Dograh routes TTS requests to `wss://api.smallest.ai/waves/v1/tts/live` and STT requests to `wss://api.smallest.ai/waves/v1/pulse/get_text` using the Pipecat service implementations under the hood.
+- For issues with the Smallest AI integration in Dograh, open an issue in the [Dograh repository](https://github.com/dograh-hq/dograh) or contact us on [Discord](https://discord.gg/9WtSXv26WE).
