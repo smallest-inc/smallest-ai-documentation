@@ -45,18 +45,6 @@ EOT is sometimes called "end of utterance" — same metric, different vocabulary
 
 When a latency number is higher than expected, the cause lives in one of four places. Measure each in isolation to attribute.
 
-```
-client                  network                 server                  network                 client
-  │                        │                       │                       │                        │
-  ├── encode chunk ───────►│                       │                       │                        │
-  │                        ├── transit ──────────► │                       │                        │
-  │                        │                       ├── model inference ──► │                        │
-  │                        │                       │                       ├── transit ───────────► │
-  │                        │                       │                       │              decode + render
-  └─── client overhead ────┴─── network ───────────┴─── transcription ─────┴─── network ────────────┘
-       (encode/send loop)       (each direction)        (steady state)         (each direction)
-```
-
 ### Connection setup
 
 A one-time cost paid on the first WebSocket frame of every new session: TLS handshake, HTTP upgrade, and server worker selection. Subsequent messages on the same socket don't pay this.
@@ -89,7 +77,7 @@ The model inference time. Contributes to EOT and to the first-partial latency:
 server_transcription ≈ EOT − 2 * network_one_way − client_overhead − finalize_RTT
 ```
 
-Typical: **sub-100 ms** at 1 concurrency, scaling to **~300 ms** at 100 concurrent requests on the production deployment. See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for headline numbers and concurrency curves.
+Typical: **150 ms** at 1 concurrency, scaling to **~300 ms** at 100 concurrent requests on the production deployment. See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for headline numbers and concurrency curves.
 
 ### Client overhead
 
@@ -98,7 +86,7 @@ Encoding, the send loop, the receive loop, and any UI render between `ws.recv()`
 Measure as wall-clock between `chunk_ready` and `ws.send()`, plus between `ws.recv()` and `on_transcript()`. Typical: **1–10 ms** for a well-written client; can balloon to hundreds of milliseconds if you're doing CPU-heavy work on the main thread or rendering through a slow framework.
 
 <Note>
-Chunk size affects two components at once. Chunks below **10 ms** flood the server with WebSocket frames; per-frame overhead dominates. Chunks above **500 ms** turn the stream into a batch and add their own buffer latency. **20–100 ms per chunk** is the practical range for low-latency streaming.
+Chunk size affects two components at once. Chunks below **10 ms** flood the server with WebSocket frames; per-frame overhead dominates. Chunks above **500 ms** turn the stream into a batch and add their own buffer latency. **100–300 ms per chunk** is the practical range for low-latency streaming.
 </Note>
 
 ## Pulse vs Pulse Pro for latency-sensitive workloads
@@ -212,7 +200,7 @@ Approximate, observed ranges on the production deployment. Use these to calibrat
 |---|---|---|
 | Connection setup | 20–80 ms | One-time per session. Geo-dependent (Mumbai vs Oregon). |
 | Network transit (one-way) | 5–30 ms intra-region · 80–200 ms cross-region | Pin region: `api.smallest.ai` (Mumbai) or `api.us.smallest.ai` (Oregon). |
-| Server transcription (Pulse streaming) | sub-100 ms at 1 concurrency · ~300 ms at 100 concurrency | See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the concurrency curve. |
+| Server transcription (Pulse streaming) | ~150 ms at 1 concurrency · ~300 ms at 100 concurrency | See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the concurrency curve. |
 | End-of-turn (EOT) latency | 150–500 ms | Pattern-dependent — finalize-on-VAD is fastest, server-side timer is bounded by `eou_timeout_ms`. |
 | Time to first partial | 100–300 ms first session · 50–150 ms warm | Always exclude the first session when averaging. |
 | RTFx (Pulse pre-recorded) | 50× or higher | Wall-clock; `metadata.processing_time_ms` will be higher (excludes network). |
