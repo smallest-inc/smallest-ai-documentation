@@ -1,0 +1,98 @@
+---
+title: "Agent Skills"
+description: "Install Smallest AI agent skills to give Claude Code, Cursor, and other AI coding agents expert knowledge of the Smallest AI API — working code on the first try."
+icon: "sparkles"
+---
+
+[Agent Skills](https://agentskills.io) are a lightweight, open format for extending AI coding agents with specialized knowledge. Install a Smallest AI skill and your agent gains accurate, up-to-date guidance on the exact APIs, models, parameters, and gotchas — without hallucinating deprecated endpoints.
+
+The Smallest AI skills live at [github.com/smallest-inc/skills](https://github.com/smallest-inc/skills) and work with any skills-compatible agent: Claude Code, Cursor, GitHub Copilot, Gemini CLI, and more.
+
+---
+
+## Available Skills
+
+| Skill | What it covers | Install path |
+|---|---|---|
+| `text-to-speech` | Lightning v3.1 + Pro — HTTP, SSE, WebSocket, voice cloning, streaming | `smallest-inc/skills/text-to-speech` |
+| `speech-to-text` | Pulse + Pulse Pro — pre-recorded and real-time WebSocket transcription | `smallest-inc/skills/speech-to-text` |
+| `speech-to-speech` | Hydra — WebSocket sessions, turn detection, barge-in, tool calling | `smallest-inc/skills/speech-to-speech` |
+| `llm-electron` | Electron — drop-in OpenAI-compatible chat completions, tool calling | `smallest-inc/skills/llm-electron` |
+| `voice-agents` | Atoms platform API — agent crews, calling, campaigns, analytics | `smallest-inc/skills/voice-agents` |
+| `setup-api-key` | API key setup, auth header, troubleshooting 401 errors | `smallest-inc/skills/setup-api-key` |
+
+---
+
+## Install
+
+<Tabs>
+  <Tab title="Claude Code">
+    Install all six skills at once:
+
+    ```bash
+    npx skills add smallest-inc/skills
+    ```
+
+    Or install only the skills you need:
+
+    ```bash
+    npx skills add smallest-inc/skills/text-to-speech
+    npx skills add smallest-inc/skills/speech-to-text
+    npx skills add smallest-inc/skills/llm-electron
+    ```
+
+    After install, invoke a skill explicitly with a slash command — for example `/text-to-speech` — or let Claude activate it automatically when your request matches the skill's description.
+  </Tab>
+  <Tab title="Cursor">
+    Install from the terminal in your project root:
+
+    ```bash
+    npx skills add smallest-inc/skills
+    ```
+
+    Skills are stored in `.cursor/skills/` and loaded automatically when Cursor detects a relevant task.
+  </Tab>
+  <Tab title="Other agents">
+    Any agent that supports the [Agent Skills](https://agentskills.io) open standard uses the same command:
+
+    ```bash
+    npx skills add smallest-inc/skills
+    ```
+
+    Supported agents include GitHub Copilot (VS Code), Gemini CLI, OpenHands, Amp, Goose, and others. See [agentskills.io/clients](https://agentskills.io/clients) for the full list.
+  </Tab>
+</Tabs>
+
+---
+
+## How it works
+
+Skills use **progressive disclosure** — your agent loads only the skill name and description at startup (low overhead), then pulls the full instructions into context the moment a task matches:
+
+1. **Discovery** — the agent scans skill names and descriptions at startup to know what's available.
+2. **Activation** — when you ask something like *"stream TTS audio from Smallest AI"*, the agent loads the full `text-to-speech` skill instructions.
+3. **Execution** — the skill provides the correct endpoint, parameters, auth header, and language-specific examples, so the generated code works first time.
+
+---
+
+## What you get
+
+Each skill covers the live API — not training-data guesses:
+
+- Correct unified endpoints (`/waves/v1/tts`, `/waves/v1/stt/`) with deprecated alternatives flagged
+- Current model names (`lightning_v3.1`, `lightning_v3.1_pro`, `pulse`, `electron`)
+- Parameter tables, voice/model pairing rules, and common gotchas
+- Working code examples in Python, TypeScript/JavaScript, and cURL
+- Error reference and retry guidance
+
+<Note>
+  Skills complement the [MCP server](/atoms/mcp/getting-started/quick-start) — MCP gives your agent live access to your Atoms platform data (agents, calls, analytics), while skills give it API expertise to write correct Waves code.
+</Note>
+
+---
+
+## Links
+
+- GitHub: [github.com/smallest-inc/skills](https://github.com/smallest-inc/skills)
+- Agent Skills standard: [agentskills.io](https://agentskills.io)
+- Compatible agents: [agentskills.io/clients](https://agentskills.io/clients)
