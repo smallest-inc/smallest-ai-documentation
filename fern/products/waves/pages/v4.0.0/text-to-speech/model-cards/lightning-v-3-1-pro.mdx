@@ -10,7 +10,7 @@ import { Capabilities, Capability } from "@/components/Capabilities";
 
 Lightning v3.1 Pro is a premium 44.1 kHz text-to-speech pool with improved naturalness and a curated voice catalog. Runs on dedicated inference capacity, isolated from general traffic. Concurrency, latency, and rate limits are identical to standard Lightning v3.1; the difference is voice quality and the catalog.
 
-**Jump to:** [Benchmarks](#performance--benchmarks) · [Voice Catalog](#voice-catalog) · [API Reference](/waves/api-reference/api-reference/text-to-speech/synthesize-speech) · [Quickstart](/waves/documentation/text-to-speech-lightning/quickstart)
+**Jump to:** [Benchmarks](#performance--benchmarks) · [Voice Catalog](#voice-catalog) · [API Reference](#api-reference) · [Pricing & Throughput](#throughput-latency--pricing) · [Quickstart](/waves/documentation/text-to-speech-lightning/quickstart)
 
 <CardGroup cols={4}>
   <Card title="44.1 kHz" icon="waveform-lines" href="#technical-specifications">
@@ -39,7 +39,9 @@ Lightning v3.1 Pro is a premium 44.1 kHz text-to-speech pool with improved natur
 | **Model ID** | `lightning_v3.1_pro` |
 | **Native sample rate** | 44,100 Hz |
 
-### Key Capabilities
+---
+
+## Key Capabilities
 
 <Capabilities bordered>
   <Capability icon="bolt" name="Real-Time Optimized" href="#performance--benchmarks">
@@ -318,6 +320,42 @@ Need a voice not in this list? Use the standard [Lightning v3.1](/waves/model-ca
 
 ---
 
+## Throughput, Latency & Pricing
+
+| Metric | Typical | Notes |
+|---|---|---|
+| Time-to-first-byte (TTFB) | 200 ms | At 40 concurrent requests (see [benchmark methodology](#performance--benchmarks)). |
+| Real-time factor (RTF) | 3.3× | Synthesis runs ~3× faster than playback speed. |
+| Max chunk size | 250 characters | Optimal throughput at ~140 characters per request. |
+
+Pro runs on dedicated inference capacity isolated from general Lightning traffic. Concurrency, latency, and rate-limit ceilings are identical to standard [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1); the difference is voice quality and catalog. Rate limits, concurrency caps, and pricing tiers are documented on the [Concurrency & Limits](/waves/api-reference/api-references/concurrency-and-limits) page. For enterprise pricing, contact [sales@smallest.ai](mailto:sales@smallest.ai).
+
+---
+
+## Best Practices
+
+### Voice ID + model pairing
+
+Pair Pro voice IDs above with `"model": "lightning_v3.1_pro"`. The API does not currently reject mismatched pairings, but pairing a Pro voice with `"model": "lightning_v3.1"` (or omitting `model`) can produce wrong or hallucinated audio. Server-side validation is on the roadmap.
+
+### Language selection
+
+- **`language: en`** → UK + American accented English. Pair with British or American Pro voices for best results.
+- **`language: hi`** → Indian accented English + Hindi with native code-switching mid-utterance. Pair with Indian Pro voices.
+- **Omit `language`** → defaults to `en + hi`. Sensible when you don't know the input language ahead of time.
+
+Per-voice metadata still lives in `tags.language` on the voice catalog (`GET /waves/v1/lightning-v3.1/get_voices`). The body parameter sets the *target* language for the synthesis pass; the voice ID controls the timbre and accent of the speaker.
+
+### Text Formatting
+
+- **Chunk boundaries.** Segment input at natural prosodic boundaries (`.` `!` `?` `,`). Maximum chunk size is 250 characters; optimal throughput at 140 characters per request.
+- **Script integrity.** Use native script for each language. Mixed-script input within a single language token produces unpredictable phoneme mappings.
+- **Lexicon overrides.** Use [pronunciation dictionaries](/waves/documentation/text-to-speech-lightning/pronunciation-dictionaries) for domain-specific terms, brand names, and acronyms where default grapheme-to-phoneme conversion is insufficient.
+
+For comprehensive text formatting rules (numeric handling, date/time, symbols, chunking logic), see [TTS Best Practices](/waves/documentation/best-practices/tts-best-practices).
+
+---
+
 ## Technical Specifications
 
 ### Audio Output
@@ -351,30 +389,6 @@ Need a voice not in this list? Use the standard [Lightning v3.1](/waves/model-ca
 
 ---
 
-## Best Practices
-
-### Voice ID + model pairing
-
-Pair Pro voice IDs above with `"model": "lightning_v3.1_pro"`. The API does not currently reject mismatched pairings, but pairing a Pro voice with `"model": "lightning_v3.1"` (or omitting `model`) can produce wrong or hallucinated audio. Server-side validation is on the roadmap.
-
-### Language selection
-
-- **`language: en`** → UK + American accented English. Pair with British or American Pro voices for best results.
-- **`language: hi`** → Indian accented English + Hindi with native code-switching mid-utterance. Pair with Indian Pro voices.
-- **Omit `language`** → defaults to `en + hi`. Sensible when you don't know the input language ahead of time.
-
-Per-voice metadata still lives in `tags.language` on the voice catalog (`GET /waves/v1/lightning-v3.1/get_voices`). The body parameter sets the *target* language for the synthesis pass; the voice ID controls the timbre and accent of the speaker.
-
-### Text Formatting
-
-- **Chunk boundaries.** Segment input at natural prosodic boundaries (`.` `!` `?` `,`). Maximum chunk size is 250 characters; optimal throughput at 140 characters per request.
-- **Script integrity.** Use native script for each language. Mixed-script input within a single language token produces unpredictable phoneme mappings.
-- **Lexicon overrides.** Use [pronunciation dictionaries](/waves/documentation/text-to-speech-lightning/pronunciation-dictionaries) for domain-specific terms, brand names, and acronyms where default grapheme-to-phoneme conversion is insufficient.
-
-For comprehensive text formatting rules (numeric handling, date/time, symbols, chunking logic), see [TTS Best Practices](/waves/documentation/best-practices/tts-best-practices).
-
----
-
 ## Use Cases
 
 ### Direct Use
@@ -394,7 +408,7 @@ For comprehensive text formatting rules (numeric handling, date/time, symbols, c
 
 ---
 
-## Limitations & Safety
+## Safety & Compliance
 
 ### Known Limitations
 
@@ -404,7 +418,7 @@ For comprehensive text formatting rules (numeric handling, date/time, symbols, c
   Lightning v3.1 Pro must **not** be used for impersonation or fraud, generating deceptive audio content (deepfakes), creating content that violates consent or privacy, harassment or abuse, or any illegal or unethical purposes.
 </Warning>
 
-### Safety & Compliance
+### Compliance
 
 - No retention of synthesized audio
 - Usage monitoring for policy compliance
@@ -413,9 +427,9 @@ For compliance documentation (GDPR, SOC2, HIPAA), contact [support@smallest.ai](
 
 ---
 
-| Channel | Details |
-|---------|---------|
-| **Support** | [support@smallest.ai](mailto:support@smallest.ai) |
-| **Documentation** | [docs.smallest.ai/waves](https://docs.smallest.ai/waves/documentation/getting-started/models) |
-| **Console** | [app.smallest.ai](https://app.smallest.ai) |
-| **Community** | [Discord](https://discord.gg/9WtSXv26WE) |
+## Support
+
+- **Email:** [support@smallest.ai](mailto:support@smallest.ai)
+- **Community:** [Discord](https://discord.gg/9WtSXv26WE)
+- **Documentation:** [docs.smallest.ai/waves](https://docs.smallest.ai/waves)
+- **Console:** [app.smallest.ai/dashboard](https://app.smallest.ai/dashboard)

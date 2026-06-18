@@ -8,7 +8,7 @@ import { Capabilities, Capability } from "@/components/Capabilities";
 
 Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering natural, expressive, and realistic speech at 44 kHz. Optimized for real-time applications with ultra-low latency and voice cloning support, it delivers broadcast-quality audio with genuinely conversational characteristics. Supports 12 languages across English, Hindi, Spanish, and 9 Indian languages.
 
-**Jump to:** [Benchmarks](#performance--benchmarks) · [Voice Catalog](#voice-catalog) · [Supported Languages](#supported-languages) · [API Reference](/waves/api-reference/api-reference/text-to-speech/synthesize-speech) · [Quickstart](/waves/documentation/text-to-speech-lightning/quickstart)
+**Jump to:** [Benchmarks](#performance--benchmarks) · [Voice Catalog](#voice-catalog) · [Supported Languages](#supported-languages) · [API Reference](#api-reference) · [Pricing & Throughput](#throughput-latency--pricing) · [Quickstart](/waves/documentation/text-to-speech-lightning/quickstart)
 
 <CardGroup cols={4}>
   <Card title="44.1 kHz" icon="waveform-lines" href="#technical-specifications">
@@ -36,7 +36,9 @@ Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering n
 | **Version** | v3.1 |
 | **Native sample rate** | 44,100 Hz |
 
-### Key Capabilities
+---
+
+## Key Capabilities
 
 <Capabilities bordered>
   <Capability icon="bolt" name="Real-Time Optimized" href="#performance--benchmarks">
@@ -58,6 +60,12 @@ Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering n
     Custom pronunciation dictionaries for specialized vocabulary, brand names, and domain-specific terms.
   </Capability>
 </Capabilities>
+
+---
+
+## How to use it
+
+See the [Lightning quickstart](/waves/documentation/text-to-speech-lightning/quickstart) for a working end-to-end example, including authentication, request shape, and audio playback. Lightning v3.1 is selected via the `model` body field on the unified TTS endpoints — `POST /waves/v1/tts` for synchronous synthesis, `POST /waves/v1/tts/live` for SSE streaming, and `WSS /waves/v1/tts/live` for WebSocket streaming. Pass `"model": "lightning_v3.1"` to route to the Standard pool, or `"model": "lightning_v3.1_pro"` to route to the [Pro pool](/waves/model-cards/text-to-speech/lightning-v-3-1-pro).
 
 ---
 
@@ -375,6 +383,18 @@ Need something not in this short-list? Call `GET /waves/v1/lightning-v3.1/get_vo
 
 ---
 
+## Throughput, Latency & Pricing
+
+| Metric | Typical | Notes |
+|---|---|---|
+| Time-to-first-byte (TTFB) | 200 ms | At 40 concurrent requests (see [benchmark methodology](#performance--benchmarks)). |
+| Real-time factor (RTF) | 3.3× | Synthesis runs ~3× faster than playback speed. |
+| Max chunk size | 250 characters | Optimal throughput at ~140 characters per request. |
+
+Rate limits, concurrency caps, and pricing tiers are documented on the [Concurrency & Limits](/waves/api-reference/api-references/concurrency-and-limits) page. For enterprise pricing, contact [sales@smallest.ai](mailto:sales@smallest.ai).
+
+---
+
 ## Word-level timestamps
 
 <Badge color="purple">Real-Time</Badge>
@@ -495,47 +515,6 @@ If you need word timing, use the WebSocket path.
 
 ---
 
-## Technical Specifications
-
-### Audio Output
-
-| Specification | Details |
-|---------------|---------|
-| **Native sample rate** | 44,100 Hz |
-| **Supported sample rates** | 8,000 / 16,000 / 24,000 / 44,100 Hz |
-| **Output formats** | PCM, MP3, WAV, ulaw, alaw |
-| **Audio channels** | Mono |
-
-### Text Formatting Guidelines
-
-| Aspect | Recommendation |
-|--------|----------------|
-| **Language scripts** | Use native script for each language. English/Spanish/French/Italian/Dutch/Swedish/Portuguese/German in Latin script, Hindi/Marathi/Gujarati in Devanagari, Tamil/Kannada/Telugu/Malayalam in their native scripts |
-| **Break points** | Natural punctuation (`.` `!` `?` `,`) |
-| **Mixed language** | Avoid transliteration. Use native script for each language |
-
-### Number & Date Handling
-
-| Type | Format |
-|------|--------|
-| Phone numbers | Default 3-4-3 grouping |
-| Dates | DD/MM/YYYY or DD-MM-YYYY |
-| Time | HH:MM or HH:MM:SS |
-
-<Accordion title="Compute Infrastructure">
-
-**Hardware**
-- Recommended GPU: NVIDIA L40S
-- Recommended VRAM: 48 GB
-
-**Software**
-- Server regions (AWS): India (Hyderabad), USA (Oregon)
-- Automatic geo-location based routing for lowest latency
-
-</Accordion>
-
----
-
 ## Best Practices
 
 ### Code-Switching
@@ -618,6 +597,47 @@ For comprehensive text formatting rules (numeric handling, date/time, symbols, c
 
 ---
 
+## Technical Specifications
+
+### Audio Output
+
+| Specification | Details |
+|---------------|---------|
+| **Native sample rate** | 44,100 Hz |
+| **Supported sample rates** | 8,000 / 16,000 / 24,000 / 44,100 Hz |
+| **Output formats** | PCM, MP3, WAV, ulaw, alaw |
+| **Audio channels** | Mono |
+
+### Text Formatting Guidelines
+
+| Aspect | Recommendation |
+|--------|----------------|
+| **Language scripts** | Use native script for each language. English/Spanish/French/Italian/Dutch/Swedish/Portuguese/German in Latin script, Hindi/Marathi/Gujarati in Devanagari, Tamil/Kannada/Telugu/Malayalam in their native scripts |
+| **Break points** | Natural punctuation (`.` `!` `?` `,`) |
+| **Mixed language** | Avoid transliteration. Use native script for each language |
+
+### Number & Date Handling
+
+| Type | Format |
+|------|--------|
+| Phone numbers | Default 3-4-3 grouping |
+| Dates | DD/MM/YYYY or DD-MM-YYYY |
+| Time | HH:MM or HH:MM:SS |
+
+<Accordion title="Compute Infrastructure">
+
+**Hardware**
+- Recommended GPU: NVIDIA L40S
+- Recommended VRAM: 48 GB
+
+**Software**
+- Server regions (AWS): India (Hyderabad), USA (Oregon)
+- Automatic geo-location based routing for lowest latency
+
+</Accordion>
+
+---
+
 ## Use Cases
 
 ### Direct Use
@@ -638,7 +658,7 @@ For comprehensive text formatting rules (numeric handling, date/time, symbols, c
 
 ---
 
-## Limitations & Safety
+## Safety & Compliance
 
 ### Known Limitations
 
@@ -652,7 +672,7 @@ For comprehensive text formatting rules (numeric handling, date/time, symbols, c
   Lightning v3.1 must **not** be used for impersonation or fraud, generating deceptive audio content (deepfakes), creating content that violates consent or privacy, harassment or abuse, or any illegal or unethical purposes.
 </Warning>
 
-### Safety & Compliance
+### Compliance
 
 - Voice cloning requires explicit consent
 - No retention of synthesized audio
@@ -663,9 +683,9 @@ For compliance documentation (GDPR, SOC2, HIPAA), contact [support@smallest.ai](
 
 ---
 
-| Channel | Details |
-|---------|---------|
-| **Support** | [support@smallest.ai](mailto:support@smallest.ai) |
-| **Documentation** | [docs.smallest.ai/models](https://docs.smallest.ai/waves/documentation/getting-started/models) |
-| **Console** | [app.smallest.ai](https://app.smallest.ai) |
-| **Community** | [Discord](https://discord.gg/9WtSXv26WE) |
+## Support
+
+- **Email:** [support@smallest.ai](mailto:support@smallest.ai)
+- **Community:** [Discord](https://discord.gg/9WtSXv26WE)
+- **Documentation:** [docs.smallest.ai/waves](https://docs.smallest.ai/waves)
+- **Console:** [app.smallest.ai/dashboard](https://app.smallest.ai/dashboard)
