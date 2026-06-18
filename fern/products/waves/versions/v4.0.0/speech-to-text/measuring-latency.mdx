@@ -23,10 +23,6 @@ For streaming STT, **latency is per-utterance, not per-chunk**. The number that 
 - **End-of-turn (EOT) latency** — also called Time-to-Final-Segment (TTFS) or Time-to-Complete-Transcript (TTCT): time between a speaker stopping and the final transcript arriving. The metric voice agents are judged on.
 - **RTFx** — for pre-recorded HTTP transcription.
 
-<Note>
-**No "transcript latency" cursor-difference formula here.** Some providers document a `audio_cursor − transcript_cursor` formula as a measure of "live transcript lag" — but it inflates artificially during silence in the audio (the audio cursor advances while the transcript cursor correctly sits still on the last word) and isn't part of any industry-standard benchmark. The [Pipecat STT benchmark](https://www.daily.co/blog/benchmarking-stt-for-voice-agents/) used across the voice-agent industry measures TTFS / EOT only. AssemblyAI documents TTFT and TTCT and recommends [live side-by-side testing](https://www.assemblyai.com/docs/streaming/evaluations/voice-agents) rather than per-chunk formulas. We follow the same approach.
-</Note>
-
 Each metric below has a definition + a measurement recipe.
 
 <Note>
@@ -241,7 +237,7 @@ If you're consistently above the ranges in the table, the [Latency components](#
 - **Including the first session in averages.** It pays a one-time TLS + worker warm-up tax that no real user will experience after the first turn.
 - **Comparing across regions without pinning.** Same audio + same model + different client region can swing EOT by 100+ ms. Pin the region when benchmarking the model.
 - **Treating TTFT and EOT as the same number.** They measure different events — first-partial-arrival vs final-after-silence. A 100 ms TTFT and a 400 ms EOT can coexist and usually do.
-- **Trying to invent a "live transcript lag" formula from cursors.** Don't — see the note at the top of the page. Use the cookbook scripts or live side-by-side testing for live-captioning workloads.
+- **Trying to derive a per-chunk "live lag" number on the client.** For live-captioning workloads, use the cookbook scripts (per-word emission timing) or live side-by-side testing against real users — that's what AssemblyAI, Pipecat, and Daily.co recommend.
 
 ## Summary
 
