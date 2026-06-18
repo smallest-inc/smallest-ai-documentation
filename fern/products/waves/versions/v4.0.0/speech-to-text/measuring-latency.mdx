@@ -1,30 +1,36 @@
 ---
 title: 'Measuring Pulse Latency'
-description: 'Define streaming-STT latency in terms of audio and transcript cursors, attribute it to the four components of the pipeline, and measure each metric from the wire signals Pulse emits.'
+description: 'Measure Pulse streaming + pre-recorded latency using the same metrics the voice-agent industry uses — Time-to-First-Partial, End-of-Turn (EOT), and RTFx — with attribution to the four components of the pipeline.'
 icon: 'gauge-high'
 ---
 
-Pulse streams transcripts back while you're still sending audio. Two numbers matter for most workloads: how far behind the audio the transcript is at any moment (**transcript latency**), and how long after a speaker stops talking the final transcript arrives (**end-of-turn latency**). Voice agents are judged on the second; live-captioning UIs on the first. Averages hide tail behaviour — track p50 and p95 for whichever metric you care about.
+Pulse streams transcripts back while you're still sending audio. The two numbers that matter for most workloads are:
 
-This page defines each metric in terms of two cursors, attributes the total latency to the four components of the streaming pipeline, and gives a copy-pasteable formula + Python snippet for every measurement.
+1. **End-of-turn (EOT) latency** — time between a speaker stopping and the final transcript arriving. The metric voice agents are judged on. Also called Time-to-Final-Segment (TTFS) by the [Pipecat STT benchmark](https://www.daily.co/blog/benchmarking-stt-for-voice-agents/) or Time-to-Complete-Transcript (TTCT) by [AssemblyAI](https://www.assemblyai.com/docs/streaming/evaluations/voice-agents).
+2. **Time to first partial (TTFT)** — startup health: how long after audio starts does the first interim transcript appear?
 
-## How streaming latency is measured
+Plus **RTFx** for pre-recorded HTTP transcription.
 
-Streaming latency lives in the gap between two cursors:
+Track p50 and p95 for whichever metric matches your workload — averages hide tail behaviour, and the tail is what users notice.
 
-- **Audio cursor** — the cumulative real-time duration of audio your client has sent. You maintain this client-side by accumulating each chunk's duration as it goes out.
-- **Transcript cursor** — how many seconds of audio Pulse has acknowledged transcribing. Pulse exposes this as the `end` timestamp on the last word of the most recent interim transcript, available when `word_timestamps=true` is set on the connection.
+This page defines each metric, attributes total latency to the four components of the streaming pipeline, and gives a copy-pasteable Python snippet for every measurement.
 
-The gap between them is **transcript latency**:
+## What "streaming latency" actually means
 
-```
-transcript_latency = audio_cursor - transcript_cursor
-```
+For streaming STT, **latency is per-utterance, not per-chunk**. The number that matters is the time between an event the user can name — they finished speaking, they started speaking, the first word appeared — and the transcript arriving for that event. We document two industry-standard metrics on this page plus a pre-recorded one:
 
-Every metric on this page is a different sampling rule over those two cursors plus a few wire signals from Pulse (interim vs final, finalize messages, silence timeouts). Once you've internalised the cursor model, the rest of the page is just naming.
+- **Time to first partial** — startup health: how long after audio starts does the first interim transcript appear?
+- **End-of-turn (EOT) latency** — also called Time-to-Final-Segment (TTFS) or Time-to-Complete-Transcript (TTCT): time between a speaker stopping and the final transcript arriving. The metric voice agents are judged on.
+- **RTFx** — for pre-recorded HTTP transcription.
 
 <Note>
-Set `word_timestamps=true` on every connection you want to measure. Without it, Pulse doesn't tell you which audio position each transcript corresponds to, and `transcript_cursor` is permanently zero — measurements silently collapse to nonsense.
+**No "transcript latency" cursor-difference formula here.** Some providers document a `audio_cursor − transcript_cursor` formula as a measure of "live transcript lag" — but it inflates artificially during silence in the audio (the audio cursor advances while the transcript cursor correctly sits still on the last word) and isn't part of any industry-standard benchmark. The [Pipecat STT benchmark](https://www.daily.co/blog/benchmarking-stt-for-voice-agents/) used across the voice-agent industry measures TTFS / EOT only. AssemblyAI documents TTFT and TTCT and recommends [live side-by-side testing](https://www.assemblyai.com/docs/streaming/evaluations/voice-agents) rather than per-chunk formulas. We follow the same approach.
+</Note>
+
+Each metric below has a definition + a measurement recipe.
+
+<Note>
+Set `word_timestamps=true` on every connection where you want per-word latency attribution. It's optional for TTFT / EOT (they don't need word-level position information) but required if you want to use the cookbook benchmark scripts that report per-word emission timing.
 </Note>
 
 ## Which metric matches your workload
@@ -33,9 +39,8 @@ There are three useful streaming metrics and one pre-recorded metric. Pick the o
 
 | Metric | Answers | Use case |
 |---|---|---|
-| Transcript latency | How far behind the audio cursor is the transcript cursor right now? | Live captioning, real-time analytics, conversation displays |
 | End-of-turn (EOT) latency | How long after a speaker stops talking does the final transcript arrive? | Voice agents — drives perceived responsiveness |
-| Time to first partial | How long after audio starts does the first interim transcript arrive? | Session-startup health, first-paint UX |
+| Time to first partial | How long after audio starts does the first interim transcript arrive? | Session-startup health, first-paint UX, captioning latency proxy |
 | RTFx (pre-recorded) | What fraction of real-time did Pulse process this file at? | Batch transcription, cross-vendor accuracy benchmarks |
 
 EOT is sometimes called "end of utterance" — same metric, different vocabulary. Voice-agent builders typically search for EOT, so we lead with that name on this page.
@@ -82,10 +87,10 @@ Typical: **5–30 ms one-way** within the same region, **80–200 ms** cross-reg
 
 ### Server transcription
 
-The model inference time. Steady-state contribution to transcript latency:
+The model inference time. Contributes to EOT and to the first-partial latency:
 
 ```
-server_transcription ≈ transcript_latency - 2 * network_one_way - client_overhead
+server_transcription ≈ EOT − 2 * network_one_way − client_overhead − finalize_RTT
 ```
 
 Typical: **sub-100 ms** at 1 concurrency, scaling to **~300 ms** at 100 concurrent requests on the production deployment. See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for headline numbers and concurrency curves.
@@ -107,51 +112,14 @@ Smallest STT ships two models. Only one of them does streaming — pick by the q
 | Workload | Use | Why |
 |---|---|---|
 | Voice agent (English or multilingual) | **Pulse** (`?model=pulse`) | Sub-100 ms server transcription, full streaming WebSocket with `finalize` support, 17 streaming languages including English. |
-| Live captioning UI | **Pulse** | Streaming endpoint with interim transcripts; transcript latency tracking via `word_timestamps=true`. |
+| Live captioning UI | **Pulse** | Streaming endpoint with interim transcripts; word-level timing via `word_timestamps=true` for per-word emission tracking. |
 | Multilingual transcription (streaming or batch) | **Pulse** | 17 streaming + 26 pre-recorded languages with regional aggregators. |
 | Offline / pre-recorded English where accuracy is the goal | **Pulse Pro** (`?model=pulse-pro`) | Tied #2 on the public Open ASR Leaderboard at 5.42% ESB avg WER. HTTP-only, no streaming worker. |
-| Long-form audio batch jobs | **Either** — measured by RTFx, not transcript latency | Both models run RTFx ≥50× on production hardware. |
+| Long-form audio batch jobs | **Either** — measured by RTFx, not EOT | Both models run RTFx ≥50× on production hardware. |
 
 See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) and [Pulse Pro model card](/waves/model-cards/speech-to-text/pulse-pro) for benchmark detail and per-language coverage.
 
 ## Measuring each metric
-
-### Transcript latency
-
-Sample continuously across the session — every time an interim transcript (`is_final=false`) arrives, take the cursor difference:
-
-```python
-import json
-
-audio_cursor = 0.0           # seconds of audio sent so far
-transcript_cursor = 0.0      # seconds of audio Pulse has transcribed
-
-def on_chunk_sent(num_bytes, sample_rate=16000, bytes_per_sample=2):
-    """Call after every binary chunk you send to the server."""
-    global audio_cursor
-    audio_cursor += num_bytes / (sample_rate * bytes_per_sample)
-
-def on_message(raw):
-    """Call on every JSON frame Pulse sends back."""
-    global transcript_cursor
-    msg = json.loads(raw)
-    if msg.get("type") != "transcription":
-        return
-    # Use ONLY interim transcripts. Finals are delayed by the server's
-    # accuracy buffer and don't reflect real-time perceived latency.
-    if msg.get("is_final"):
-        return
-    words = msg.get("words", [])
-    if words:
-        transcript_cursor = words[-1]["end"]
-    latency_ms = (audio_cursor - transcript_cursor) * 1000
-    print(f"transcript_latency = {latency_ms:.0f} ms")
-```
-
-Two rules to follow:
-
-1. **Sample only on interim transcripts.** Pulse emits `is_final=true` after an internal accuracy buffer fills, which trades a few hundred milliseconds for a better final transcript. Treating finals as a latency signal makes the number look worse than what users perceive. See [Realtime response format](/waves/documentation/speech-to-text-pulse/realtime-web-socket/response-format) for the buffer behaviour.
-2. **Set `word_timestamps=true`** on the connection. Without it the `end` field is missing and `transcript_cursor` stays at zero.
 
 ### End-of-turn (EOT) latency
 
@@ -183,7 +151,7 @@ def on_message(raw):
         silence_started_at = None
 ```
 
-**Pattern B — server-side silence timer.** Configure `eou_timeout_ms` on the connection. Pulse emits `is_final=true` automatically after that many ms of silence in the inbound audio. EOT in this mode approximates `eou_timeout_ms + transcript_latency` — easier to set up, but EOT can never beat the timer.
+**Pattern B — server-side silence timer.** Configure `eou_timeout_ms` on the connection. Pulse emits `is_final=true` automatically after that many ms of silence in the inbound audio. EOT in this mode is bounded below by `eou_timeout_ms` (plus server-processing + network round-trip) — easier to set up, but EOT can never beat the timer.
 
 **Pattern C — VAD without finalize.** Mark the silence timestamp on your VAD and wait passively for the next `is_final=true`. Equivalent to Pattern B without the explicit timer — useful only if you're avoiding `finalize` for protocol reasons.
 
@@ -249,7 +217,6 @@ Approximate, observed ranges on the production deployment. Use these to calibrat
 | Connection setup | 20–80 ms | One-time per session. Geo-dependent (Mumbai vs Oregon). |
 | Network transit (one-way) | 5–30 ms intra-region · 80–200 ms cross-region | Pin region: `api.smallest.ai` (Mumbai) or `api.us.smallest.ai` (Oregon). |
 | Server transcription (Pulse streaming) | sub-100 ms at 1 concurrency · ~300 ms at 100 concurrency | See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the concurrency curve. |
-| Total transcript latency | 100–300 ms intra-region | Client-side end-to-end during normal streaming. |
 | End-of-turn (EOT) latency | 150–500 ms | Pattern-dependent — finalize-on-VAD is fastest, server-side timer is bounded by `eou_timeout_ms`. |
 | Time to first partial | 100–300 ms first session · 50–150 ms warm | Always exclude the first session when averaging. |
 | RTFx (Pulse pre-recorded) | 50× or higher | Wall-clock; `metadata.processing_time_ms` will be higher (excludes network). |
@@ -270,19 +237,20 @@ If you're consistently above the ranges in the table, the [Latency components](#
 ## Common measurement pitfalls
 
 - **Sampling latency from `is_final=true`.** Finals are intentionally delayed by Pulse's accuracy buffer. They look slow because they are — by design. Use interims.
-- **Forgetting `word_timestamps=true`.** `transcript_cursor` stays at zero. Code runs silently, numbers are meaningless.
+- **Forgetting `word_timestamps=true`.** Without it the `end` field on words is missing, so you can't look up the send-time for the audio a transcript covers — measurements collapse to nonsense.
 - **Including the first session in averages.** It pays a one-time TLS + worker warm-up tax that no real user will experience after the first turn.
-- **Comparing across regions without pinning.** Same audio + same model + different client region can swing transcript latency by 100+ ms. Pin the region when benchmarking the model.
-- **Treating EOT and transcript latency as the same number.** They measure different things. A 50 ms transcript latency and a 400 ms EOT can coexist (and usually do — finalize messages traverse the same network round-trip the transcript does).
+- **Comparing across regions without pinning.** Same audio + same model + different client region can swing EOT by 100+ ms. Pin the region when benchmarking the model.
+- **Treating TTFT and EOT as the same number.** They measure different events — first-partial-arrival vs final-after-silence. A 100 ms TTFT and a 400 ms EOT can coexist and usually do.
+- **Trying to invent a "live transcript lag" formula from cursors.** Don't — see the note at the top of the page. Use the cookbook scripts or live side-by-side testing for live-captioning workloads.
 
 ## Summary
 
-- **Two cursors, one formula.** `transcript_latency = audio_cursor − transcript_cursor`. Every streaming metric is a sampling rule over those two cursors plus a wire signal.
-- **Transcript latency and EOT are different metrics.** Captioning is judged on the first; voice agents on the second. A session can have great transcript latency and bad EOT, or the reverse.
+- **Per-utterance, not per-chunk.** Streaming STT latency is measured between named events — speaker stops, first word appears, file uploaded — not as a continuous gap. The voice-agent industry standardised on TTFT + EOT for this reason; no widely-adopted per-chunk formula exists.
+- **TTFT and EOT are different metrics.** First-partial timing matters for startup health and live-captioning first-paint; EOT is what voice agents are judged on. They can move independently.
 - **Four components, attributed individually.** Connection setup, network transit, server transcription, client overhead. If a number is bad, walk the four to find which one to fix.
 - **Pulse for streaming, Pulse Pro for offline English accuracy.** Pulse Pro has no streaming worker.
 - **Voice agents should use finalize-on-VAD.** It's the fastest of the three EOT patterns by design — the server timer is bounded below by `eou_timeout_ms`.
-- **Set `word_timestamps=true`** on every streaming connection you want to measure. Without it, `transcript_cursor` is always zero and the math collapses to nonsense.
+- **Set `word_timestamps=true`** on every streaming connection you want to measure. Without it the `end` field is missing and the send-time lookup has nothing to key on.
 - **Track p50 and p95.** Single-shot averages hide the tail. The tail is what users notice.
 
 ## Reference scripts and cross-references
@@ -292,7 +260,7 @@ Two reference scripts in the [Smallest AI Cookbook](https://github.com/smallest-
 | Script | Endpoint | Reports |
 |---|---|---|
 | [`ping_pulse_offline.py`](https://github.com/smallest-inc/cookbook/blob/main/speech-to-text/benchmarks/ping_pulse_offline.py) | `POST /waves/v1/stt/` | WER, per-clip wall-clock, RTFx |
-| [`ping_pulse_streaming.py`](https://github.com/smallest-inc/cookbook/blob/main/speech-to-text/benchmarks/ping_pulse_streaming.py) | `WSS /waves/v1/stt/live` | WER, transcript latency, EOT, time-to-first-partial |
+| [`ping_pulse_streaming.py`](https://github.com/smallest-inc/cookbook/blob/main/speech-to-text/benchmarks/ping_pulse_streaming.py) | `WSS /waves/v1/stt/live` | WER, EOT, time-to-first-partial, per-word emission timing |
 
 See the [benchmarks README](https://github.com/smallest-inc/cookbook/tree/main/speech-to-text/benchmarks#readme) for dataset layout, install steps, and output format.
 
