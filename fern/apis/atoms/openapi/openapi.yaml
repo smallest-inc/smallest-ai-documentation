@@ -106,6 +106,7 @@ paths:
   /agent/template:
     get:
       summary: Get agent templates
+      x-fern-sdk-group-name: agent_templates
       x-fern-sdk-method-name: list_agent_templates
       tags:
         - Agent Templates
@@ -260,6 +261,7 @@ paths:
   /agent:
     get:
       summary: Get all agents
+      x-fern-sdk-group-name: agents
       x-fern-sdk-method-name: list_agents
       tags:
         - Agents
@@ -355,6 +357,7 @@ paths:
           $ref: "#/components/responses/InternalServerErrorResponse"
     post:
       summary: Create a new agent
+      x-fern-sdk-group-name: agents
       x-fern-sdk-method-name: create_agent
       tags:
         - Agents
@@ -407,6 +410,7 @@ paths:
   /agent/{id}:
     get:
       summary: Get agent by ID
+      x-fern-sdk-group-name: agents
       x-fern-sdk-method-name: get_agent
       description: |
         Returns the agent document merged with the resolved config of the active version
@@ -488,6 +492,7 @@ paths:
           $ref: "#/components/responses/InternalServerErrorResponse"
     patch:
       summary: Update agent metadata
+      x-fern-sdk-group-name: agents
       x-fern-sdk-method-name: update_agent
       description: |
         Update agent fields. Behavior depends on whether the agent has versioning enabled:
@@ -553,6 +558,7 @@ paths:
     delete:
       operationId: deleteAgent
       summary: Archive or unarchive an agent
+      x-fern-sdk-group-name: agents
       x-fern-sdk-method-name: archive_agent
       description: |
         Soft-archives the agent — it is excluded from listings and stops accepting calls,
@@ -619,6 +625,7 @@ paths:
   /agent/{id}/duplicate:
     post:
       summary: Duplicate agent to another organization
+      x-fern-sdk-group-name: agents
       x-fern-sdk-method-name: duplicate_agent
       description: |
         Duplicates a SINGLE_PROMPT agent's live active version into a target organization
@@ -772,7 +779,9 @@ paths:
     patch:
       summary: Update workflow configuration
       deprecated: true
-      x-fern-sdk-method-name: _update_workflow_configuration_deprecated
+      x-fern-availability: deprecated
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: update_workflow_configuration
       description: |
         **Deprecated** — use `PATCH /agent/{id}/drafts/{draftId}/config` instead.
 
@@ -1575,6 +1584,7 @@ paths:
   /conversation/{callId}/retries:
     get:
       summary: List retry attempts for a call
+      x-fern-sdk-group-name: conversations
       x-fern-sdk-method-name: list_retry_attempts
       description: |
         Returns the **parent call** plus every retry attempt that branched from it, ordered by attempt index. Use this when a customer asks "did the platform retry this call?" — typically driven by an outbound agent's auto-retry configuration (`maxRetries`, `retryDelay`).
@@ -1628,6 +1638,7 @@ paths:
   /conversation/cancel:
     post:
       summary: Cancel an in-flight call
+      x-fern-sdk-group-name: conversations
       x-fern-sdk-method-name: cancel
       description: |
         Cancels an outbound call that has been queued or is in progress. Use the body form to look the call up by `callId`; the path-param form (`POST /conversation/{callId}/cancel`) is the equivalent for REST conventions, but only handles `IN_QUEUE` calls.
@@ -1686,6 +1697,7 @@ paths:
   /conversation/{callId}/cancel:
     post:
       summary: Cancel a queued call (path-param form)
+      x-fern-sdk-group-name: conversations
       x-fern-sdk-method-name: cancel_queued
       description: |
         REST-conventional path-param variant of [`POST /conversation/cancel`](#operation/cancelCallByBody).
@@ -1734,6 +1746,7 @@ paths:
   /conversation/outbound:
     post:
       summary: Start an outbound call
+      x-fern-sdk-group-name: calls
       x-fern-sdk-method-name: start_outbound_call
       description: |
         Initiates an outbound telephony call with a specified agent and phone number.
@@ -1871,6 +1884,7 @@ paths:
   /events:
     get:
       summary: Subscribe to live call events (SSE)
+      x-fern-sdk-group-name: live_transcripts
       x-fern-sdk-method-name: subscribe_to_live_events
       description: |
         Real-time streaming of user speech (STT) and agent speech (TTS) events for an active call via Server-Sent Events.
