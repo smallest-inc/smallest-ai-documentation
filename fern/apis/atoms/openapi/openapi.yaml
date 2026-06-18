@@ -106,6 +106,8 @@ paths:
   /agent/template:
     get:
       summary: Get agent templates
+      x-fern-sdk-group-name: agent_templates
+      x-fern-sdk-method-name: list_agent_templates
       tags:
         - Agent Templates
       security:
@@ -259,6 +261,8 @@ paths:
   /agent:
     get:
       summary: Get all agents
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: list_agents
       tags:
         - Agents
       security:
@@ -353,6 +357,8 @@ paths:
           $ref: "#/components/responses/InternalServerErrorResponse"
     post:
       summary: Create a new agent
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: create_agent
       tags:
         - Agents
       security:
@@ -404,6 +410,8 @@ paths:
   /agent/{id}:
     get:
       summary: Get agent by ID
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: get_agent
       description: |
         Returns the agent document merged with the resolved config of the active version
         under `_resolvedConfig`. Non-versioned fields (name, telephonyProductId, allowInboundCall,
@@ -443,6 +451,12 @@ paths:
           required: true
           schema:
             type: string
+            minLength: 1
+            description: |
+              Agent identifier (Mongo ObjectId string). Must be non-empty.
+              An empty `id` would resolve to `GET /agent/`, which is the list
+              endpoint — Fern adds the `minLength: 1` guard so the generated
+              SDK raises locally rather than silently calling the wrong route.
         - in: query
           name: draftId
           required: false
@@ -478,6 +492,8 @@ paths:
           $ref: "#/components/responses/InternalServerErrorResponse"
     patch:
       summary: Update agent metadata
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: update_agent
       description: |
         Update agent fields. Behavior depends on whether the agent has versioning enabled:
 
@@ -542,6 +558,8 @@ paths:
     delete:
       operationId: deleteAgent
       summary: Archive or unarchive an agent
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: archive_agent
       description: |
         Soft-archives the agent — it is excluded from listings and stops accepting calls,
         but all data is preserved and the operation is fully reversible.
@@ -607,6 +625,8 @@ paths:
   /agent/{id}/duplicate:
     post:
       summary: Duplicate agent to another organization
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: duplicate_agent
       description: |
         Duplicates a SINGLE_PROMPT agent's live active version into a target organization
         (can also be the same organization). Copies all versioned configuration but strips
@@ -759,6 +779,9 @@ paths:
     patch:
       summary: Update workflow configuration
       deprecated: true
+      x-fern-availability: deprecated
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: update_workflow_configuration
       description: |
         **Deprecated** — use `PATCH /agent/{id}/drafts/{draftId}/config` instead.
 
@@ -822,6 +845,8 @@ paths:
   /conversation:
     get:
       summary: Get all conversation logs
+      x-fern-sdk-group-name: calls
+      x-fern-sdk-method-name: list
       description: Retrieve paginated conversation logs with support for various filters. Returns call logs for agents belonging to the authenticated user's organization.
       tags:
         - Logs
@@ -1145,6 +1170,8 @@ paths:
   /conversation/search:
     post:
       summary: Search conversation logs by call IDs
+      x-fern-sdk-group-name: calls
+      x-fern-sdk-method-name: search
       description: |
         Fetch specific conversation logs by their callIds. This endpoint allows you to retrieve up to 100 specific calls at once.
         Only returns calls that belong to agents in your organization (security check enforced).
@@ -1314,6 +1341,8 @@ paths:
   /conversation/{id}:
     get:
       summary: Get conversation log by ID
+      x-fern-sdk-group-name: calls
+      x-fern-sdk-method-name: get
       description: Retrieve detailed information about a specific conversation including transcript, events, and latency metrics.
       tags:
         - Logs
@@ -1555,6 +1584,8 @@ paths:
   /conversation/{callId}/retries:
     get:
       summary: List retry attempts for a call
+      x-fern-sdk-group-name: conversations
+      x-fern-sdk-method-name: list_retry_attempts
       description: |
         Returns the **parent call** plus every retry attempt that branched from it, ordered by attempt index. Use this when a customer asks "did the platform retry this call?" — typically driven by an outbound agent's auto-retry configuration (`maxRetries`, `retryDelay`).
 
@@ -1607,6 +1638,8 @@ paths:
   /conversation/cancel:
     post:
       summary: Cancel an in-flight call
+      x-fern-sdk-group-name: conversations
+      x-fern-sdk-method-name: cancel
       description: |
         Cancels an outbound call that has been queued or is in progress. Use the body form to look the call up by `callId`; the path-param form (`POST /conversation/{callId}/cancel`) is the equivalent for REST conventions, but only handles `IN_QUEUE` calls.
 
@@ -1664,6 +1697,8 @@ paths:
   /conversation/{callId}/cancel:
     post:
       summary: Cancel a queued call (path-param form)
+      x-fern-sdk-group-name: conversations
+      x-fern-sdk-method-name: cancel_queued
       description: |
         REST-conventional path-param variant of [`POST /conversation/cancel`](#operation/cancelCallByBody).
 
@@ -1711,6 +1746,8 @@ paths:
   /conversation/outbound:
     post:
       summary: Start an outbound call
+      x-fern-sdk-group-name: calls
+      x-fern-sdk-method-name: start_outbound_call
       description: |
         Initiates an outbound telephony call with a specified agent and phone number.
 
@@ -1847,6 +1884,8 @@ paths:
   /events:
     get:
       summary: Subscribe to live call events (SSE)
+      x-fern-sdk-group-name: live_transcripts
+      x-fern-sdk-method-name: subscribe_to_live_events
       description: |
         Real-time streaming of user speech (STT) and agent speech (TTS) events for an active call via Server-Sent Events.
 
