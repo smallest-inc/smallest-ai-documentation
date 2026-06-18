@@ -212,20 +212,46 @@ export const Capability: React.FC<CapabilityProps> = ({ icon, name, href, childr
 };
 
 type CapabilitiesProps = {
+  /**
+   * If true, wraps the entire grid in a subtle outer container with a
+   * 1px border + rounded corners + interior padding. Per-row dividers
+   * stay. Use this when the section needs more visual definition next
+   * to surrounding tables / heavy prose. Default is borderless.
+   */
+  bordered?: boolean;
   children?: React.ReactNode;
 };
 
-export const Capabilities: React.FC<CapabilitiesProps> = ({ children }) => {
+export const Capabilities: React.FC<CapabilitiesProps> = ({ bordered = false, children }) => {
+  const gridStyle: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    columnGap: "32px",
+    rowGap: 0,
+  };
+
+  if (bordered) {
+    return (
+      <div
+        className="capabilities-container--bordered"
+        style={{
+          border: "1px solid rgba(127, 127, 127, 0.18)",
+          borderRadius: 10,
+          padding: "4px 20px",
+          margin: "16px 0 8px",
+        }}
+      >
+        <div className="capabilities-grid" style={gridStyle}>
+          {children}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="capabilities-grid"
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
-        columnGap: "32px",
-        rowGap: 0,
-        margin: "16px 0 8px",
-      }}
+      style={{ ...gridStyle, margin: "16px 0 8px" }}
     >
       {children}
     </div>
