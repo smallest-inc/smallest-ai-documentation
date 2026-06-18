@@ -4,22 +4,26 @@ description: "Model card for Hydra — Smallest AI's full-duplex speech-to-speec
 icon: "wave-pulse"
 ---
 
+import { Capabilities, Capability } from "@/components/Capabilities";
+
 <Badge color="purple">Latest Release</Badge>
 
 Hydra is Smallest AI's **speech-to-speech model**. A single WebSocket carries microphone audio from your client to the model and streams synthesised response audio back. There is no STT → LLM → TTS pipeline in the middle, and no transcript on the wire.
 
+**Jump to:** [Benchmarks](#performance--benchmarks) · [Voices](#voices) · [API Reference](/waves/api-reference/api-reference/speech-to-speech/speech-to-speech) · [Pricing & Throughput](#throughput-latency--pricing) · [Quickstart](/waves/documentation/speech-to-speech-hydra/quickstart)
+
 <CardGroup cols={4}>
-  <Card title="Audio in, audio out" icon="arrow-right-arrow-left">
+  <Card title="Audio in, audio out" icon="arrow-right-arrow-left" href="#how-to-use-it">
     One model. One socket. No glue code.
   </Card>
-  <Card title="Full-duplex" icon="wave-pulse">
+  <Card title="Full-duplex" icon="wave-pulse" href="#key-capabilities">
     Barge-in handled by the model. In-flight responses cancel automatically.
   </Card>
-  <Card title="Tool calling" icon="screwdriver-wrench">
+  <Card title="Tool calling" icon="screwdriver-wrench" href="#key-capabilities">
     Standard JSON-schema function calls, executed on your side.
   </Card>
-  <Card title="Bot speaks first" icon="hand-wave">
-    `generate_initial_response: true` for greetings.
+  <Card title="6 voices" icon="user-music" href="#voices">
+    `wren`, `sloane`, `marlowe`, `reed`, `knox`, `tate`.
   </Card>
 </CardGroup>
 
@@ -34,49 +38,42 @@ Hydra is Smallest AI's **speech-to-speech model**. A single WebSocket carries mi
 | **Wire version** | v1 |
 | **License** | Proprietary, hosted API |
 
-### Key capabilities
+---
 
-<CardGroup cols={3}>
-  <Card title="6 voices" icon="user-music">
-    `wren`, `sloane`, `marlowe`, `reed`, `knox`, `tate`.
-  </Card>
-  <Card title="Tool calling" icon="screwdriver-wrench">
-    JSON-schema tools, streamed args, client-side execution.
-  </Card>
-  <Card title="Mid-session updates" icon="rotate">
-    Live-patch `tools` without reconnecting via `session.update`.
-  </Card>
-</CardGroup>
+## Key Capabilities
 
-## Audio formats
+<Capabilities bordered>
+  <Capability icon="arrow-right-arrow-left" name="Audio In, Audio Out" href="#how-to-use-it">
+    Single WebSocket carries microphone PCM in and response PCM out. No STT → LLM → TTS pipeline, no transcript on the wire.
+  </Capability>
+  <Capability icon="waveform" name="Full-duplex Barge-in">
+    Server handles interruption natively. In-flight responses cancel automatically when the user speaks over the bot.
+  </Capability>
+  <Capability icon="bolt" name="Tool / Function Calling">
+    Standard JSON-schema tools with streamed arguments, executed on your side.
+  </Capability>
+  <Capability icon="user-music" name="6 Voices" href="#voices">
+    `wren`, `sloane`, `marlowe`, `reed`, `knox`, `tate`. Frozen at handshake.
+  </Capability>
+  <Capability icon="sparkles" name="Bot Speaks First">
+    `generate_initial_response: true` lets the bot open with a greeting before the user speaks.
+  </Capability>
+  <Capability icon="webhook" name="Mid-session Updates">
+    Live-patch `tools` and session config without reconnecting via `session.update`.
+  </Capability>
+</Capabilities>
 
-| Direction | Format | Sample rate | Channels | Encoding |
-|---|---|---|---|---|
-| Input (client → server) | PCM16, signed little-endian | **16 kHz** | mono | base64 inside `input_audio_buffer.append` |
-| Output (server → client) | PCM16, signed little-endian | **48 kHz** | mono | base64 inside `response.output_audio.delta` |
+---
 
-## Languages
+## How to use it
 
-Hydra currently supports **English only**. Additional languages are on the roadmap.
+See the [Hydra quickstart](/waves/documentation/speech-to-speech-hydra/quickstart) for a working end-to-end browser client — clone the reference repo, paste your API key, and talk to Hydra. Hydra is selected via the `model` query parameter on the unified Speech-to-Speech endpoint: `wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=$SMALLEST_API_KEY`. For browser clients, mint a short-lived token server-side rather than embedding the long-lived key in the page.
 
-| Language | ISO code | Status |
-|---|---|---|
-| English | `en` | ✅ Production |
+The [Overview](/waves/documentation/speech-to-speech-hydra/overview) covers the full event catalog (session config, tool calling, interruption, errors).
 
-## Voices
+---
 
-Six voice IDs are accepted on `session.configure.session.voice` and frozen at handshake.
-
-| Voice ID | Notes |
-|---|---|
-| `wren` | Default (server-side default if `voice` is omitted). |
-| `sloane` | — |
-| `marlowe` | — |
-| `reed` | — |
-| `knox` | — |
-| `tate` | — |
-
-## Performance & benchmarks
+## Performance & Benchmarks
 
 Hydra is benchmarked against eight other production-grade voice / realtime models. Full methodology and metric definitions live on the dedicated [Performance](/waves/documentation/speech-to-speech-hydra/benchmarks/performance) and [Metrics Overview](/waves/documentation/speech-to-speech-hydra/benchmarks/metrics-overview) pages.
 
@@ -111,20 +108,84 @@ Hydra is evaluated on voice-agent axes — voice-to-voice latency, turn-taking a
 |---|---|
 | **Idle timeout** | ~30 s with no traffic from either side. Keep streaming audio (silence frames are fine) to hold the connection. |
 
-## Capacity & rate limits
+---
 
-- One voice session per WebSocket connection.
-- Concurrency follows your plan's WebSocket pool. Excess connections receive `error` with `code: "server_full"` followed by close code `1013` — back off with jitter and retry.
+## Supported Languages
 
-For higher limits, contact your account manager.
+Hydra currently supports **English only**. Additional languages are on the roadmap.
 
-## Pricing
+| Language | ISO code | Status |
+|---|---|---|
+| English | `en` | ✅ Production |
 
-Contact your Smallest AI account manager for current pricing. Hydra is billed by session minute; `usage` per turn is reported on `response.done` when available.
+---
 
-## Use cases
+## Voices
 
-### Direct use
+Six voice IDs are accepted on `session.configure.session.voice` and frozen at handshake.
+
+| Voice ID | Notes |
+|---|---|
+| `wren` | Default (server-side default if `voice` is omitted). |
+| `sloane` | — |
+| `marlowe` | — |
+| `reed` | — |
+| `knox` | — |
+| `tate` | — |
+
+---
+
+## API Reference
+
+| Endpoint | Method | Use case |
+|---|---|---|
+| `wss://api.smallest.ai/waves/v1/s2s?model=hydra` | WebSocket | Realtime full-duplex speech-to-speech |
+
+See [Hydra (Realtime / WebSocket)](/waves/api-reference/api-reference/speech-to-speech/speech-to-speech) for the full event schema. The [documentation hub](/waves/documentation/speech-to-speech-hydra/overview) covers the event catalog, session config, tool calling, interruption handling, and errors end-to-end.
+
+---
+
+## Throughput, Latency & Pricing
+
+| Metric | Typical | Notes |
+|---|---|---|
+| Non-tool voice-to-voice median | 864 ms | Tied-fastest of 9 models on AIEWF S2S `aiwf_medium_context`. |
+| Tool voice-to-voice mean | 1624 ms | Fastest of 9 models on the same benchmark. |
+| Pass rate | 95.9% | #3 of 8 on AIEWF S2S, within ~2 pp of the leader. |
+
+- **One voice session per WebSocket connection.** Concurrency follows your plan's WebSocket pool. Excess connections receive `error` with `code: "server_full"` followed by close code `1013` — back off with jitter and retry.
+- **Idle timeout: ~30 s** with no traffic from either side. Keep streaming audio (silence frames are fine) to hold the connection.
+
+Pricing: Contact your Smallest AI account manager. Hydra is billed by session minute; `usage` per turn is reported on `response.done` when available.
+
+---
+
+## Best Practices
+
+- **Keep the socket warm.** Stream silence frames during pauses rather than letting the 30 s idle timer fire.
+- **Handle `code: "server_full"` with jittered backoff.** Capacity is per-plan WebSocket pool; surface a "please retry" UX rather than a hard error to the user.
+- **Mint short-lived tokens for browser clients.** Don't embed the long-lived `SMALLEST_API_KEY` in client-side code — mint a session token server-side.
+- **Live-patch `tools` via `session.update`** rather than reconnecting. Reconnects pay handshake cost; `session.update` does not.
+- **For compliance transcripts, mirror the PCM through [Pulse STT](/waves/documentation/speech-to-text-pulse/overview)** after the session — Hydra itself does not emit transcripts on the wire.
+
+---
+
+## Technical Specifications
+
+| Specification | Details |
+|---|---|
+| **Endpoint** | `wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=<KEY>` |
+| **Frame format** | JSON (UTF-8 text frames). No binary frames. |
+| **Authentication** | `api_key` query parameter (browser clients should mint a short-lived token server-side) |
+| **Input audio** | PCM16 signed little-endian, 16 kHz, mono, base64 in `input_audio_buffer.append` |
+| **Output audio** | PCM16 signed little-endian, 48 kHz, mono, base64 in `response.output_audio.delta` |
+| **Close codes** | `1000` normal · `1013` server full · auth failures are HTTP 401 during the WS handshake (no close code) |
+
+---
+
+## Use Cases
+
+### Direct Use
 
 - **Realtime voice assistants** — companion apps, concierge bots, in-app tutors.
 - **Phone agents** — restaurant reservations, banking concierges, customer support.
@@ -132,36 +193,27 @@ Contact your Smallest AI account manager for current pricing. Hydra is billed by
 - **Accessibility** — voice-first interfaces for visually-impaired users.
 - **Voice-controlled IoT and games** — kiosks, in-car assistants, gaming companions.
 
-### Downstream use
+### Downstream Use
 
 - **Conversational analytics** over recorded phone-call audio (transcribe the captured audio with [Pulse STT](/waves/documentation/speech-to-text-pulse/overview) afterwards).
 - **Multi-agent voice systems** where Hydra is one specialised speaker.
 - **Hybrid voice + text agents** where a text fallback is needed for compliance.
 
-## Specs & API surface
+---
 
-| | |
-|---|---|
-| Endpoint | `wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=<KEY>` |
-| Frame format | JSON (UTF-8 text frames). No binary frames. |
-| Authentication | `api_key` query parameter (browser clients should mint a short-lived token server-side). |
-| Close codes | `1000` normal, `1013` server full — auth failures are HTTP 401 during the WS handshake (no close code) |
-
-See the [documentation hub](/waves/documentation/speech-to-speech-hydra/overview) for the full event catalog, session config, tool calling, interruption handling, and errors.
-
-## Safety & responsible use
+## Safety & Compliance
 
 Hydra is intended for voice-agent and conversational workloads. Customers building user-facing applications should layer their own content moderation, prompt-injection defenses, and PII handling appropriate to their domain. Hydra does not currently apply content moderation server-side — outputs reflect the model's training and the prompts you provide.
 
 For voice-agent applications handling regulated content (financial, healthcare), the standard pattern applies: keep PII out of prompts where practical, apply post-processing redaction on outputs, and — if you need a transcript for compliance — transcribe the PCM you sent/received via the [Pulse STT API](/waves/documentation/speech-to-text-pulse/overview) and store that transcript with your moderation log.
 
-## Related
+For compliance documentation (GDPR, SOC2, HIPAA), contact [support@smallest.ai](mailto:support@smallest.ai).
 
-<CardGroup cols={2}>
-  <Card title="Quickstart" icon="rocket" href="/waves/documentation/speech-to-speech-hydra/quickstart">
-    Clone the reference client, paste your API key, and talk to Hydra in your browser.
-  </Card>
-  <Card title="Overview" icon="plug" href="/waves/documentation/speech-to-speech-hydra/overview">
-    Full event reference, tool calling, interruption, errors.
-  </Card>
-</CardGroup>
+---
+
+## Support
+
+- **Email:** [support@smallest.ai](mailto:support@smallest.ai)
+- **Community:** [Discord](https://discord.gg/9WtSXv26WE)
+- **Documentation:** [docs.smallest.ai/waves](https://docs.smallest.ai/waves)
+- **Console:** [app.smallest.ai/dashboard](https://app.smallest.ai/dashboard)
