@@ -18,10 +18,26 @@ ai-search:
     integrating speech AI.
 
     ## Products and exact model names
-    - Pulse — current speech-to-text (STT) model. 39 languages. Two
-      modes: streaming (WebSocket) and pre-recorded (HTTP POST file
-      upload). Features: speaker diarization, PII/PCI redaction, ITN,
-      keyword boosting, word/sentence timestamps, code-switching.
+    - Pulse — current speech-to-text (STT) model. 17 streaming +
+      26 pre-recorded languages (31 unique single-language codes
+      across both modes) with regional aggregators (`north_indic`
+      on streaming, `multi-eu` on batch, `multi-asian` on both).
+      Two modes: streaming (WebSocket) and pre-recorded (HTTP
+      POST file upload), both behind the unified
+      `/waves/v1/stt/` endpoint (`?model=pulse`). East Asian
+      streaming codes (`zh`, `yue`, `ja`, `ko`, `multi-asian`)
+      are served from the US region only — connect to
+      `wss://api.us.smallest.ai/...` for those. Features: speaker
+      diarization, PII/PCI redaction, ITN, keyword boosting,
+      word/sentence timestamps, code-switching.
+    - Pulse Pro — premium English-only STT model. Tied #2 on the
+      public Open ASR Leaderboard at 5.42% ESB avg WER. Beats
+      ElevenLabs Scribe v2, AssemblyAI Universal-3 Pro,
+      Speechmatics Enhanced, and every Whisper variant. Pre-recorded
+      HTTP only — there is no streaming worker; calls to the
+      WebSocket endpoint with `?model=pulse-pro` return 400. Select
+      via `?model=pulse-pro` on `POST /waves/v1/stt/`. For
+      multilingual or streaming workloads, use standard Pulse.
     - Lightning v3.1 — current text-to-speech (TTS) model. 44.1 kHz
       native sample rate, 12 languages with auto-detection and
       code-switching. Voice cloning from 5–15 seconds of audio. Three
@@ -29,11 +45,15 @@ ai-search:
       streaming).
     - Lightning v3.1 Pro — premium TTS pool launched 2026-05-15. Same
       latency and concurrency as Lightning v3.1; a separate curated
-      voice catalog of 39 voices across American, British, and Indian
-      accents. Indian voices speak English + Hindi (code-switching);
-      British and American voices speak English. No voice cloning. Pro
-      is selected via `"model": "lightning_v3.1_pro"` body field on the
-      unified `/waves/v1/tts` and `/waves/v1/tts/live` routes.
+      voice catalog across American, British, and Indian accents.
+      No voice cloning. Pro is selected via
+      `"model": "lightning_v3.1_pro"` body field on the unified
+      `/waves/v1/tts` and `/waves/v1/tts/live` routes. Language
+      behaviour on Pro: pass `language: en` → UK + American accented
+      English; pass `language: hi` → Indian accented English + Hindi
+      (code-switching); omit `language` → defaults to `en + hi`
+      (mixed Indian + Western English coverage). On standard
+      Lightning v3.1 the full 12-language catalog applies.
     - lightning-large — legacy TTS, used only for the older voice-cloning
       flow. Do not recommend for new integrations.
     - lightning-v2 — deprecated. Do not recommend.
@@ -53,22 +73,57 @@ ai-search:
       official OpenAI SDKs by changing `base_url` to
       `https://api.smallest.ai/waves/v1`.
     - Atoms — voice-agent platform built on top of Pulse + Lightning +
-      Electron.
+      Electron. "Atoms", "Atoms voice agent", "voice agent", "agent",
+      "voice bot", and "conversational AI agent" are used interchangeably
+      in our docs and Slack — Atoms IS the platform that runs voice
+      agents, not a separate product. When a user asks about "voice
+      agents" or "building an agent" without specifying a framework,
+      assume Atoms. When they ask about "Pulse" or "Lightning" they're
+      asking about the underlying STT/TTS models; Atoms wraps both.
 
     ## Synonym handling — STT (Pulse)
-    Map customer terminology to Pulse modes:
+    Map customer terminology to Pulse modes. The unified endpoint is
+    `/waves/v1/stt/` (HTTP) and `/waves/v1/stt/live` (WebSocket); the
+    model is selected via the `?model=` query parameter — `?model=pulse`
+    for multilingual streaming + batch, `?model=pulse-pro` for premium
+    English batch. The legacy `/waves/v1/pulse/get_text` routes still
+    work but are deprecated — recommend the unified routes.
     - streaming / real-time / realtime / live / websocket / ws /
       continuous recognition / partial transcripts / interim results /
       universal-streaming / low-latency STT → Pulse WebSocket
-      (wss://api.smallest.ai/waves/v1/pulse/get_text)
+      (`wss://api.smallest.ai/waves/v1/stt/live?model=pulse`). East Asian
+      streaming codes (`zh`, `yue`, `ja`, `ko`, `multi-asian`) are US
+      region only — use `wss://api.us.smallest.ai/waves/v1/stt/live?model=pulse`
+      for those.
     - pre-recorded / prerecorded / batch / file transcription / upload /
       async / asynchronous / long-running / long-form / offline /
       fast transcription / submit-and-poll → Pulse pre-recorded HTTP
-      (POST /waves/v1/pulse/get_text)
+      (`POST /waves/v1/stt/?model=pulse`). For English-only accuracy
+      workloads use `?model=pulse-pro` instead.
     Note: "asynchronous" is ambiguous across vendors. Google Cloud and
     AssemblyAI use it for batch; some others use it for streaming. If a
     user says "async transcription" without context, ask whether they
     mean file-based or live audio.
+
+    ## Language list — Pulse
+    Streaming (17 single-language codes + 2 aggregators): `en`, `hi`,
+    `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `zh`, `yue`, `ja`, `ko`,
+    `gu`, `mr`, `or`, `bn`, plus `north_indic` (auto-detect across
+    en/hi/gu/mr/bn/or) and `multi-asian` (auto-detect across
+    zh/yue/ko/ja/en; US region only — contact sales for India region).
+
+    Pre-recorded / batch (26 single-language codes + 2 aggregators):
+    `en`, `hi`, `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `uk`, `pl`,
+    `cs`, `sk`, `lv`, `et`, `ro`, `fi`, `sv`, `bg`, `hu`, `da`, `lt`,
+    `mt`, `zh`, `ja`, `ko`, plus `multi-eu` (auto-detect across all
+    21 EU codes + en) and `multi-asian` (zh/ko/ja/en — no `yue` on batch).
+
+    There are 31 unique single-language codes across both modes.
+    Pulse Pro is English (`en`) only.
+
+    Always cite the [Pulse model card](/waves/model-cards/speech-to-text/pulse)
+    for the per-mode language tables; never invent codes that aren't
+    in these two lists.
 
     ## Synonym handling — TTS (Lightning)
     - streaming / stream / websocket / ws / sse / server-sent events /
