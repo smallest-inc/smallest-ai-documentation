@@ -100,6 +100,22 @@ Measure as wall-clock between `chunk_ready` and `ws.send()`, plus between `ws.re
 Chunk size affects two components at once. Chunks below **10 ms** flood the server with WebSocket frames; per-frame overhead dominates. Chunks above **500 ms** turn the stream into a batch and add their own buffer latency. **20–100 ms per chunk** is the practical range for low-latency streaming.
 </Note>
 
+## Pulse vs Pulse Pro for latency-sensitive workloads
+
+Smallest STT ships two models. Only one of them does streaming — pick by the question you're answering.
+
+| Workload | Use | Why |
+|---|---|---|
+| Voice agent (English or multilingual) | **Pulse** (`?model=pulse`) | Sub-100 ms server transcription, full streaming WebSocket with `finalize` support, 17 streaming languages including English. |
+| Live captioning UI | **Pulse** | Streaming endpoint with interim transcripts; transcript latency tracking via `word_timestamps=true`. |
+| Multilingual transcription (streaming or batch) | **Pulse** | 17 streaming + 26 pre-recorded languages with regional aggregators. |
+| Offline / pre-recorded English where accuracy is the goal | **Pulse Pro** (`?model=pulse-pro`) | Tied #2 on the public Open ASR Leaderboard at 5.42% ESB avg WER. HTTP-only, no streaming worker. |
+| Long-form audio batch jobs | **Either** — measured by RTFx, not transcript latency | Both models run RTFx ≥50× on production hardware. |
+
+**Pulse Pro has no streaming worker.** Calls to `WS /waves/v1/stt/live?model=pulse-pro` return `400` immediately. If your workload is latency-sensitive *and* needs Pulse Pro's accuracy, you're choosing between accuracy and streaming — there's no "Pulse Pro streaming" option today.
+
+See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) and [Pulse Pro model card](/waves/model-cards/speech-to-text/pulse-pro) for benchmark detail and per-language coverage.
+
 ## Measuring each metric
 
 ### Transcript latency
@@ -226,6 +242,33 @@ print(f"RTFx (wall-clock) = {audio_duration / wall_clock:.1f}")
 
 The response includes `metadata.processing_time_ms` — the server's internal measurement, which **excludes** network round-trip and request body upload. Use it for attribution: if wall-clock RTFx is far worse than server-time RTFx, the bottleneck is your network or upload bandwidth, not the model.
 
+## Latency expectations
+
+Approximate, observed ranges on the production deployment. Use these to calibrate your own measurements — if your numbers are inside the ranges your client and network are healthy, if they're well above, work through the [next section](#when-latencies-are-higher-than-expected).
+
+| Metric | Typical range | Notes |
+|---|---|---|
+| Connection setup | 20–80 ms | One-time per session. Geo-dependent (Mumbai vs Oregon). |
+| Network transit (one-way) | 5–30 ms intra-region · 80–200 ms cross-region | Pin region: `api.smallest.ai` (Mumbai) or `api.us.smallest.ai` (Oregon). |
+| Server transcription (Pulse streaming) | sub-100 ms at 1 concurrency · ~300 ms at 100 concurrency | See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the concurrency curve. |
+| Total transcript latency | 100–300 ms intra-region | Client-side end-to-end during normal streaming. |
+| End-of-turn (EOT) latency | 150–500 ms | Pattern-dependent — finalize-on-VAD is fastest, server-side timer is bounded by `eou_timeout_ms`. |
+| Time to first partial | 100–300 ms first session · 50–150 ms warm | Always exclude the first session when averaging. |
+| RTFx (Pulse pre-recorded) | 50× or higher | Wall-clock; `metadata.processing_time_ms` will be higher (excludes network). |
+
+Latency varies session-to-session. Track p50 and p95 over a representative window — single-shot measurements are noisy and hide tail behaviour that drives the user experience.
+
+## When latencies are higher than expected
+
+If you're consistently above the ranges in the table, the [Latency components](#latency-components) section tells you which knob to turn. Common cases:
+
+- **Connection setup is slow on every session.** You're not reusing the WebSocket. Pool sockets across turns within the same conversation; reconnect only when the session is genuinely over or after a long idle.
+- **Network transit dominates.** Your client and `api.smallest.ai` are in different regions. Switch endpoint: clients in the Americas should hit `api.us.smallest.ai` (Oregon); clients in EMEA / South Asia should hit `api.smallest.ai` (Mumbai). For East Asian streaming languages you're locked to `api.us.smallest.ai` regardless — that's a wire constraint, not a tuning choice.
+- **Server transcription is slow even at low concurrency.** Open a support ticket and include the `X-Request-Id` from a slow session. If you're at high concurrency, you may be queueing behind other tenants — contact sales about dedicated capacity.
+- **Client overhead is high.** Audio encoding or the WebSocket loop is on the main thread, or a UI render is blocking on `on_transcript`. Move encoding to a worker thread, decouple render from receive.
+- **EOT specifically is slow.** You're probably using the server-side silence timer (Pattern B) — switch to finalize-on-VAD (Pattern A) for voice agents. The server timer can never beat `eou_timeout_ms`; finalize-on-VAD can.
+- **Buffer size is wrong.** Chunks below 10 ms or above 500 ms both hurt. Stay in 20–100 ms.
+
 ## Common measurement pitfalls
 
 - **Sampling latency from `is_final=true`.** Finals are intentionally delayed by Pulse's accuracy buffer. They look slow because they are — by design. Use interims.
@@ -233,6 +276,16 @@ The response includes `metadata.processing_time_ms` — the server's internal me
 - **Including the first session in averages.** It pays a one-time TLS + worker warm-up tax that no real user will experience after the first turn.
 - **Comparing across regions without pinning.** Same audio + same model + different client region can swing transcript latency by 100+ ms. Pin the region when benchmarking the model.
 - **Treating EOT and transcript latency as the same number.** They measure different things. A 50 ms transcript latency and a 400 ms EOT can coexist (and usually do — finalize messages traverse the same network round-trip the transcript does).
+
+## Summary
+
+- **Two cursors, one formula.** `transcript_latency = audio_cursor − transcript_cursor`. Every streaming metric is a sampling rule over those two cursors plus a wire signal.
+- **Transcript latency and EOT are different metrics.** Captioning is judged on the first; voice agents on the second. A session can have great transcript latency and bad EOT, or the reverse.
+- **Four components, attributed individually.** Connection setup, network transit, server transcription, client overhead. If a number is bad, walk the four to find which one to fix.
+- **Pulse for streaming, Pulse Pro for offline English accuracy.** Pulse Pro has no streaming worker.
+- **Voice agents should use finalize-on-VAD.** It's the fastest of the three EOT patterns by design — the server timer is bounded below by `eou_timeout_ms`.
+- **Set `word_timestamps=true`** on every streaming connection you want to measure. Without it, `transcript_cursor` is always zero and the math collapses to nonsense.
+- **Track p50 and p95.** Single-shot averages hide the tail. The tail is what users notice.
 
 ## Reference scripts and cross-references
 
