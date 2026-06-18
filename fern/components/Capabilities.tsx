@@ -119,22 +119,30 @@ type CapabilityProps = {
   children?: React.ReactNode;
 };
 
+// Brand accent — matches `colors.accentPrimary` in docs.yml.
+// Dark theme: #2A9D8F (teal). Light theme: #083b4d (dark navy).
+// We default icons to a muted neutral; the accent color only kicks in on
+// hover for linked rows (mirrors the sidebar's selected-vs-unselected pattern).
+const MUTED_ICON = "rgba(127, 127, 127, 0.72)";   // works on both themes
+const ACCENT = "#2A9D8F";                            // brand teal
+
 export const Capability: React.FC<CapabilityProps> = ({ icon, name, href, children }) => {
   const content = (
     <>
       {icon && (
         <span
           aria-hidden="true"
+          className="capability-icon"
           style={{
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 36,
-            height: 36,
-            borderRadius: 8,
-            background: "rgba(99, 102, 241, 0.12)",
-            color: "rgb(129, 140, 248)",
+            width: 20,
+            height: 20,
             flexShrink: 0,
+            marginTop: 2,
+            color: MUTED_ICON,
+            transition: "color 150ms ease",
           }}
         >
           <Icon name={icon} />
@@ -156,8 +164,8 @@ export const Capability: React.FC<CapabilityProps> = ({ icon, name, href, childr
               aria-hidden="true"
               style={{
                 fontSize: "0.75rem",
-                opacity: 0.55,
-                transition: "opacity 150ms ease, transform 150ms ease",
+                opacity: 0.45,
+                transition: "opacity 150ms ease, transform 150ms ease, color 150ms ease",
               }}
               className="capability-arrow"
             >
@@ -195,16 +203,22 @@ export const Capability: React.FC<CapabilityProps> = ({ icon, name, href, childr
         style={itemStyle}
         className="capability-row capability-row--linked"
         onMouseEnter={(e) => {
+          const icon = e.currentTarget.querySelector(".capability-icon") as HTMLElement | null;
           const arrow = e.currentTarget.querySelector(".capability-arrow") as HTMLElement | null;
+          if (icon) icon.style.color = ACCENT;
           if (arrow) {
             arrow.style.opacity = "1";
+            arrow.style.color = ACCENT;
             arrow.style.transform = "translateX(2px)";
           }
         }}
         onMouseLeave={(e) => {
+          const icon = e.currentTarget.querySelector(".capability-icon") as HTMLElement | null;
           const arrow = e.currentTarget.querySelector(".capability-arrow") as HTMLElement | null;
+          if (icon) icon.style.color = MUTED_ICON;
           if (arrow) {
-            arrow.style.opacity = "0.55";
+            arrow.style.opacity = "0.45";
+            arrow.style.color = "";
             arrow.style.transform = "translateX(0)";
           }
         }}
