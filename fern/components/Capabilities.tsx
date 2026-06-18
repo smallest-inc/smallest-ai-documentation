@@ -5,8 +5,10 @@ import React from "react";
  *
  * Usage in MDX:
  *
+ *   import { Capabilities, Capability } from "@/components/Capabilities";
+ *
  *   <Capabilities>
- *     <Capability icon="zap" name="Real-Time Optimized">
+ *     <Capability icon="bolt" name="Real-Time Optimized">
  *       Sub-100 ms TTFT at 1 concurrency, ~300 ms at 100.
  *     </Capability>
  *     <Capability icon="globe" name="Multi-Language" href="#supported-languages">
@@ -14,18 +16,101 @@ import React from "react";
  *     </Capability>
  *   </Capabilities>
  *
- * Renders as a 2-col responsive grid (1-col on mobile). Each item is icon + bold
- * name + description prose. Optional `href` makes the row a link with a subtle
- * affordance — items without `href` render as static prose (no fake-clickability).
+ * Renders as a 2-col responsive grid (1-col on mobile). Each item is icon +
+ * bold name + description prose. Optional `href` makes the row a link with a
+ * subtle right-arrow affordance — items without `href` render as static prose
+ * (no fake-clickability).
  *
- * Styling rationale:
- * - Inline styles + CSS variables for portability across Fern themes (dark/light)
- *   without depending on Tailwind being globally available in the components dir.
- * - No card chrome / no shadow / no border on individual items — just a subtle
- *   row divider. Generous vertical rhythm so the list scans top-to-bottom.
- * - Icon is a 28px square with the accent color background at low alpha — gives
- *   visual hierarchy without competing with the body text.
+ * Icons are inline SVGs (Lucide-style, 18px, currentColor-stroked) so they
+ * work without depending on Font Awesome being available in the custom-
+ * component context. Add new icons to ICONS below if you need more.
  */
+
+// Icon set — inline SVGs, 24x24 viewBox, stroke-based for theme parity.
+const ICONS: Record<string, React.ReactNode> = {
+  bolt: (
+    <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" strokeLinecap="round" strokeLinejoin="round" />
+  ),
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20" />
+    </>
+  ),
+  "shield-halved": (
+    <>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 2v20" strokeLinecap="round" />
+    </>
+  ),
+  users: (
+    <>
+      <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  "volume-low": (
+    <>
+      <path d="M11 5L6 9H2v6h4l5 4V5z" strokeLinejoin="round" />
+      <path d="M15.54 8.46a5 5 0 010 7.07" strokeLinecap="round" />
+    </>
+  ),
+  language: (
+    <>
+      <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  // STT/TTS specific extras — add as you need them
+  microphone: (
+    <>
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M19 10a7 7 0 01-14 0M12 19v3M8 22h8" strokeLinecap="round" />
+    </>
+  ),
+  waveform: (
+    <>
+      <path d="M2 12h2M6 8v8M10 4v16M14 8v8M18 6v12M22 12h2" strokeLinecap="round" />
+    </>
+  ),
+  gauge: (
+    <>
+      <path d="M3 12a9 9 0 0118 0" />
+      <path d="M12 12l4-4" strokeLinecap="round" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" strokeLinecap="round" />
+    </>
+  ),
+  sparkles: (
+    <>
+      <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" strokeLinejoin="round" />
+      <path d="M19 14l.75 2.25L22 17l-2.25.75L19 20l-.75-2.25L16 17l2.25-.75L19 14z" strokeLinejoin="round" />
+    </>
+  ),
+};
+
+const Icon: React.FC<{ name: string }> = ({ name }) => {
+  const path = ICONS[name];
+  if (!path) return null;
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      aria-hidden="true"
+    >
+      {path}
+    </svg>
+  );
+};
 
 type CapabilityProps = {
   icon?: string;
@@ -44,17 +129,15 @@ export const Capability: React.FC<CapabilityProps> = ({ icon, name, href, childr
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 32,
-            height: 32,
+            width: 36,
+            height: 36,
             borderRadius: 8,
-            background: "color-mix(in srgb, var(--accent, #6366f1) 12%, transparent)",
-            color: "var(--accent, #6366f1)",
+            background: "rgba(99, 102, 241, 0.12)",
+            color: "rgb(129, 140, 248)",
             flexShrink: 0,
-            fontSize: 16,
-            lineHeight: 1,
           }}
         >
-          <i className={`fa-solid fa-${icon}`} />
+          <Icon name={icon} />
         </span>
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
@@ -62,7 +145,6 @@ export const Capability: React.FC<CapabilityProps> = ({ icon, name, href, childr
           style={{
             fontWeight: 600,
             fontSize: "0.95rem",
-            color: "var(--text-default, inherit)",
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
@@ -74,7 +156,7 @@ export const Capability: React.FC<CapabilityProps> = ({ icon, name, href, childr
               aria-hidden="true"
               style={{
                 fontSize: "0.75rem",
-                opacity: 0.5,
+                opacity: 0.55,
                 transition: "opacity 150ms ease, transform 150ms ease",
               }}
               className="capability-arrow"
@@ -86,8 +168,8 @@ export const Capability: React.FC<CapabilityProps> = ({ icon, name, href, childr
         <span
           style={{
             fontSize: "0.875rem",
-            lineHeight: 1.5,
-            color: "color-mix(in srgb, var(--text-default, currentColor) 75%, transparent)",
+            lineHeight: 1.55,
+            opacity: 0.78,
           }}
         >
           {children}
@@ -101,7 +183,7 @@ export const Capability: React.FC<CapabilityProps> = ({ icon, name, href, childr
     gap: 14,
     alignItems: "flex-start",
     padding: "16px 4px",
-    borderBottom: "1px solid color-mix(in srgb, var(--text-default, currentColor) 8%, transparent)",
+    borderBottom: "1px solid rgba(127, 127, 127, 0.15)",
     textDecoration: "none",
     color: "inherit",
   };
@@ -122,7 +204,7 @@ export const Capability: React.FC<CapabilityProps> = ({ icon, name, href, childr
         onMouseLeave={(e) => {
           const arrow = e.currentTarget.querySelector(".capability-arrow") as HTMLElement | null;
           if (arrow) {
-            arrow.style.opacity = "0.5";
+            arrow.style.opacity = "0.55";
             arrow.style.transform = "translateX(0)";
           }
         }}
@@ -150,7 +232,8 @@ export const Capabilities: React.FC<CapabilitiesProps> = ({ children }) => {
       style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
-        gap: "0 32px",
+        columnGap: "32px",
+        rowGap: 0,
         margin: "16px 0 8px",
       }}
     >
