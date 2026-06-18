@@ -69,51 +69,6 @@ Pulse Pro is the premium Speech-to-Text model in the Pulse family. Built for Eng
 
 ---
 
-## How to use it
-
-Pulse Pro is selected via the `model` query parameter on the unified Speech-to-Text endpoint.
-
-```bash
-curl -sL "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav" | \
-  curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en" \
-    -H "Authorization: Bearer $SMALLEST_API_KEY" \
-    -H "Content-Type: application/octet-stream" \
-    --data-binary @-
-```
-
-Replace the inline sample URL with `--data-binary "@./your.wav"` to send a local file.
-
-Sample response:
-
-```json
-{
-  "status": "success",
-  "transcription": "Hi, how are you doing? ...",
-  "words": [],
-  "language": "en",
-  "metadata": { "duration": 17.643, "processing_time_ms": 482.21, "rtfx": 36.6, "num_chunks": 1 },
-  "request_id": "8c355f4d-bd45-48ee-aa83-d00e4670f6bb"
-}
-```
-
-For long files where you do not want to hold the HTTP connection open, pass a `webhook_url`:
-
-```bash
-curl -sL "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav" | \
-  curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse-pro&language=en&webhook_url=https://your-server.com/cb" \
-    -H "Authorization: Bearer $SMALLEST_API_KEY" \
-    -H "Content-Type: application/octet-stream" \
-    --data-binary @-
-```
-
-Returns `200` immediately with `{"status": "processing", "request_id": "..."}`. The webhook receives the full transcription payload when ready.
-
-<Warning>
-Pulse Pro has no streaming worker. Calls to `WS /waves/v1/stt/live?model=pulse-pro` return `400` with a clear message. For live transcription use [standard Pulse](/waves/model-cards/speech-to-text/pulse) (`?model=pulse`).
-</Warning>
-
----
-
 ## Performance & Benchmarks
 
 Pulse Pro is evaluated on the public Open ASR Leaderboard (ESB benchmark, Whisper EnglishTextNormalizer) and FLEURS English.
