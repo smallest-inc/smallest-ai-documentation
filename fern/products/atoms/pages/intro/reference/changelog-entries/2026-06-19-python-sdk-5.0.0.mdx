@@ -1,0 +1,57 @@
+---
+title: Python SDK 5.0.0 — method renames, new `calls` namespace, conversations sub-operations
+---
+
+`smallestai==5.0.0` ships a method-rename pass that aligns the auto-generated SDK with the canonical OpenAPI operation IDs. The constructor signature is unchanged from 4.4.7 — `SmallestAI(api_key="...")` keeps working — so the only client-side action is renaming the method calls below.
+
+## Method renames
+
+Verbose Fern-generated names → canonical short names:
+
+| 4.4.x | 5.0.0 |
+|---|---|
+| `client.atoms.agents.create_a_new_agent(...)` | `client.atoms.agents.create_agent(...)` |
+| `client.atoms.agents.get_agent_by_id(id=...)` | `client.atoms.agents.get_agent(id=...)` |
+| `client.atoms.agents.get_all_agents(...)` | `client.atoms.agents.list_agents(...)` |
+| `client.atoms.agents.update_agent_metadata(...)` | `client.atoms.agents.update_agent(...)` |
+| `client.atoms.calls.start_an_outbound_call(...)` | `client.atoms.calls.start_outbound_call(...)` |
+| `client.atoms.agent_templates.get_agent_templates(...)` | `client.atoms.agent_templates.list_agent_templates(...)` |
+
+The 4.4.x names are removed in 5.0.0 with no deprecation alias. They shipped only briefly and only as auto-generated client surface — no documented page or cookbook referenced them by their long form.
+
+## New namespaces
+
+5.0.0 also surfaces methods that existed in the API but were missing from the 4.4.x SDK:
+
+| Method | What it does |
+|---|---|
+| `client.atoms.calls.get(id=...)` | Fetch a conversation log by call ID (transcript, status, post-call metrics). |
+| `client.atoms.calls.list(...)` | List conversation logs with filters (status, agent, date range, campaign, etc.). |
+| `client.atoms.calls.search(call_ids=[...])` | Fetch up to 100 specific logs by callId. |
+| `client.atoms.conversations.cancel(call_id=...)` | Cancel an in-flight outbound call. |
+| `client.atoms.conversations.cancel_queued(call_id=...)` | Cancel a queued (not-yet-dialed) call. |
+| `client.atoms.conversations.list_retry_attempts(call_id=...)` | List retry attempts for a call. |
+
+## Migration
+
+For 4.4.x → 5.0.0, the rename pattern is mechanical. A single repo-wide `sed`:
+
+```bash
+find . -name '*.py' -exec sed -i.bak \
+  -e 's/create_a_new_agent/create_agent/g' \
+  -e 's/get_agent_by_id/get_agent/g' \
+  -e 's/get_all_agents/list_agents/g' \
+  -e 's/update_agent_metadata/update_agent/g' \
+  -e 's/start_an_outbound_call/start_outbound_call/g' \
+  -e 's/get_agent_templates/list_agent_templates/g' \
+  {} \;
+```
+
+Update your install:
+
+```bash
+pip install --upgrade smallestai
+# pinned: pip install smallestai==5.0.0
+```
+
+Full release notes and the SDK-side migration write-up: [MIGRATION.md on smallest-python-sdk](https://github.com/smallest-inc/smallest-python-sdk/blob/main/MIGRATION.md).
