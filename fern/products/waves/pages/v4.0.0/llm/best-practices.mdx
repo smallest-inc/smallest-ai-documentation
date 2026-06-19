@@ -54,14 +54,14 @@ The user hears *"Let me check the weather for you…"* while your weather API re
 
 Electron's plan limits cap concurrent in-flight requests. If you're firing many parallel requests:
 
-- **Standard plan**: 3 concurrent. Burst-safe up to this; over the limit returns `HTTP 429` with `Concurrency limit reached`.
-- **Enterprise plan**: 20 concurrent.
+- **Standard plan**: 2 concurrent, 50 RPM. Burst-safe up to these limits; over either returns `HTTP 429` with `Concurrency limit reached`.
+- **Enterprise plan**: 20 concurrent, 200 RPM.
 
 If you need to fire more in parallel, batch with a semaphore or queue:
 
 ```python
 import asyncio
-sem = asyncio.Semaphore(3)   # match your plan's concurrency
+sem = asyncio.Semaphore(2)   # match your plan's concurrency
 
 async def safe_chat(messages):
     async with sem:
