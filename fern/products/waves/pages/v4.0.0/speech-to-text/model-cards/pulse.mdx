@@ -450,6 +450,30 @@ Additionally:
 
 ---
 
+## FAQ
+
+<Accordion title="What is the difference between Pulse streaming and batch modes?">
+Pulse runs two independent inference paths. Streaming uses a WebSocket connection and emits partial transcripts in real time — suited for live call transcription, voice assistants, and conversational AI where first-token latency matters. Batch accepts a full audio file over HTTP and returns the complete transcript once processing is done — suited for call recordings, media archives, and any workload where you have the full audio upfront. Features also differ: keyword boosting and sentence-level timestamps are streaming-only, and batch supports a broader set of 26 languages vs 17 on streaming.
+</Accordion>
+
+<Accordion title="How do I choose between a specific language code and a regional aggregator?">
+Use a specific language code (e.g. `hi`, `es`, `en`) whenever you know the language of the audio. Pulse optimises directly for that language and handles code-switching with English automatically — so `hi` covers Hindi–English mixed speech without needing an aggregator. Use `north_indic` or `multi-asian` only when the source language is genuinely unknown or mixed across several languages. Auto-detection adds a small accuracy overhead compared to an explicit code.
+</Accordion>
+
+<Accordion title="Where can I find the full API reference and quickstart guides?">
+The complete request/response schema, all query parameters, error codes, and WebSocket protocol details are in the [API Reference](/waves/api-reference/api-reference/speech-to-text/transcribe). For step-by-step setup, see the [Realtime quickstart](/waves/documentation/speech-to-text-pulse/realtime-web-socket/quickstart) for streaming and the [Pre-recorded quickstart](/waves/documentation/speech-to-text-pulse/pre-recorded/quickstart) for batch.
+</Accordion>
+
+<Accordion title="What is the difference between Pulse and Pulse Pro?">
+Pulse supports both streaming and batch transcription across 31 languages (17 streaming + 26 pre-recorded). Pulse Pro is English-only and batch-only, but achieves higher accuracy — tied for #2 on the Open ASR Leaderboard at 5.42% average WER vs Pulse's 6.03% on English FLEURS. Use Pulse for live streaming, multilingual audio, or latency-sensitive workloads. Use [Pulse Pro](/waves/model-cards/speech-to-text/pulse-pro) for high-volume English batch transcription where accuracy is the top requirement.
+</Accordion>
+
+<Accordion title="How does PII and PCI redaction work?">
+Pulse applies built-in redaction on both streaming and batch surfaces — no preprocessing required. PII redaction masks personal identifiers such as names, phone numbers, email addresses, and SSNs. PCI redaction masks payment card data including card numbers, CVVs, and expiry dates. Both are enabled via query parameters in the API request. Redacted content is replaced with a placeholder in the transcript; the original audio is not retained post-processing.
+</Accordion>
+
+---
+
 ## Support
 
 <CardGroup cols={3}>
