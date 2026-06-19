@@ -21,7 +21,7 @@ pip install smallestai
 ```
 
 <Note>
-  **Expected boot output on `smallestai>=4.4.7`.** Startup includes a validation routine that exercises your `setup_handler` against a placeholder WebSocket to surface init-time errors. This dry-run reaches `await session.start()` before any client has connected and logs:
+  **Expected boot output on `smallestai>=5.0.0`.** Startup includes a validation routine that exercises your `setup_handler` against a placeholder WebSocket to surface init-time errors. This dry-run reaches `await session.start()` before any client has connected and logs:
 
   ```
   ERROR | Startup validation failed — pod will not accept sessions. ValueError: Session not initialized
@@ -138,7 +138,7 @@ pip install -r requirements.txt
 ```
 
 <Info>
-  Multi-node uses `smallestai>=4.4.7` because `sentiment_analyzer.py` imports `SDKAgentLogEvent` (introduced in 4.4.7). Same boot-log caveat as the Installation section applies — you'll see the `Session not initialized` ERROR; the pod still serves.
+  Multi-node uses `smallestai>=5.0.0` because `sentiment_analyzer.py` imports `SDKAgentLogEvent` (introduced in 4.4.7). Same boot-log caveat as the Installation section applies — you'll see the `Session not initialized` ERROR; the pod still serves.
 </Info>
 
 `app.py` wires both nodes into a single `CrewSession`. `support_agent.py` is the user-facing `OutputCrewNode`; it can query the sibling sentiment node mid-conversation. `sentiment_analyzer.py` is a `BackgroundCrewNode` — it listens to every transcript event, classifies sentiment, and updates state the support agent reads.
@@ -199,7 +199,7 @@ When you're ready for production, deploy to Smallest AI's managed infrastructure
 
   # Reads SMALLEST_API_KEY from the environment, or pass api_key="sk_..." explicitly.
   client = SmallestAI()
-  response = client.atoms.agents.create_a_new_agent(name="my-test-agent")
+  response = client.atoms.agents.create_agent(name="my-test-agent")
   agent_id = response.data   # the agent id is a string at .data
   print(agent_id)
   ```
