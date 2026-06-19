@@ -10,10 +10,12 @@ Smallest AI API implements concurrency limits to ensure fair usage and optimal p
 
 ## What is Concurrency?
 
-**Concurrency** refers to the number of simultaneous requests that can be processed at any given moment. In the context of Smallest AI API:
+**Concurrency** refers to the number of simultaneous requests that can be processed at any given moment. Concurrency caps are **plan-based** and apply per-account across all Waves models (Pulse, Pulse Pro, Lightning v3.1, Lightning v3.1 Pro, Hydra, Electron).
 
-- **1 TTS request concurrency**: Only 1 Text-to-Speech request can be actively processed at a time per account
-- This applies to every Lightning v3.1 TTS endpoint (sync, SSE, WebSocket) and the deprecated Lightning v2 endpoints
+- **Standard plan**: 1 concurrent TTS request, 25 RPM per STT model. WebSocket pool of up to 5 connections (only 1 active request across them at a time).
+- **Enterprise plan**: configurable per-customer; STT is unlimited and TTS scales to the customer's dedicated capacity. The model-card benchmarks (e.g. ~200 ms TTFB at 40 concurrent TTS, ~300 ms STT TTFT at 100 concurrent) are run on Enterprise-tier capacity.
+
+Contact your account manager for Enterprise pricing and capacity sizing.
 
 ## How Concurrency Works
 
@@ -21,13 +23,14 @@ Smallest AI API implements concurrency limits to ensure fair usage and optimal p
 
 - Each HTTP API call (POST request) counts as **1 concurrency unit** while being processed
 - Once the request completes and returns a response, the concurrency slot is freed
-- If you attempt to make a second HTTP request while one is already being processed, you'll receive a `429 Too Many Requests` error
+- If you attempt a second HTTP request while one is already being processed (on the Standard plan), you'll receive a `429 Too Many Requests` error
 
 ### WebSocket Connections
 
-- You can establish up to **5 WebSocket connections** simultaneously (5 × concurrency limit)
-- However, only **1 concurrent request** can be processed across all WebSocket connections
+- The Standard plan allows up to **5 WebSocket connections** simultaneously (5 × concurrency limit)
+- Only **1 concurrent request** can be processed across all WebSocket connections on Standard
 - Additional requests sent through any WebSocket while one is being processed will be rejected with an error
+- Enterprise-tier limits scale these caps per-customer; see your account manager
 
 ## Monitoring Your Usage
 
@@ -69,9 +72,13 @@ If your application requires higher concurrency limits, please contact our suppo
 
 Waves runs in two regions and automatically routes every request to the cluster nearest the client. No region selector is required — the routing is transparent to your application.
 
-| Region | Location |
-|---|---|
-| India | Mumbai |
-| USA | Oregon |
+| Region | Hostname | Location |
+|---|---|---|
+| India | `api.smallest.ai` | Mumbai |
+| USA | `api.us.smallest.ai` | Oregon |
 
 Routing is based on network proximity and latency. If you need region-pinned traffic for data-residency or compliance reasons, contact [support@smallest.ai](mailto:support@smallest.ai).
+
+<Note>
+**East Asian streaming languages on Pulse STT** (`zh`, `yue`, `ja`, `ko`, `multi-asian`) are served from the **US region only**. Connect to `wss://api.us.smallest.ai/waves/v1/stt/live?model=pulse` for these — the Mumbai host closes the connection without a transcription frame when an East Asian streaming language is requested. Contact sales for `multi-asian` access in the India region.
+</Note>

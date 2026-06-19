@@ -59,17 +59,23 @@ Play `hello.wav` — you should hear the generated audio.
 ### Transcribe audio (Pulse STT)
 
 ```bash
-curl -X POST "https://api.smallest.ai/waves/v1/pulse/get_text?language=en" \
+# Download sample audio
+curl -sL -o sample.wav "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
+
+# Transcribe via the unified Speech-to-Text endpoint
+curl -X POST "https://api.smallest.ai/waves/v1/stt/?model=pulse&language=en" \
   -H "Authorization: Bearer $SMALLEST_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"}'
+  -H "Content-Type: application/octet-stream" \
+  --data-binary "@sample.wav"
 ```
 
 You'll get back:
 
 ```json
 {
-  "transcription": "This is a sample audio file for testing speech to text transcription with the Pulse API."
+  "status": "success",
+  "transcription": "This is a sample audio file for testing speech to text transcription with the Pulse API.",
+  "language": "en"
 }
 ```
 
