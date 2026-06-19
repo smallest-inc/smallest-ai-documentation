@@ -354,6 +354,10 @@ Not a public dataset. Hindi audio sliced by perturbation type to isolate model w
 </Accordion>
 </AccordionGroup>
 
+<Note>
+**Single language code vs. aggregator:** Use a specific language code (e.g. `hi`, `es`, `en`) whenever you know the language of the audio — the model optimizes directly for that language and also handles code-switching with English (e.g. `hi` covers Hindi–English mixed speech). Use an aggregator (`north_indic`, `multi-eu`, `multi-asian`) only when the language is genuinely unknown or the source is mixed across multiple languages; auto-detection adds a small accuracy overhead compared to an explicit code.
+</Note>
+
 ---
 
 ## Features — Streaming
@@ -406,30 +410,6 @@ Rate limits, concurrency caps, and pricing tiers are documented on the [Concurre
 
 ---
 
-## Best Practices
-
-### Specify the language parameter when known
-
-When the language of the audio is known in advance, always set it explicitly rather than relying on automatic detection. This yields better transcription accuracy because the model can optimize directly for that language without needing to first identify it.
-
-For example, setting the language parameter to `es` (Spanish) tells the model to expect Spanish audio, which also handles English+Spanish code-switching scenarios. This produces more accurate outputs compared to using `multi-eu` or `multi`.
-
-| Parameter | Use case |
-|---|---|
-| `en` | English |
-| `es` | Spanish (handles English+Spanish) |
-| `hi` | Hindi (handles English+Hindi) |
-| `multi-eu` | Unknown European-language audio (auto-detects across the European set) |
-| `multi` | Truly unknown or mixed-language audio (full multilingual auto-detection) |
-
-<Note>
-**When to use `multi-eu` or `multi`:**
-- When the language is truly unknown beforehand
-- When processing audio from varied or unpredictable sources
-- Prefer `multi-eu` for European-language input; use `multi` only for truly mixed multilingual audio
-</Note>
-
----
 
 ## Technical Specifications
 
