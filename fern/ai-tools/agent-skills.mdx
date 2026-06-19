@@ -1,0 +1,155 @@
+---
+title: "Agent Skills"
+description: "Install Smallest AI agent skills to give Claude Code, Cursor, and other AI coding agents expert knowledge of the Smallest AI API — working code on the first try."
+icon: "sparkles"
+---
+
+[Agent Skills](https://agentskills.io) are a lightweight, open format for extending AI coding agents with specialized knowledge. Install a Smallest AI skill and your agent gains accurate, up-to-date guidance on the exact APIs, models, parameters, and gotchas — without hallucinating deprecated endpoints.
+
+The Smallest AI skills live at [github.com/smallest-inc/skills](https://github.com/smallest-inc/skills) and work with any skills-compatible agent: Claude Code, Cursor, GitHub Copilot, Gemini CLI, and more.
+
+---
+
+## Available Skills
+
+<AccordionGroup>
+  <Accordion title="setup-api-key" icon="key">
+    Get and configure a Smallest AI API key. Use this when setting up for the first time or troubleshooting 401 errors.
+
+    **Install path:** `smallest-inc/skills/setup-api-key`
+
+    **Example prompt:**
+    ```
+    Help me set up my Smallest AI API key and verify it works
+    with a test speech synthesis request.
+    ```
+  </Accordion>
+
+  <Accordion title="text-to-speech" icon="volume-high">
+    Convert text to speech using Lightning v3.1 and Lightning v3.1 Pro. Covers HTTP, SSE streaming, WebSocket, voice cloning, voice/model pairing, and output formats.
+
+    **Install path:** `smallest-inc/skills/text-to-speech`
+
+    **Example prompt:**
+    ```
+    Generate speech from "Your order has been confirmed." using Smallest AI.
+    Use the magnus voice, stream it as a WAV at 24000 Hz, and save to output.wav.
+    ```
+  </Accordion>
+
+  <Accordion title="speech-to-text" icon="microphone">
+    Transcribe audio with Pulse and Pulse Pro. Covers pre-recorded HTTP upload and real-time WebSocket streaming, word timestamps, speaker diarization, and language detection.
+
+    **Install path:** `smallest-inc/skills/speech-to-text`
+
+    **Example prompt:**
+    ```
+    Transcribe recording.mp3 using Smallest AI. Return word-level timestamps
+    and identify any speaker changes.
+    ```
+  </Accordion>
+
+  <Accordion title="speech-to-speech" icon="waveform-lines">
+    Build real-time voice pipelines with Hydra. Covers WebSocket session setup, audio I/O, turn detection, barge-in, and tool calling.
+
+    **Install path:** `smallest-inc/skills/speech-to-speech`
+
+    **Example prompt:**
+    ```
+    Set up a real-time speech-to-speech session using Smallest AI.
+    Connect via WebSocket, pipe microphone input, and play back the
+    synthesized response with barge-in support.
+    ```
+  </Accordion>
+
+  <Accordion title="llm-electron" icon="robot">
+    Use Electron as a drop-in replacement for OpenAI chat completions. Covers streaming, tool/function calling, prefix caching, and migration from OpenAI.
+
+    **Install path:** `smallest-inc/skills/llm-electron`
+
+    **Example prompt:**
+    ```
+    Replace my OpenAI GPT-4o call with Smallest AI's Electron model.
+    Keep the same messages array and streaming setup — just swap the base URL and model name.
+    ```
+  </Accordion>
+
+  <Accordion title="voice-agents" icon="headset">
+    Build and manage voice agents with the Atoms platform API. Covers agent crews, outbound calling, campaigns, knowledge base, and post-call analytics.
+
+    **Install path:** `smallest-inc/skills/voice-agents`
+
+    **Example prompt:**
+    ```
+    Create a Smallest AI voice agent called "Support Bot" with the prompt
+    "You are a helpful customer support agent." Set the language to English
+    and use the yuvika voice.
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Install
+
+<Tabs>
+  <Tab title="Claude Code">
+    Install all six skills at once:
+
+    ```bash
+    npx skills add smallest-inc/skills
+    ```
+
+    Or install only the skills you need:
+
+    ```bash
+    npx skills add smallest-inc/skills/text-to-speech
+    npx skills add smallest-inc/skills/speech-to-text
+    npx skills add smallest-inc/skills/llm-electron
+    ```
+
+    After install, invoke a skill explicitly with a slash command — for example `/text-to-speech` — or let Claude activate it automatically when your request matches the skill's description.
+  </Tab>
+  <Tab title="Cursor">
+    Install from the terminal in your project root:
+
+    ```bash
+    npx skills add smallest-inc/skills
+    ```
+
+    Skills are stored in `.cursor/skills/` and loaded automatically when Cursor detects a relevant task.
+  </Tab>
+  <Tab title="Other agents">
+    Any agent that supports the [Agent Skills](https://agentskills.io) open standard uses the same command:
+
+    ```bash
+    npx skills add smallest-inc/skills
+    ```
+
+    Supported agents include GitHub Copilot (VS Code), Gemini CLI, OpenHands, Amp, Goose, and others. See [agentskills.io/clients](https://agentskills.io/clients) for the full list.
+  </Tab>
+</Tabs>
+
+---
+
+## How it works
+
+Skills use **progressive disclosure** — your agent loads only the skill name and description at startup (low overhead), then pulls the full instructions into context the moment a task matches:
+
+1. **Discovery** — the agent scans skill names and descriptions at startup to know what's available.
+2. **Activation** — when you ask something like *"stream TTS audio from Smallest AI"*, the agent loads the full `text-to-speech` skill instructions.
+3. **Execution** — the skill provides the correct endpoint, parameters, auth header, and language-specific examples, so the generated code works first time.
+
+---
+
+<Note>
+  Skills complement the [MCP server](/atoms/mcp/getting-started/quick-start) — MCP gives your agent live access to your Atoms platform data (agents, calls, analytics), while skills give it the API expertise to generate correct TTS, STT, S2S, and LLM code.
+</Note>
+
+---
+
+## Links
+
+- GitHub: [github.com/smallest-inc/skills](https://github.com/smallest-inc/skills)
+- Agent Skills standard: [agentskills.io](https://agentskills.io)
+- Compatible agents: [agentskills.io/clients](https://agentskills.io/clients)
