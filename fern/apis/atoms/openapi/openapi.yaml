@@ -140,10 +140,11 @@ paths:
                       properties:
                         _id:
                           type: string
-                          description: MongoDB ObjectId of the template
+                          description: MongoDB ObjectId of the template (e.g. `6942a64ac74fc65e7bc94e47`). Distinct from `id` — surfaced as `object_id` in the generated SDK to avoid colliding with the human-readable `id` slug.
+                          x-fern-property-name: object_id
                         id:
                           type: string
-                          description: The ID of the agent template
+                          description: Human-readable slug for the agent template (e.g. `sp-medical-centre-receptionist-in`). Distinct from `_id` (Mongo ObjectId).
                         name:
                           type: string
                           description: The name of the agent template
@@ -196,6 +197,10 @@ paths:
                           type: object
                           description: Configuration for single-prompt agents
                           properties:
+                            _id:
+                              type: string
+                              description: Auto-generated Mongo ObjectId of the embedded single-prompt config document. Always present when `singlePromptConfig` is set.
+                              x-fern-property-name: object_id
                             prompt:
                               type: string
                               description: The system prompt used by the agent
@@ -205,6 +210,15 @@ paths:
                               items:
                                 type: object
                                 properties:
+                                  type:
+                                    type: string
+                                    description: The tool type — drives runtime dispatch.
+                                    enum:
+                                      - end_call
+                                      - transfer_call
+                                      - api_call
+                                      - extract_dynamic_variables
+                                      - knowledge_base_search
                                   name:
                                     type: string
                                     description: The name of the tool
@@ -1119,6 +1133,12 @@ paths:
                                 medianLatency:
                                   type: number
                                   description: Median turn latency in milliseconds
+                                minLatency:
+                                  type: number
+                                  description: Minimum turn latency in milliseconds
+                                maxLatency:
+                                  type: number
+                                  description: Maximum turn latency in milliseconds
                                 turns:
                                   type: number
                                   description: Total number of turns in the call
@@ -1127,6 +1147,27 @@ paths:
                                   items:
                                     type: number
                                   description: Array of individual turn latencies in milliseconds
+                                transitions:
+                                  type: array
+                                  description: Per-turn timing breakdown.
+                                  items:
+                                    type: object
+                                    properties:
+                                      turn:
+                                        type: number
+                                      user_end:
+                                        type: number
+                                        description: Timestamp (ms) when the user finished speaking
+                                      bot_start:
+                                        type: number
+                                        description: Timestamp (ms) when the agent started responding
+                                      latency:
+                                        type: number
+                                        description: Latency for this turn in milliseconds
+                                processedAt:
+                                  type: string
+                                  format: date-time
+                                  description: When the latency metrics were computed.
                       pagination:
                         type: object
                         properties:
@@ -1317,12 +1358,32 @@ paths:
                                   type: number
                                 medianLatency:
                                   type: number
+                                minLatency:
+                                  type: number
+                                maxLatency:
+                                  type: number
                                 turns:
                                   type: number
                                 latencies:
                                   type: array
                                   items:
                                     type: number
+                                transitions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      turn:
+                                        type: number
+                                      user_end:
+                                        type: number
+                                      bot_start:
+                                        type: number
+                                      latency:
+                                        type: number
+                                processedAt:
+                                  type: string
+                                  format: date-time
                       total:
                         type: integer
                         description: Number of logs returned
@@ -2147,9 +2208,27 @@ paths:
                     type: integer
                     description: TTS latency in milliseconds (only for `tts_completed`)
                   metrics:
-                    type: object
-                    additionalProperties: true
-                    description: Metrics payload for `metrics`
+                    type: array
+                    description: |
+                      Per-turn metrics payload for `metrics` events. Server emits an
+                      **array** of `{processor, model, value}` entries (one per
+                      pipeline stage), not a single object. The SDK previously
+                      dropped every `metrics` SSE event with a pydantic
+                      ValidationError when this was typed as an object (122
+                      events on a 40s call); typing it as an array of objects
+                      fixes the decode.
+                    items:
+                      type: object
+                      properties:
+                        processor:
+                          type: string
+                          description: Pipeline stage that produced the metric (e.g. `pulse_stt`, `electron_llm`, `lightning_tts`).
+                        model:
+                          type: string
+                          description: Concrete model/version identifier within the processor (e.g. `pulse-large english_v4.1`).
+                        value:
+                          type: number
+                          description: Metric value — typically milliseconds for latency metrics.
                   node_id:
                     type: string
                     description: Node ID for `agent_node_state`
@@ -2333,6 +2412,8 @@ paths:
   /campaign:
     get:
       summary: Retrieve all campaigns
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: list
       description: Get all campaigns for the authenticated organization.
       tags:
         - Campaigns
@@ -2490,6 +2571,8 @@ paths:
           $ref: "#/components/responses/InternalServerErrorResponse"
     post:
       summary: Create a campaign
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: create
       description: Create a campaign
       tags:
         - Campaigns
@@ -2634,6 +2717,8 @@ paths:
   /campaign/{id}:
     get:
       summary: Get a campaign
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: get
       description: Get a campaign with detailed metrics
       tags:
         - Campaigns
@@ -2782,6 +2867,8 @@ paths:
           $ref: "#/components/responses/InternalServerErrorResponse"
     delete:
       summary: Delete a campaign
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: delete
       description: Delete a campaign
       tags:
         - Campaigns
@@ -2817,6 +2904,8 @@ paths:
   /campaign/{id}/start:
     post:
       summary: Start or resume a campaign
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: start_or_resume
       description: |
         Queues the campaign for processing and returns immediately — the campaign is **not** yet
         running when the 202 is returned. Poll `GET /campaign/{id}` and watch for `status: "running"`.
@@ -2869,6 +2958,8 @@ paths:
   /campaign/{id}/pause:
     post:
       summary: Pause a campaign
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: pause
       description: |
         Queues a pause task and returns immediately — the campaign is **not** immediately paused.
         Poll `GET /campaign/{id}` and watch for `status: "paused"`.
@@ -4270,6 +4361,8 @@ paths:
   /compliance/applications:
     post:
       summary: Submit a compliance application
+      x-fern-sdk-group-name: compliance
+      x-fern-sdk-method-name: submit
       description: |
         Submit a new compliance application with end-user details and supporting documents.
         One application is allowed per organization per country per number type per user type.
@@ -4386,6 +4479,8 @@ paths:
   /compliance/applications/{id}:
     patch:
       summary: Resubmit a rejected compliance application
+      x-fern-sdk-group-name: compliance
+      x-fern-sdk-method-name: resubmit
       description: |
         Resubmit a previously rejected compliance application with corrected documents.
         Only applications in `rejected` status can be resubmitted. All documents must be
@@ -4550,6 +4645,8 @@ paths:
           $ref: "#/components/responses/InternalServerErrorResponse"
     post:
       summary: Create a webhook
+      x-fern-sdk-group-name: webhooks
+      x-fern-sdk-method-name: create
       description: |
         Create a new webhook with subscriptions for specific agents and events.
 
@@ -4697,6 +4794,8 @@ paths:
   /webhook/{id}:
     delete:
       summary: Delete a webhook
+      x-fern-sdk-group-name: webhooks
+      x-fern-sdk-method-name: delete
       description: |
         Delete a webhook by its ID.
 
@@ -4942,6 +5041,8 @@ paths:
   /audience:
     get:
       summary: Get all audiences
+      x-fern-sdk-group-name: audience
+      x-fern-sdk-method-name: list
       description: Retrieve all audiences created by the authenticated user. Users can only access audiences they have created.
       tags:
         - Audience
@@ -5148,6 +5249,8 @@ paths:
   /audience/{id}:
     get:
       summary: Get audience by ID
+      x-fern-sdk-group-name: audience
+      x-fern-sdk-method-name: get
       description: |
         Retrieve a specific audience by its ID.
         Note: if the audience belongs to a different organization, the API returns 404 (not 403) — ownership is deliberately obscured.
@@ -5717,6 +5820,8 @@ paths:
   /agent/{id}/drafts:
     post:
       summary: Create a draft
+      x-fern-sdk-group-name: agent_versioning_drafts
+      x-fern-sdk-method-name: create_draft
       description: Create a new draft from an existing published version or another draft. At least one of sourceVersionId or sourceDraftId is required (both may be sent simultaneously).
       tags:
         - Agent Versioning - Drafts
@@ -5849,6 +5954,8 @@ paths:
 
     patch:
       summary: Rename a draft
+      x-fern-sdk-group-name: agent_versioning_drafts
+      x-fern-sdk-method-name: rename_draft
       description: |
         Rename a draft. For config changes, use PATCH /agent/{id}/drafts/{draftId}/config instead.
       tags:
@@ -5901,6 +6008,8 @@ paths:
 
     delete:
       summary: Discard a draft
+      x-fern-sdk-group-name: agent_versioning_drafts
+      x-fern-sdk-method-name: discard_draft
       description: Discard (soft-delete) a draft. Only the draft creator or an admin can discard.
       tags:
         - Agent Versioning - Drafts
@@ -5984,6 +6093,8 @@ paths:
   /agent/{id}/drafts/{draftId}/publish:
     post:
       summary: Publish a draft
+      x-fern-sdk-group-name: agent_versioning_drafts
+      x-fern-sdk-method-name: publish_draft
       description: Publish a draft as a new versioned release. Optionally activate it immediately.
       tags:
         - Agent Versioning - Drafts
@@ -6071,6 +6182,8 @@ paths:
   /agent/{id}/drafts/{draftId}/config:
     patch:
       summary: Edit draft config (prompt, tools, post-call metrics, voice, etc.)
+      x-fern-sdk-group-name: agent_versioning_drafts
+      x-fern-sdk-method-name: update_draft_config
       description: |
         Update the configuration of a draft. This single endpoint is how every
         agent-level config field is changed: prompt, tools, voice, language,
@@ -6279,6 +6392,8 @@ paths:
   /agent/{id}/versions/compare-metrics:
     get:
       summary: Compare metrics between two versions
+      x-fern-sdk-group-name: agent_versioning_versions
+      x-fern-sdk-method-name: compare_version_metrics
       description: Compare analytics/call metrics between two published versions over an optional date range.
       tags:
         - Agent Versioning - Versions
@@ -6395,6 +6510,8 @@ paths:
 
     patch:
       summary: Update version metadata (label, description, pin only)
+      x-fern-sdk-group-name: agent_versioning_versions
+      x-fern-sdk-method-name: update_version_metadata
       description: |
         Update a published version's label, description, or pinned status. At least one field is required.
         Published versions (both active and inactive) are config-immutable — their agent
@@ -6444,6 +6561,8 @@ paths:
   /agent/{id}/versions/{versionId}/activate:
     patch:
       summary: Activate a version
+      x-fern-sdk-group-name: agent_versioning_versions
+      x-fern-sdk-method-name: activate_version
       description: |
         Set a published version as the active version for the agent. The previously
         active version is deactivated. This does not modify the version's config — it
@@ -7007,16 +7126,27 @@ components:
                 model:
                   type: string
                   enum:
+                    - waves_lightning_v3_1
+                    - gpt-realtime
+                    - gpt-realtime-mini
                     - waves
                     - waves_lightning_large
                     - waves_lightning_v2
-                    - waves_lightning_v3_1
                     - waves_lightning_v3
                     - waves_lightning_v2_http
-                    - gpt-realtime
-                    - gpt-realtime-mini
-                  default: waves_lightning_large
-                  description: The TTS model to use.
+                  default: waves_lightning_v3_1
+                  description: |
+                    The TTS model to use. **Use `waves_lightning_v3_1`** — current
+                    recommended Waves model and the new default on 5.1.0.
+
+                    **Deprecated** (kept for backwards compatibility, slated for
+                    removal once the new lineup tokens land):
+                    `waves`, `waves_lightning_large`, `waves_lightning_v2`,
+                    `waves_lightning_v3`, `waves_lightning_v2_http`.
+
+                    **Pending** (exact enum tokens + modality to be confirmed
+                    with the platform team before adding): Lightning v3.1 Pro,
+                    Pulse, Pulse Pro, Hydra.
                 voiceId:
                   type: string
                   default: nyah
@@ -7495,13 +7625,29 @@ components:
               properties:
                 model:
                   type: string
-                  description: The model of the synthesizer
+                  description: |
+                    The TTS model of the synthesizer. **Use `waves_lightning_v3_1`** —
+                    current recommended Waves model and the new default on 5.1.0.
+
+                    **Deprecated** (kept for backwards compatibility, slated for
+                    removal once the new lineup tokens land):
+                    `waves`, `waves_lightning_large`, `waves_lightning_large_voice_clone`,
+                    `waves_lightning_v2`, `waves_lightning_v3`, `waves_lightning_v2_http`.
+
+                    **Pending** (exact enum tokens + modality to be confirmed
+                    with the platform team before adding): Lightning v3.1 Pro,
+                    Pulse, Pulse Pro, Hydra.
                   enum:
+                    - waves_lightning_v3_1
+                    - gpt-realtime
+                    - gpt-realtime-mini
                     - waves
                     - waves_lightning_large
                     - waves_lightning_large_voice_clone
                     - waves_lightning_v2
-                  default: waves_lightning_large
+                    - waves_lightning_v3
+                    - waves_lightning_v2_http
+                  default: waves_lightning_v3_1
                 voiceId:
                   type: string
                   description: The voice ID of the synthesizer.
