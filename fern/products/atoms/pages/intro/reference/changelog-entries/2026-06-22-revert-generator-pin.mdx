@@ -1,0 +1,12 @@
+---
+title: Revert `fern-python-sdk` generator pin from 4.61.3 back to 5.12.12
+---
+
+PR #262 pinned the Python SDK generator from 5.12.12 down to 4.61.3 to address sub-package `__init__` type-export stripping under `exclude_types_from_init_exports: true`. An empirical regen test against 4.61.3 showed that change was the wrong fix:
+
+- 4.61.3's `core/` is missing helpers (`encode_path_param`, `_make_default_async_client`) that our preserved / `.fernignore`'d files depend on — so the regen produces mypy failures it didn't have on 5.12.12.
+- 4.61.3 also does **not** restore the sub-package type exports the downgrade was supposed to fix — the empty `__init__` symptom reproduces on it.
+
+The actual fix for preserving the sub-package import surface lives in the SDK repo itself (`.fernignore` the 3 sub-package `__init__`s with their hand-written type exports — `waves` is already done; `webhooks` and `prompt_scoring` will follow). That keeps the generator on a coherent 5.12.12 `core/` with no version skew.
+
+All other PR #262 / #263 spec changes (the 20 method-name renames, synthesizer enum cleanup, `_id` / `object_id` rename, `live_transcripts.metrics` array fix, calls turn-latency fields, 19 new `AgentDTO` fields) are generator-independent and stay as-is.
