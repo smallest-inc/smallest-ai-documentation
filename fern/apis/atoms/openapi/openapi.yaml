@@ -2998,6 +2998,8 @@ paths:
       description: Get all knowledge bases
       tags:
         - Knowledge Base
+      x-fern-sdk-group-name: knowledge_base
+      x-fern-sdk-method-name: list
       security:
         - BearerAuth: []
       responses:
@@ -3024,6 +3026,8 @@ paths:
       description: Create a knowledge base
       tags:
         - Knowledge Base
+      x-fern-sdk-group-name: knowledge_base
+      x-fern-sdk-method-name: create
       security:
         - BearerAuth: []
       requestBody:
@@ -3069,6 +3073,8 @@ paths:
       description: Get a knowledge base
       tags:
         - Knowledge Base
+      x-fern-sdk-group-name: knowledge_base
+      x-fern-sdk-method-name: get
       security:
         - BearerAuth: []
       parameters:
@@ -3101,6 +3107,8 @@ paths:
           $ref: "#/components/responses/InternalServerErrorResponse"
     delete:
       summary: Delete a knowledge base
+      x-fern-sdk-group-name: knowledge_base
+      x-fern-sdk-method-name: delete
       description: |
         Delete a knowledge base.
 
@@ -3447,6 +3455,8 @@ paths:
   /knowledgebase/get-sitemap-urls:
     post:
       summary: Extract URLs from a sitemap.xml
+      x-fern-sdk-group-name: knowledge_base
+      x-fern-sdk-method-name: extract_sitemap_urls
       description: |
         Fetches a website's `sitemap.xml`, parses it, and returns the list of URLs inside. Use this before calling `POST /knowledgebase/{id}/scrape-urls` to let the customer pick which URLs they actually want indexed.
 
@@ -3509,6 +3519,8 @@ paths:
   /knowledgebase/{id}/scrape-urls:
     post:
       summary: Scrape a list of URLs into a knowledge base
+      x-fern-sdk-group-name: knowledge_base
+      x-fern-sdk-method-name: scrape_urls
       description: |
         Adds one or more URLs to a knowledge base by scraping each page's content, chunking it, and indexing for retrieval. Typical flow:
 
@@ -3660,6 +3672,8 @@ paths:
   /product/phone-numbers:
     get:
       summary: Get acquired phone numbers
+      x-fern-sdk-group-name: phone_numbers
+      x-fern-sdk-method-name: list
       description: |
         Retrieve all platform-purchased telephony numbers (Twilio/Plivo) for the organization.
 
@@ -3784,6 +3798,8 @@ paths:
   /product/get-available-numbers:
     get:
       summary: Search rentable phone numbers in inventory
+      x-fern-sdk-group-name: phone_numbers
+      x-fern-sdk-method-name: search_rentable
       description: |
         Searches the telephony provider's inventory for available numbers matching the requested country (and optional area code). Returns up to 5 candidates per call.
 
@@ -3915,6 +3931,8 @@ paths:
   /product/rent-number:
     post:
       summary: Rent a phone number from the telephony inventory
+      x-fern-sdk-group-name: phone_numbers
+      x-fern-sdk-method-name: rent
       description: |
         Rents an available number returned by [`GET /product/get-available-numbers`](#operation/searchAvailablePhoneNumbers). Charges the organization the prorated amount returned by [`GET /product/proration-amount`](#operation/getProrationAmount) immediately, then the monthly rate on each billing cycle.
 
@@ -3967,6 +3985,8 @@ paths:
   /product/release-number:
     post:
       summary: Release a rented phone number
+      x-fern-sdk-group-name: phone_numbers
+      x-fern-sdk-method-name: release
       description: |
         Releases a phone number previously rented via `POST /product/rent-number`. The number goes back into provider inventory and recurring charges stop.
 
@@ -4079,6 +4099,8 @@ paths:
   /product/import-phone-number:
     post:
       summary: Import a SIP phone number
+      x-fern-sdk-group-name: phone_numbers
+      x-fern-sdk-method-name: import_sip
       description: |
         Bring your own SIP trunk by importing an existing phone number with its SIP termination URL.
         Atoms creates both inbound and outbound SIP trunks so your number works for making and receiving calls through the platform.
@@ -6912,6 +6934,794 @@ paths:
                       type: string
                     example: ["Prompt scoring failed"]
 
+  # ---------------------------------------------------------------------------
+  # 5.1.0 additive endpoints — customer-facing, verifyToken auth
+  # See SDK_5.1.0_COMPLETENESS_SPEC.md for the audit + backend handler refs.
+  # ---------------------------------------------------------------------------
+
+  /agent/with-ai:
+    post:
+      summary: Create agent with AI brief
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: create_with_ai
+      description: |
+        Create a new single-prompt agent from a natural-language brief or structured
+        question/answer pairs. Atoms generates the system prompt for you.
+
+        Provide either `description` (free-form brief) or a non-empty `questions` array,
+        but not both. The `emotiveToggle`, `voiceId`, and `voiceModel` fields must be
+        supplied as a 3-tuple or omitted entirely.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 50
+                  description: Agent name (trimmed). Auto-generated when omitted.
+                description:
+                  type: string
+                  minLength: 1
+                  maxLength: 15000
+                  description: |
+                    Free-form natural-language description of what the agent should do.
+                    Atoms turns this into the system prompt. Use this OR `questions`, not both.
+                questions:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [question, answer]
+                    properties:
+                      question:
+                        type: string
+                        minLength: 1
+                        maxLength: 2000
+                      answer:
+                        type: string
+                        minLength: 50
+                        maxLength: 15000
+                  description: |
+                    Structured question/answer pairs. Atoms uses these to compose the
+                    system prompt. Use this OR `description`, not both.
+                type:
+                  type: string
+                  enum: [single_prompt]
+                  default: single_prompt
+                  description: Currently the only supported agent type.
+                emotiveToggle:
+                  type: boolean
+                  description: Enable emotive synthesis. Must be paired with `voiceId` + `voiceModel`.
+                voiceId:
+                  type: string
+                  description: Voice ID for synthesis. Must be paired with `emotiveToggle` + `voiceModel`.
+                voiceModel:
+                  type: string
+                  enum:
+                    - waves
+                    - waves_lightning_large
+                    - waves_lightning_large_voice_clone
+                    - waves_lightning_v2
+                    - waves_lightning_v3
+                    - waves_lightning_v3_1
+                    - gpt-realtime
+                    - gpt-realtime-mini
+                    - other
+                  description: Synthesizer to use. Must be paired with `emotiveToggle` + `voiceId`.
+                knowledgeBaseId:
+                  type: string
+                  description: Optional knowledge-base ID to attach to the new agent.
+      responses:
+        "201":
+          description: Agent created. `data` is the new agent's `_id` (string).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: string
+                    description: Newly created agent ID.
+                    example: "60d0fe4f5311236168a109ca"
+        "400":
+          $ref: "#/components/responses/BadRequestErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/call-logs:
+    get:
+      summary: Get conversation logs for an agent
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: list_call_logs
+      description: |
+        Returns paginated conversation logs (calls) for a specific agent in the caller's
+        organization. Use `GET /conversation` for cross-agent log listing; use this when
+        you already have an agent ID.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "1"
+          description: Page number (string-encoded positive integer).
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "10"
+          description: Page size (string-encoded positive integer).
+      responses:
+        "200":
+          description: Paginated list of conversation logs for the agent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      callLogs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                            createdAt:
+                              type: string
+                              format: date-time
+                            callId:
+                              type: string
+                            callDuration:
+                              type: number
+                            recordingUrl:
+                              type: string
+                              nullable: true
+                            callStatus:
+                              type: string
+                            callType:
+                              type: string
+                            callCost:
+                              type: number
+                              nullable: true
+                            statusDetails:
+                              type: array
+                              items:
+                                type: string
+                            fromNumber:
+                              type: string
+                              nullable: true
+                            toNumber:
+                              type: string
+                              nullable: true
+                            plivoData:
+                              type: object
+                              nullable: true
+                      pagination:
+                        type: object
+                        properties:
+                          currentPage:
+                            type: integer
+                          totalPages:
+                            type: integer
+                          totalCount:
+                            type: integer
+                          offset:
+                            type: integer
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/widget-config:
+    get:
+      summary: Get widget configuration for an agent
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: get_widget_config
+      description: |
+        Returns the embeddable web widget configuration for the agent (theme, copy,
+        consent prompts, branding, voice/chat mode, allowlist). The response merges the
+        stored config with `assistantId: <agentId>` injected.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      responses:
+        "200":
+          description: Widget configuration for the agent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/WidgetConfig"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+    patch:
+      summary: Update widget configuration for an agent
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: update_widget_config
+      description: |
+        Merge updates into the agent's embeddable widget config. Only the fields in the
+        request body are overwritten; everything else is preserved. Returns the full
+        widget config after merge.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [widgetConfig]
+              properties:
+                widgetConfig:
+                  $ref: "#/components/schemas/WidgetConfig"
+      responses:
+        "200":
+          description: Merged widget configuration.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/WidgetConfig"
+        "400":
+          $ref: "#/components/responses/BadRequestErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/prompt-config:
+    get:
+      summary: Get prompt-config metadata (question definitions + labels)
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: get_prompt_config
+      description: |
+        Returns the canonical question definitions, option choices, and example labels
+        used by the agent-builder UI when collecting input for `POST /agent/with-ai`.
+
+        Use this to programmatically discover what questions to ask end-users when
+        building agent-creation UIs.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Prompt-config catalogue.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      questions:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            text:
+                              type: string
+                            type:
+                              type: string
+                              enum: [textarea, select, multiselect]
+                            options:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  value:
+                                    type: string
+                                  label:
+                                    type: string
+                            examples:
+                              type: object
+                              additionalProperties:
+                                type: string
+                              description: Map of `<exampleLabel>` → answer text. Always includes a `default` key.
+                      exampleLabels:
+                        type: array
+                        items:
+                          type: string
+                      defaultLabel:
+                        type: string
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /dnc:
+    get:
+      summary: List DNC entries for the organization
+      x-fern-sdk-group-name: dnc
+      x-fern-sdk-method-name: list
+      description: |
+        Lists Do-Not-Call entries for the caller's organization with pagination, search,
+        and sort. Optionally scope to a single agent via `agentId`.
+
+        Each entry records a phone number that was flagged (via call outcome or manual
+        upload) as not-to-be-called for either the org or a specific agent.
+      tags:
+        - DNC
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Optional 24-character hex agent ID. When present, restricts results to entries
+            for this agent. Returns 400/404 if the ID isn't valid or doesn't belong to
+            the caller's org.
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Free-text search across phone numbers.
+        - name: sortField
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [createdAt, phoneNumber]
+            default: createdAt
+        - name: sortOrder
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "1"
+          description: Page number (string-encoded positive integer, ≥ 1).
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "50"
+          description: Page size (string-encoded; server clamps to 1–500).
+      responses:
+        "200":
+          description: Paginated DNC entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      entries:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            agentId:
+                              type: string
+                            orgId:
+                              type: string
+                            phoneNumber:
+                              type: string
+                            source:
+                              type: string
+                            detectedInCallId:
+                              type: string
+                              nullable: true
+                            createdAt:
+                              type: string
+                              format: date-time
+                            updatedAt:
+                              type: string
+                              format: date-time
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                          offset:
+                            type: integer
+                          total:
+                            type: integer
+                          totalPages:
+                            type: integer
+                          hasMore:
+                            type: boolean
+        "400":
+          $ref: "#/components/responses/BadRequestErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /account/get-account-details:
+    get:
+      summary: Get authenticated user + organizations
+      x-fern-sdk-group-name: organization
+      x-fern-sdk-method-name: get_account_details
+      description: |
+        Returns the authenticated user's profile and the organizations they belong to.
+
+        **Response envelope is non-standard** — this endpoint returns the account object
+        directly (no `{status, data}` wrapper).
+      tags:
+        - Organization
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Authenticated user + organizations. Raw object, no envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  email:
+                    type: string
+                  phone:
+                    type: string
+                    nullable: true
+                  firstName:
+                    type: string
+                  lastName:
+                    type: string
+                  userId:
+                    type: string
+                  picture:
+                    type: string
+                  organizations:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        orgId:
+                          type: string
+                        roleId:
+                          type: string
+                        name:
+                          type: string
+                        ownerEmail:
+                          type: string
+                        onPremEnabled:
+                          type: boolean
+                  hasOnboarded:
+                    type: boolean
+        "401":
+          description: User not authenticated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: User not authenticated
+        "500":
+          description: Internal Server Error (non-standard envelope — `{message}`).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Internal Server Error
+
+  /account/update-org-name:
+    put:
+      summary: Update organization display name
+      x-fern-sdk-group-name: organization
+      x-fern-sdk-method-name: update_name
+      description: |
+        Update the display name of the caller's current organization. Requires admin role.
+
+        **Response envelope is non-standard** — returns `{success: true, name}` instead
+        of the usual `{status, data}` wrapper.
+      tags:
+        - Organization
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 50
+                  description: New organization name (trimmed).
+      responses:
+        "200":
+          description: Organization renamed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  name:
+                    type: string
+        "400":
+          description: Validation error (missing or too-long name).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Organization name is required
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Unauthorized
+        "500":
+          description: Internal Server Error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Internal server error
+
+  /user/subscription:
+    get:
+      summary: Get caller's subscription + plan limits + feature flags
+      x-fern-sdk-group-name: user
+      x-fern-sdk-method-name: get_subscription
+      description: |
+        Returns the caller's subscription details (plan ID + plan-tier limits) and
+        feature-flag map. Useful for client-side gating of paid features.
+
+        **`limits` is omitted** for the `ENTERPRISE` plan (and for unknown plan IDs) —
+        only `features` is returned in those cases.
+      tags:
+        - User
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Subscription details + limits + features.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      planId:
+                        type: string
+                      limits:
+                        type: object
+                        description: |
+                          Per-plan caps. Omitted for ENTERPRISE.
+                        properties:
+                          agents:
+                            type: integer
+                          campaigns:
+                            type: integer
+                          numbers:
+                            type: integer
+                          dailyCalls:
+                            type: integer
+                          concurrentCalls:
+                            type: integer
+                          knowledgeBaseItemLimit:
+                            type: integer
+                          knowledgeBaseLimits:
+                            type: object
+                      features:
+                        type: object
+                        description: Feature-flag map. All keys are boolean.
+                        properties:
+                          chat:
+                            type: boolean
+                          telephony:
+                            type: boolean
+                          campaign:
+                            type: boolean
+                          webcall:
+                            type: boolean
+                          knowledge_base:
+                            type: boolean
+                          integrations:
+                            type: boolean
+                          webhooks:
+                            type: boolean
+                          telephony_inbound:
+                            type: boolean
+                          telephony_outbound:
+                            type: boolean
+                          waves_lightning:
+                            type: boolean
+                          waves_lightning_large:
+                            type: boolean
+                          waves_lightning_large_voice_clone:
+                            type: boolean
+                          openai_gpt_4o:
+                            type: boolean
+                          electron:
+                            type: boolean
+                          workflow_editor:
+                            type: boolean
+        "400":
+          $ref: "#/components/responses/BadRequestErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /campaign/{id}/logs/export:
+    get:
+      summary: Export campaign call logs as a JSON file
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: export_logs
+      description: |
+        Streams a JSON file containing every call log for a campaign.
+
+        Response is a **file download** (`Content-Disposition: attachment`), not the
+        standard `{status, data}` envelope. Body is a raw JSON array of log objects.
+        When the relay-service is configured and reachable, each row also includes an
+        `events` array; otherwise the field is omitted.
+      tags:
+        - Campaigns
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Campaign ID.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: |
+            Campaign-logs JSON file. `Content-Disposition: attachment; filename=campaign-logs-<campaignName>-<createdAt>.json`.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: "attachment; filename=campaign-logs-MyCampaign-2026-06-19T11:30:00.000Z.json"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    _id:
+                      type: string
+                    callId:
+                      type: string
+                    status:
+                      type: string
+                    duration:
+                      type: number
+                    recordingUrl:
+                      type: string
+                      nullable: true
+                    from:
+                      type: string
+                      nullable: true
+                    to:
+                      type: string
+                      nullable: true
+                    agentId:
+                      type: string
+                    statusDetails:
+                      type: array
+                      items:
+                        type: string
+                    events:
+                      type: array
+                      description: Relay-service event stream. Omitted when relay isn't configured.
+                      items:
+                        type: object
+        "400":
+          $ref: "#/components/responses/BadRequestErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
 components:
   securitySchemes:
     BearerAuth:
@@ -6952,6 +7762,106 @@ components:
           type: boolean
         data:
           type: object
+    WidgetConfig:
+      type: object
+      description: |
+        Configuration for the embeddable web widget. Used by `GET /agent/{id}/widget-config`
+        (returned with `assistantId` injected) and `PATCH /agent/{id}/widget-config`
+        (merge-patched). Every field is optional — only the fields present in a PATCH
+        request body are written, so partial updates are safe.
+      properties:
+        position:
+          type: string
+          enum: [bottom-right, bottom-left, top-right, top-left]
+        size:
+          type: string
+          enum: [tiny, compact, full]
+        borderRadius:
+          type: number
+          minimum: 0
+          maximum: 50
+        mode:
+          type: string
+          enum: [chat, voice]
+        theme:
+          type: string
+          enum: [light, dark]
+        baseColor:
+          type: string
+        accentColor:
+          type: string
+        agentBubbleColor:
+          type: string
+        textOnAccentColor:
+          type: string
+        secondaryTextColor:
+          type: string
+        primaryTextColor:
+          type: string
+        title:
+          type: string
+        startButtonText:
+          type: string
+          minLength: 1
+        endButtonText:
+          type: string
+          minLength: 1
+        ctaTitle:
+          type: string
+          nullable: true
+        ctaSubtitle:
+          type: string
+          nullable: true
+        ctaName:
+          type: string
+          nullable: true
+        widgetName:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+          description: |
+            Must start with the CDN distribution domain prefix configured for the
+            organization. Submit a non-CDN URL and the server returns 400.
+        voiceEmptyMessage:
+          type: string
+          nullable: true
+        voiceActiveEmptyMessage:
+          type: string
+          nullable: true
+        chatEmptyMessage:
+          type: string
+          nullable: true
+        chatFirstMessage:
+          type: string
+          nullable: true
+        chatPlaceholder:
+          type: string
+          minLength: 1
+        voiceShowTranscript:
+          type: boolean
+        consentRequired:
+          type: boolean
+        consentTitle:
+          type: string
+          minLength: 1
+        consentContent:
+          type: string
+          minLength: 1
+        consentStorageKey:
+          type: string
+          nullable: true
+        publicKey:
+          type: string
+        assistantId:
+          type: string
+          description: Injected by `GET /agent/{id}/widget-config` (equals the agent ID).
+        allowlist:
+          type: array
+          items:
+            type: string
+          description: List of origins (domains) authorized to embed this widget.
     Product:
       type: object
       description: 'A phone-number product owned by the organization — either a platform-rented number (`productType: telephony`) or a SIP-imported number (`productType: custom-telephony`).'
@@ -9423,6 +10333,29 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/InternalServerErrorResponse"
+
+    BadRequestErrorResponse:
+      description: Bad request — validation failed or required field missing.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BadRequestErrorResponse"
+
+    NotFoundErrorResponse:
+      description: Resource not found — the referenced ID does not exist or does not belong to the caller's organization.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: boolean
+                example: false
+              errors:
+                type: array
+                items:
+                  type: string
+                example: ["Resource not found"]
 
 tags:
   - name: Prompt Scoring
