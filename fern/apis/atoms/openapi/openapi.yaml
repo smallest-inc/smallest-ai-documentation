@@ -7781,6 +7781,213 @@ components:
         versionId:
           type: string
           description: Alias for `activeVersionId`.
+        allowInboundCall:
+          type: boolean
+          default: true
+          description: Whether the agent accepts inbound calls.
+        phoneNumber:
+          type: array
+          items:
+            type: string
+          description: |
+            Phone numbers attached to this agent (E.164 strings). Only present when
+            the agent has been linked to one or more telephony products.
+        visibleToEveryone:
+          type: boolean
+          default: false
+          description: Whether the agent is visible to all members of the organization (vs. only the creator).
+        speechFormatting:
+          type: boolean
+          description: |
+            Apply LLM-side speech formatting (e.g. expanding "$100" to "one hundred dollars")
+            before passing text to the synthesizer. Boolean; no default — when unset the
+            platform applies the per-organization default.
+        muteUserUntilFirstBotResponse:
+          type: boolean
+          default: false
+          description: When true, the user microphone is muted until the agent has spoken its first response.
+        interruptionBackoffTimer:
+          type: number
+          description: Seconds to wait after an interruption before the agent resumes speaking.
+        enableStyleGuide:
+          type: boolean
+          default: true
+          description: Whether to apply the platform's style-guide post-processing on agent responses.
+        callDispositionConfig:
+          type: string
+          default: ""
+          description: Free-form prompt used for call disposition classification (separate from `postCallAnalyticsConfig.dispositionMetrics`).
+        voiceMailDetectionConfig:
+          type: object
+          description: Voicemail detection settings.
+          properties:
+            enabled:
+              type: boolean
+              default: false
+            endText:
+              type: string
+              default: "Terminating call, you can call us back anytime. Thank you for calling."
+              description: Text spoken before the call is terminated when voicemail is detected.
+        smartTurnConfig:
+          type: object
+          description: Smart end-of-turn detection settings.
+          properties:
+            isEnabled:
+              type: boolean
+            waitTimeInSecs:
+              type: number
+              minimum: 0
+              maximum: 10
+        voiceDetectionConfig:
+          type: object
+          description: VAD (voice activity detection) tuning.
+          properties:
+            confidence:
+              type: number
+              minimum: 0
+              maximum: 1
+            minVolume:
+              type: number
+              minimum: 0
+              maximum: 1
+            triggerTimeInSecs:
+              type: number
+              minimum: 0
+              maximum: 10
+            releaseTimeInSecs:
+              type: number
+              minimum: 0
+              maximum: 10
+        denoisingConfig:
+          type: object
+          description: Audio denoising settings.
+          properties:
+            isEnabled:
+              type: boolean
+        redactionConfig:
+          type: object
+          description: PII/PCI redaction settings applied to transcripts.
+          properties:
+            isEnabled:
+              type: boolean
+        pronunciationDicts:
+          type: array
+          description: Custom pronunciation dictionary applied before synthesis.
+          items:
+            type: object
+            required: [word, pronunciation]
+            properties:
+              word:
+                type: string
+              pronunciation:
+                type: string
+        llmIdleTimeoutConfig:
+          type: object
+          description: |
+            Per-channel idle timeouts (seconds) after which the LLM is nudged when the user
+            stops speaking. `maxRetries` bounds how many nudges before the call ends.
+          properties:
+            chatTimeoutTimeInSecs:
+              type: number
+            webcallTimeoutTimeInSecs:
+              type: number
+            telephonyTimeoutTimeInSecs:
+              type: number
+            maxRetries:
+              type: number
+        sessionTimeoutConfig:
+          type: object
+          description: Maximum session duration before the call is automatically ended.
+          properties:
+            timeoutTimeInSecs:
+              type: number
+        timezone:
+          type: object
+          description: Agent timezone — used for time-of-day-sensitive prompts and analytics bucketing.
+          properties:
+            label:
+              type: string
+              default: "(GMT+0:00) UTC"
+            offset:
+              type: number
+              default: 0
+        postCallAnalyticsConfig:
+          $ref: "#/components/schemas/PostCallAnalyticsConfig"
+        widgetConfig:
+          type: object
+          description: |
+            Chat-widget rendering configuration (theme, copy, consent prompt). Only relevant
+            when the agent is exposed via the embeddable widget; ignored by voice-only agents.
+          properties:
+            position:
+              type: string
+              enum: [bottom-right, bottom-left, top-right, top-left]
+              default: bottom-right
+            size:
+              type: string
+              enum: [tiny, compact, full]
+              default: full
+            mode:
+              type: string
+              enum: [chat, voice]
+              default: chat
+            theme:
+              type: string
+              enum: [light, dark]
+              default: light
+            baseColor:
+              type: string
+              default: "#ffffff"
+            accentColor:
+              type: string
+              default: "#2d9d9f"
+            agentBubbleColor:
+              type: string
+              default: "#f3f4f6"
+            textOnAccentColor:
+              type: string
+              default: "#FFFFFF"
+            secondaryTextColor:
+              type: string
+              default: "#6b7280"
+            primaryTextColor:
+              type: string
+              default: "#111827"
+            startButtonText:
+              type: string
+              default: Start
+            endButtonText:
+              type: string
+              default: End
+            ctaName:
+              type: string
+              default: Talk to Atoms
+            widgetName:
+              type: string
+              default: Atoms
+            avatarUrl:
+              type: string
+              nullable: true
+            chatPlaceholder:
+              type: string
+              default: "Type your message..."
+            consentRequired:
+              type: boolean
+              default: false
+            consentTitle:
+              type: string
+              default: "Privacy Agreement"
+            consentContent:
+              type: string
+              description: Long-form consent body shown before the user can interact.
+            assistantId:
+              type: string
+              nullable: true
+            allowlist:
+              type: array
+              items:
+                type: string
+              description: Allowed origin hostnames for widget embedding.
         _resolvedConfig:
           type: object
           additionalProperties: true

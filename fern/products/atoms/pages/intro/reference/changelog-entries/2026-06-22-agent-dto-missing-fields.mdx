@@ -1,0 +1,39 @@
+---
+title: AgentDTO — 19 customer-facing fields added to the `GET /agent/{id}` response schema
+---
+
+The `GET /atoms/v1/agent/{id}` response was already returning these 19 fields at runtime (via the platform's response transformer), but the OpenAPI `AgentDTO` schema did not include them — so the auto-generated Python SDK couldn't surface them as typed attributes, and customers had to fall through to `.dict()` / raw-dict access.
+
+Each field below was cross-referenced against the canonical mongoose schema in `atoms-platform` (`agent.mongo.ts`) — types, defaults, min/max bounds, and nested-object shapes were copied verbatim rather than paraphrased.
+
+## Fields added to `AgentDTO`
+
+- `allowInboundCall` (boolean, default `true`) — whether the agent accepts inbound calls.
+- `phoneNumber` (string array) — phone numbers attached to this agent (E.164 strings).
+- `visibleToEveryone` (boolean, default `false`) — whether the agent is visible to all members of the organization.
+- `speechFormatting` (boolean) — LLM-side speech formatting (e.g. expanding `"$100"` → `"one hundred dollars"`).
+- `muteUserUntilFirstBotResponse` (boolean, default `false`).
+- `interruptionBackoffTimer` (number) — seconds to wait after an interruption before resuming.
+- `enableStyleGuide` (boolean, default `true`).
+- `callDispositionConfig` (string, default `""`) — free-form prompt used for call disposition classification.
+- `voiceMailDetectionConfig` (object) — `{ enabled, endText }`.
+- `smartTurnConfig` (object) — `{ isEnabled, waitTimeInSecs }`.
+- `voiceDetectionConfig` (object) — 4 bounded numerics for VAD tuning.
+- `denoisingConfig` (object) — `{ isEnabled }`.
+- `redactionConfig` (object) — `{ isEnabled }` PII/PCI redaction.
+- `pronunciationDicts` (array of `{ word, pronunciation }`) — custom pronunciation dictionary.
+- `llmIdleTimeoutConfig` (object) — per-channel idle timeouts + `maxRetries`.
+- `sessionTimeoutConfig` (object) — `{ timeoutTimeInSecs }`.
+- `timezone` (object) — `{ label, offset }`.
+- `postCallAnalyticsConfig` — references the existing `PostCallAnalyticsConfig` schema.
+- `widgetConfig` (object, 24 sub-fields) — chat-widget rendering configuration (theme, copy, consent prompt).
+
+## Behavior change for SDK consumers
+
+After the next regen lands, all 19 fields surface as typed attributes on `agent` responses. Existing code that read them through `.dict()` keeps working.
+
+## Endpoint shapes not changed
+
+- `UpdateAgentRequest` is intentionally restricted to `name`, `description`, `avatarUrl`, `telephonyProductId`, `allowInboundCall`, `visibleToEveryone`. Adding the other fields here would misrepresent what `PATCH /agent/{id}` accepts. To update versioned fields, callers continue to go through `PATCH /agent/{id}/drafts/{draftId}/config`.
+- `CreateAgentRequest` already accepted these fields.
+- `_resolvedConfig` already uses `additionalProperties: true`, so SDK clients can read these from the merged-config block as well.
