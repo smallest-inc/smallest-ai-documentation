@@ -1,0 +1,36 @@
+---
+title: Python SDK 5.1.0 regen-prep — generator pin, spec field/type fixes, naming cleanup
+---
+
+Spec changes that prepare the next Python SDK regen so the auto-generated client (a) preserves the 4.4.7 sub-package import surface that customers still rely on and (b) picks up several missing or mistyped fields from the live API.
+
+## Generator pin
+
+`fern-python-sdk` is pinned to `4.61.3` (the version 4.4.x was generated with). 5.12.12 combined with `exclude_types_from_init_exports: true` strips type exports from **every** package `__init__`, not just the top-level one — Fern's own auto-generated wire tests do `from smallestai.atoms.<ns> import <Type>` and ImportError out. The pin is the proper fix until Fern ships a 5.x build that scopes the exclusion to top-level only.
+
+## Spec field/type fixes
+
+- **`listAgentTemplates` — `_id` vs `id`**: the Mongo `_id` (ObjectId) and the human `id` slug are distinct. Fern was aliasing `_id` → `id` and the two fields collided. Added `x-fern-property-name: object_id` on `_id` so the generated SDK exposes `.object_id` and `.id` as separate attributes. Same fix on `singlePromptConfig._id`.
+- **Template `tools[].type`**: added the missing enum (`end_call | transfer_call | api_call | extract_dynamic_variables | knowledge_base_search`).
+- **`live_transcripts.metrics`**: was typed `object` with `additionalProperties: true`; server actually sends an **array** of `{processor, model, value}` objects. The SDK was silently dropping 122 SSE metrics events in a 40-second call before this. Now typed as an array with the correct item shape.
+- **`calls.list` / `calls.search` — `turnLatencyMetrics`**: brought in line with `calls.get` by adding `minLatency`, `maxLatency`, `transitions[]`, and `processedAt`.
+
+## Method-name cleanup
+
+20 operations had verbose summary-derived method names; added explicit `x-fern-sdk-group-name` + `x-fern-sdk-method-name` annotations so the SDK surface stays readable. The worst offender — `edit_draft_config_prompt_tools_post_call_metrics_voice_etc` — is now `agent_versioning_drafts.update_draft_config`.
+
+Renames cover: `campaigns` (list/create/get/delete/start_or_resume/pause), `compliance` (submit/resubmit), `webhooks` (create/delete), `audience` (list/get), `agent_versioning_drafts` (create_draft/rename_draft/discard_draft/publish_draft/update_draft_config), and `agent_versioning_versions` (compare_version_metrics/update_version_metadata/activate_version).
+
+## Synthesizer model enum
+
+`agent_dto.synthesizer.voiceConfig.model` (and the template variant) now lists `waves_lightning_v3_1` first and uses it as the default (was `waves_lightning_large`). The deprecated tokens (`waves`, `waves_lightning_large`, `waves_lightning_large_voice_clone`, `waves_lightning_v2`, `waves_lightning_v3`, `waves_lightning_v2_http`) remain in the enum for backwards compatibility — existing agents using them keep working — but the description flags them and notes removal once the new lineup tokens (Lightning v3.1 Pro, Pulse, Pulse Pro, Hydra) are confirmed and added.
+
+## Behavior change for SDK consumers
+
+After the next regen lands:
+
+- `agent.object_id` returns the Mongo ObjectId for an agent template (previously colliding with the slug).
+- `live_transcripts` event handlers that read `metrics` need to iterate it as a list of objects, not look up keys on a dict.
+- The 4.4.x verbose method names on the operations listed above are gone — only the short names work.
+
+No customer-facing endpoint paths or request shapes change.
