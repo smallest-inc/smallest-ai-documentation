@@ -83,23 +83,26 @@ groups:
   python-sdk:
     generators:
       - name: fernapi/fern-python-sdk
-        # Pinned to 4.61.3 (the version 4.4.x SDK was generated with). 5.12.12
-        # combined with `exclude_types_from_init_exports: true` strips type
-        # exports from EVERY package __init__ including sub-packages — the
-        # 4.61.3 generator only stripped the top-level __init__.
+        # Kept on 5.12.12 — the version 5.0.0 shipped on, CI-green.
         #
-        # Symptom on 5.12.12: Fern's own generated wire tests do
-        #   `from smallestai.atoms.webhooks import PostWebhookRequestEventsItem`
-        # → ImportError → CI red. Also regresses the 4.4.7 public API — users
-        # who relied on `from smallestai.atoms.<ns> import <Type>` lose those
-        # imports (types still reachable via `<ns>.types.<module>`).
+        # PR #262 attempted a downgrade to 4.61.3 to "restore" sub-package
+        # __init__ type exports under `exclude_types_from_init_exports: true`.
+        # Empirical regen test showed this was the wrong fix:
+        #   - 4.61.3's `core/` is missing helpers (`encode_path_param`,
+        #     `_make_default_async_client`) that our preserved/.fernignore'd
+        #     files import from → mypy failures on regen.
+        #   - 4.61.3 also did NOT restore the sub-package type exports — the
+        #     empty `__init__` symptom that motivated the downgrade reproduces
+        #     on it.
+        # So the downgrade broke `core/` API compatibility AND didn't achieve
+        # its goal. Reverted here.
         #
-        # Hand-patched 3 sub-package __init__s in the 5.0.0 seed as a STOPGAP
-        # that reverts on regen. Pinning to 4.61.3 is the proper fix until
-        # Fern ships a 5.x build that either (a) doesn't generate wire tests
-        # that import from __init__ when `exclude_types_from_init_exports`
-        # is true, or (b) configures the exclusion to be top-level-only.
-        version: 4.61.3
+        # The real fix for the sub-package import surface lives SDK-side:
+        # `.fernignore` the 3 sub-package __init__s (waves already is; add
+        # webhooks + prompt_scoring) so the hand-written type exports
+        # persist across regens. That keeps us on a coherent 5.12.12 `core/`
+        # with no version skew.
+        version: 5.12.12
         # PyPI publishing is handled by the canonical
         # `smallest-inc/smallest-python-sdk` repo's own ci.yml — Fern just
         # opens a regen PR against that repo. The previous `output.location:
