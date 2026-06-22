@@ -10,7 +10,7 @@ Spec changes that prepare the next Python SDK regen so the auto-generated client
 
 ## Spec field/type fixes
 
-- **`listAgentTemplates` — `_id` vs `id`**: the Mongo `_id` (ObjectId) and the human `id` slug are distinct. Fern was aliasing `_id` → `id` and the two fields collided. Added `x-fern-property-name: object_id` on `_id` so the generated SDK exposes `.object_id` and `.id` as separate attributes. Same fix on `singlePromptConfig._id`.
+- **`listAgentTemplates` — `_id` vs `id`**: the `_id` (ObjectId) and the human `id` slug are distinct. Fern was aliasing `_id` → `id` and the two fields collided. Added `x-fern-property-name: object_id` on `_id` so the generated SDK exposes `.object_id` and `.id` as separate attributes. Same fix on `singlePromptConfig._id`.
 - **Template `tools[].type`**: added the missing enum (`end_call | transfer_call | api_call | extract_dynamic_variables | knowledge_base_search`).
 - **`live_transcripts.metrics`**: was typed `object` with `additionalProperties: true`; server actually sends an **array** of `{processor, model, value}` objects. The SDK was silently dropping 122 SSE metrics events in a 40-second call before this. Now typed as an array with the correct item shape.
 - **`calls.list` / `calls.search` — `turnLatencyMetrics`**: brought in line with `calls.get` by adding `minLatency`, `maxLatency`, `transitions[]`, and `processedAt`.
@@ -29,7 +29,7 @@ Renames cover: `campaigns` (list/create/get/delete/start_or_resume/pause), `comp
 
 After the next regen lands:
 
-- `agent.object_id` returns the Mongo ObjectId for an agent template (previously colliding with the slug).
+- `agent.object_id` returns the ObjectId for an agent template (previously colliding with the slug).
 - `live_transcripts` event handlers that read `metrics` need to iterate it as a list of objects, not look up keys on a dict.
 - The 4.4.x verbose method names on the operations listed above are gone — only the short names work.
 
