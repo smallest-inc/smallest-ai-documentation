@@ -1,0 +1,80 @@
+---
+title: Python SDK 5.1.0 — 10 new endpoints, verb-noun method renames, 19 typed agent fields
+---
+
+`smallestai==5.1.0` adds 10 endpoints that were already serving traffic but missing from the SDK surface, cleans up auto-generated method names across the namespaces that still had verbose summary-derived names, and surfaces 19 customer-facing fields on the agent response that the auto-generated client previously couldn't type. Constructor signature is unchanged from 5.0.0 — `SmallestAI(api_key="...")` keeps working.
+
+## Update your install
+
+```bash
+pip install --upgrade smallestai
+# pinned: pip install smallestai==5.1.0
+```
+
+## New endpoints
+
+| Method | What it does |
+|---|---|
+| `client.atoms.agents.create_with_ai(...)` | Create an agent from a natural-language brief. |
+| `client.atoms.agents.list_call_logs(id=...)` | Fetch conversation logs for an agent. |
+| `client.atoms.agents.get_widget_config(id=...)` | Read the chat-widget configuration for an agent. |
+| `client.atoms.agents.update_widget_config(id=...)` | Update the chat-widget configuration for an agent. |
+| `client.atoms.agents.get_prompt_config(...)` | Fetch prompt-config metadata (question definitions + labels). |
+| `client.atoms.organization.get_account_details(...)` | Get the authenticated user + organizations they belong to. |
+| `client.atoms.organization.update_name(...)` | Update the organization display name. |
+| `client.atoms.user.get_subscription(...)` | Get the caller's subscription, plan limits, and feature flags. |
+| `client.atoms.campaigns.export_logs(id=...)` | Export campaign call logs as JSON. |
+| `client.atoms.dnc.list(...)` | List DNC entries for the organization (new `dnc` namespace). |
+
+## Method renames
+
+Verbose summary-derived method names → canonical short names. Applied across 20 operations:
+
+| Namespace | Before | After |
+|---|---|---|
+| `campaigns` | `get_all_campaigns`, `start_or_resume_campaign`, `pause_campaign` | `list`, `start_or_resume`, `pause` (plus `create`, `get`, `delete`) |
+| `compliance` | `submit_a_compliance_application`, `resubmit_a_rejected_compliance_application` | `submit`, `resubmit` |
+| `webhooks` | `create_a_webhook`, `delete_a_webhook` | `create`, `delete` |
+| `audience` | `get_all_audiences`, `get_audience_by_id` | `list`, `get` |
+| `agent_versioning_drafts` | `edit_draft_config_prompt_tools_post_call_metrics_voice_etc` (worst offender) | `update_draft_config` (also `create_draft`, `rename_draft`, `discard_draft`, `publish_draft`) |
+| `agent_versioning_versions` | `compare_metrics_between_two_versions`, `update_version_metadata_label_description_pin_only`, `activate_a_version` | `compare_version_metrics`, `update_version_metadata`, `activate_version` |
+
+The 5.0.x verbose names are removed in 5.1.0 with no deprecation alias.
+
+## Newly-typed agent response fields
+
+`GET /agent/{id}` was already returning these 19 fields at runtime, but the spec didn't include them — so the 5.0.x client couldn't surface them as typed attributes. Each field is now a typed attribute on the agent response:
+
+`allow_inbound_call`, `phone_number`, `visible_to_everyone`, `speech_formatting`, `mute_user_until_first_bot_response`, `interruption_backoff_timer`, `enable_style_guide`, `call_disposition_config`, `voice_mail_detection_config`, `smart_turn_config`, `voice_detection_config`, `denoising_config`, `redaction_config`, `pronunciation_dicts`, `llm_idle_timeout_config`, `session_timeout_config`, `timezone`, `post_call_analytics_config`, `widget_config`.
+
+Each shape is documented in the [agent response schema](/atoms/api-reference/api-reference/agents/get-agent).
+
+## Other spec corrections
+
+- **`agent_templates`** — `_id` (stable identifier) and `id` (human-readable slug) are now distinct on the SDK side. `_id` surfaces as `template.object_id`; `id` stays as `template.id`. Previous releases aliased one over the other.
+- **`live_transcripts.metrics`** — typed as a list of `{processor, model, value}` items (was untyped). The 5.0.x client silently dropped these events on deserialization.
+- **`calls.list` / `calls.search`** — `turn_latency_metrics` now includes `min_latency`, `max_latency`, `transitions`, `processed_at` (parity with `calls.get`).
+
+## Migration
+
+The rename pattern is mechanical. A single repo-wide `sed`:
+
+```bash
+find . -name '*.py' -exec sed -i.bak \
+  -e 's/get_all_campaigns/list_campaigns/g' \
+  -e 's/start_or_resume_campaign/start_or_resume/g' \
+  -e 's/pause_campaign/pause/g' \
+  -e 's/submit_a_compliance_application/submit_compliance/g' \
+  -e 's/resubmit_a_rejected_compliance_application/resubmit_compliance/g' \
+  -e 's/create_a_webhook/create_webhook/g' \
+  -e 's/delete_a_webhook/delete_webhook/g' \
+  -e 's/get_all_audiences/list_audiences/g' \
+  -e 's/get_audience_by_id/get_audience/g' \
+  -e 's/edit_draft_config_prompt_tools_post_call_metrics_voice_etc/update_draft_config/g' \
+  -e 's/compare_metrics_between_two_versions/compare_version_metrics/g' \
+  -e 's/update_version_metadata_label_description_pin_only/update_version_metadata/g' \
+  -e 's/activate_a_version/activate_version/g' \
+  {} \;
+```
+
+Full release notes and the SDK-side migration write-up: [MIGRATION.md on smallest-python-sdk](https://github.com/smallest-inc/smallest-python-sdk/blob/main/MIGRATION.md).
