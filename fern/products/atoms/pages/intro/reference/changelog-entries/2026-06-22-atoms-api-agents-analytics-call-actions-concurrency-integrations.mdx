@@ -1,0 +1,74 @@
+---
+title: Atoms API — agents, analytics, call actions, concurrency, integrations, and disposition templates
+---
+
+**New agent endpoints (7).** New endpoints for creating, configuring, and operating agents:
+
+| Endpoint | Description |
+|---|---|
+| `POST /agent` | Create a new agent by name. Versioning is enabled by default; use the drafts flow to set prompt, `firstMessage`, tools, or runtime config before going live. The legacy `PATCH /workflow/{workflowId}` path bypasses the version lifecycle and should be avoided. |
+| `POST /agent/with-ai` | Generate an agent from either a free-text `description` or a structured `questions[]` array (mutually exclusive). Voice fields (`emotiveToggle`, `voiceId`, `voiceModel`) must all be present or all absent; `emotiveToggle: true` requires `voiceModel: GPT_REALTIME`. Returns 503 if the security-check service is unavailable. |
+| `GET /agent/prompt-config` | Returns the questionnaire for the Create-with-AI flow — `questions[]`, `exampleLabels[]`, and `defaultLabel`. |
+| `GET /agent/{id}/widget-config` | Returns the full web widget config: position, size, theme, colors, consent settings, public key, and allowlist. |
+| `PATCH /agent/{id}/widget-config` | Partial update of any widget config field, including display strings (`ctaTitle`, `ctaSubtitle`, `chatPlaceholder`, `voiceEmptyMessage`, etc.). Changing `avatarUrl` automatically removes the old CDN asset from S3. |
+| `POST /agent/{id}/avatar/presigned-url` | Returns a pre-signed S3 PUT URL for avatar upload. Requires `fileName`, `contentType` (must start with `image/`), and `fileSize` (max 2 MB). URL expires after 300 seconds; response includes `presignedUrl`, `cdnUrl`, and `key`. |
+| `GET /agent/{id}/call-logs` | Paginated call logs for a specific agent. Query params: `page` (default 1), `offset` (default 10). Each entry includes `callId`, `callStatus`, `callType`, `fromNumber`, `toNumber`, `createdAt`, and `callDuration` (ms). |
+
+**Agent duplicate endpoint restructured.** `POST /agent/{id}/duplicate` is now clearly documented at its own path. Logic is unchanged — pass `targetOrganizationId` (24-char hex ObjectId) to copy an agent into another org. Returns 403 if the caller is not a member of the target org, 404 if the agent or org is not found.
+
+**Draft diff response typed.** The `data` field on `GET /agent/{id}/drafts/{draftId}/diff` is now typed with explicit fields: `sections` (keyed by section name, each with `before`, `after`, and `changed`) and `hasChanges: boolean`.
+
+**New analytics endpoints (18).** A full analytics surface is now documented under the `/analytics` prefix:
+
+| Endpoint | Description |
+|---|---|
+| `GET /analytics/dashboard` | Batched — runs 6 sub-queries in parallel; returns summary, timeseries, pickup rates, hourly performance, and duration stats |
+| `GET /analytics/summary` | KPI summary with trend metrics (`totalCalls`, `pickupRate`, `avgDurationMs`, `totalCost`, etc.) using the new `AnalyticsTrendMetric` schema |
+| `GET /analytics/call-counts-log` | Paginated call records filterable by `agentId`, `campaignId`, `callType`, and date range |
+| `GET /analytics/call-counts-by-day` | Daily call counts for bar charts |
+| `GET /analytics/conversation-details/{callId}` | Full transcript and events for a single call (ClickHouse-sourced) |
+| `GET /analytics/usage/timeseries` | Daily credit usage with `dayWiseCredits[]` and `totalCredits` |
+| `GET /analytics/call-volume-timeseries` | Daily breakdown by answered, no-answer, failed, and cancelled calls |
+| `GET /analytics/call-outcomes-timeseries` | Daily outcomes with period-level totals |
+| `GET /analytics/pickup-rate-by-number` | Per-phone-number pickup rate with `lastActiveDate` |
+| `GET /analytics/phone-number-trends` | Daily timeseries per phone number for volume and pickup rate |
+| `GET /analytics/hourly-performance` | Aggregated by hour (0–23) — calls, pickup rate, and duration |
+| `GET /analytics/duration-stats` | Percentiles: avg, median, p90, p95, plus `shortCallsPercent` and `longCallsPercent` |
+| `GET /analytics/weekly-trends` | Per-week duration and pickup metrics |
+| `GET /analytics/agent-performance` | Per-agent metrics; accepts `sortBy`, `sortOrder`, `limit` |
+| `GET /analytics/concurrency` | Minute-by-minute concurrent calls for a given `date`; optional `includeAgents=true` for per-agent breakdown |
+| `GET /analytics/call-start-distribution` | Minute-level call start buckets for a given `date` |
+| `GET /analytics/daily-call-summary` | Aggregate for a specific `date` including live `inProgressCalls` and `inQueueCalls` |
+| `GET /analytics/attempt-cohort` | Cohort analysis of call attempts: `pickupRate`, `cumulativeRate`, `marginalGain` per attempt number |
+
+**New call actions endpoints (full CRUD).** Call actions are automated behaviors fired at call lifecycle events. The action body includes a `config.conditions[]` array using the new `CallActionCondition` schema (field, operator, value):
+
+| Endpoint | Description |
+|---|---|
+| `POST /call-actions` | Create a call action. Set `category` to `trigger` (fires during the call) or `post-call`. |
+| `GET /call-actions` | List call actions. Requires `agentId`; optional `category` and `provider` filters. Paginated. |
+| `GET /call-actions/{id}` | Get a single call action by ID. |
+| `PUT /call-actions/{id}` | Update a call action — all fields optional. |
+| `DELETE /call-actions/{id}` | Permanently delete a call action. |
+
+**New concurrency endpoints.**
+
+| Endpoint | Description |
+|---|---|
+| `GET /concurrency` | Returns `orgLimit`, `totalReserved`, `unreservedPool`, and a per-agent slot breakdown (`webcall`, `outbound`, `inbound`, `chat`). |
+| `PUT /concurrency/reservations` | Update slot reservations for one or more agents in a single request. Requires Admin role. |
+
+**New integrations endpoints.** Both endpoints return a direct JSON body rather than the standard `{ success, data }` envelope:
+
+| Endpoint | Description |
+|---|---|
+| `POST /integration/modify-webengage-integration` | Create or update a WebEngage integration. Request body: `integrationSets[]` with `licenseCode`, `environment`, and `apiKey`. |
+| `GET /integration/get-webengage-details` | Returns the current WebEngage integration config. |
+
+**New endpoint: disposition metric templates.**
+
+| Endpoint | Description |
+|---|---|
+| `GET /disposition-metric-templates` | Returns all available templates for the post-call analytics metric picker. Each template exposes an `identifier`, `dispositionMetricPrompt`, and `dispositionMetricType` (`STRING`, `BOOLEAN`, `INTEGER`, `ENUM`, or `DATETIME`). |
+
+→ [Atoms API reference](/atoms/api-reference)

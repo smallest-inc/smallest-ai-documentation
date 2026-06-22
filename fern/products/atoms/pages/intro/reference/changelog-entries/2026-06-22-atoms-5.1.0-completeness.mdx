@@ -1,0 +1,26 @@
+---
+title: Atoms API 5.1.0 completeness — 9 new endpoints + phone/KB SDK method names
+---
+
+Adds 9 customer-facing endpoints that the Atoms backend already serves but were not exposed in the OpenAPI spec, plus an `x-fern-sdk-method-name` cleanup pass on the phone-numbers and knowledge-base namespaces.
+
+## New endpoints
+
+- `POST /agent/with-ai` — create an agent from a natural-language brief.
+- `GET /agent/{id}/call-logs` — fetch conversation logs for an agent.
+- `GET /agent/{id}/widget-config` — read the chat-widget configuration for an agent.
+- `PATCH /agent/{id}/widget-config` — update the chat-widget configuration for an agent.
+- `GET /agent/prompt-config` — fetch prompt-config metadata (question definitions + labels) used by the agent builder.
+- `GET /dnc` — list DNC entries for the organization.
+- `GET /account/get-account-details` — get the authenticated user + organizations they belong to.
+- `PATCH /account/update-org-name` — update the organization's display name.
+- `GET /user/subscription` — get the caller's subscription, plan limits, and feature flags.
+- `GET /campaign/{id}/logs/export` — export a campaign's call logs as a JSON file.
+
+## SDK method renames
+
+`x-fern-sdk-{group,method}-name` annotations added across the `phone_numbers` and `knowledge_base` namespaces so the generated client uses canonical short names instead of summary-derived verbose ones.
+
+## Behavior change for SDK consumers
+
+After the next regen, each of the 9 endpoints is callable via the auto-generated client (under `client.atoms.agents.*`, `client.atoms.dnc.*`, etc.). No changes to existing endpoint paths or request/response shapes.

@@ -140,10 +140,11 @@ paths:
                       properties:
                         _id:
                           type: string
-                          description: MongoDB ObjectId of the template
+                          description: Stable unique identifier for the template (24-character hex string, e.g. `6942a64ac74fc65e7bc94e47`). Surfaced as `object_id` in the generated SDK to keep it distinct from the human-readable `id` slug.
+                          x-fern-property-name: object_id
                         id:
                           type: string
-                          description: The ID of the agent template
+                          description: Human-readable slug for the agent template (e.g. `sp-medical-centre-receptionist-in`). Distinct from `_id`.
                         name:
                           type: string
                           description: The name of the agent template
@@ -196,6 +197,10 @@ paths:
                           type: object
                           description: Configuration for single-prompt agents
                           properties:
+                            _id:
+                              type: string
+                              description: Auto-generated unique identifier for the embedded single-prompt config (24-character hex string). Always present when `singlePromptConfig` is set. Surfaced as `object_id` in the generated SDK.
+                              x-fern-property-name: object_id
                             prompt:
                               type: string
                               description: The system prompt used by the agent
@@ -205,6 +210,15 @@ paths:
                               items:
                                 type: object
                                 properties:
+                                  type:
+                                    type: string
+                                    description: The tool type — drives runtime dispatch.
+                                    enum:
+                                      - end_call
+                                      - transfer_call
+                                      - api_call
+                                      - extract_dynamic_variables
+                                      - knowledge_base_search
                                   name:
                                     type: string
                                     description: The name of the tool
@@ -259,6 +273,58 @@ paths:
           $ref: "#/components/responses/InternalServerErrorResponse"
 
   /agent:
+    post:
+      summary: Create a new agent
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: create_agent
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      description: |
+        Create a new agent by passing the agent name in the request body.
+
+        New agents have versioning enabled by default. To set the prompt,
+        `firstMessage`, tools, or any runtime config, fork a draft from the
+        auto-created initial version, edit it, publish, and activate — see
+        the [Versioning Lifecycle](/atoms/developer-guide/build/agents/versioning-lifecycle)
+        guide for the full flow.
+
+        The legacy `PATCH /workflow/{workflowId}` endpoint writes directly to
+        the underlying workflow document and bypasses the version lifecycle;
+        edits made that way are not captured as a version and may not
+        propagate to live calls. Use the drafts flow above.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAgentRequest"
+      responses:
+        "201":
+          description: Agent created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: string
+                    example: "60d0fe4f5311236168a109ca"
+                    description: The ID of the created agent
+
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
     get:
       summary: Get all agents
       x-fern-sdk-group-name: agents
@@ -355,36 +421,152 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
+  /agent/with-ai:
     post:
-      summary: Create a new agent
-      x-fern-sdk-group-name: agents
-      x-fern-sdk-method-name: create_agent
+      operationId: createAgentWithAi
+      summary: Create agent with AI
+      description: |
+        Creates a new agent using AI generation. Accepts either a guided questionnaire (array of Q&A pairs) or a free-text description. The AI generates the agent's prompt and configuration. A security check is run on the generated prompt before the agent is persisted. Deducts credits on success.
+
+        **Rules:**
+        - Either `questions` (non-empty array) or `description` must be provided — not both.
+        - `emotiveToggle`, `voiceId`, and `voiceModel` must either all be present or all be absent.
+        - When `emotiveToggle=true`, `voiceModel` must be `GPT_REALTIME`.
+        - When `emotiveToggle=false`, `voiceModel` cannot be `GPT_REALTIME`.
       tags:
         - Agents
       security:
         - BearerAuth: []
-      description: |
-        Create a new agent by passing the agent name in the request body.
-
-        New agents have versioning enabled by default. To set the prompt,
-        `firstMessage`, tools, or any runtime config, fork a draft from the
-        auto-created initial version, edit it, publish, and activate — see
-        the [Versioning Lifecycle](/atoms/developer-guide/build/agents/versioning-lifecycle)
-        guide for the full flow.
-
-        The legacy `PATCH /workflow/{workflowId}` endpoint writes directly to
-        the underlying workflow document and bypasses the version lifecycle;
-        edits made that way are not captured as a version and may not
-        propagate to live calls. Use the drafts flow above.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateAgentRequest"
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 50
+                  description: Agent name. Auto-generated if omitted.
+                description:
+                  type: string
+                  maxLength: 15000
+                  description: Free-text description. Required if `questions` not given.
+                questions:
+                  type: array
+                  description: Guided Q&A pairs. Required if `description` not given.
+                  items:
+                    type: object
+                    required: [question, answer]
+                    properties:
+                      question:
+                        type: string
+                        minLength: 1
+                        maxLength: 2000
+                      answer:
+                        type: string
+                        minLength: 50
+                        maxLength: 15000
+                type:
+                  type: string
+                  enum: [single_prompt]
+                  description: Workflow type. Only `single_prompt` is supported.
+                emotiveToggle:
+                  type: boolean
+                  description: Enable emotive (GPT Realtime) mode. Must be given with `voiceId` and `voiceModel`.
+                voiceId:
+                  type: string
+                  description: Voice ID. Must be given together with `emotiveToggle` and `voiceModel`.
+                voiceModel:
+                  type: string
+                  description: Voice model. Must be given together with `emotiveToggle` and `voiceId`.
+                knowledgeBaseId:
+                  type: string
+                  description: Knowledge base to attach (must belong to the organization).
       responses:
         "201":
-          description: Agent created successfully
+          description: Agent created — returns the new agent's ObjectId
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: string
+                    description: MongoDB ObjectId of the created agent
+        "400":
+          description: Invalid request body, or the generated prompt failed the security check
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Organization lacks access to the requested workflow type or model (WORKFLOW_GRAPH, GPT 5.2, Electron Kogta)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        "503":
+          description: Security check service temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+
+  /agent/{id}/duplicate:
+    post:
+      summary: Duplicate agent to another organization
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: duplicate_agent
+      description: |
+        Duplicates a SINGLE_PROMPT agent's live active version into a target organization
+        (can also be the same organization). Copies all versioned configuration but strips
+        organization-specific resources: knowledge base tools are removed, default variable
+        values are blanked, and a new avatar is generated. The duplicate starts with a
+        published V1 as its active version.
+
+        **400 is returned when:**
+        - The source agent is archived (`"Cannot duplicate an archived agent"`)
+        - The agent has no `activeVersionId` (`"This agent has no active version and cannot be duplicated"`)
+        - The active version exists but is not published/active (`"This agent has no active published version and cannot be duplicated"`)
+        - The agent is not `SINGLE_PROMPT` workflow type
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The ID of the source agent to duplicate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - targetOrganizationId
+              properties:
+                targetOrganizationId:
+                  type: string
+                  pattern: "^[a-fA-F0-9]{24}$"
+                  description: |
+                    MongoDB ObjectId of the target organization. Must be a 24-character hex string.
+                    The authenticated user must be a member of this organization.
+                  example: "60d0fe4f5311236168a109ca"
+      responses:
+        "201":
+          description: Agent duplicated successfully
           content:
             application/json:
               schema:
@@ -394,18 +576,38 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    type: string
-                    example: "60d0fe4f5311236168a109ca"
-                    description: The ID of the created agent
-
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        example: "60d0fe4f5311236168a109cb"
+                        description: The ID of the newly created agent
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
         "403":
-          $ref: "#/components/responses/ForbiddenError"
+          description: Forbidden — authenticated user is not a member of the target organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "404":
+          description: |
+            Not found. Possible messages:
+            - `"Agent not found"` — source agent doesn't exist or doesn't belong to the caller's org
+            - `"Target organization not found"` — the `targetOrganizationId` doesn't exist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
+
+  # ── Deprecated: Workflow endpoints (still live) ────────────────────────
+  # Both still work in production and are actively used by customers, but
+  # they bypass the versioning system. Prefer PATCH /agent/{id}/drafts/{draftId}/config
+  # for writes and GET /agent/{id} for reads.
 
   /agent/{id}:
     get:
@@ -554,162 +756,334 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
-  /agent/{id}/archive:
-    delete:
-      operationId: deleteAgent
-      summary: Archive or unarchive an agent
-      x-fern-sdk-group-name: agents
-      x-fern-sdk-method-name: archive_agent
+  /agent/prompt-config:
+    get:
+      operationId: getAgentPromptConfig
+      summary: Get AI creation questionnaire config
       description: |
-        Soft-archives the agent — it is excluded from listings and stops accepting calls,
-        but all data is preserved and the operation is fully reversible.
-
-        Pass `?on=false` to unarchive (restore) a previously archived agent.
-
-        **409 is returned when:**
-        - The agent is already in the requested state (`"Agent is already archived"` / `"Agent is already active"`)
-        - The agent is linked to an active campaign (`"Agent is associated with the [status] campaign "[name]". Complete or remove the campaign before archiving."`)
+        Returns the questionnaire configuration used by the "Create with AI" flow — the list of guided questions, their types, available options, and pre-filled example answers per label. Only a user token is required; no organization auth needed.
       tags:
         - Agents
       security:
         - BearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: on
-          required: false
-          schema:
-            type: boolean
-            default: true
-          description: |
-            `true` (default) — archive the agent.
-            `false` — unarchive (restore) a previously archived agent.
       responses:
         "200":
-          description: Agent archived or unarchived successfully
+          description: Questionnaire configuration
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  status:
+                  success:
                     type: boolean
                     example: true
                   data:
                     type: object
                     properties:
-                      message:
+                      questions:
+                        type: array
+                        description: Ordered list of questions shown in the agent creation wizard
+                        items:
+                          type: object
+                          properties:
+                            text:
+                              type: string
+                            type:
+                              type: string
+                              description: "Question input type (e.g. `text`, `select`)"
+                            options:
+                              type: array
+                              items:
+                                type: string
+                            examples:
+                              type: object
+                              description: Pre-filled sample answers keyed by label. `"default"` is always present.
+                              additionalProperties:
+                                type: string
+                      exampleLabels:
+                        type: array
+                        description: Labels other than `"default"` that example answer sets exist for
+                        items:
+                          type: string
+                      defaultLabel:
                         type: string
-                        description: Human-readable outcome message
-                        enum:
-                          - Agent archived
-                          - Agent unarchived
-        "400":
-          $ref: "#/components/responses/BadRequestError"
+                        example: default
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
-        "403":
-          $ref: "#/components/responses/ForbiddenError"
-        "404":
-          description: Agent not found
-        "409":
-          description: |
-            Conflict — agent is already in the requested state, or is linked to an active campaign.
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
-  /agent/{id}/duplicate:
-    post:
-      summary: Duplicate agent to another organization
-      x-fern-sdk-group-name: agents
-      x-fern-sdk-method-name: duplicate_agent
-      description: |
-        Duplicates a SINGLE_PROMPT agent's live active version into a target organization
-        (can also be the same organization). Copies all versioned configuration but strips
-        organization-specific resources: knowledge base tools are removed, default variable
-        values are blanked, and a new avatar is generated. The duplicate starts with a
-        published V1 as its active version.
-
-        **400 is returned when:**
-        - The source agent is archived (`"Cannot duplicate an archived agent"`)
-        - The agent has no `activeVersionId` (`"This agent has no active version and cannot be duplicated"`)
-        - The active version exists but is not published/active (`"This agent has no active published version and cannot be duplicated"`)
-        - The agent is not `SINGLE_PROMPT` workflow type
+  /agent/{id}/widget-config:
+    get:
+      operationId: getAgentWidgetConfig
+      summary: Get widget configuration
+      description: Returns the current web widget configuration for the agent. Also includes `assistantId` (same as the agent ID) as a convenience field for the widget embed code.
       tags:
         - Agents
       security:
         - BearerAuth: []
       parameters:
-        - in: path
-          name: id
+        - name: id
+          in: path
           required: true
           schema:
             type: string
-          description: The ID of the source agent to duplicate
+          description: Agent ObjectId
+      responses:
+        "200":
+          description: Widget configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: All fields may be absent if not yet configured
+                    properties:
+                      assistantId:
+                        type: string
+                        description: Same as the agent ID — convenience field for the widget embed code
+                      position:
+                        type: string
+                        enum: [bottom-right, bottom-left, top-right, top-left]
+                      size:
+                        type: string
+                        enum: [tiny, compact, full]
+                      borderRadius:
+                        type: number
+                      mode:
+                        type: string
+                        enum: [chat, voice]
+                      theme:
+                        type: string
+                        enum: [light, dark]
+                      baseColor:
+                        type: string
+                      accentColor:
+                        type: string
+                      title:
+                        type: string
+                      startButtonText:
+                        type: string
+                      endButtonText:
+                        type: string
+                      avatarUrl:
+                        type: string
+                        nullable: true
+                      voiceShowTranscript:
+                        type: boolean
+                      consentRequired:
+                        type: boolean
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Agent not found
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+    patch:
+      operationId: updateAgentWidgetConfig
+      summary: Update widget configuration
+      description: |
+        Updates the web widget configuration for the agent. Only provided fields are updated (partial update). When `avatarUrl` is changed, the old CDN avatar is automatically deleted from S3. The `avatarUrl` must be a URL from the platform's CDN domain — use `POST /agent/{id}/avatar/presigned-url` to upload first.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Agent ObjectId
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - targetOrganizationId
               properties:
-                targetOrganizationId:
-                  type: string
-                  pattern: "^[a-fA-F0-9]{24}$"
-                  description: |
-                    MongoDB ObjectId of the target organization. Must be a 24-character hex string.
-                    The authenticated user must be a member of this organization.
-                  example: "60d0fe4f5311236168a109ca"
+                widgetConfig:
+                  type: object
+                  description: All fields are optional — only provided fields are updated
+                  properties:
+                    position:
+                      type: string
+                      enum: [bottom-right, bottom-left, top-right, top-left]
+                    size:
+                      type: string
+                      enum: [tiny, compact, full]
+                    borderRadius:
+                      type: number
+                      minimum: 0
+                      maximum: 50
+                    mode:
+                      type: string
+                      enum: [chat, voice]
+                    theme:
+                      type: string
+                      enum: [light, dark]
+                    baseColor:
+                      type: string
+                    accentColor:
+                      type: string
+                    agentBubbleColor:
+                      type: string
+                    textOnAccentColor:
+                      type: string
+                    secondaryTextColor:
+                      type: string
+                    primaryTextColor:
+                      type: string
+                    title:
+                      type: string
+                    startButtonText:
+                      type: string
+                    endButtonText:
+                      type: string
+                    ctaTitle:
+                      type: string
+                      nullable: true
+                    ctaSubtitle:
+                      type: string
+                      nullable: true
+                    ctaName:
+                      type: string
+                      nullable: true
+                    widgetName:
+                      type: string
+                      nullable: true
+                    avatarUrl:
+                      type: string
+                      nullable: true
+                      description: Must be a platform CDN URL. Use `POST /agent/{id}/avatar/presigned-url` to obtain one.
+                    voiceEmptyMessage:
+                      type: string
+                      nullable: true
+                    voiceActiveEmptyMessage:
+                      type: string
+                      nullable: true
+                    chatEmptyMessage:
+                      type: string
+                      nullable: true
+                    chatFirstMessage:
+                      type: string
+                      nullable: true
+                    chatPlaceholder:
+                      type: string
+                    voiceShowTranscript:
+                      type: boolean
+                    consentRequired:
+                      type: boolean
+                    consentTitle:
+                      type: string
+                    consentContent:
+                      type: string
+                    consentStorageKey:
+                      type: string
+                      nullable: true
+                    publicKey:
+                      type: string
+                    allowlist:
+                      type: array
+                      items:
+                        type: string
       responses:
-        "201":
-          description: Agent duplicated successfully
+        "200":
+          description: Updated widget configuration
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  status:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: The updated widgetConfig object
+        "400":
+          description: Invalid agent ID or `avatarUrl` is not a valid CDN URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Agent not found
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/avatar/presigned-url:
+    post:
+      operationId: getAgentAvatarPresignedUrl
+      summary: Get avatar upload URL
+      description: |
+        Generates a pre-signed S3 upload URL for the agent's widget avatar image. Upload the image directly to S3 using the returned `presignedUrl`, then save `cdnUrl` as the agent's avatar via `PATCH /agent/{id}/widget-config`.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Agent ObjectId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, contentType, fileSize]
+              properties:
+                fileName:
+                  type: string
+                  description: Original file name (used to construct the S3 key)
+                contentType:
+                  type: string
+                  description: "MIME type — must start with `image/`"
+                fileSize:
+                  type: number
+                  description: File size in bytes — must be > 0 and ≤ 2 MB (2,097,152 bytes)
+      responses:
+        "200":
+          description: Pre-signed upload URL and CDN URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
                     type: boolean
                     example: true
                   data:
                     type: object
                     properties:
-                      _id:
+                      presignedUrl:
                         type: string
-                        example: "60d0fe4f5311236168a109cb"
-                        description: The ID of the newly created agent
+                        description: S3 pre-signed PUT URL (expires in 300 s)
+                      cdnUrl:
+                        type: string
+                        description: Final public CDN URL to save on the agent after upload
+                      key:
+                        type: string
+                        description: S3 object key
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
-        "403":
-          description: Forbidden — authenticated user is not a member of the target organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BadRequestErrorResponse"
         "404":
-          description: |
-            Not found. Possible messages:
-            - `"Agent not found"` — source agent doesn't exist or doesn't belong to the caller's org
-            - `"Target organization not found"` — the `targetOrganizationId` doesn't exist
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BadRequestErrorResponse"
+          description: Agent not found
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
-
-  # ── Deprecated: Workflow endpoints (still live) ────────────────────────
-  # Both still work in production and are actively used by customers, but
-  # they bypass the versioning system. Prefer PATCH /agent/{id}/drafts/{draftId}/config
-  # for writes and GET /agent/{id} for reads.
 
   /agent/{id}/workflow:
     get:
@@ -839,6 +1213,148 @@ paths:
           $ref: "#/components/responses/UnauthorizedErrorResponse"
         "404":
           description: Workflow not found.
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/call-logs:
+    get:
+      operationId: getAgentCallLogs
+      summary: Get agent call logs
+      description: Returns paginated call logs for a specific agent.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Agent ObjectId
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number (default 1)
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Records per page (default 10)
+      responses:
+        "200":
+          description: Paginated call logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      callLogs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            callId:
+                              type: string
+                            callStatus:
+                              type: string
+                            callType:
+                              type: string
+                            fromNumber:
+                              type: string
+                            toNumber:
+                              type: string
+                            createdAt:
+                              type: string
+                              format: date-time
+                            callDuration:
+                              type: number
+                              description: Call duration in milliseconds
+                      totalCount:
+                        type: number
+                      page:
+                        type: number
+                      offset:
+                        type: number
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/archive:
+    delete:
+      operationId: deleteAgent
+      summary: Archive or unarchive an agent
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: archive_agent
+      description: |
+        Soft-archives the agent — it is excluded from listings and stops accepting calls,
+        but all data is preserved and the operation is fully reversible.
+
+        Pass `?on=false` to unarchive (restore) a previously archived agent.
+
+        **409 is returned when:**
+        - The agent is already in the requested state (`"Agent is already archived"` / `"Agent is already active"`)
+        - The agent is linked to an active campaign (`"Agent is associated with the [status] campaign "[name]". Complete or remove the campaign before archiving."`)
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: on
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: |
+            `true` (default) — archive the agent.
+            `false` — unarchive (restore) a previously archived agent.
+      responses:
+        "200":
+          description: Agent archived or unarchived successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        description: Human-readable outcome message
+                        enum:
+                          - Agent archived
+                          - Agent unarchived
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Agent not found
+        "409":
+          description: |
+            Conflict — agent is already in the requested state, or is linked to an active campaign.
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -1119,6 +1635,12 @@ paths:
                                 medianLatency:
                                   type: number
                                   description: Median turn latency in milliseconds
+                                minLatency:
+                                  type: number
+                                  description: Minimum turn latency in milliseconds
+                                maxLatency:
+                                  type: number
+                                  description: Maximum turn latency in milliseconds
                                 turns:
                                   type: number
                                   description: Total number of turns in the call
@@ -1127,6 +1649,27 @@ paths:
                                   items:
                                     type: number
                                   description: Array of individual turn latencies in milliseconds
+                                transitions:
+                                  type: array
+                                  description: Per-turn timing breakdown.
+                                  items:
+                                    type: object
+                                    properties:
+                                      turn:
+                                        type: number
+                                      user_end:
+                                        type: number
+                                        description: Timestamp (ms) when the user finished speaking
+                                      bot_start:
+                                        type: number
+                                        description: Timestamp (ms) when the agent started responding
+                                      latency:
+                                        type: number
+                                        description: Latency for this turn in milliseconds
+                                processedAt:
+                                  type: string
+                                  format: date-time
+                                  description: When the latency metrics were computed.
                       pagination:
                         type: object
                         properties:
@@ -1317,12 +1860,32 @@ paths:
                                   type: number
                                 medianLatency:
                                   type: number
+                                minLatency:
+                                  type: number
+                                maxLatency:
+                                  type: number
                                 turns:
                                   type: number
                                 latencies:
                                   type: array
                                   items:
                                     type: number
+                                transitions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      turn:
+                                        type: number
+                                      user_end:
+                                        type: number
+                                      bot_start:
+                                        type: number
+                                      latency:
+                                        type: number
+                                processedAt:
+                                  type: string
+                                  format: date-time
                       total:
                         type: integer
                         description: Number of logs returned
@@ -2147,9 +2710,27 @@ paths:
                     type: integer
                     description: TTS latency in milliseconds (only for `tts_completed`)
                   metrics:
-                    type: object
-                    additionalProperties: true
-                    description: Metrics payload for `metrics`
+                    type: array
+                    description: |
+                      Per-turn metrics payload for `metrics` events. Server emits an
+                      **array** of `{processor, model, value}` entries (one per
+                      pipeline stage), not a single object. The SDK previously
+                      dropped every `metrics` SSE event with a pydantic
+                      ValidationError when this was typed as an object (122
+                      events on a 40s call); typing it as an array of objects
+                      fixes the decode.
+                    items:
+                      type: object
+                      properties:
+                        processor:
+                          type: string
+                          description: Pipeline stage that produced the metric (e.g. `pulse_stt`, `electron_llm`, `lightning_tts`).
+                        model:
+                          type: string
+                          description: Concrete model/version identifier within the processor (e.g. `pulse-large english_v4.1`).
+                        value:
+                          type: number
+                          description: Metric value — typically milliseconds for latency metrics.
                   node_id:
                     type: string
                     description: Node ID for `agent_node_state`
@@ -2333,6 +2914,8 @@ paths:
   /campaign:
     get:
       summary: Retrieve all campaigns
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: list
       description: Get all campaigns for the authenticated organization.
       tags:
         - Campaigns
@@ -2490,6 +3073,8 @@ paths:
           $ref: "#/components/responses/InternalServerErrorResponse"
     post:
       summary: Create a campaign
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: create
       description: Create a campaign
       tags:
         - Campaigns
@@ -2634,6 +3219,8 @@ paths:
   /campaign/{id}:
     get:
       summary: Get a campaign
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: get
       description: Get a campaign with detailed metrics
       tags:
         - Campaigns
@@ -2782,6 +3369,8 @@ paths:
           $ref: "#/components/responses/InternalServerErrorResponse"
     delete:
       summary: Delete a campaign
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: delete
       description: Delete a campaign
       tags:
         - Campaigns
@@ -2817,6 +3406,8 @@ paths:
   /campaign/{id}/start:
     post:
       summary: Start or resume a campaign
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: start_or_resume
       description: |
         Queues the campaign for processing and returns immediately — the campaign is **not** yet
         running when the 202 is returned. Poll `GET /campaign/{id}` and watch for `status: "running"`.
@@ -2869,6 +3460,8 @@ paths:
   /campaign/{id}/pause:
     post:
       summary: Pause a campaign
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: pause
       description: |
         Queues a pause task and returns immediately — the campaign is **not** immediately paused.
         Poll `GET /campaign/{id}` and watch for `status: "paused"`.
@@ -2907,6 +3500,8 @@ paths:
       description: Get all knowledge bases
       tags:
         - Knowledge Base
+      x-fern-sdk-group-name: knowledge_base
+      x-fern-sdk-method-name: list
       security:
         - BearerAuth: []
       responses:
@@ -2933,6 +3528,8 @@ paths:
       description: Create a knowledge base
       tags:
         - Knowledge Base
+      x-fern-sdk-group-name: knowledge_base
+      x-fern-sdk-method-name: create
       security:
         - BearerAuth: []
       requestBody:
@@ -2978,6 +3575,8 @@ paths:
       description: Get a knowledge base
       tags:
         - Knowledge Base
+      x-fern-sdk-group-name: knowledge_base
+      x-fern-sdk-method-name: get
       security:
         - BearerAuth: []
       parameters:
@@ -3010,6 +3609,8 @@ paths:
           $ref: "#/components/responses/InternalServerErrorResponse"
     delete:
       summary: Delete a knowledge base
+      x-fern-sdk-group-name: knowledge_base
+      x-fern-sdk-method-name: delete
       description: |
         Delete a knowledge base.
 
@@ -3356,6 +3957,8 @@ paths:
   /knowledgebase/get-sitemap-urls:
     post:
       summary: Extract URLs from a sitemap.xml
+      x-fern-sdk-group-name: knowledge_base
+      x-fern-sdk-method-name: extract_sitemap_urls
       description: |
         Fetches a website's `sitemap.xml`, parses it, and returns the list of URLs inside. Use this before calling `POST /knowledgebase/{id}/scrape-urls` to let the customer pick which URLs they actually want indexed.
 
@@ -3418,6 +4021,8 @@ paths:
   /knowledgebase/{id}/scrape-urls:
     post:
       summary: Scrape a list of URLs into a knowledge base
+      x-fern-sdk-group-name: knowledge_base
+      x-fern-sdk-method-name: scrape_urls
       description: |
         Adds one or more URLs to a knowledge base by scraping each page's content, chunking it, and indexing for retrieval. Typical flow:
 
@@ -3569,6 +4174,8 @@ paths:
   /product/phone-numbers:
     get:
       summary: Get acquired phone numbers
+      x-fern-sdk-group-name: phone_numbers
+      x-fern-sdk-method-name: list
       description: |
         Retrieve all platform-purchased telephony numbers (Twilio/Plivo) for the organization.
 
@@ -3693,6 +4300,8 @@ paths:
   /product/get-available-numbers:
     get:
       summary: Search rentable phone numbers in inventory
+      x-fern-sdk-group-name: phone_numbers
+      x-fern-sdk-method-name: search_rentable
       description: |
         Searches the telephony provider's inventory for available numbers matching the requested country (and optional area code). Returns up to 5 candidates per call.
 
@@ -3824,6 +4433,8 @@ paths:
   /product/rent-number:
     post:
       summary: Rent a phone number from the telephony inventory
+      x-fern-sdk-group-name: phone_numbers
+      x-fern-sdk-method-name: rent
       description: |
         Rents an available number returned by [`GET /product/get-available-numbers`](#operation/searchAvailablePhoneNumbers). Charges the organization the prorated amount returned by [`GET /product/proration-amount`](#operation/getProrationAmount) immediately, then the monthly rate on each billing cycle.
 
@@ -3876,6 +4487,8 @@ paths:
   /product/release-number:
     post:
       summary: Release a rented phone number
+      x-fern-sdk-group-name: phone_numbers
+      x-fern-sdk-method-name: release
       description: |
         Releases a phone number previously rented via `POST /product/rent-number`. The number goes back into provider inventory and recurring charges stop.
 
@@ -3988,6 +4601,8 @@ paths:
   /product/import-phone-number:
     post:
       summary: Import a SIP phone number
+      x-fern-sdk-group-name: phone_numbers
+      x-fern-sdk-method-name: import_sip
       description: |
         Bring your own SIP trunk by importing an existing phone number with its SIP termination URL.
         Atoms creates both inbound and outbound SIP trunks so your number works for making and receiving calls through the platform.
@@ -4270,6 +4885,8 @@ paths:
   /compliance/applications:
     post:
       summary: Submit a compliance application
+      x-fern-sdk-group-name: compliance
+      x-fern-sdk-method-name: submit
       description: |
         Submit a new compliance application with end-user details and supporting documents.
         One application is allowed per organization per country per number type per user type.
@@ -4386,6 +5003,8 @@ paths:
   /compliance/applications/{id}:
     patch:
       summary: Resubmit a rejected compliance application
+      x-fern-sdk-group-name: compliance
+      x-fern-sdk-method-name: resubmit
       description: |
         Resubmit a previously rejected compliance application with corrected documents.
         Only applications in `rejected` status can be resubmitted. All documents must be
@@ -4550,6 +5169,8 @@ paths:
           $ref: "#/components/responses/InternalServerErrorResponse"
     post:
       summary: Create a webhook
+      x-fern-sdk-group-name: webhooks
+      x-fern-sdk-method-name: create
       description: |
         Create a new webhook with subscriptions for specific agents and events.
 
@@ -4697,6 +5318,8 @@ paths:
   /webhook/{id}:
     delete:
       summary: Delete a webhook
+      x-fern-sdk-group-name: webhooks
+      x-fern-sdk-method-name: delete
       description: |
         Delete a webhook by its ID.
 
@@ -4942,6 +5565,8 @@ paths:
   /audience:
     get:
       summary: Get all audiences
+      x-fern-sdk-group-name: audience
+      x-fern-sdk-method-name: list
       description: Retrieve all audiences created by the authenticated user. Users can only access audiences they have created.
       tags:
         - Audience
@@ -5148,6 +5773,8 @@ paths:
   /audience/{id}:
     get:
       summary: Get audience by ID
+      x-fern-sdk-group-name: audience
+      x-fern-sdk-method-name: get
       description: |
         Retrieve a specific audience by its ID.
         Note: if the audience belongs to a different organization, the API returns 404 (not 403) — ownership is deliberately obscured.
@@ -5717,6 +6344,8 @@ paths:
   /agent/{id}/drafts:
     post:
       summary: Create a draft
+      x-fern-sdk-group-name: agent_versioning_drafts
+      x-fern-sdk-method-name: create_draft
       description: Create a new draft from an existing published version or another draft. At least one of sourceVersionId or sourceDraftId is required (both may be sent simultaneously).
       tags:
         - Agent Versioning - Drafts
@@ -5849,6 +6478,8 @@ paths:
 
     patch:
       summary: Rename a draft
+      x-fern-sdk-group-name: agent_versioning_drafts
+      x-fern-sdk-method-name: rename_draft
       description: |
         Rename a draft. For config changes, use PATCH /agent/{id}/drafts/{draftId}/config instead.
       tags:
@@ -5901,6 +6532,8 @@ paths:
 
     delete:
       summary: Discard a draft
+      x-fern-sdk-group-name: agent_versioning_drafts
+      x-fern-sdk-method-name: discard_draft
       description: Discard (soft-delete) a draft. Only the draft creator or an admin can discard.
       tags:
         - Agent Versioning - Drafts
@@ -5969,7 +6602,25 @@ paths:
                     example: true
                   data:
                     type: object
-                    description: Section-by-section diff between the draft and the comparison target
+                    properties:
+                      sections:
+                        type: object
+                        description: Keyed by config section name. Each entry shows the before/after state of that section.
+                        additionalProperties:
+                          type: object
+                          properties:
+                            before:
+                              nullable: true
+                              description: Section value in the comparison target (null if section did not exist)
+                            after:
+                              nullable: true
+                              description: Section value in the draft (null if section was removed)
+                            changed:
+                              type: boolean
+                              description: Whether the section differs between the draft and the comparison target
+                      hasChanges:
+                        type: boolean
+                        description: True if at least one section differs
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
@@ -5984,6 +6635,8 @@ paths:
   /agent/{id}/drafts/{draftId}/publish:
     post:
       summary: Publish a draft
+      x-fern-sdk-group-name: agent_versioning_drafts
+      x-fern-sdk-method-name: publish_draft
       description: Publish a draft as a new versioned release. Optionally activate it immediately.
       tags:
         - Agent Versioning - Drafts
@@ -6071,6 +6724,8 @@ paths:
   /agent/{id}/drafts/{draftId}/config:
     patch:
       summary: Edit draft config (prompt, tools, post-call metrics, voice, etc.)
+      x-fern-sdk-group-name: agent_versioning_drafts
+      x-fern-sdk-method-name: update_draft_config
       description: |
         Update the configuration of a draft. This single endpoint is how every
         agent-level config field is changed: prompt, tools, voice, language,
@@ -6279,6 +6934,8 @@ paths:
   /agent/{id}/versions/compare-metrics:
     get:
       summary: Compare metrics between two versions
+      x-fern-sdk-group-name: agent_versioning_versions
+      x-fern-sdk-method-name: compare_version_metrics
       description: Compare analytics/call metrics between two published versions over an optional date range.
       tags:
         - Agent Versioning - Versions
@@ -6395,6 +7052,8 @@ paths:
 
     patch:
       summary: Update version metadata (label, description, pin only)
+      x-fern-sdk-group-name: agent_versioning_versions
+      x-fern-sdk-method-name: update_version_metadata
       description: |
         Update a published version's label, description, or pinned status. At least one field is required.
         Published versions (both active and inactive) are config-immutable — their agent
@@ -6444,6 +7103,8 @@ paths:
   /agent/{id}/versions/{versionId}/activate:
     patch:
       summary: Activate a version
+      x-fern-sdk-group-name: agent_versioning_versions
+      x-fern-sdk-method-name: activate_version
       description: |
         Set a published version as the active version for the agent. The previously
         active version is deactivated. This does not modify the version's config — it
@@ -6793,6 +7454,2017 @@ paths:
                       type: string
                     example: ["Prompt scoring failed"]
 
+  /analytics/call-counts-log:
+    get:
+      operationId: getCallCountsLog
+      summary: List call records
+      description: Paginated listing of call records for the organization, with optional filtering by agent, campaign, call type, and date range.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number (default 1)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Records per page (default 10)
+      responses:
+        "200":
+          description: Paginated call records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      calls:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            orgId:
+                              type: string
+                            callId:
+                              type: string
+                            agentId:
+                              type: string
+                            agentName:
+                              type: string
+                            campaignId:
+                              type: string
+                            campaignName:
+                              type: string
+                            callType:
+                              type: string
+                            timestamp:
+                              type: string
+                              format: date-time
+                            callDurationMs:
+                              type: number
+                            callLatencyMs:
+                              type: number
+                            costSpent:
+                              type: number
+                            disconnectionReason:
+                              type: string
+                            source:
+                              type: string
+                            recordingUrl:
+                              type: string
+                            callStatus:
+                              type: string
+                            fromNumber:
+                              type: string
+                            toNumber:
+                              type: string
+                      totalCalls:
+                        type: number
+                      totalPages:
+                        type: number
+                      currentPage:
+                        type: number
+                      limit:
+                        type: number
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/call-counts-by-day:
+    get:
+      operationId: getCallCountsByDay
+      summary: Call counts by day
+      description: Returns call counts aggregated per calendar day, suitable for bar chart visualizations.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Daily call counts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      callCountsByDay:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            day:
+                              type: string
+                              format: date
+                            count:
+                              type: number
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/conversation-details/{callId}:
+    get:
+      operationId: getConversationDetails
+      summary: Get conversation details
+      description: Returns the full transcript and event stream for a specific call, reconstructed from ClickHouse event data.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: callId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique identifier for the call
+      responses:
+        "200":
+          description: Call transcript and events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      callId:
+                        type: string
+                      agentName:
+                        type: string
+                      workflowType:
+                        type: string
+                      transcript:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            role:
+                              type: string
+                            text:
+                              type: string
+                            timestamp:
+                              type: string
+                              format: date-time
+                      events:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            eventType:
+                              type: string
+                            timestamp:
+                              type: string
+                              format: date-time
+                      fromNumber:
+                        type: string
+                      toNumber:
+                        type: string
+                      callDurationMs:
+                        type: number
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Call log not found or does not belong to the organization
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/usage/timeseries:
+    get:
+      operationId: getUsageTimeseries
+      summary: Credit usage timeseries
+      description: Returns daily credit usage over a date range.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Daily credit usage
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      dateRange:
+                        type: object
+                        properties:
+                          from:
+                            type: string
+                            format: date
+                          to:
+                            type: string
+                            format: date
+                      dayWiseCredits:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            date:
+                              type: string
+                              format: date
+                            credits:
+                              type: number
+                      totalCredits:
+                        type: number
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/dashboard:
+    get:
+      operationId: getDashboard
+      summary: Full dashboard data
+      description: |
+        Batched endpoint that fetches all dashboard panels in a single request by running six sub-queries in parallel. Equivalent to calling `summary`, `call-volume-timeseries`, `call-outcomes-timeseries`, `pickup-rate-by-number`, `hourly-performance`, and `duration-stats` individually. Each field may be absent if that sub-query failed; partial data is still returned.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: All dashboard panel data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      summary:
+                        type: object
+                        description: "See GET /analytics/summary"
+                      callVolumeTimeseries:
+                        type: object
+                        description: "See GET /analytics/call-volume-timeseries"
+                      callOutcomesTimeseries:
+                        type: object
+                        description: "See GET /analytics/call-outcomes-timeseries"
+                      pickupRateByNumber:
+                        type: object
+                        description: "See GET /analytics/pickup-rate-by-number"
+                      hourlyPerformance:
+                        type: object
+                        description: "See GET /analytics/hourly-performance"
+                      durationStats:
+                        type: object
+                        description: "See GET /analytics/duration-stats"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/summary:
+    get:
+      operationId: getAnalyticsSummary
+      summary: Dashboard summary KPIs
+      description: Returns high-level KPI metrics with current period value, previous period value, and percent change for trend comparison.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: KPI summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      totalCalls:
+                        $ref: "#/components/schemas/AnalyticsTrendMetric"
+                      pickupRate:
+                        $ref: "#/components/schemas/AnalyticsTrendMetric"
+                      avgDurationMs:
+                        $ref: "#/components/schemas/AnalyticsTrendMetric"
+                      medianDurationMs:
+                        type: number
+                      totalDurationMs:
+                        $ref: "#/components/schemas/AnalyticsTrendMetric"
+                      uniqueUsersReached:
+                        $ref: "#/components/schemas/AnalyticsTrendMetric"
+                      totalCost:
+                        $ref: "#/components/schemas/AnalyticsTrendMetric"
+                      period:
+                        $ref: "#/components/schemas/AnalyticsDateRange"
+                      previousPeriod:
+                        $ref: "#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/call-volume-timeseries:
+    get:
+      operationId: getCallVolumeTimeseries
+      summary: Call volume timeseries
+      description: Returns daily call volume broken down by outcome (answered, no-answer, failed, cancelled) over the selected period.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Daily call volume by outcome
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      dataPoints:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            date:
+                              type: string
+                              format: date
+                            totalCalls:
+                              type: number
+                            answeredCalls:
+                              type: number
+                            noAnswerCalls:
+                              type: number
+                            failedCalls:
+                              type: number
+                            cancelledCalls:
+                              type: number
+                            totalDurationMs:
+                              type: number
+                      period:
+                        $ref: "#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/pickup-rate-by-number:
+    get:
+      operationId: getPickupRateByNumber
+      summary: Pickup rate by phone number
+      description: Returns pickup rate and call volume broken down per originating phone number.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Per-number pickup rate and call volume
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      numbers:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            phoneNumber:
+                              type: string
+                            totalCalls:
+                              type: number
+                            answeredCalls:
+                              type: number
+                            pickupRate:
+                              type: number
+                            lastActiveDate:
+                              type: string
+                              format: date
+                      period:
+                        $ref: "#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/phone-number-trends:
+    get:
+      operationId: getPhoneNumberTrends
+      summary: Phone number trends
+      description: Returns per-phone-number call volume and pickup rate as a daily timeseries, useful for spotting number-level degradation over time.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Per-number daily timeseries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      trends:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            phoneNumber:
+                              type: string
+                            dataPoints:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  date:
+                                    type: string
+                                    format: date
+                                  totalCalls:
+                                    type: number
+                                  answeredCalls:
+                                    type: number
+                                  pickupRate:
+                                    type: number
+                      period:
+                        $ref: "#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/hourly-performance:
+    get:
+      operationId: getHourlyPerformance
+      summary: Hourly performance
+      description: Returns call volume and performance metrics broken down by hour of day (0–23), aggregated across the selected date range.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Hourly performance breakdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      hours:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            hour:
+                              type: integer
+                              minimum: 0
+                              maximum: 23
+                              description: Hour of day (0–23)
+                            totalCalls:
+                              type: number
+                            answeredCalls:
+                              type: number
+                            pickupRate:
+                              type: number
+                            totalDurationMs:
+                              type: number
+                            avgDurationMs:
+                              type: number
+                      period:
+                        $ref: "#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/call-outcomes-timeseries:
+    get:
+      operationId: getCallOutcomesTimeseries
+      summary: Call outcomes timeseries
+      description: Returns a daily breakdown of call outcomes (answered, no-answer, failed, cancelled) over time, plus totals for the entire period.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Daily call outcomes and period totals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      dataPoints:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            date:
+                              type: string
+                              format: date
+                            answered:
+                              type: number
+                            noAnswer:
+                              type: number
+                            failed:
+                              type: number
+                            cancelled:
+                              type: number
+                            total:
+                              type: number
+                      totals:
+                        type: object
+                        properties:
+                          answered:
+                            type: number
+                          noAnswer:
+                            type: number
+                          failed:
+                            type: number
+                          cancelled:
+                            type: number
+                          total:
+                            type: number
+                      period:
+                        $ref: "#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/duration-stats:
+    get:
+      operationId: getDurationStats
+      summary: Call duration statistics
+      description: Returns call duration statistics including average, median, p90, p95 percentiles, and the proportion of short vs. long calls.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Duration statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      avgDurationMs:
+                        type: number
+                      medianDurationMs:
+                        type: number
+                      p90DurationMs:
+                        type: number
+                      p95DurationMs:
+                        type: number
+                      shortCallsPercent:
+                        type: number
+                      longCallsPercent:
+                        type: number
+                      totalCalls:
+                        type: number
+                      totalDurationMs:
+                        type: number
+                      period:
+                        $ref: "#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/weekly-trends:
+    get:
+      operationId: getWeeklyTrends
+      summary: Weekly call trends
+      description: Returns per-week call performance metrics including volume, pickup rate, and duration percentiles (p50, p90). Each week starts on Monday.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Weekly performance metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      weeks:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            weekStart:
+                              type: string
+                              format: date
+                              description: Monday that starts this week
+                            totalCalls:
+                              type: number
+                            answeredCalls:
+                              type: number
+                            pickupRate:
+                              type: number
+                            avgDuration:
+                              type: number
+                              description: Average call duration in seconds
+                            medianDuration:
+                              type: number
+                              description: Median call duration in seconds
+                            p90Duration:
+                              type: number
+                              description: p90 call duration in seconds
+                            shortCallsPercent:
+                              type: number
+                            longCallsPercent:
+                              type: number
+                      period:
+                        $ref: "#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/agent-performance:
+    get:
+      operationId: getAgentPerformance
+      summary: Agent performance
+      description: Returns per-agent call performance metrics. Supports sorting and limiting results.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+          description: "Field to sort by (e.g. `totalCalls`, `pickupRate`, `avgDuration`)"
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+          description: Sort direction
+        - name: limit
+          in: query
+          schema:
+            type: integer
+          description: Maximum number of agents to return
+      responses:
+        "200":
+          description: Per-agent performance metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      agents:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            agentId:
+                              type: string
+                            totalCalls:
+                              type: number
+                            answeredCalls:
+                              type: number
+                            pickupRate:
+                              type: number
+                            avgDuration:
+                              type: number
+                              description: Average call duration in seconds
+                            totalCost:
+                              type: number
+                      period:
+                        $ref: "#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/concurrency:
+    get:
+      operationId: getAnalyticsConcurrency
+      summary: Concurrent call counts
+      description: Returns minute-by-minute concurrent call counts for a specific day. Optionally broken down per agent.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: "Date to query (YYYY-MM-DD)"
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Filter to a specific agent
+        - name: includeAgents
+          in: query
+          schema:
+            type: string
+            enum: ["true", "false"]
+          description: Pass `true` to include a per-agent breakdown in the response
+      responses:
+        "200":
+          description: Minute-level concurrency data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      date:
+                        type: string
+                        format: date
+                      dataPoints:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            minute:
+                              type: string
+                              description: "Time in HH:MM format"
+                            concurrentCalls:
+                              type: number
+                      peakConcurrent:
+                        type: number
+                      avgConcurrent:
+                        type: number
+                      totalMinutes:
+                        type: number
+                      byAgent:
+                        type: array
+                        description: Only present when `includeAgents=true`
+                        items:
+                          type: object
+                          properties:
+                            agentId:
+                              type: string
+                            peakConcurrent:
+                              type: number
+                            avgConcurrent:
+                              type: number
+                            totalCalls:
+                              type: number
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/call-start-distribution:
+    get:
+      operationId: getCallStartDistribution
+      summary: Call start distribution
+      description: Returns the distribution of call start times as minute-level buckets for a specific day, showing when calls were initiated throughout the day.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: "Date to query (YYYY-MM-DD)"
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Filter to a specific agent
+      responses:
+        "200":
+          description: Minute-level call start distribution
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      date:
+                        type: string
+                        format: date
+                      dataPoints:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            minute:
+                              type: string
+                              description: "Time in HH:MM format"
+                            callCount:
+                              type: number
+                      totalCalls:
+                        type: number
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/daily-call-summary:
+    get:
+      operationId: getDailyCallSummary
+      summary: Daily call summary
+      description: Returns an aggregate call summary for a specific day. Live in-progress and in-queue counts are merged from real-time data on top of the historical data.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: "Date to query (YYYY-MM-DD)"
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Filter to a specific agent
+      responses:
+        "200":
+          description: Daily call summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      date:
+                        type: string
+                        format: date
+                      totalCalls:
+                        type: number
+                      answeredCalls:
+                        type: number
+                      unansweredCalls:
+                        type: number
+                      failedCalls:
+                        type: number
+                      pickupRate:
+                        type: number
+                      inProgressCalls:
+                        type: number
+                      inQueueCalls:
+                        type: number
+                      totalDurationMs:
+                        type: number
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /analytics/attempt-cohort:
+    get:
+      operationId: getAttemptCohort
+      summary: Attempt cohort analysis
+      description: Returns cohort analysis of call attempt numbers, showing how pickup rate changes across the 1st, 2nd, 3rd (etc.) attempts to reach the same number, including cumulative rates and marginal gain per additional attempt.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Attempt cohort data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      cohorts:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            attemptNumber:
+                              type: number
+                            totalCalls:
+                              type: number
+                            answeredCalls:
+                              type: number
+                            pickupRate:
+                              type: number
+                            cumulativeAnswered:
+                              type: number
+                            cumulativeRate:
+                              type: number
+                            marginalGain:
+                              type: number
+                      totalUniqueNumbers:
+                        type: number
+                      maxAttemptsSeen:
+                        type: number
+                      avgAttemptsToPickup:
+                        type: number
+                      period:
+                        $ref: "#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /call-actions:
+    post:
+      operationId: createCallAction
+      summary: Create a call action
+      description: |
+        Creates a new call action for an agent. Call actions define automated behaviors that fire at specific points in a call lifecycle.
+
+        - **`trigger`** actions fire to initiate an outbound call and require `config.phoneNumberFieldName`.
+        - **`post-call`** actions fire after a call ends (e.g. to update a CRM record).
+      tags:
+        - Call Actions
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agentId, category, provider, config]
+              properties:
+                agentId:
+                  type: string
+                  description: Agent this action belongs to (ObjectId)
+                category:
+                  type: string
+                  enum: [trigger, post-call]
+                  description: When the action fires
+                provider:
+                  type: string
+                  description: "Integration provider (e.g. `hubspot`, `salesforce`)"
+                action_type:
+                  type: string
+                  enum: [create, update]
+                  description: The operation to perform on the provider object
+                object:
+                  type: string
+                  description: "Provider object type to act on (e.g. `contact`, `deal`)"
+                config:
+                  type: object
+                  required: []
+                  properties:
+                    phoneNumberFieldName:
+                      type: string
+                      description: "Provider field name that contains the phone number. Required when `category` is `trigger`."
+                    conditions:
+                      type: array
+                      description: Filter conditions — action only fires when all conditions match
+                      items:
+                        $ref: "#/components/schemas/CallActionCondition"
+                    body:
+                      type: string
+                      description: Request body template or payload for the provider action
+      responses:
+        "201":
+          description: Call action created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/CallAction"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+    get:
+      operationId: listCallActions
+      summary: List call actions
+      description: Returns a paginated list of call actions for the organization, filtered by agent. Optionally filter by category or provider.
+      tags:
+        - Call Actions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Filter by agent (ObjectId)
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number (default 1)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Records per page (default 10)
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [trigger, post-call]
+          description: Filter by category
+        - name: provider
+          in: query
+          schema:
+            type: string
+          description: Filter by provider name
+      responses:
+        "200":
+          description: Paginated list of call actions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      callActions:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/CallAction"
+                      totalCount:
+                        type: number
+                      page:
+                        type: number
+                      limit:
+                        type: number
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /call-actions/{id}:
+    get:
+      operationId: getCallAction
+      summary: Get a call action
+      description: Returns a single call action by ID. Scoped to the authenticated organization.
+      tags:
+        - Call Actions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Call action ObjectId
+      responses:
+        "200":
+          description: Call action
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/CallAction"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Call action not found
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+    put:
+      operationId: updateCallAction
+      summary: Update a call action
+      description: Updates an existing call action. All body fields are optional — only provided fields are updated.
+      tags:
+        - Call Actions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Call action ObjectId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category:
+                  type: string
+                  enum: [trigger, post-call]
+                  description: Change when the action fires
+                provider:
+                  type: string
+                  description: Change the integration provider
+                action_type:
+                  type: string
+                  enum: [create, update]
+                  description: Change the operation type
+                object:
+                  type: string
+                  description: Change the provider object type
+                config:
+                  type: object
+                  properties:
+                    phoneNumberFieldName:
+                      type: string
+                      description: Update the phone number field mapping
+                    conditions:
+                      type: array
+                      description: Replace the full conditions array
+                      items:
+                        $ref: "#/components/schemas/CallActionCondition"
+                    body:
+                      type: string
+                      description: Update the payload body
+      responses:
+        "200":
+          description: Updated call action
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/CallAction"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Call action not found
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+    delete:
+      operationId: deleteCallAction
+      summary: Delete a call action
+      description: Permanently deletes a call action. Scoped to the authenticated organization.
+      tags:
+        - Call Actions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Call action ObjectId
+      responses:
+        "200":
+          description: Call action deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Call action deleted successfully
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Call action not found
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /integration/modify-webengage-integration:
+    post:
+      operationId: modifyWebEngageIntegration
+      summary: Create or update WebEngage integration
+      description: |
+        Creates or updates the WebEngage integration for the organization. Replaces the existing integration configuration with the provided credential set(s).
+
+        **Note:** This endpoint returns a direct JSON response — not the standard `{ success, data }` wrapper used by other endpoints.
+      tags:
+        - Integrations
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [integrationSets]
+              properties:
+                integrationSets:
+                  type: array
+                  minItems: 1
+                  description: One or more WebEngage credential sets
+                  items:
+                    $ref: "#/components/schemas/WebEngageIntegrationSet"
+      responses:
+        "200":
+          description: Integration created or updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Integration created successfully
+                  data:
+                    type: object
+                    description: Integration details object
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Organization not found
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /integration/get-webengage-details:
+    get:
+      operationId: getWebEngageDetails
+      summary: Get WebEngage integration details
+      description: |
+        Returns the current WebEngage integration configuration for the organization.
+
+        **Note:** This endpoint returns a direct JSON response — not the standard `{ success, data }` wrapper used by other endpoints.
+      tags:
+        - Integrations
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: WebEngage integration details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Integration details retrieved successfully
+                  data:
+                    type: object
+                    description: Integration details object
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /concurrency:
+    get:
+      operationId: getConcurrency
+      summary: Get concurrency limits
+      description: |
+        Returns the organization's overall concurrency limit, how much is reserved across all agents, the remaining unreserved pool, and the per-agent reservation breakdown per call channel.
+      tags:
+        - Concurrency
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Concurrency overview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgLimit:
+                        type: number
+                        description: Total concurrent calls allowed for this organization
+                      totalReserved:
+                        type: number
+                        description: Sum of all agent reservations across all channels
+                      unreservedPool:
+                        type: number
+                        description: orgLimit minus totalReserved — capacity available to any agent
+                      agents:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            agentId:
+                              type: string
+                              description: Agent ObjectId
+                            agentName:
+                              type: string
+                            avatarUrl:
+                              type: string
+                              nullable: true
+                            webcall:
+                              type: number
+                              description: Reserved webcall slots
+                            outbound:
+                              type: number
+                              description: Reserved outbound call slots
+                            inbound:
+                              type: number
+                              description: Reserved inbound call slots
+                            chat:
+                              type: number
+                              description: Reserved chat slots
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /concurrency/reservations:
+    put:
+      operationId: updateConcurrencyReservations
+      summary: Update concurrency reservations
+      description: |
+        Updates concurrency reservations for one or more agents in a single request. Replaces the existing reservation values for each specified agent. **Admin role required.**
+      tags:
+        - Concurrency
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reservations]
+              properties:
+                reservations:
+                  type: array
+                  minItems: 1
+                  description: Array of agent reservations to update
+                  items:
+                    type: object
+                    required: [agentId, webcall, outbound, inbound, chat]
+                    properties:
+                      agentId:
+                        type: string
+                        description: Agent ObjectId
+                      webcall:
+                        type: integer
+                        minimum: 0
+                        description: Reserved webcall slots
+                      outbound:
+                        type: integer
+                        minimum: 0
+                        description: Reserved outbound call slots
+                      inbound:
+                        type: integer
+                        minimum: 0
+                        description: Reserved inbound call slots
+                      chat:
+                        type: integer
+                        minimum: 0
+                        description: Reserved chat slots
+      responses:
+        "200":
+          description: Reservations updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      updated:
+                        type: number
+                        description: Count of agent reservations updated
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /disposition-metric-templates:
+    get:
+      operationId: listDispositionMetricTemplates
+      summary: List disposition metric templates
+      description: |
+        Returns all available disposition metric templates. These reusable definitions are used to populate the post-call analytics metric picker when configuring an agent's `postCallAnalyticsConfig`. Only a user token is required — no organization context needed.
+      tags:
+        - Disposition Metric Templates
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Array of disposition metric templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        identifier:
+                          type: string
+                          description: Unique snake_case key (lowercase letters, digits, and underscores only)
+                          example: call_resolved
+                        dispositionMetricPrompt:
+                          type: string
+                          description: AI prompt used to extract this metric from the call transcript
+                        dispositionMetricType:
+                          type: string
+                          enum: [STRING, BOOLEAN, INTEGER, ENUM, DATETIME]
+                          description: |
+                            How the extracted value is interpreted:
+                            - `STRING` — free-text output
+                            - `BOOLEAN` — true/false outcome
+                            - `INTEGER` — whole number value
+                            - `ENUM` — one of a predefined set of choices
+                            - `DATETIME` — a date/time value
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
 components:
   securitySchemes:
     BearerAuth:
@@ -6826,6 +9498,105 @@ components:
         pattern: "^[a-f\\d]{24}$"
 
   schemas:
+    WebEngageIntegrationSet:
+      type: object
+      description: A single WebEngage credential set
+      required: [licenseCode, environment, apiKey]
+      properties:
+        licenseCode:
+          type: string
+          description: WebEngage license code
+        environment:
+          type: string
+          description: WebEngage environment identifier
+        apiKey:
+          type: string
+          description: WebEngage API key
+
+    CallActionCondition:
+      type: object
+      description: A filter condition evaluated against provider record fields
+      required: [field, operator, value]
+      properties:
+        field:
+          type: string
+          description: Provider record field name
+        operator:
+          type: string
+          enum: [eq, neq, gt, gte, lt, lte, in, nin, contains, notContains, startsWith, endsWith]
+          description: Comparison operator
+        value:
+          type: string
+          description: Value to compare against
+
+    CallAction:
+      type: object
+      description: A call action that fires automatically at a specific point in the call lifecycle
+      properties:
+        _id:
+          type: string
+          description: MongoDB ObjectId
+        organization:
+          type: string
+          description: Organization ObjectId
+        agentId:
+          type: string
+          description: Agent ObjectId this action belongs to
+        category:
+          type: string
+          enum: [trigger, post-call]
+          description: When the action fires
+        provider:
+          type: string
+          description: "Integration provider (e.g. `hubspot`, `salesforce`)"
+        action_type:
+          type: string
+          enum: [create, update]
+          description: The operation performed on the provider object
+        object:
+          type: string
+          description: "Provider object type (e.g. `contact`, `deal`)"
+        config:
+          type: object
+          properties:
+            phoneNumberFieldName:
+              type: string
+              description: "Provider field that contains the phone number (required for `trigger` actions)"
+            conditions:
+              type: array
+              items:
+                $ref: "#/components/schemas/CallActionCondition"
+            body:
+              type: string
+              description: Request body template or payload for the provider action
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AnalyticsTrendMetric:
+      type: object
+      description: A metric value with current and previous period values and percent change
+      properties:
+        current:
+          type: number
+        previous:
+          type: number
+        percentChange:
+          type: number
+
+    AnalyticsDateRange:
+      type: object
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+
     ApiResponse:
       type: object
       properties:
@@ -6833,6 +9604,106 @@ components:
           type: boolean
         data:
           type: object
+    WidgetConfig:
+      type: object
+      description: |
+        Configuration for the embeddable web widget. Used by `GET /agent/{id}/widget-config`
+        (returned with `assistantId` injected) and `PATCH /agent/{id}/widget-config`
+        (merge-patched). Every field is optional — only the fields present in a PATCH
+        request body are written, so partial updates are safe.
+      properties:
+        position:
+          type: string
+          enum: [bottom-right, bottom-left, top-right, top-left]
+        size:
+          type: string
+          enum: [tiny, compact, full]
+        borderRadius:
+          type: number
+          minimum: 0
+          maximum: 50
+        mode:
+          type: string
+          enum: [chat, voice]
+        theme:
+          type: string
+          enum: [light, dark]
+        baseColor:
+          type: string
+        accentColor:
+          type: string
+        agentBubbleColor:
+          type: string
+        textOnAccentColor:
+          type: string
+        secondaryTextColor:
+          type: string
+        primaryTextColor:
+          type: string
+        title:
+          type: string
+        startButtonText:
+          type: string
+          minLength: 1
+        endButtonText:
+          type: string
+          minLength: 1
+        ctaTitle:
+          type: string
+          nullable: true
+        ctaSubtitle:
+          type: string
+          nullable: true
+        ctaName:
+          type: string
+          nullable: true
+        widgetName:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+          description: |
+            Must start with the CDN distribution domain prefix configured for the
+            organization. Submit a non-CDN URL and the server returns 400.
+        voiceEmptyMessage:
+          type: string
+          nullable: true
+        voiceActiveEmptyMessage:
+          type: string
+          nullable: true
+        chatEmptyMessage:
+          type: string
+          nullable: true
+        chatFirstMessage:
+          type: string
+          nullable: true
+        chatPlaceholder:
+          type: string
+          minLength: 1
+        voiceShowTranscript:
+          type: boolean
+        consentRequired:
+          type: boolean
+        consentTitle:
+          type: string
+          minLength: 1
+        consentContent:
+          type: string
+          minLength: 1
+        consentStorageKey:
+          type: string
+          nullable: true
+        publicKey:
+          type: string
+        assistantId:
+          type: string
+          description: Injected by `GET /agent/{id}/widget-config` (equals the agent ID).
+        allowlist:
+          type: array
+          items:
+            type: string
+          description: List of origins (domains) authorized to embed this widget.
     Product:
       type: object
       description: 'A phone-number product owned by the organization — either a platform-rented number (`productType: telephony`) or a SIP-imported number (`productType: custom-telephony`).'
@@ -7007,16 +9878,24 @@ components:
                 model:
                   type: string
                   enum:
+                    - waves_lightning_v3_1
+                    - gpt-realtime
+                    - gpt-realtime-mini
                     - waves
                     - waves_lightning_large
                     - waves_lightning_v2
-                    - waves_lightning_v3_1
                     - waves_lightning_v3
-                    - waves_lightning_v2_http
-                    - gpt-realtime
-                    - gpt-realtime-mini
-                  default: waves_lightning_large
-                  description: The TTS model to use.
+                  default: waves_lightning_v3_1
+                  description: |
+                    The TTS model to use. Use `waves_lightning_v3_1` for the
+                    recommended Waves voice path (default), or `gpt-realtime` /
+                    `gpt-realtime-mini` for OpenAI realtime models (require
+                    `workflowType: single_prompt`).
+
+                    The other tokens (`waves`, `waves_lightning_large`,
+                    `waves_lightning_v2`, `waves_lightning_v3`) are kept for
+                    backwards compatibility with existing agents and should
+                    not be used for new agents.
                 voiceId:
                   type: string
                   default: nyah
@@ -7495,13 +10374,25 @@ components:
               properties:
                 model:
                   type: string
-                  description: The model of the synthesizer
+                  description: |
+                    The TTS model of the synthesizer. Use `waves_lightning_v3_1`
+                    for the recommended Waves voice path (default), or
+                    `gpt-realtime` / `gpt-realtime-mini` for OpenAI realtime models.
+
+                    The other tokens (`waves`, `waves_lightning_large`,
+                    `waves_lightning_large_voice_clone`, `waves_lightning_v2`,
+                    `waves_lightning_v3`) are kept for backwards compatibility
+                    with existing agents and should not be used for new agents.
                   enum:
+                    - waves_lightning_v3_1
+                    - gpt-realtime
+                    - gpt-realtime-mini
                     - waves
                     - waves_lightning_large
                     - waves_lightning_large_voice_clone
                     - waves_lightning_v2
-                  default: waves_lightning_large
+                    - waves_lightning_v3
+                  default: waves_lightning_v3_1
                 voiceId:
                   type: string
                   description: The voice ID of the synthesizer.
@@ -7642,6 +10533,213 @@ components:
         versionId:
           type: string
           description: Alias for `activeVersionId`.
+        allowInboundCall:
+          type: boolean
+          default: true
+          description: Whether the agent accepts inbound calls.
+        phoneNumber:
+          type: array
+          items:
+            type: string
+          description: |
+            Phone numbers attached to this agent (E.164 strings). Only present when
+            the agent has been linked to one or more telephony products.
+        visibleToEveryone:
+          type: boolean
+          default: false
+          description: Whether the agent is visible to all members of the organization (vs. only the creator).
+        speechFormatting:
+          type: boolean
+          description: |
+            Apply LLM-side speech formatting (e.g. expanding "$100" to "one hundred dollars")
+            before passing text to the synthesizer. Boolean; no default — when unset the
+            platform applies the per-organization default.
+        muteUserUntilFirstBotResponse:
+          type: boolean
+          default: false
+          description: When true, the user microphone is muted until the agent has spoken its first response.
+        interruptionBackoffTimer:
+          type: number
+          description: Seconds to wait after an interruption before the agent resumes speaking.
+        enableStyleGuide:
+          type: boolean
+          default: true
+          description: Whether to apply the platform's style-guide post-processing on agent responses.
+        callDispositionConfig:
+          type: string
+          default: ""
+          description: Free-form prompt used for call disposition classification (separate from `postCallAnalyticsConfig.dispositionMetrics`).
+        voiceMailDetectionConfig:
+          type: object
+          description: Voicemail detection settings.
+          properties:
+            enabled:
+              type: boolean
+              default: false
+            endText:
+              type: string
+              default: "Terminating call, you can call us back anytime. Thank you for calling."
+              description: Text spoken before the call is terminated when voicemail is detected.
+        smartTurnConfig:
+          type: object
+          description: Smart end-of-turn detection settings.
+          properties:
+            isEnabled:
+              type: boolean
+            waitTimeInSecs:
+              type: number
+              minimum: 0
+              maximum: 10
+        voiceDetectionConfig:
+          type: object
+          description: VAD (voice activity detection) tuning.
+          properties:
+            confidence:
+              type: number
+              minimum: 0
+              maximum: 1
+            minVolume:
+              type: number
+              minimum: 0
+              maximum: 1
+            triggerTimeInSecs:
+              type: number
+              minimum: 0
+              maximum: 10
+            releaseTimeInSecs:
+              type: number
+              minimum: 0
+              maximum: 10
+        denoisingConfig:
+          type: object
+          description: Audio denoising settings.
+          properties:
+            isEnabled:
+              type: boolean
+        redactionConfig:
+          type: object
+          description: PII/PCI redaction settings applied to transcripts.
+          properties:
+            isEnabled:
+              type: boolean
+        pronunciationDicts:
+          type: array
+          description: Custom pronunciation dictionary applied before synthesis.
+          items:
+            type: object
+            required: [word, pronunciation]
+            properties:
+              word:
+                type: string
+              pronunciation:
+                type: string
+        llmIdleTimeoutConfig:
+          type: object
+          description: |
+            Per-channel idle timeouts (seconds) after which the LLM is nudged when the user
+            stops speaking. `maxRetries` bounds how many nudges before the call ends.
+          properties:
+            chatTimeoutTimeInSecs:
+              type: number
+            webcallTimeoutTimeInSecs:
+              type: number
+            telephonyTimeoutTimeInSecs:
+              type: number
+            maxRetries:
+              type: number
+        sessionTimeoutConfig:
+          type: object
+          description: Maximum session duration before the call is automatically ended.
+          properties:
+            timeoutTimeInSecs:
+              type: number
+        timezone:
+          type: object
+          description: Agent timezone — used for time-of-day-sensitive prompts and analytics bucketing.
+          properties:
+            label:
+              type: string
+              default: "(GMT+0:00) UTC"
+            offset:
+              type: number
+              default: 0
+        postCallAnalyticsConfig:
+          $ref: "#/components/schemas/PostCallAnalyticsConfig"
+        widgetConfig:
+          type: object
+          description: |
+            Chat-widget rendering configuration (theme, copy, consent prompt). Only relevant
+            when the agent is exposed via the embeddable widget; ignored by voice-only agents.
+          properties:
+            position:
+              type: string
+              enum: [bottom-right, bottom-left, top-right, top-left]
+              default: bottom-right
+            size:
+              type: string
+              enum: [tiny, compact, full]
+              default: full
+            mode:
+              type: string
+              enum: [chat, voice]
+              default: chat
+            theme:
+              type: string
+              enum: [light, dark]
+              default: light
+            baseColor:
+              type: string
+              default: "#ffffff"
+            accentColor:
+              type: string
+              default: "#2d9d9f"
+            agentBubbleColor:
+              type: string
+              default: "#f3f4f6"
+            textOnAccentColor:
+              type: string
+              default: "#FFFFFF"
+            secondaryTextColor:
+              type: string
+              default: "#6b7280"
+            primaryTextColor:
+              type: string
+              default: "#111827"
+            startButtonText:
+              type: string
+              default: Start
+            endButtonText:
+              type: string
+              default: End
+            ctaName:
+              type: string
+              default: Talk to Atoms
+            widgetName:
+              type: string
+              default: Atoms
+            avatarUrl:
+              type: string
+              nullable: true
+            chatPlaceholder:
+              type: string
+              default: "Type your message..."
+            consentRequired:
+              type: boolean
+              default: false
+            consentTitle:
+              type: string
+              default: "Privacy Agreement"
+            consentContent:
+              type: string
+              description: Long-form consent body shown before the user can interact.
+            assistantId:
+              type: string
+              nullable: true
+            allowlist:
+              type: array
+              items:
+                type: string
+              description: Allowed origin hostnames for widget embedding.
         _resolvedConfig:
           type: object
           additionalProperties: true
@@ -9078,7 +12176,40 @@ components:
           schema:
             $ref: "#/components/schemas/InternalServerErrorResponse"
 
+    BadRequestErrorResponse:
+      description: Bad request — validation failed or required field missing.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BadRequestErrorResponse"
+
+    NotFoundErrorResponse:
+      description: Resource not found — the referenced ID does not exist or does not belong to the caller's organization.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: boolean
+                example: false
+              errors:
+                type: array
+                items:
+                  type: string
+                example: ["Resource not found"]
+
 tags:
+  - name: Integrations
+    description: Third-party platform integrations. Currently supports WebEngage — a customer engagement platform. Credentials are stored per organization as one or more integration sets.
+  - name: Concurrency
+    description: Manage organization-wide concurrency limits and per-agent call slot reservations across webcall, outbound, inbound, and chat channels.
+  - name: Disposition Metric Templates
+    description: Reusable post-call analytics metric definitions. Each template specifies an identifier, an AI extraction prompt, and a value type (STRING, BOOLEAN, INTEGER, ENUM, DATETIME).
+  - name: Call Actions
+    description: Automated behaviors that fire at specific points in the call lifecycle — trigger actions initiate outbound calls, post-call actions update CRM records after a call ends.
+  - name: Analytics
+    description: Analytics and reporting endpoints for call metrics, trends, usage, and dashboard data.
   - name: Prompt Scoring
     description: Score and analyse agent prompts across quality dimensions
   - name: Agent Templates

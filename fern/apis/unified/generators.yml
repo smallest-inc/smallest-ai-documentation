@@ -7,6 +7,11 @@ auth-schemes:
   bearer-auth:
     scheme: bearer
     token:
+      # Name the SDK constructor parameter `api_key` (Python) / `apiKey` (TS) —
+      # NOT the Fern default `token`. This preserves the 4.4.7 surface where
+      # customers write `SmallestAI(api_key=...)`; without this the 5.0.0
+      # regen would silently break to `SmallestAI(token=...)`.
+      name: api_key
       # Match the env var name used by the hand-written helpers
       # (smallestai.atoms.helpers.{call,campaign,audience,kb}) and the
       # cookbook .env.sample files — see app.smallest.ai/dashboard/api-keys.
@@ -78,12 +83,33 @@ groups:
   python-sdk:
     generators:
       - name: fernapi/fern-python-sdk
+        # Kept on 5.12.12 — the version 5.0.0 shipped on, CI-green.
+        #
+        # PR #262 attempted a downgrade to 4.61.3 to "restore" sub-package
+        # __init__ type exports under `exclude_types_from_init_exports: true`.
+        # Empirical regen test showed this was the wrong fix:
+        #   - 4.61.3's `core/` is missing helpers (`encode_path_param`,
+        #     `_make_default_async_client`) that our preserved/.fernignore'd
+        #     files import from → mypy failures on regen.
+        #   - 4.61.3 also did NOT restore the sub-package type exports — the
+        #     empty `__init__` symptom that motivated the downgrade reproduces
+        #     on it.
+        # So the downgrade broke `core/` API compatibility AND didn't achieve
+        # its goal. Reverted here.
+        #
+        # The real fix for the sub-package import surface lives SDK-side:
+        # `.fernignore` the 3 sub-package __init__s (waves already is; add
+        # webhooks + prompt_scoring) so the hand-written type exports
+        # persist across regens. That keeps us on a coherent 5.12.12 `core/`
+        # with no version skew.
         version: 5.12.12
-        output:
-          location: pypi
-          package-name: smallestai
+        # PyPI publishing is handled by the canonical
+        # `smallest-inc/smallest-python-sdk` repo's own ci.yml — Fern just
+        # opens a regen PR against that repo. The previous `output.location:
+        # pypi` block here would double-publish whenever a regen merged, so
+        # it is intentionally removed.
         github:
-          repository: smallest-inc/smallest-ai-python-sdk
+          repository: smallest-inc/smallest-python-sdk
           mode: pull-request
         config:
           package_name: smallestai

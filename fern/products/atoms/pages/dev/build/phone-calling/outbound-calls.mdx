@@ -4,7 +4,7 @@ sidebarTitle: "Outbound Calls"
 description: "Make phone calls programmatically with your AI agent."
 ---
 
-Use `start_an_outbound_call()` to dial any phone number and connect it to your agent. This is the **production** outbound surface — full `variables` support for per-call personalization, optional caller-ID rotation, and version pinning.
+Use `start_outbound_call()` to dial any phone number and connect it to your agent. This is the **production** outbound surface — full `variables` support for per-call personalization, optional caller-ID rotation, and version pinning.
 
 <Note>
 **Not to be confused with `/agent/{id}/versions/{versionId}/test-call`.** That endpoint is a debug surface bound to a specific agent draft or version. It only accepts `mode` and `toPhone`, doesn't carry per-call variables, and counts against test-call slot limits. For real outbound traffic — campaigns, lead callbacks, anything customer-facing — use the pattern on this page (which maps to `POST /conversation/outbound`).
@@ -18,7 +18,7 @@ from smallestai import SmallestAI
 # Reads SMALLEST_API_KEY from the environment, or pass api_key="sk_..." explicitly
 client = SmallestAI()
 
-response = client.atoms.calls.start_an_outbound_call(
+response = client.atoms.calls.start_outbound_call(
     agent_id="your-agent-id",
     phone_number="+14155551234",
 )
@@ -32,7 +32,7 @@ print(f"Call started: {response.data.conversation_id}")
 
 ## Parameters
 
-These are the parameters the Python SDK's `start_an_outbound_call()` method accepts today.
+These are the parameters the Python SDK's `start_outbound_call()` method accepts today.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -71,7 +71,7 @@ print("Call started:", response.json()["data"]["conversationId"])
 Pass `variables` to carry caller-specific values into the conversation — names, lead source, amounts, anything the agent should reference.
 
 ```python
-response = client.atoms.calls.start_an_outbound_call(
+response = client.atoms.calls.start_outbound_call(
     agent_id="your-agent-id",
     phone_number="+14155551234",
     variables={
@@ -104,7 +104,7 @@ Save this ID to retrieve transcripts and analytics later.
 
 ```python
 try:
-    response = client.atoms.calls.start_an_outbound_call(
+    response = client.atoms.calls.start_outbound_call(
         agent_id="agent-123",
         phone_number="+14155551234",
     )
