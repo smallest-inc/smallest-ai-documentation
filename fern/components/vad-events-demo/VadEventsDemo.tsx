@@ -1,40 +1,22 @@
 import React from "react";
 
-import cleanFixture from "./fixtures/clean.json";
-import multiFixture from "./fixtures/multi-turn.json";
-import noTailFixture from "./fixtures/no-tail.json";
+// Fixtures are committed as TS modules (not JSON) because Fern's MDX
+// bundler does not resolve relative JSON imports. Each fixture exports a
+// typed `Fixture` object captured live from the production Pulse STT
+// WebSocket with vad_events=true.
+import { fixture as cleanFixture } from "./fixtures/clean";
+import { fixture as multiFixture } from "./fixtures/multi-turn";
+import { fixture as noTailFixture } from "./fixtures/no-tail";
+import type { AnyEvent, Fixture, SpeechEvent } from "./types";
 
-// Audio fixtures live alongside the JSON. The bundler resolves these to
-// runtime URLs so they ship with the docs build and stay cache-busted on
-// content changes.
-import cleanAudioUrl from "./assets/clean.mp3";
-import multiAudioUrl from "./assets/multi-turn.mp3";
-import noTailAudioUrl from "./assets/no-tail.mp3";
-
-type EventBase = { type: string; session_id?: string };
-type SpeechEvent = EventBase & { type: "speech_started" | "speech_ended"; timestamp: number };
-type TranscriptEvent = EventBase & {
-  type: "transcription";
-  transcript: string;
-  is_final: boolean;
-  is_last?: boolean;
-  timestamp_est: number;
-};
-type AnyEvent = SpeechEvent | TranscriptEvent;
-
-type Fixture = {
-  name: string;
-  audio: string;
-  duration_s: number;
-  sample_rate: number;
-  waveform: number[];
-  events: AnyEvent[];
-};
+// Audio files live under fern/docs/assets/vad-events/ (Fern static asset
+// root). They are served at /assets/vad-events/<name>.mp3 on the rendered
+// site. Each fixture's `audio` field carries the URL.
 
 const FIXTURES: Record<string, Fixture> = {
-  clean: cleanFixture as Fixture,
-  "multi-turn": multiFixture as Fixture,
-  "no-tail": noTailFixture as Fixture,
+  clean: cleanFixture,
+  "multi-turn": multiFixture,
+  "no-tail": noTailFixture,
 };
 
 const FIXTURE_LABELS: Record<string, { title: string; subtitle: string }> = {
@@ -52,11 +34,8 @@ const FIXTURE_LABELS: Record<string, { title: string; subtitle: string }> = {
   },
 };
 
-const FIXTURE_AUDIO: Record<string, string> = {
-  clean: cleanAudioUrl as unknown as string,
-  "multi-turn": multiAudioUrl as unknown as string,
-  "no-tail": noTailAudioUrl as unknown as string,
-};
+// Each fixture's `audio` field already points at the served URL
+// (/assets/vad-events/<name>.mp3) — no separate mapping needed.
 
 function eventTimestamp(e: AnyEvent): number {
   return e.type === "transcription" ? e.timestamp_est : e.timestamp;
@@ -210,7 +189,7 @@ export const VadEventsDemo: React.FC = () => {
       {/* Audio + transport */}
       <audio
         ref={audioRef}
-        src={FIXTURE_AUDIO[activeFixture]}
+        src={fixture.audio}
         preload="metadata"
         onTimeUpdate={onTimeUpdate}
         onEnded={onEnded}
