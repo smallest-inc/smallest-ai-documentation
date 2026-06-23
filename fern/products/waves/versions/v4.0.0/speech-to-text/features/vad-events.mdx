@@ -5,7 +5,7 @@ description: 'Acoustic `speech_started` / `speech_ended` events delivered on the
 
 <Badge color="purple">Real-Time</Badge>
 
-Flip one query parameter and the same Pulse STT WebSocket also emits acoustic voice-activity events — `speech_started` and `speech_ended` — interleaved with your normal `transcription` messages. Useful for "is the user talking?" UI state, barge-in detection, mic visualization, and silence-driven turn boundaries that don't depend on transcript finalization.
+With one query parameter set, the Pulse STT WebSocket also emits acoustic voice-activity events — `speech_started` and `speech_ended` — interleaved with the normal `transcription` messages on the same connection. Boundaries are derived from the audio itself, independent of transcript finalization.
 
 VAD events are **streaming only** (WebSocket). The pre-recorded REST endpoint is unaffected.
 
@@ -122,7 +122,8 @@ async for raw in ws:
 ## Good to know
 
 - **Opt-in.** Without `vad_events=true`, nothing changes — you keep getting transcripts only. Existing integrations are unaffected.
-- **Acoustic, not lexical.** These are real voice-activity boundaries from the audio. They're independent of transcript finalization (`is_final`), so they won't line up exactly with words — that's expected.
+- **Acoustic, not lexical.** Boundaries are derived from the audio, independent of transcript finalization (`is_final`), so they won't line up exactly with words.
+- **`speech_ended` requires trailing silence.** The event fires when the model detects a run of silence after speech. If a connection closes with the speaker still mid-utterance — for example you call `close_stream` immediately at the end of an audio file — no trailing silence is observed and no `speech_ended` is emitted for that final region. To force the event at the end of a file, append a short pad (≈1 s) of zero-valued PCM before closing.
 - **Timestamps** are seconds from the first audio frame you sent on this connection.
 - **Match the sample rate.** Keep the `sample_rate` query param equal to the rate of the PCM you send, or both transcripts and event timing will drift.
 - **Tuning is not client-configurable.** Sensitivity threshold and debounce are model defaults; there are no `vad_threshold` / `vad_debounce` knobs.
