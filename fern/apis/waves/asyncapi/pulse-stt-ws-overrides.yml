@@ -135,6 +135,27 @@ servers:
             max_words:
               type: integer
               description: "Maximum number of words before forced finalization. Useful for keeping ITN chunks short and accurate."
+            vad_events:
+              type: string
+              enum:
+                - "true"
+                - "false"
+              default: "false"
+              description: |
+                Acoustic voice-activity events. When `true`, the server emits
+                `speech_started` and `speech_ended` JSON messages interleaved
+                with the `transcription` stream on the same connection.
+                Boundaries are derived from the audio signal and are independent
+                of transcript finalization (`is_final`); they do not coincide
+                with word boundaries. WebSocket only.
+            vad:
+              type: string
+              enum:
+                - "true"
+                - "false"
+              description: |
+                Alias for `vad_events`. When both are set, `vad_events`
+                takes precedence and `vad` is ignored.
 
 channels:
   pulseStream:
@@ -156,6 +177,12 @@ channels:
       pulseTranscriptionResponse.message:
         x-fern-type-name: PulseTranscriptionResponse
         name: PulseTranscriptionResponse
+      pulseSpeechStartedEvent.message:
+        x-fern-type-name: PulseSpeechStartedEvent
+        name: PulseSpeechStartedEvent
+      pulseSpeechEndedEvent.message:
+        x-fern-type-name: PulseSpeechEndedEvent
+        name: PulseSpeechEndedEvent
 
 operations:
   sendAudioData:
@@ -170,3 +197,6 @@ operations:
   receiveTranscription:
     action: receive
     x-fern-sdk-method-name: receive_transcribe_streaming_pulse
+  receiveVadEvents:
+    action: receive
+    x-fern-sdk-method-name: receive_vad_events_streaming_pulse
