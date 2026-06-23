@@ -240,6 +240,30 @@ servers:
             max_words:
               type: integer
               description: Maximum number of words before forced finalization. Useful for keeping ITN chunks short and accurate.
+            vad_events:
+              type: string
+              enum:
+              - 'true'
+              - 'false'
+              default: 'false'
+              description: |
+                Acoustic voice-activity events. When `true`, the server interleaves
+                `speech_started` and `speech_ended` JSON messages with the normal
+                `transcription` stream on the same WebSocket. Default `false` —
+                existing integrations stay transcripts-only.
+
+                Boundaries are acoustic (computed from the audio), independent of
+                transcript finalization, so they won't line up exactly with
+                `is_final` words — that's expected. Streaming only.
+            vad:
+              type: string
+              enum:
+              - 'true'
+              - 'false'
+              description: |
+                Alias for `vad_events`. If both are set, `vad_events` wins;
+                otherwise `vad` is used. Provided for parity with the param name
+                Gaurav's preview rig uses.
 channels:
   pulseStream:
     address: /waves/v1/pulse/get_text
@@ -450,6 +474,63 @@ channels:
             - '[FIRSTNAME_2]'
             - '[CREDITCARDCVV_1]'
             - '[TIME_2]'
+      pulseSpeechStartedEvent.message:
+        name: PulseSpeechStartedEvent
+        contentType: application/json
+        payload:
+          type: object
+          required:
+          - type
+          - session_id
+          - timestamp
+          properties:
+            type:
+              type: string
+              enum:
+              - speech_started
+              description: Discriminator. Always `speech_started` for this event.
+            session_id:
+              type: string
+              description: Same session identifier returned on the `transcription` messages — use it to correlate VAD events with transcript turns.
+            timestamp:
+              type: number
+              description: Acoustic onset of speech, in seconds from the first audio frame sent on this connection.
+          examples:
+          - type: speech_started
+            session_id: a1b2c3d4
+            timestamp: 1.84
+        description: |
+          Emitted the moment speech is detected after silence. Sent only when
+          `vad_events=true` (or the `vad` alias) was set on connect. Independent
+          of transcript finalization — won't line up exactly with `is_final`.
+      pulseSpeechEndedEvent.message:
+        name: PulseSpeechEndedEvent
+        contentType: application/json
+        payload:
+          type: object
+          required:
+          - type
+          - session_id
+          - timestamp
+          properties:
+            type:
+              type: string
+              enum:
+              - speech_ended
+              description: Discriminator. Always `speech_ended` for this event.
+            session_id:
+              type: string
+              description: Same session identifier returned on the `transcription` messages.
+            timestamp:
+              type: number
+              description: Acoustic offset of speech (end of a continuous voiced region), in seconds from the first audio frame.
+          examples:
+          - type: speech_ended
+            session_id: a1b2c3d4
+            timestamp: 4.52
+        description: |
+          Emitted after a run of silence following speech. Sent only when
+          `vad_events=true` was set on connect.
     description: |
       Transcribe audio in real time over a persistent WebSocket. The fit-for-purpose path for live captioning, voice agents, and any flow where you need partial transcripts as the user is still speaking.
 
@@ -560,6 +641,19 @@ operations:
     description: Get real-time transcription results as audio is processed
     messages:
     - $ref: '#/channels/pulseStream/messages/pulseTranscriptionResponse.message'
+  receiveVadEvents:
+    action: receive
+    channel:
+      $ref: '#/channels/pulseStream'
+    summary: 'Receive acoustic VAD events (opt-in via `vad_events=true`)'
+    description: |
+      `speech_started` and `speech_ended` JSON messages, interleaved with the
+      normal `transcription` stream when `vad_events=true` was set on connect.
+      Discriminate by the `type` field; existing transcript handlers stay
+      unchanged.
+    messages:
+    - $ref: '#/channels/pulseStream/messages/pulseSpeechStartedEvent.message'
+    - $ref: '#/channels/pulseStream/messages/pulseSpeechEndedEvent.message'
 components:
   securitySchemes:
     bearerAuth:
