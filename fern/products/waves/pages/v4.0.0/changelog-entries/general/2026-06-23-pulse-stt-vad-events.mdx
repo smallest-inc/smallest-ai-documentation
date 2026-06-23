@@ -1,27 +1,25 @@
 ---
-title: Pulse STT — opt-in `vad_events` on the streaming WebSocket
+title: Pulse STT — `vad_events` query parameter on the streaming WebSocket
 ---
 
-The Pulse streaming WebSocket now emits acoustic voice-activity events when `vad_events=true` is set on the connection query string. The same WebSocket interleaves two new JSON message types — `speech_started` and `speech_ended` — with your normal `transcription` messages, so you can react to talking and silence directly without waiting for transcript finalization.
+The Pulse STT WebSocket accepts a new query parameter, `vad_events`. When set to `true`, the server emits two additional JSON message types — `speech_started` and `speech_ended` — interleaved with the `transcription` stream on the same connection.
 
-## Enabling
+## Usage
 
-Add `vad_events=true` to your WebSocket URL. The alias `vad=true` works too; if both are set, `vad_events` wins.
+Set `vad_events=true` on the WebSocket URL. Default is `false`. `vad=true` is accepted as an alias; when both are set, `vad_events` takes precedence and `vad` is ignored.
 
 ```javascript
 const url = new URL("wss://api.smallest.ai/waves/v1/stt/live?model=pulse");
 url.searchParams.append("vad_events", "true");
 ```
 
-Default is `false` — existing integrations are unaffected.
-
-## Event payload
+## Event payloads
 
 ```json
 { "type": "speech_started", "session_id": "a1b2c3d4", "timestamp": 1.84 }
 { "type": "speech_ended",   "session_id": "a1b2c3d4", "timestamp": 4.52 }
 ```
 
-`timestamp` is seconds from the first audio frame sent on the connection. Boundaries are acoustic — independent of transcript finalization, so they won't line up exactly with `is_final` words.
+`timestamp` is measured in seconds from the first audio frame received on the connection. Boundaries are acoustic and independent of transcript finalization (`is_final`).
 
-Full reference: [VAD Events feature page](/waves/documentation/speech-to-text-pulse/features/vad-events).
+Full reference: [VAD Events](/waves/documentation/speech-to-text-pulse/features/vad-events).

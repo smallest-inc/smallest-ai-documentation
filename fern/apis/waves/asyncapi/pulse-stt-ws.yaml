@@ -247,22 +247,20 @@ servers:
               - 'false'
               default: 'false'
               description: |
-                Acoustic voice-activity events. When `true`, the server interleaves
-                `speech_started` and `speech_ended` JSON messages with the normal
-                `transcription` stream on the same WebSocket. Default `false` —
-                existing integrations stay transcripts-only.
-
-                Boundaries are acoustic (computed from the audio), independent of
-                transcript finalization, so they won't line up exactly with
-                `is_final` words — that's expected. Streaming only.
+                Acoustic voice-activity events. When `true`, the server emits
+                `speech_started` and `speech_ended` JSON messages interleaved
+                with the `transcription` stream on the same connection.
+                Boundaries are derived from the audio signal and are independent
+                of transcript finalization (`is_final`); they do not coincide
+                with word boundaries. WebSocket only.
             vad:
               type: string
               enum:
               - 'true'
               - 'false'
               description: |
-                Alias for `vad_events`. If both are set, `vad_events` wins;
-                otherwise `vad` is used.
+                Alias for `vad_events`. When both are set, `vad_events`
+                takes precedence and `vad` is ignored.
 channels:
   pulseStream:
     address: /waves/v1/pulse/get_text
@@ -499,9 +497,9 @@ channels:
             session_id: a1b2c3d4
             timestamp: 1.84
         description: |
-          Emitted the moment speech is detected after silence. Sent only when
-          `vad_events=true` (or the `vad` alias) was set on connect. Independent
-          of transcript finalization — won't line up exactly with `is_final`.
+          Emitted when speech onset is detected after silence. Sent only when
+          `vad_events=true` (or the `vad` alias) was set on connect. Acoustic
+          boundary, independent of transcript finalization (`is_final`).
       pulseSpeechEndedEvent.message:
         name: PulseSpeechEndedEvent
         contentType: application/json

@@ -1,17 +1,17 @@
 ---
 title: 'Voice Activity (VAD) events'
-description: 'Acoustic `speech_started` / `speech_ended` events delivered on the streaming Pulse STT WebSocket, alongside your normal transcripts.'
+description: 'Acoustic `speech_started` / `speech_ended` events emitted on the Pulse STT WebSocket alongside `transcription` messages when `vad_events=true` is set on the connection.'
 ---
 
 <Badge color="purple">Real-Time</Badge>
 
-With one query parameter set, the Pulse STT WebSocket also emits acoustic voice-activity events — `speech_started` and `speech_ended` — interleaved with the normal `transcription` messages on the same connection. Boundaries are derived from the audio itself, independent of transcript finalization.
+When `vad_events=true` is set on the WebSocket connection, the Pulse STT server emits two additional JSON message types — `speech_started` and `speech_ended` — interleaved with the `transcription` stream on the same socket. Event boundaries are derived from the audio signal and are independent of transcript finalization.
 
-VAD events are **streaming only** (WebSocket). The pre-recorded REST endpoint is unaffected.
+VAD events are **WebSocket only**. The pre-recorded REST endpoint does not emit them.
 
-## Enabling VAD events
+## Enabling
 
-Add `vad_events=true` to your WebSocket connection query string. Default is `false` — existing integrations stay transcripts-only.
+Set `vad_events=true` on the WebSocket URL. Default is `false`.
 
 ```javascript
 const url = new URL("wss://api.smallest.ai/waves/v1/stt/live?model=pulse");
@@ -25,9 +25,9 @@ const ws = new WebSocket(url.toString(), {
 });
 ```
 
-The alias `vad=true` works too. If both are set, `vad_events` wins.
+`vad=true` is accepted as an alias. When both are set, `vad_events` takes precedence and `vad` is ignored.
 
-## How it flows
+## Message sequence
 
 ```mermaid
 sequenceDiagram
@@ -36,25 +36,25 @@ sequenceDiagram
     participant Pulse as Pulse STT (WS)
 
     Client->>Pulse: connect ?vad_events=true
-    Client->>Pulse: binary PCM frames (continuous)
-    Note over Pulse: detects voiced region begin
+    Client->>Pulse: binary PCM frames
+    Note over Pulse: voiced region onset
     Pulse-->>Client: {"type":"speech_started", "timestamp":1.84}
     Pulse-->>Client: {"type":"transcription", "transcript":"hello", "is_final":false}
     Pulse-->>Client: {"type":"transcription", "transcript":"hello world", "is_final":true}
-    Note over Pulse: detects voiced region end
+    Note over Pulse: voiced region offset
     Pulse-->>Client: {"type":"speech_ended", "timestamp":4.52}
-    Client->>Pulse: more audio…
+    Client->>Pulse: binary PCM frames
 ```
 
-Boundaries are **acoustic**, not lexical — they're computed directly from the audio, so they don't line up exactly with `is_final` transcript turns. That's expected.
+Boundaries are acoustic, not lexical. They are computed from the audio signal independently of transcript finalization, so they do not coincide with `is_final` transcript turns.
 
 ## Event payloads
 
-Two new message types are interleaved with the normal `transcription` stream. Discriminate by the `type` field.
+The two message types are interleaved with `transcription` messages on the same socket. Discriminate on the `type` field.
 
 ### `speech_started`
 
-Emitted the moment speech is detected after silence.
+Emitted when speech onset is detected after silence.
 
 ```json
 {
@@ -66,7 +66,7 @@ Emitted the moment speech is detected after silence.
 
 ### `speech_ended`
 
-Emitted after a run of silence following speech.
+Emitted when a voiced region ends and silence is detected.
 
 ```json
 {
@@ -78,13 +78,13 @@ Emitted after a run of silence following speech.
 
 | Field | Type | Description |
 |---|---|---|
-| `type` | string | `speech_started` or `speech_ended` — the message-type discriminator. |
-| `session_id` | string | Same session identifier returned on every `transcription` message — use it to correlate VAD events with transcript turns when multiplexing. |
-| `timestamp` | number | Seconds from the first audio frame you sent on this connection. |
+| `type` | string | Message-type discriminator. One of `speech_started`, `speech_ended`. |
+| `session_id` | string | Session identifier. Matches the `session_id` returned on `transcription` messages from the same connection. |
+| `timestamp` | number | Seconds, measured from the first audio frame received on the connection. |
 
-## Handling the events
+## Handling
 
-Switch on `type` so VAD events route to your speaking-indicator logic while transcript messages flow through your existing handler unchanged.
+Discriminate on the `type` field. `transcription` messages route through the default branch unchanged.
 
 ```javascript
 ws.onmessage = (e) => {
@@ -98,7 +98,7 @@ ws.onmessage = (e) => {
       break;
     case "transcription":
     default:
-      handleTranscript(m);   // your existing path
+      handleTranscript(m);
       break;
   }
 };
@@ -111,19 +111,18 @@ async for raw in ws:
     m = json.loads(raw)
     t = m.get("type")
     if t == "speech_started":
-        print(f"▶ speech_started @ {m['timestamp']:.2f}s")
+        on_speech_start(m["timestamp"])
     elif t == "speech_ended":
-        print(f"■ speech_ended   @ {m['timestamp']:.2f}s")
+        on_speech_end(m["timestamp"])
     else:
-        # existing transcription handling
-        ...
+        handle_transcript(m)
 ```
 
-## Good to know
+## Notes
 
-- **Opt-in.** Without `vad_events=true`, nothing changes — you keep getting transcripts only. Existing integrations are unaffected.
-- **Acoustic, not lexical.** Boundaries are derived from the audio, independent of transcript finalization (`is_final`), so they won't line up exactly with words.
-- **`speech_ended` requires trailing silence.** The event fires when the model detects a run of silence after speech. If a connection closes with the speaker still mid-utterance — for example you call `close_stream` immediately at the end of an audio file — no trailing silence is observed and no `speech_ended` is emitted for that final region. To force the event at the end of a file, append a short pad (≈1 s) of zero-valued PCM before closing.
-- **Timestamps** are seconds from the first audio frame you sent on this connection.
-- **Match the sample rate.** Keep the `sample_rate` query param equal to the rate of the PCM you send, or both transcripts and event timing will drift.
-- **Tuning is not client-configurable.** Sensitivity threshold and debounce are model defaults; there are no `vad_threshold` / `vad_debounce` knobs.
+- **Opt-in.** When `vad_events` is unset or `false`, the connection emits only `transcription` messages.
+- **Acoustic, not lexical.** Boundaries are derived from the audio signal, independent of `is_final`. They do not coincide with word boundaries.
+- **`speech_ended` requires trailing silence.** The event is emitted when silence is detected after a voiced region. If the connection closes while the audio still contains voiced energy — for example, sending `close_stream` immediately after the last word of an audio file — no `speech_ended` is emitted for the final voiced region. To force emission at the end of a finite audio file, append a short pad (≈1 s) of zero-valued PCM before sending `close_stream`.
+- **`timestamp`** is measured in seconds from the first audio frame received on the connection.
+- **Sample rate.** The `sample_rate` query parameter must equal the rate of the PCM frames sent on the connection. Mismatch causes timing drift on both transcripts and VAD timestamps.
+- **No tuning parameters.** Sensitivity threshold and debounce use model-side defaults; the API exposes no per-connection tuning.
