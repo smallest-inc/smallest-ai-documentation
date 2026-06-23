@@ -152,13 +152,13 @@ def assert_doc_claims(messages: list[dict]) -> int:
 
     if failures:
         print()
-        print("FAIL — doc claims not met:")
+        print("FAIL: doc claims not met:")
         for f in failures:
             print(f"  - {f}")
         return 1
 
     print()
-    print("OK — doc claims match prod.")
+    print("OK: doc claims match prod.")
     return 0
 
 
@@ -172,7 +172,7 @@ async def main() -> int:
     chunks, sample_rate = pcm_frames(path, CHUNK_MS)
     # Append ~1.5s of silence so the model emits `speech_ended` for the trailing
     # voiced region. Without it, the audio ends mid-utterance and no silence
-    # boundary is detected — see the doc note on acoustic boundaries.
+    # boundary is detected. See the doc note on acoustic boundaries.
     silence_bytes = b"\x00\x00" * int(sample_rate * 1.5)
     bytes_per_chunk = int(sample_rate * (CHUNK_MS / 1000.0)) * 2
     silence_chunks = [

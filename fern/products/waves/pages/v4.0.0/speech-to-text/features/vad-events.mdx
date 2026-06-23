@@ -5,7 +5,7 @@ description: 'Acoustic `speech_started` / `speech_ended` events emitted on the P
 
 <Badge color="purple">Real-Time</Badge>
 
-When `vad_events=true` is set on the WebSocket connection, the Pulse STT server emits two additional JSON message types — `speech_started` and `speech_ended` — interleaved with the `transcription` stream on the same socket. Event boundaries are derived from the audio signal and are independent of transcript finalization.
+When `vad_events=true` is set on the WebSocket connection, the Pulse STT server emits two additional JSON message types: `speech_started` and `speech_ended`. They are interleaved with the `transcription` stream on the same socket. Event boundaries are derived from the audio signal and are independent of transcript finalization.
 
 VAD events are **WebSocket only**. The pre-recorded REST endpoint does not emit them.
 
@@ -122,7 +122,7 @@ async for raw in ws:
 
 - **Opt-in.** When `vad_events` is unset or `false`, the connection emits only `transcription` messages.
 - **Acoustic, not lexical.** Boundaries are derived from the audio signal, independent of `is_final`. They do not coincide with word boundaries.
-- **`speech_ended` requires trailing silence.** The event is emitted when silence is detected after a voiced region. If the connection closes while the audio still contains voiced energy — for example, sending `close_stream` immediately after the last word of an audio file — no `speech_ended` is emitted for the final voiced region. To force emission at the end of a finite audio file, append a short pad (≈1 s) of zero-valued PCM before sending `close_stream`.
+- **`speech_ended` requires trailing silence.** The event is emitted when silence is detected after a voiced region. If the connection closes while the audio still contains voiced energy, no `speech_ended` is emitted for the final voiced region. This happens, for example, when `close_stream` is sent immediately after the last word of an audio file. To force emission at the end of a finite audio file, append a short pad (about 1 second) of zero-valued PCM before sending `close_stream`.
 - **`timestamp`** is measured in seconds from the first audio frame received on the connection.
 - **Sample rate.** The `sample_rate` query parameter must equal the rate of the PCM frames sent on the connection. Mismatch causes timing drift on both transcripts and VAD timestamps.
 - **No tuning parameters.** Sensitivity threshold and debounce use model-side defaults; the API exposes no per-connection tuning.
