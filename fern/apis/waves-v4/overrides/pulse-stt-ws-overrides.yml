@@ -315,6 +315,29 @@ channels:
           type: integer
         required: false
         location: $message.header#/max_words
+      vad_events:
+        description: |
+          Acoustic voice-activity events. When `true`, the server emits
+          `speech_started` and `speech_ended` JSON messages interleaved
+          with the `transcription` stream on the same connection.
+          Boundaries are derived from the audio signal and are independent
+          of transcript finalization (`is_final`); they do not coincide
+          with word boundaries. WebSocket only.
+        enum:
+          - "true"
+          - "false"
+        default: "false"
+        required: false
+        location: $message.header#/vad_events
+      vad:
+        description: |
+          Alias for `vad_events`. When both are set, `vad_events` takes
+          precedence and `vad` is ignored.
+        enum:
+          - "true"
+          - "false"
+        required: false
+        location: $message.header#/vad
     messages:
       pulseAudioData.message:
         name: V4PulseAudioData
@@ -324,6 +347,10 @@ channels:
         name: V4PulseCloseStreamSignal
       pulseTranscriptionResponse.message:
         name: V4PulseTranscriptionResponse
+      pulseSpeechStartedEvent.message:
+        name: V4PulseSpeechStartedEvent
+      pulseSpeechEndedEvent.message:
+        name: V4PulseSpeechEndedEvent
 
 operations:
   sendAudioData:
