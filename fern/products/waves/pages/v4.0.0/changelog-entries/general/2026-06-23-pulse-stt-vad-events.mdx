@@ -1,0 +1,27 @@
+---
+title: Pulse STT — opt-in `vad_events` on the streaming WebSocket
+---
+
+The Pulse streaming WebSocket now emits acoustic voice-activity events when `vad_events=true` is set on the connection query string. The same WebSocket interleaves two new JSON message types — `speech_started` and `speech_ended` — with your normal `transcription` messages, so you can react to talking and silence directly without waiting for transcript finalization.
+
+## Enabling
+
+Add `vad_events=true` to your WebSocket URL. The alias `vad=true` works too; if both are set, `vad_events` wins.
+
+```javascript
+const url = new URL("wss://api.smallest.ai/waves/v1/stt/live?model=pulse");
+url.searchParams.append("vad_events", "true");
+```
+
+Default is `false` — existing integrations are unaffected.
+
+## Event payload
+
+```json
+{ "type": "speech_started", "session_id": "a1b2c3d4", "timestamp": 1.84 }
+{ "type": "speech_ended",   "session_id": "a1b2c3d4", "timestamp": 4.52 }
+```
+
+`timestamp` is seconds from the first audio frame sent on the connection. Boundaries are acoustic — independent of transcript finalization, so they won't line up exactly with `is_final` words.
+
+Full reference: [VAD Events feature page](/waves/documentation/speech-to-text-pulse/features/vad-events).
