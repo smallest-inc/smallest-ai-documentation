@@ -266,9 +266,17 @@ async def main() -> int:
         n_end = sum(1 for e in events if e["type"] == "speech_ended")
         n_tr = sum(1 for e in events if e["type"] == "transcription")
         print(f"  duration={duration_s:.2f}s  speech_started={n_start} speech_ended={n_end} transcription={n_tr}")
+        # Embed the MP3 as a base64 data URL so the demo works without any
+        # runtime asset hosting. Fern does not serve fern/docs/assets/ at
+        # runtime (those are MDX compile-time paths only), and PR previews
+        # cannot reach raw.githubusercontent.com/main until merge. Data
+        # URLs work in every environment with zero external dependencies.
+        import base64
+        mp3_b64 = base64.b64encode(mp3.read_bytes()).decode("ascii")
+        audio_data_url = f"data:audio/mpeg;base64,{mp3_b64}"
         fixture = {
             "name": name,
-            "audio": f"/assets/vad-events/{name}.mp3",
+            "audio": audio_data_url,
             "duration_s": round(duration_s, 3),
             "sample_rate": SAMPLE_RATE,
             "waveform": bars,
