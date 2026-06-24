@@ -3,10 +3,10 @@ title: 'Code Examples'
 description: 'Complete Python examples for transcribing pre-recorded audio with Pulse Pro and Pulse'
 ---
 
-Two end-to-end Python examples: a simple Pulse Pro transcription, and an advanced Pulse transcription that adds gender detection, emotion detection, speaker diarization, and sentence-level timestamps. Both call the unified `/waves/v1/stt/` endpoint with the `requests` library.
+Two end-to-end Python examples: a simple Pulse Pro transcription, and an advanced Pulse transcription that adds speaker diarization, sentence-level timestamps, and PII redaction. Both call the unified `/waves/v1/stt/` endpoint with the `requests` library.
 
 <Note>
-For plain English transcription where leaderboard accuracy matters most, use **Pulse Pro** (`?model=pulse-pro`). For multilingual audio or advanced features (gender, emotion, diarization with per-utterance speaker labels), use **Pulse** (`?model=pulse`). The endpoint and request shape are identical; only the `model` query param changes.
+For plain English transcription where leaderboard accuracy matters most, use **Pulse Pro** (`?model=pulse-pro`). For multilingual audio or advanced features (diarization with per-utterance speaker labels, redaction), use **Pulse** (`?model=pulse`). The endpoint and request shape are identical; only the `model` query param changes.
 </Note>
 
 ## Pulse Pro: basic transcription
@@ -64,9 +64,9 @@ if __name__ == "__main__":
     os.remove(wav_path)
 ```
 
-## Pulse: advanced features (gender, emotion, diarization, utterances)
+## Pulse: advanced features (diarization, utterances, redaction)
 
-Pulse supports gender detection, emotion detection, and per-utterance speaker labels. The example below enables all of them.
+Pulse supports per-utterance speaker labels and PII / PCI redaction. The example below enables both alongside word timestamps.
 
 <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
 
@@ -88,7 +88,7 @@ def preprocess_audio(input_path: str, output_path: str) -> str:
 
 
 def transcribe_with_features(audio_path: str) -> dict:
-    """Transcribe with Pulse + gender, emotion, diarization, utterances."""
+    """Transcribe with Pulse + diarization, utterances, redaction."""
     with open(audio_path, "rb") as f:
         audio_bytes = f.read()
     response = requests.post(
@@ -97,9 +97,9 @@ def transcribe_with_features(audio_path: str) -> dict:
             "model": "pulse",
             "language": "en",
             "word_timestamps": "true",
-            "gender_detection": "true",
-            "emotion_detection": "true",
             "diarize": "true",
+            "redact_pii": "true",
+            "redact_pci": "true",
         },
         headers={
             "Authorization": f"Bearer {API_KEY}",
@@ -118,14 +118,6 @@ def report(result: dict) -> None:
     print("=" * 60)
 
     print(f"\nTranscription: {result.get('transcription', 'N/A')}")
-
-    if result.get("gender") is not None:
-        print(f"\nGender: {result['gender']}")
-
-    if result.get("emotions"):
-        print("\nEmotion scores:")
-        for emotion, score in result["emotions"].items():
-            print(f"  {emotion.capitalize()}: {score:.4f}")
 
     utterances = result.get("utterances") or []
     if utterances:
@@ -170,17 +162,14 @@ pip install requests pydub
 |---|---|---|
 | Audio preprocessing | 16 kHz mono WAV, normalized, silence-trimmed | Same |
 | Transcription | Word-timestamps on | Word-timestamps on |
-| Gender detection | Not available on Pulse Pro | `gender` field on response |
-| Emotion detection | Not available on Pulse Pro | `emotions` object with 5 scores |
 | Speaker diarization | Not available on Pulse Pro | `diarize=true` plus per-utterance speaker labels |
 | Sentence-level utterances | Not available on Pulse Pro | `utterances[]` with start/end/speaker |
+| PII / PCI redaction | Available | Available |
 
 ## Expected output
 
 The Pulse advanced example prints:
 
-- Full transcription text
-- Detected gender (`male` / `female`)
-- Emotion scores: anger, disgust, fear, sadness, happiness
+- Full transcription text (with PII / PCI redacted)
 - Sentence-level utterances with timestamps and speaker IDs
 - A count of word-level timestamps
