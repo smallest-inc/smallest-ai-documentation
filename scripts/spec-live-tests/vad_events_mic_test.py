@@ -60,6 +60,10 @@ async def ws_to_stdout(ws, t0: float) -> None:
             continue
         try:
             m = json.loads(raw)
+            print(m)
+            import ipdb
+
+            ipdb.set_trace()
         except json.JSONDecodeError:
             continue
         t = m.get("type")
