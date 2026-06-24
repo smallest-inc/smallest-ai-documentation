@@ -101,12 +101,19 @@ export const VadEventsDemo: React.FC = () => {
     return undefined;
   }, [isPlaying]);
 
-  // Determine "current" event index based on playhead
+  // Determine "current" event index based on playhead.
+  // Scans the whole array (rather than stopping at the first out-of-order
+  // timestamp) so non-monotonic sequences still highlight correctly.
+  // Picks the latest event by timestamp that the playhead has crossed.
   const currentEventIdx = React.useMemo(() => {
     let idx = -1;
+    let bestTs = -Infinity;
     for (let i = 0; i < fixture.events.length; i++) {
-      if (eventTimestamp(fixture.events[i]) <= playheadS) idx = i;
-      else break;
+      const ts = eventTimestamp(fixture.events[i]);
+      if (ts <= playheadS && ts > bestTs) {
+        idx = i;
+        bestTs = ts;
+      }
     }
     return idx;
   }, [playheadS, fixture]);
