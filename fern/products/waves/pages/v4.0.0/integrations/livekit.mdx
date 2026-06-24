@@ -8,7 +8,7 @@ This guide walks you through integrating [Smallest AI](https://smallest.ai) TTS 
 
 The `livekit-plugins-smallestai` package provides two services:
 
-- **`smallestai.STT`** — real-time speech-to-text using the Pulse API, with streaming over WebSocket (~64ms TTFT) and batch transcription over HTTP
+- **`smallestai.STT`** — real-time speech-to-text using the Pulse API, with streaming over WebSocket (~150 ms TTFT at 1 concurrency) and batch transcription over HTTP
 - **`smallestai.TTS`** — ultra-low-latency text-to-speech using the Lightning API
 
 ## Code Example
@@ -90,7 +90,7 @@ stt = smallestai.STT(language="en", diarize=True)
 | `diarize` | `bool` | `False` | Enable speaker diarization — each word includes a speaker ID |
 | `eou_timeout_ms` | `int` | `0` | Milliseconds of silence before the server emits a final transcript. `0` disables server-side end-of-utterance detection (recommended — lets LiveKit's built-in turn detection control timing) |
 
-The STT service connects to `wss://api.smallest.ai/waves/v1/pulse/get_text` for streaming and `https://api.smallest.ai/waves/v1/pulse/get_text` for batch. Interim and final transcripts are both supported. `START_OF_SPEECH` is inferred from the first non-empty transcript.
+The STT service connects to `wss://api.smallest.ai/waves/v1/stt/live?model=pulse` for streaming and `https://api.smallest.ai/waves/v1/stt/?model=pulse` for batch. Interim and final transcripts are both supported. `START_OF_SPEECH` is inferred from the first non-empty transcript.
 
 ---
 
@@ -113,8 +113,8 @@ smallest_tts = smallestai.TTS(
 | --- | --- | --- | --- |
 | `api_key` | `str` | `$SMALLEST_API_KEY` | Your Smallest AI API key |
 | `model` | `str` | `"lightning_v3.1_pro"` | TTS model. `"lightning_v3.1_pro"` — premium 44.1 kHz pool with curated American, British, and Indian voices; `"lightning_v3.1"` — standard pool with 217 voices across 12 languages |
-| `voice_id` | `str` | auto | Voice ID for synthesis. Defaults to `"meher"` for `lightning_v3.1_pro` and `"sophia"` for `lightning_v3.1`. Pro voices must be paired with `lightning_v3.1_pro`; standard voices with `lightning_v3.1` |
-| `language` | `str` | `"en"` | Language code. `lightning_v3.1` supports 12 codes plus `"auto"`; `lightning_v3.1_pro` supports `"en"`, `"hi"`, and `"auto"` only — see the [model cards](/waves/model-cards/text-to-speech) for the full lists |
+| `voice_id` | `str` | auto | Voice ID for synthesis. Defaults to `"meher"` for `lightning_v3.1_pro` and `"magnus"` for `lightning_v3.1`. Pro voices must be paired with `lightning_v3.1_pro`; standard voices with `lightning_v3.1` — see the [Lightning v3.1 voice catalog](/waves/model-cards/text-to-speech/lightning-v-3-1#voice-catalog) and [Lightning v3.1 Pro voice catalog](/waves/model-cards/text-to-speech/lightning-v-3-1-pro#voice-catalog) |
+| `language` | `str` | `"en"` | Language code. `lightning_v3.1` supports 12 codes; `lightning_v3.1_pro` supports `"en"` (UK + American accented English) or `"hi"` (Indian English + Hindi code-switching), or omit to default to `en + hi` auto-detect — see the [model cards](/waves/model-cards/text-to-speech) for the full lists |
 | `speed` | `float` | `1.0` | Playback speed multiplier (0.5–2.0) |
 | `sample_rate` | `int` | `24000` | Output audio sample rate in Hz. Supported: `8000`, `16000`, `24000`, `44100` |
 | `output_format` | `str` | `"pcm"` | Output encoding for HTTP synthesis: `"pcm"`, `"mp3"`, `"wav"`, `"ulaw"`, `"alaw"`. WebSocket streaming always returns PCM. |

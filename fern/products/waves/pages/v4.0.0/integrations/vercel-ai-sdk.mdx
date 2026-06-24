@@ -40,7 +40,7 @@ import {
 const { audio } = await generateSpeech({
   model: smallestai.speech(DEFAULT_LIGHTNING_MODEL),
   text: 'Hello from Smallest AI!',
-  voice: 'sophia',
+  voice: 'magnus',
   language: 'auto',   // 'en', 'hi', 'es', ... — defaults to 'auto'
   speed: 1.0,
 });
@@ -86,7 +86,7 @@ export async function POST(req: Request) {
   const { audio } = await generateSpeech({
     model: smallestai.speech('lightning-v3.1'),
     text,
-    voice: voice || 'sophia',
+    voice: voice || 'magnus',
   });
 
   return new Response(Buffer.from(audio.uint8Array), {
@@ -100,7 +100,7 @@ Play it in the browser:
 ```typescript
 const res = await fetch('/api/speak', {
   method: 'POST',
-  body: JSON.stringify({ text: 'Hello!', voice: 'sophia' }),
+  body: JSON.stringify({ text: 'Hello!', voice: 'magnus' }),
 });
 const blob = await res.blob();
 new Audio(URL.createObjectURL(blob)).play();
@@ -169,7 +169,7 @@ const result = await transcribe({
 
 ## Streaming Speech-to-Text (WebSocket)
 
-For real-time transcription (TTFT ~64 ms server-side), the SDK exposes a WebSocket session that wraps `wss://api.smallest.ai/waves/v1/pulse/get_text` with the canonical `Authorization: Bearer` flow. WS-only flags like `itnNormalize`, `sentenceTimestamps`, `finalizeOnWords`, `maxWords`, and `eouTimeoutMs` only take effect on this path.
+For real-time transcription (~150 ms TTFT at 1 concurrency, scaling to ~300 ms at 100), the SDK exposes a WebSocket session that wraps `wss://api.smallest.ai/waves/v1/stt/live?model=pulse` with the canonical `Authorization: Bearer` flow. WS-only flags like `itnNormalize`, `sentenceTimestamps`, `finalizeOnWords`, `maxWords`, and `eouTimeoutMs` only take effect on this path.
 
 ```typescript
 import { smallestai } from 'smallestai-vercel-provider';
