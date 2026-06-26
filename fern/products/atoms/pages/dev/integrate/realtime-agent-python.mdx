@@ -1,0 +1,275 @@
+---
+title: "Agent WebSocket (Python)"
+sidebarTitle: "Agent WebSocket (Python)"
+description: "End-to-end Python client for the Realtime Agent WebSocket. Mic + speaker, base64 PCM16 audio, transcript handling — without numpy or the JS SDK."
+---
+
+A minimal Python client for the [Realtime Agent WebSocket API](/atoms/api-reference/api-reference/realtime-agent/realtime-agent). Uses the same two-step token flow as the [JavaScript Web SDK](/atoms/developer-guide/integrate/web-socket-sdk): your server calls `POST /conversation/register-call` with the long-lived API key, then the WebSocket connects with a short-lived `wct_` token.
+
+## When to use this
+
+- Headless Python clients (CLI tools, automation, agent evaluation harnesses).
+- Backends that proxy a voice session to an internal user.
+- Reproducing a customer issue from the command line.
+
+For browser experiences, prefer the [Agent Web SDK](/atoms/developer-guide/integrate/web-socket-sdk) — it does the same thing in JavaScript with a managed event API.
+
+## Install
+
+```bash
+pip install sounddevice websocket-client
+```
+
+`numpy` is not required. `sounddevice` exposes the audio callback buffers as CFFI byte buffers that support direct slice assignment — going through numpy is unnecessary overhead.
+
+## How it works
+
+```
+┌─────────────┐ 1. POST /register-call ┌──────────────────┐
+│ Your server │  Authorization: sk_…  │  Atoms API       │
+│             │  { agent_id }    ────▶ │                  │
+│             │ ◀──────────────────── │  { access_token, │
+│             │                       │    expires_in,    │
+└─────────────┘                       │    sample_rate }  │
+       │                              └──────────────────┘
+       │ 2. return token to client
+       ▼
+┌─────────────┐ 3. WSS connect with ?token=wct_…
+│  Python     │ ───────────────────▶  wss://api.smallest.ai/atoms/v1/agent/connect
+│  client     │
+└─────────────┘
+```
+
+- API key never leaves the server.
+- Token is single-use and expires in 30 seconds.
+
+## Full working script
+
+Set `ATOMS_API_KEY` and `ATOMS_AGENT_ID` in your environment, then run. Use headphones to avoid speaker → mic echo.
+
+```python title="realtime_agent.py"
+"""
+Minimal Python client for the Atoms Realtime Agent WebSocket.
+"""
+import base64
+import json
+import os
+import queue
+import sys
+import threading
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+
+import sounddevice as sd
+from websocket import WebSocketApp
+
+sys.stdout.reconfigure(line_buffering=True)
+
+API_KEY = os.environ["ATOMS_API_KEY"]
+AGENT_ID = os.environ["ATOMS_AGENT_ID"]
+REGISTER_URL = "https://api.smallest.ai/atoms/v1/conversation/register-call"
+WS_URL = "wss://api.smallest.ai/atoms/v1/agent/connect"
+MODE = "webcall"
+VARIABLES = None        # e.g. {"customer_name": "Alex"} for {{customer_name}} in prompt
+MIC_BLOCK_MS = 40       # audio block size in ms — 40ms is a good default
+PREBUFFER_MS = 250      # warm-up before speaker starts pulling
+
+
+def register_call() -> dict:
+    """POST /register-call → short-lived wct_ token (30s, single-use)."""
+    body = {"agent_id": AGENT_ID, "mode": MODE}
+    if VARIABLES:
+        body["variables"] = VARIABLES
+    req = Request(
+        REGISTER_URL,
+        data=json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read())["data"]
+
+
+class RealtimeAgent:
+    def __init__(self):
+        self.ws = None
+        self.mic_stream = None
+        self.speaker_stream = None
+        self.play_buf = bytearray()
+        self.play_lock = threading.Lock()
+        self.send_queue: "queue.Queue[str]" = queue.Queue()
+        self.session_sample_rate = 24000
+        self.running = False
+        self.speaker_armed = False
+        self.prebuffer_bytes = 0
+        self.underruns = 0
+
+    def _speaker_callback(self, outdata, frames, time_info, status):
+        needed = frames * 2  # 16-bit mono
+        with self.play_lock:
+            if not self.speaker_armed:
+                outdata[:] = b"\x00" * needed
+                return
+            take = min(needed, len(self.play_buf))
+            chunk = bytes(self.play_buf[:take])
+            del self.play_buf[:take]
+        if take < needed:
+            chunk += b"\x00" * (needed - take)
+            if self.running:
+                self.underruns += 1
+        outdata[:] = chunk
+
+    def _mic_callback(self, indata, frames, time_info, status):
+        if not self.running:
+            return
+        b64 = base64.b64encode(bytes(indata)).decode("ascii")
+        self.send_queue.put(json.dumps({"type": "input_audio_buffer.append", "audio": b64}))
+
+    def _sender_loop(self):
+        while True:
+            try:
+                msg = self.send_queue.get(timeout=0.5)
+            except queue.Empty:
+                if not self.running:
+                    return
+                continue
+            if msg is None:
+                return
+            try:
+                self.ws.send(msg)
+            except Exception as e:
+                print(f"send failed: {e}")
+                return
+
+    def on_message(self, ws, message):
+        try:
+            data = json.loads(message)
+        except json.JSONDecodeError:
+            return
+        mtype = data.get("type")
+
+        if mtype == "session.created":
+            self.session_sample_rate = data.get("sample_rate", self.session_sample_rate)
+            self.prebuffer_bytes = int(self.session_sample_rate * PREBUFFER_MS / 1000) * 2
+            print(f"session.created sr={self.session_sample_rate} call={data.get('call_id')}")
+            self._start_audio_io()
+
+        elif mtype == "output_audio.delta":
+            pcm = base64.b64decode(data.get("audio", ""))
+            with self.play_lock:
+                self.play_buf.extend(pcm)
+                if not self.speaker_armed and len(self.play_buf) >= self.prebuffer_bytes:
+                    self.speaker_armed = True
+
+        elif mtype == "transcript.delta":
+            # streaming text per role — REPLACES previously rendered text for that role
+            role = data.get("role", "?")
+            label = "Agent" if role == "assistant" else "You"
+            print(f"\r[{label}] {data.get('text', '')}", end="", flush=True)
+
+        elif mtype == "transcript":
+            role = data.get("role", "?")
+            label = "Agent" if role == "assistant" else "You"
+            print(f"\r[{label} ✓] {data.get('text', '')}")
+
+        elif mtype == "agent_start_talking":
+            print("-- agent speaking --")
+
+        elif mtype == "agent_stop_talking":
+            print("-- agent done --")
+
+        elif mtype == "session.closed":
+            print(f"session.closed: {data.get('reason')}")
+            self.running = False
+            ws.close()
+
+        elif mtype == "error":
+            print(f"ERROR {data.get('code')}: {data.get('message')}")
+
+    def _start_audio_io(self):
+        block = int(self.session_sample_rate * MIC_BLOCK_MS / 1000)
+        self.mic_stream = sd.RawInputStream(
+            samplerate=self.session_sample_rate, channels=1, dtype="int16",
+            blocksize=block, callback=self._mic_callback,
+        )
+        self.speaker_stream = sd.RawOutputStream(
+            samplerate=self.session_sample_rate, channels=1, dtype="int16",
+            blocksize=block, callback=self._speaker_callback,
+        )
+        self.mic_stream.start()
+        self.speaker_stream.start()
+        self.running = True
+
+    def run(self):
+        token_data = register_call()
+        access_token = token_data["access_token"]
+        sample_rate = token_data.get("sample_rate", 24000)
+        url = WS_URL + "?" + urlencode({
+            "agent_id": AGENT_ID, "token": access_token,
+            "mode": MODE, "sample_rate": sample_rate,
+        })
+        self.ws = WebSocketApp(url, on_message=self.on_message)
+        threading.Thread(target=self._sender_loop, daemon=True).start()
+        ws_thread = threading.Thread(target=self.ws.run_forever, daemon=True)
+        ws_thread.start()
+        try:
+            ws_thread.join()
+        except KeyboardInterrupt:
+            try:
+                self.ws.send(json.dumps({"type": "session.close"}))
+            except Exception:
+                pass
+            self.running = False
+            self.ws.close()
+
+
+if __name__ == "__main__":
+    RealtimeAgent().run()
+```
+
+## Run it
+
+```bash
+export ATOMS_API_KEY="sk_..."
+export ATOMS_AGENT_ID="..."
+python realtime_agent.py
+```
+
+Speak after `session.created` prints. The agent's response streams in as `output_audio.delta` (audio) plus `transcript.delta` events (text). Press `Ctrl+C` to end the session cleanly.
+
+## Audio format
+
+PCM 16-bit signed little-endian, mono, at the sample rate the server returns in `session.created.sample_rate`. The default request is 24 kHz; the server also accepts 8 kHz, 16 kHz, and 48 kHz.
+
+## Event handling notes
+
+| Server event | What to do |
+|---|---|
+| `session.created` | Start mic + speaker at `sample_rate` from the payload. |
+| `output_audio.delta` | Decode base64, append to playback buffer. |
+| `transcript.delta` | Streaming text. **Replace** any in-flight text for that `role`, do not append. `role` is `user` or `assistant`. |
+| `transcript` | Final text for a settled turn. Emission is best-effort. |
+| `agent_start_talking` | Show a speaking indicator. |
+| `agent_stop_talking` | Hide the indicator. |
+| `interruption` | Clear the audio buffer, the agent's current turn is being truncated. |
+| `session.closed` | Stop streams, close the socket. |
+| `error` | Surface to user. Most errors come alongside `session.closed`. |
+
+## Why pre-buffer 250 ms before playback
+
+If you start playing the first `output_audio.delta` immediately, any network jitter creates a buffer underrun and an audible click. The script gates the speaker until 250 ms of audio has accumulated. In testing against production, this drops underruns from a handful per session to zero on typical connections.
+
+## Common errors
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `401` on connect | Token expired (older than 30 s) or already consumed | Call `/register-call` again — tokens are single-use |
+| `Microphone access required` | OS or browser denied mic | Check system audio permissions |
+| Crackle on first audio | No jitter buffer | Raise `PREBUFFER_MS` to 250-300 ms |
+| Live text never shows | Listening only for `transcript` (final) | Subscribe to `transcript.delta` (streaming) |
+
+## Limits
+
+- Token TTL: 30 seconds, single-use.
+- Max call duration: 15 minutes.
+- Audio: PCM 16-bit, mono, server-negotiated sample rate.

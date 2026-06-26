@@ -2306,6 +2306,114 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
+  /conversation/register-call:
+    post:
+      summary: Register a webcall (short-lived access token)
+      x-fern-sdk-group-name: calls
+      x-fern-sdk-method-name: register_webcall
+      description: |
+        Issues a short-lived `access_token` (prefix `wct_`) the browser uses
+        to open the Realtime Agent WebSocket. The token TTL is 30 seconds
+        and is single-use. Call this from your server with the long-lived
+        API key, then return only the `access_token` to the browser — the
+        API key never leaves your backend.
+
+        The browser then opens:
+
+        ```
+        wss://api.smallest.ai/atoms/v1/agent/connect?agent_id=<id>&token=<wct_…>
+        ```
+
+        See the [Realtime Agent WebSocket](/atoms/api-reference/api-reference/realtime-agent/realtime-agent)
+        spec for the full event protocol.
+      tags:
+        - Calls
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - agent_id
+              properties:
+                agent_id:
+                  type: string
+                  description: Agent identifier (24-character hex string).
+                mode:
+                  type: string
+                  enum: [webcall, chat]
+                  default: webcall
+                  description: |
+                    `webcall` for full voice (mic + speaker). `chat` for
+                    text-only conversations over the same WebSocket.
+                variables:
+                  type: object
+                  additionalProperties:
+                    oneOf:
+                      - type: string
+                      - type: number
+                      - type: boolean
+                  description: |
+                    Optional per-call values for `{{key}}` placeholders in the
+                    agent prompt. Each value must be a string, number, or
+                    boolean. Reserved keys (`call_id`, `conversation_type`,
+                    `user_number`, `agent_number`) are stripped server-side.
+            examples:
+              minimal:
+                summary: Minimal request (defaults to webcall)
+                value:
+                  agent_id: "6a3ed925c0d28f7a29c772ff"
+              with_variables:
+                summary: With per-call variables
+                value:
+                  agent_id: "6a3ed925c0d28f7a29c772ff"
+                  variables:
+                    customer_name: "Alex"
+                    account_tier: "gold"
+      responses:
+        "201":
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  data:
+                    type: object
+                    required:
+                      - access_token
+                      - expires_in
+                      - sample_rate
+                    properties:
+                      access_token:
+                        type: string
+                        description: Short-lived token. Prefix `wct_`. Single-use.
+                      expires_in:
+                        type: integer
+                        description: Token lifetime in seconds (currently `30`).
+                      sample_rate:
+                        type: integer
+                        description: Negotiated audio sample rate in Hz for the WebSocket session.
+              examples:
+                default:
+                  value:
+                    status: true
+                    data:
+                      access_token: "wct_99bda2ff-3b28-48d0-9c0e-1a2b3c4d5e6f"
+                      expires_in: 30
+                      sample_rate: 24000
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
   /conversation/outbound:
     post:
       summary: Start an outbound call
