@@ -141,6 +141,8 @@ channels:
         $ref: "#/components/messages/sessionClosed"
       outputAudioDelta:
         $ref: "#/components/messages/outputAudioDelta"
+      transcriptDelta:
+        $ref: "#/components/messages/transcriptDelta"
       transcript:
         $ref: "#/components/messages/transcript"
       agentStartTalking:
@@ -209,6 +211,13 @@ operations:
     summary: Audio chunk produced by the agent's TTS (webcall mode)
     messages:
       - $ref: "#/channels/agentSession/messages/outputAudioDelta"
+  receiveTranscriptDelta:
+    action: receive
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: Streaming transcript text for the current turn (per role)
+    messages:
+      - $ref: "#/channels/agentSession/messages/transcriptDelta"
   receiveTranscript:
     action: receive
     channel:
@@ -273,10 +282,11 @@ components:
           audio:
             type: string
             description: |
-              Base64-encoded raw audio chunk. Format negotiated via the
-              `sample_rate` query param at connection time and returned in
-              `session.created`. Send chunks continuously while the user
-              speaks — the server handles VAD and turn boundaries.
+              Base64-encoded raw PCM audio chunk. Format is 16-bit signed
+              little-endian, mono, at the sample rate negotiated via the
+              `sample_rate` query param and echoed in `session.created`.
+              Send chunks continuously while the user speaks — the server
+              handles VAD and turn boundaries.
         examples:
           - summary: 40ms of PCM16 audio at 16kHz
             value:
@@ -425,9 +435,13 @@ components:
       title: Agent audio chunk
       summary: Base64-encoded audio chunk produced by the agent's TTS.
       description: |
-        Stream of audio chunks in the negotiated sample rate. Client decodes
+        Stream of audio chunks in the negotiated format. Client decodes
         base64 and plays each chunk as it arrives for lowest latency. Only
         sent in `webcall` mode.
+
+        Pre-buffer 200-300 ms of audio before starting playback to absorb
+        network jitter — without a jitter buffer, the first network hiccup
+        produces an audible click.
       contentType: application/json
       payload:
         type: object
@@ -440,19 +454,70 @@ components:
             const: output_audio.delta
           audio:
             type: string
-            description: Base64-encoded raw audio chunk.
+            description: |
+              Base64-encoded raw PCM audio chunk. Format is 16-bit signed
+              little-endian, mono, at the sample rate echoed in
+              `session.created`.
+
+    transcriptDelta:
+      name: TranscriptDelta
+      title: Transcript delta (streaming)
+      summary: Cumulative transcript text for the current turn.
+      description: |
+        Streaming text for the current turn, per role. Each event carries the
+        full cumulative text for that role so far in the turn. Clients should
+        replace any previously rendered text for the same role with the new
+        value on every event.
+
+        Wire event type is `transcript.delta` (dot notation). The JavaScript
+        SDK normalizes this to `transcript_delta` (underscore) on the client
+        event bus; raw WebSocket clients see the dot form.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+          - role
+          - text
+        properties:
+          type:
+            type: string
+            const: transcript.delta
+          role:
+            type: string
+            enum:
+              - user
+              - assistant
+            description: |
+              Whose utterance this transcript is for. `assistant` is the agent.
+          text:
+            type: string
+            description: |
+              Cumulative text for this role in the current turn. Replaces, does
+              not append.
+        examples:
+          - value:
+              type: transcript.delta
+              role: user
+              text: "Tell me about your"
+          - value:
+              type: transcript.delta
+              role: user
+              text: "Tell me about your pricing."
+          - value:
+              type: transcript.delta
+              role: assistant
+              text: "We offer three plans: Starter,"
 
     transcript:
       name: Transcript
-      title: Transcript
-      summary: Transcription of user speech or text of agent response.
+      title: Transcript (final)
+      summary: Final transcript for a completed turn.
       description: |
-        Emitted on turn boundaries when the server produces a text
-        representation of the utterance — user speech after STT, or
-        agent response text alongside TTS. Emission timing depends on
-        the agent pipeline configuration; not every audio chunk is
-        accompanied by a transcript, and clients should treat transcripts
-        as informational.
+        Emitted at the end of a turn with the final text for that role. May
+        not fire on every turn — the streaming `transcript.delta` events are
+        the authoritative source of in-conversation text. Use `transcript` to
+        settle any UI bubble you opened from deltas.
       contentType: application/json
       payload:
         type: object
@@ -468,11 +533,12 @@ components:
             type: string
             enum:
               - user
-              - agent
-            description: Whose utterance this transcript is for.
+              - assistant
+            description: |
+              Whose utterance this transcript is for. `assistant` is the agent.
           text:
             type: string
-            description: The transcribed (or agent-generated) text.
+            description: The final transcribed (or agent-generated) text.
         examples:
           - value:
               type: transcript
@@ -480,7 +546,7 @@ components:
               text: "Tell me about your pricing."
           - value:
               type: transcript
-              role: agent
+              role: assistant
               text: "We offer three plans: Starter, Pro, and Enterprise."
 
     agentStartTalking:
