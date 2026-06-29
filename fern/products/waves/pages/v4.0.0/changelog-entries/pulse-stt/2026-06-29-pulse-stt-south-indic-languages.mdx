@@ -1,0 +1,22 @@
+---
+title: Pulse STT — streaming now supports ta / te / kn / ml + `multi-south-indic` aggregator (India region)
+---
+
+The Pulse streaming Speech-to-Text API now supports four South Indian languages: Tamil (`ta`), Telugu (`te`), Kannada (`kn`), and Malayalam (`ml`). The `multi-south-indic` aggregator is also available for unknown South Indian audio — it auto-detects across the same four-language set plus English code-switching.
+
+These five language values are served from the **India region only** — connect to `wss://api.smallest.ai/waves/v1/stt/live?model=pulse` (or the legacy `wss://api.smallest.ai/waves/v1/pulse/get_text`). Requesting any of them on the US host (`wss://api.us.smallest.ai/...`) returns an error:
+
+```json
+{
+  "type": "error",
+  "error_code": "LANGUAGE_NOT_ENABLED_IN_REGION",
+  "message": "Language 'multi-south-indic' has not been enabled in this region. Please contact support to request access."
+}
+```
+
+All other Pulse streaming parameters work as before: `word_timestamps`, `diarize`, `redact_pii`, `redact_pci`, `punctuate`, `capitalize`, `itn_normalize`, sample rates 8000/16000/22050/24000/44100/48000, encodings `linear16` (default) / `linear32` / `alaw` / `mulaw` / `opus` / `ogg_opus`.
+
+**Pre-recorded (batch) is unchanged.** These four languages are not enabled on the batch endpoint — use the streaming endpoint.
+
+→ [Pulse model card — Supported Languages](/waves/model-cards/speech-to-text/pulse)
+→ [Speech-to-Text overview](/waves/documentation/speech-to-text-pulse/overview)
