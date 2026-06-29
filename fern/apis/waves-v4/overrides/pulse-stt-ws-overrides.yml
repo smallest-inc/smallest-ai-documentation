@@ -97,16 +97,20 @@ channels:
     parameters:
       language:
         description: |
-          Language code for transcription. Streaming supports 17 single-language
-          codes and 2 regional aggregators.
+          Language code for transcription. Streaming supports 21 single-language
+          codes and 3 regional aggregators.
 
           **Single-language codes:** `en`, `hi`, `de`, `es`, `ru`, `it`, `fr`,
-          `nl`, `pt`, `zh`, `yue`, `ja`, `ko`, `gu`, `mr`, `or`, `bn`.
+          `nl`, `pt`, `zh`, `yue`, `ja`, `ko`, `gu`, `mr`, `or`, `bn`, `ta`,
+          `te`, `kn`, `ml`.
 
           **Regional aggregators** for unknown audio:
           - `north_indic` — auto-detects across `en`, `hi`, `gu`, `mr`, `bn`, `or`.
           - `multi-asian` — auto-detects across `zh`, `yue`, `ko`, `ja`, `en`.
             Available on the US region only; contact sales for access in the India region.
+          - `multi-south-indic` — auto-detects across `ta`, `te`, `kn`, `ml`, and
+            English code-switching. **India region only.** Use when the South Indian
+            language is not known in advance.
 
           Set `language` explicitly to the known code for best accuracy.
 
@@ -116,6 +120,11 @@ channels:
           these. The default `wss://api.smallest.ai/...` host closes the
           connection without a transcription frame when an East Asian language
           is requested.
+
+          **South Indian languages** (`ta`, `te`, `kn`, `ml`, `multi-south-indic`)
+          are served from the **India region only** (`wss://api.smallest.ai/...`).
+          Requests to `wss://api.us.smallest.ai/...` are rejected with
+          `LANGUAGE_NOT_ENABLED_IN_REGION`.
         enum:
           - en
           - hi
@@ -134,8 +143,13 @@ channels:
           - mr
           - or
           - bn
+          - ta
+          - te
+          - kn
+          - ml
           - north_indic
           - multi-asian
+          - multi-south-indic
         required: false
         location: $message.header#/language
       encoding:
