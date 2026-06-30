@@ -142,15 +142,18 @@ channels:
         description: |
           Language code for transcription. This endpoint is **Streaming (Real-Time, WebSocket)** — for pre-recorded audio, use `POST /waves/v1/stt/` (different supported language set).
 
-          **Supported single-language codes (17):** `en`, `hi`, `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `zh`, `yue`, `ja`, `ko`, `gu`, `mr`, `or`, `bn`.
+          **Supported single-language codes (21):** `en`, `hi`, `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `zh`, `yue`, `ja`, `ko`, `gu`, `mr`, `or`, `bn`, `ta`, `te`, `kn`, `ml`.
 
           **Auto-detect aggregators** for unknown audio:
           - `north_indic` — auto-detects across `en`, `hi`, `gu`, `mr`, `bn`, `or`.
           - `multi-asian` — auto-detects across `zh`, `yue`, `ko`, `ja`, `en`. Available on the US region only; contact sales for access in the India region.
+          - `multi-south-indic` — auto-detects across `ta`, `te`, `kn`, `ml`, and English code-switching. **India region only.** Use when the South Indian language is not known in advance.
 
           Set `language` explicitly to the known code for best accuracy. See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the full table with language names.
 
           **Region note for East Asian languages:** `zh`, `yue`, `ja`, `ko`, and the `multi-asian` aggregator are served from the US region only — connect to `wss://api.us.smallest.ai/waves/v1/stt/live` for these. The default `wss://api.smallest.ai/...` host closes the connection without a transcription frame when an East Asian language is requested.
+
+          **South Indian languages** (`ta`, `te`, `kn`, `ml`, `multi-south-indic`) are served from the **India region only** (`wss://api.smallest.ai/...`). Requests to `wss://api.us.smallest.ai/...` are rejected with error code `LANGUAGE_NOT_ENABLED_IN_REGION`. Contact support to request access.
         enum:
           - en
           - hi
@@ -194,6 +197,7 @@ channels:
           - multi-eu
           - north_indic
           - multi-asian
+          - multi-south-indic
         required: true
         location: $message.header#/language
       sample_rate:
@@ -241,6 +245,29 @@ channels:
         default: "false"
         required: false
         location: $message.header#/diarize
+      vad_events:
+        description: |
+          Acoustic voice-activity events. When `true`, the server emits
+          `speech_started` and `speech_ended` JSON messages interleaved
+          with the `transcription` stream on the same connection.
+          Boundaries are derived from the audio signal and are independent
+          of transcript finalization (`is_final`); they do not coincide
+          with word boundaries. WebSocket only.
+        enum:
+          - "true"
+          - "false"
+        default: "false"
+        required: false
+        location: $message.header#/vad_events
+      vad:
+        description: |
+          Alias for `vad_events`. When both are set, `vad_events` takes
+          precedence and `vad` is ignored.
+        enum:
+          - "true"
+          - "false"
+        required: false
+        location: $message.header#/vad
       eou_timeout_ms:
         description: Time in milliseconds to wait after speech ends before flushing the transcript.
         default: 800

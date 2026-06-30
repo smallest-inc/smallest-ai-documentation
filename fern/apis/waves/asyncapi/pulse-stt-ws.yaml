@@ -42,21 +42,29 @@ servers:
               - mr
               - or
               - bn
+              - ta
+              - te
+              - kn
+              - ml
               - north_indic
               - multi-asian
+              - multi-south-indic
               description: |
-                Language code for transcription. Streaming supports 17 single-language codes and 2 regional aggregators.
+                Language code for transcription. Streaming supports 21 single-language codes and 3 regional aggregators.
 
-                Single-language codes: `en`, `hi`, `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `zh`, `yue`, `ja`, `ko`, `gu`, `mr`, `or`, `bn`.
+                Single-language codes: `en`, `hi`, `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `zh`, `yue`, `ja`, `ko`, `gu`, `mr`, `or`, `bn`, `ta`, `te`, `kn`, `ml`.
 
                 Regional auto-detect aggregators for unknown audio:
 
                 - `north_indic` — auto-detects across `en`, `hi`, `gu`, `mr`, `bn`, `or`.
                 - `multi-asian` — auto-detects across `zh`, `yue`, `ko`, `ja`, `en`. Available on the US region only; contact sales for access in the India region.
+                - `multi-south-indic` — auto-detects across `ta`, `te`, `kn`, `ml`, and English code-switching. **India region only** (`wss://api.smallest.ai/...`). Use when the South Indian language is not known in advance.
 
                 Set `language` explicitly to the known code for best accuracy.
 
                 **Region note:** `zh`, `yue`, `ja`, `ko`, and the `multi-asian` aggregator are served from the US region only — connect to `wss://api.us.smallest.ai/waves/v1/pulse/get_text` for these. The default `wss://api.smallest.ai/...` host closes the connection without a transcription frame when an East Asian language is requested.
+
+                **South Indian languages** (`ta`, `te`, `kn`, `ml`, `multi-south-indic`) are served from the **India region only** (`wss://api.smallest.ai/...`). Requests to `wss://api.us.smallest.ai/...` for these languages are rejected with `LANGUAGE_NOT_ENABLED_IN_REGION`.
 
             encoding:
               type: string
@@ -240,6 +248,27 @@ servers:
             max_words:
               type: integer
               description: Maximum number of words before forced finalization. Useful for keeping ITN chunks short and accurate.
+            vad_events:
+              type: string
+              enum:
+              - 'true'
+              - 'false'
+              default: 'false'
+              description: |
+                Acoustic voice-activity events. When `true`, the server emits
+                `speech_started` and `speech_ended` JSON messages interleaved
+                with the `transcription` stream on the same connection.
+                Boundaries are derived from the audio signal and are independent
+                of transcript finalization (`is_final`); they do not coincide
+                with word boundaries. WebSocket only.
+            vad:
+              type: string
+              enum:
+              - 'true'
+              - 'false'
+              description: |
+                Alias for `vad_events`. When both are set, `vad_events`
+                takes precedence and `vad` is ignored.
 channels:
   pulseStream:
     address: /waves/v1/pulse/get_text
@@ -450,6 +479,63 @@ channels:
             - '[FIRSTNAME_2]'
             - '[CREDITCARDCVV_1]'
             - '[TIME_2]'
+      pulseSpeechStartedEvent.message:
+        name: PulseSpeechStartedEvent
+        contentType: application/json
+        payload:
+          type: object
+          required:
+          - type
+          - session_id
+          - timestamp
+          properties:
+            type:
+              type: string
+              enum:
+              - speech_started
+              description: Discriminator. Always `speech_started` for this event.
+            session_id:
+              type: string
+              description: Matches the `session_id` returned on `transcription` messages from the same connection. Use it to correlate VAD events with transcript turns.
+            timestamp:
+              type: number
+              description: Acoustic onset of speech, in seconds from the first audio frame sent on this connection.
+          examples:
+          - type: speech_started
+            session_id: a1b2c3d4
+            timestamp: 1.84
+        description: |
+          Emitted when speech onset is detected after silence. Sent only when
+          `vad_events=true` (or the `vad` alias) was set on connect. Acoustic
+          boundary, independent of transcript finalization (`is_final`).
+      pulseSpeechEndedEvent.message:
+        name: PulseSpeechEndedEvent
+        contentType: application/json
+        payload:
+          type: object
+          required:
+          - type
+          - session_id
+          - timestamp
+          properties:
+            type:
+              type: string
+              enum:
+              - speech_ended
+              description: Discriminator. Always `speech_ended` for this event.
+            session_id:
+              type: string
+              description: Same session identifier returned on the `transcription` messages.
+            timestamp:
+              type: number
+              description: Acoustic offset of speech (end of a continuous voiced region), in seconds from the first audio frame.
+          examples:
+          - type: speech_ended
+            session_id: a1b2c3d4
+            timestamp: 4.52
+        description: |
+          Emitted after a run of silence following speech. Sent only when
+          `vad_events=true` was set on connect.
     description: |
       Transcribe audio in real time over a persistent WebSocket. The fit-for-purpose path for live captioning, voice agents, and any flow where you need partial transcripts as the user is still speaking.
 
@@ -560,6 +646,19 @@ operations:
     description: Get real-time transcription results as audio is processed
     messages:
     - $ref: '#/channels/pulseStream/messages/pulseTranscriptionResponse.message'
+  receiveVadEvents:
+    action: receive
+    channel:
+      $ref: '#/channels/pulseStream'
+    summary: 'Receive acoustic VAD events (opt-in via `vad_events=true`)'
+    description: |
+      `speech_started` and `speech_ended` JSON messages, interleaved with the
+      normal `transcription` stream when `vad_events=true` was set on connect.
+      Discriminate by the `type` field; existing transcript handlers stay
+      unchanged.
+    messages:
+    - $ref: '#/channels/pulseStream/messages/pulseSpeechStartedEvent.message'
+    - $ref: '#/channels/pulseStream/messages/pulseSpeechEndedEvent.message'
 components:
   securitySchemes:
     bearerAuth:

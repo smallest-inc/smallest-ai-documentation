@@ -1,12 +1,12 @@
 ---
 title: Pulse
-description: High-accuracy, low-latency speech-to-text model built for real-time transcription across 31 documented languages (17 streaming + 26 pre-recorded), with regional aggregators and both streaming and non-streaming support.
+description: High-accuracy, low-latency speech-to-text model built for real-time transcription across 35 documented languages (21 streaming + 26 pre-recorded), with regional aggregators and both streaming and non-streaming support.
 icon: microphone
 ---
 
 import { Capabilities, Capability } from "@/components/Capabilities";
 
-Pulse is a high-accuracy, low-latency speech-to-text model built for real-time transcription across 31 documented languages (17 on streaming + 26 on pre-recorded, with regional aggregators), supporting both streaming and non-streaming use cases.
+Pulse is a high-accuracy, low-latency speech-to-text model built for real-time transcription across 35 documented languages (21 on streaming + 26 on pre-recorded, with regional aggregators), supporting both streaming and non-streaming use cases.
 
 **Jump to:** [Benchmarks](#performance--benchmarks) · [Supported Languages](#supported-languages) · [API Reference](/waves/api-reference/api-reference/speech-to-text/transcribe) · [Quickstart](/waves/documentation/speech-to-text-pulse/quickstart)
 
@@ -18,7 +18,7 @@ Pulse is a high-accuracy, low-latency speech-to-text model built for real-time t
     TTFT at 100 concurrency
   </Card>
   <Card title="Supported Languages" icon="globe" href="#supported-languages">
-    17 streaming + 26 pre-recorded
+    21 streaming + 26 pre-recorded
   </Card>
   <Card title="2 Modes" icon="arrows-split-up-and-left" href="#features--streaming">
     Streaming + Non-streaming
@@ -31,7 +31,7 @@ Pulse is a high-accuracy, low-latency speech-to-text model built for real-time t
 |---|---|
 | **Developed by** | Smallest AI |
 | **Model type** | Speech-to-Text Streaming · Speech-to-Text Batch |
-| **Languages** | Streaming: 17 single-language codes + `north_indic` and `multi-asian` aggregators. Non-streaming (batch): 26 single-language codes + `multi-eu` and `multi-asian` aggregators. East Asian codes (`zh`, `yue`, `ja`, `ko`, `multi-asian`) are streaming + US-region only. |
+| **Languages** | Streaming: 21 single-language codes + `north_indic`, `multi-asian`, and `multi-south-indic` aggregators. Non-streaming (batch): 26 single-language codes + `multi-eu` and `multi-asian` aggregators. East Asian codes (`zh`, `yue`, `ja`, `ko`, `multi-asian`) are streaming + US-region only. South Indian codes (`ta`, `te`, `kn`, `ml`, `multi-south-indic`) are streaming + India-region only. |
 | **Audio input formats** | WAV, MP3, FLAC, Opus, μ-law, A-law, raw PCM |
 | **Pricing** <br /> (Standard Plan) | Realtime: \$0.008/min · Batch: \$0.005/min |
 | **Concurrency** <br /> (Standard Plan) | Streaming: 100 concurrent requests · Batch: 25 RPM |
@@ -47,7 +47,7 @@ Pulse is a high-accuracy, low-latency speech-to-text model built for real-time t
     Sub-100 ms TTFT at 1 concurrency, ~300 ms at 100 concurrent requests. Designed for live transcription and conversational AI.
   </Capability>
   <Capability icon="globe" name="Multi-Language" href="#supported-languages">
-    31 documented languages (17 streaming + 26 pre-recorded) with regional auto-detect aggregators and in-session code-switching.
+    35 documented languages (21 streaming + 26 pre-recorded) with regional auto-detect aggregators and in-session code-switching.
   </Capability>
   <Capability icon="shield-halved" name="PII / PCI Redaction">
     Built-in redaction of personal data and payment-card information on both streaming and non-streaming surfaces.
@@ -300,10 +300,10 @@ Not a public dataset. Hindi audio sliced by perturbation type to isolate model w
 
 ## Supported Languages
 
-31 unique language codes across the two modes (17 on streaming, 26 on pre-recorded). Click an accordion to expand the full per-mode list.
+35 unique language codes across the two modes (21 on streaming, 26 on pre-recorded). Click an accordion to expand the full per-mode list.
 
 <AccordionGroup>
-<Accordion title="Streaming — 17 languages + 2 regional aggregators" defaultOpen>
+<Accordion title="Streaming — 21 languages + 3 regional aggregators" defaultOpen>
 
 | # | Language | Code |
 |---|---|---|
@@ -324,10 +324,17 @@ Not a public dataset. Hindi audio sliced by perturbation type to isolate model w
 | 15 | Marathi | `mr` |
 | 16 | Oriya | `or` |
 | 17 | Bengali | `bn` |
-| 18 | North-Indic aggregator | `north_indic` &mdash; auto-detects across `en`, `hi`, `gu`, `mr`, `bn`, `or` |
-| 19 | Multi-Asian aggregator | `multi-asian` &mdash; auto-detects across `zh`, `yue`, `ko`, `ja`, `en`. US region only \[*]. Contact sales for access in the India region. |
+| 18 | Tamil | `ta` &mdash; India region only \[**] |
+| 19 | Telugu | `te` &mdash; India region only \[**] |
+| 20 | Kannada | `kn` &mdash; India region only \[**] |
+| 21 | Malayalam | `ml` &mdash; India region only \[**] |
+| 22 | North-Indic aggregator | `north_indic` &mdash; auto-detects across `en`, `hi`, `gu`, `mr`, `bn`, `or` |
+| 23 | Multi-Asian aggregator | `multi-asian` &mdash; auto-detects across `zh`, `yue`, `ko`, `ja`, `en`. US region only \[*]. Contact sales for access in the India region. |
+| 24 | South-Indic aggregator | `multi-south-indic` &mdash; auto-detects across `ta`, `te`, `kn`, `ml`, and English code-switching. India region only \[**]. Use when the South Indian language is not known in advance. |
 
 \[*] East Asian languages (`zh`, `yue`, `ja`, `ko`, `multi-asian`) are served from the US region only. Connect to `wss://api.us.smallest.ai/waves/v1/stt/live` instead of `wss://api.smallest.ai/...` for these.
+
+\[**] South Indian languages (`ta`, `te`, `kn`, `ml`, `multi-south-indic`) are served from the India region only (`wss://api.smallest.ai/...`). Requests to `wss://api.us.smallest.ai/...` are rejected with error code `LANGUAGE_NOT_ENABLED_IN_REGION`. Contact support to request access.
 
 </Accordion>
 

@@ -35,17 +35,20 @@ servers:
                 Selects the ASR model. Today only `pulse` is supported on the streaming endpoint. `pulse-pro` returns `400` before WebSocket upgrade, use `POST /waves/v1/stt/?model=pulse-pro` (HTTP) for Pulse Pro.
             language:
               type: string
-              enum: [en, hi, de, es, ru, it, fr, nl, pt, zh, yue, ja, ko, gu, mr, or, bn, north_indic, multi-asian]
+              enum: [en, hi, de, es, ru, it, fr, nl, pt, zh, yue, ja, ko, gu, mr, or, bn, ta, te, kn, ml, north_indic, multi-asian, multi-south-indic]
               description: |
                 Language code. This endpoint is **Streaming (Real-Time, WebSocket)** — for pre-recorded audio, use `POST /waves/v1/stt/` (different supported language set).
 
-                **17 single-language codes:** `en`, `hi`, `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `zh`, `yue`, `ja`, `ko`, `gu`, `mr`, `or`, `bn`.
+                **21 single-language codes:** `en`, `hi`, `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `zh`, `yue`, `ja`, `ko`, `gu`, `mr`, `or`, `bn`, `ta`, `te`, `kn`, `ml`.
 
-                **2 regional auto-detect aggregators** for unknown audio:
+                **3 regional auto-detect aggregators** for unknown audio:
                 - `north_indic` — auto-detects across `en`, `hi`, `gu`, `mr`, `bn`, `or`
                 - `multi-asian` — auto-detects across `zh`, `yue`, `ko`, `ja`, `en`. Available on the US region only; contact sales for access in the India region.
+                - `multi-south-indic` — auto-detects across `ta`, `te`, `kn`, `ml`, and English code-switching. **India region only.** Use when the South Indian language is not known in advance.
 
                 **East Asian languages on streaming (`zh`, `yue`, `ja`, `ko`, `multi-asian`) are served from the US region only.** Connect to `wss://api.us.smallest.ai/...` instead of `wss://api.smallest.ai/...` for these.
+
+                **South Indian languages** (`ta`, `te`, `kn`, `ml`, `multi-south-indic`) are served from the **India region only** (`wss://api.smallest.ai/...`). Requests to `wss://api.us.smallest.ai/...` are rejected with `LANGUAGE_NOT_ENABLED_IN_REGION`.
 
                 See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the full table with language names.
             sample_rate:
@@ -68,6 +71,21 @@ servers:
               enum: ['true', 'false']
               default: 'false'
               description: Speaker diarization.
+            vad_events:
+              type: string
+              enum: ['true', 'false']
+              default: 'false'
+              description: |
+                Acoustic voice-activity events. When `true`, the server emits
+                `speech_started` and `speech_ended` JSON messages interleaved
+                with the `transcription` stream on the same connection.
+                Boundaries are derived from the audio signal and are independent
+                of transcript finalization (`is_final`); they do not coincide
+                with word boundaries.
+            vad:
+              type: string
+              enum: ['true', 'false']
+              description: Alias for `vad_events`. When both are set, `vad_events` takes precedence and `vad` is ignored.
             eou_timeout_ms:
               type: integer
               description: End-of-utterance silence timeout in milliseconds.

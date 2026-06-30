@@ -54,18 +54,18 @@ servers:
                 - chat
               default: webcall
               description: |
-                Session mode. The gateway accepts both values; which ones
-                are end-to-end supported depends on the agent's configuration.
+                Session mode.
 
                 - `webcall` — full voice pipeline (STT → LLM → TTS). The
                   client sends audio via `input_audio_buffer.append` and
                   receives audio via `output_audio.delta`. Text input via
                   `input_text.send` is also accepted and is routed through
                   the LLM + TTS just like transcribed speech.
-                - `chat` — text-only pipeline for agents configured with a
-                  chat widget. The client sends text via `input_text.send`.
-                  Not all agents support chat mode — verify on your agent's
-                  config before relying on it.
+                - `chat` — text-only pipeline (no STT/TTS, no audio). The
+                  client sends text via `input_text.send` and receives the
+                  agent's replies as `transcript` events. Works for any agent
+                  — ideal for non-browser/server-side clients and automated
+                  prompt testing.
             sample_rate:
               type: integer
               enum: [8000, 16000, 24000, 48000]

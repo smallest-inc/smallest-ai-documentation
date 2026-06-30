@@ -1,0 +1,25 @@
+---
+title: 'Pulse STT: `vad_events` query parameter on the streaming WebSocket'
+---
+
+The Pulse STT WebSocket accepts a new query parameter, `vad_events`. When set to `true`, the server emits two additional JSON message types: `speech_started` and `speech_ended`. They are interleaved with the `transcription` stream on the same connection.
+
+## Usage
+
+Set `vad_events=true` on the WebSocket URL. Default is `false`. `vad=true` is accepted as an alias; when both are set, `vad_events` takes precedence and `vad` is ignored.
+
+```javascript
+const url = new URL("wss://api.smallest.ai/waves/v1/stt/live?model=pulse");
+url.searchParams.append("vad_events", "true");
+```
+
+## Event payloads
+
+```json
+{ "type": "speech_started", "session_id": "a1b2c3d4", "timestamp": 1.84 }
+{ "type": "speech_ended",   "session_id": "a1b2c3d4", "timestamp": 4.52 }
+```
+
+`timestamp` is measured in seconds from the first audio frame received on the connection. Boundaries are acoustic and independent of transcript finalization (`is_final`).
+
+Full reference: [VAD Events](/waves/documentation/speech-to-text-pulse/features/vad-events).
