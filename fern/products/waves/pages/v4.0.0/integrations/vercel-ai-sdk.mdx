@@ -4,15 +4,17 @@ description: "Use Smallest AI TTS and STT with the Vercel AI SDK in Next.js and 
 icon: "triangle"
 ---
 
-Use Smallest AI as a speech and transcription provider in the [Vercel AI SDK](https://ai-sdk.dev). Generate speech and transcribe audio with a few lines of code. The package also exposes streaming WebSocket transcription and voice cloning APIs that sit alongside the Vercel `SpeechModelV2` / `TranscriptionModelV2` interfaces.
+Use Smallest AI as a speech and transcription provider in the [Vercel AI SDK](https://ai-sdk.dev). Generate speech and transcribe audio with a few lines of code. The package also exposes streaming WebSocket transcription and voice cloning APIs that sit alongside the Vercel `SpeechModelV4` / `TranscriptionModelV4` interfaces.
 
-Latest: **`smallestai-vercel-provider@0.6.2`** — adds browser-native streaming (no proxy required), microphone capture hooks, auto-reconnect on socket drops (with counter reset across the session, so multi-hour streams survive sporadic blips), and a security-validated `signedUrl` flow for production browser apps. The SDK lazy-loads its `ws` dependency so browser-only consumers (using `auth: 'query'` or `signedUrl`) ship a smaller bundle and don't need the `bufferutil` / `serverExternalPackages` setup that older versions required.
+Latest: **`smallestai-vercel-provider@1.0.0`** — upgrades to the Vercel AI SDK 7 line and implements the `SpeechModelV4` / `TranscriptionModelV4` specs (removes the runtime compatibility-shim warning you'd otherwise get running an older spec under `ai@7`). Also includes browser-native streaming (no proxy required), microphone capture hooks, auto-reconnect on socket drops (with counter reset across the session, so multi-hour streams survive sporadic blips), and a security-validated `signedUrl` flow for production browser apps. The SDK lazy-loads its `ws` dependency so browser-only consumers (using `auth: 'query'` or `signedUrl`) ship a smaller bundle and don't need the `bufferutil` / `serverExternalPackages` setup that older versions required.
 
 ## Installation
 
 ```bash
 npm install smallestai-vercel-provider ai
 ```
+
+Requires **`ai@^7`** — v1.0.0 of the provider implements the AI SDK's V4 model specs, introduced in the `ai@7` line.
 
 ## Setup
 
@@ -290,6 +292,16 @@ const { audio } = await generateSpeech({
 // Delete when done
 await smallestai.voiceClone.delete(clone.voiceId);
 ```
+
+<Note>
+`delete()` calls the canonical `POST /waves/v1/voice-cloning/delete` (the old `DELETE /waves/v1/lightning-large/` Bearer-auth workaround is retired and now returns `410`). That canonical route is currently gated on a console session token rather than the Waves API key, so a call authenticated only with `SMALLEST_API_KEY` may return `401` until the server accepts API keys here. If you hold a console JWT, override the request auth with `opts.headers`:
+
+```typescript
+await smallestai.voiceClone.delete(clone.voiceId, {
+  headers: { Authorization: 'Bearer <console-jwt>' },
+});
+```
+</Note>
 
 ## Patterns & Caveats
 
