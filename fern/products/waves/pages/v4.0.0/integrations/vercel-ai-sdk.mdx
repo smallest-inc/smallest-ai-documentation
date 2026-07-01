@@ -24,14 +24,17 @@ export SMALLEST_API_KEY="your_key_here"
 
 ## Text-to-Speech
 
-Supported model: `lightning-v3.1` — 44.1 kHz, natural expressive speech, voice cloning, ~200 ms TTFB, 12 languages plus `auto` for code-switching (see the [Lightning v3.1 model card](/waves/model-cards/text-to-speech/lightning-v-3-1#supported-languages) for the full list). The package also exports `DEFAULT_LIGHTNING_MODEL` so you don't have to hard-code the id; bumping it on a new Lightning release flows through to every caller that imports the constant.
+Two models, selected via the `model` field on the unified `POST /waves/v1/tts` route:
 
-<Note>
-The provider's `lightning-v3.1` constant targets the standard pool. To use the [Lightning v3.1 Pro](/waves/model-cards/text-to-speech/lightning-v-3-1-pro) pool (premium voice catalog), use the raw HTTP examples on the Pro model card today and pass `"model": "lightning_v3.1_pro"`. Provider-level Pro support is coming in a future `smallestai-vercel-provider` release.
-</Note>
+| Model ID | Description |
+|---|---|
+| `lightning_v3.1` | Default. 44.1 kHz, natural expressive speech, ~200 ms TTFB, 12 languages plus `auto` for code-switching, voice cloning supported. See the [Lightning v3.1 model card](/waves/model-cards/text-to-speech/lightning-v-3-1#supported-languages) for the full language list. |
+| `lightning_v3.1_pro` | Premium broadcast-quality pool (English + Hindi). American / British / Indian accents; Indian voices code-switch automatically. No voice cloning. See the [Lightning v3.1 Pro model card](/waves/model-cards/text-to-speech/lightning-v-3-1-pro). |
+
+The package also exports `DEFAULT_LIGHTNING_MODEL` (`lightning_v3.1`) and `LIGHTNING_V3_1_PRO_MODEL` so you don't have to hard-code the ids; bumping `DEFAULT_LIGHTNING_MODEL` on a new Lightning release flows through to every caller that imports the constant.
 
 ```typescript
-import { experimental_generateSpeech as generateSpeech } from 'ai';
+import { generateSpeech } from 'ai';
 import {
   smallestai,
   DEFAULT_LIGHTNING_MODEL,
@@ -49,14 +52,30 @@ const { audio } = await generateSpeech({
 // audio.base64    — base64-encoded audio
 ```
 
+To use the premium **Pro** pool, select the Pro model and a Pro-pool voice:
+
+```typescript
+const { audio } = await generateSpeech({
+  model: smallestai.speech('lightning_v3.1_pro'),
+  text: 'Broadcast-quality narration.',
+  voice: 'meher',   // must be a Pro-pool voice — see Available Voices below
+  language: 'en',
+});
+```
+
 <Note>
 Pass `outputFormat` under `providerOptions.smallestai.outputFormat`, not as Vercel's top-level `outputFormat` arg — the SDK rejects the top-level form with a warning. See [TTS Options](#tts-options) below.
 </Note>
 
 ## Speech-to-Text (batch)
 
+| Model ID | Languages | Notes |
+|---|---|---|
+| `pulse` | 38 (auto-detect) | Batch **and** WebSocket streaming (64 ms TTFT). Use for multilingual or real-time. |
+| `pulse-pro` | English only | **Batch/pre-recorded only** — leaderboard-ranked accuracy. No streaming (`transcriptionStream` rejects it). |
+
 ```typescript
-import { experimental_transcribe as transcribe } from 'ai';
+import { transcribe } from 'ai';
 import { smallestai } from 'smallestai-vercel-provider';
 import { readFileSync } from 'fs';
 
@@ -69,13 +88,24 @@ const { text, segments, durationInSeconds } = await transcribe({
 console.log(text);
 ```
 
+For max-accuracy English batch transcription, swap in `pulse-pro`:
+
+```typescript
+const { text } = await transcribe({
+  model: smallestai.transcription('pulse-pro'),
+  audio: readFileSync('recording.wav'),
+  mediaType: 'audio/wav',
+  providerOptions: { smallestai: { language: 'en' } },
+});
+```
+
 ## Next.js API Route Example
 
 Create a TTS endpoint in your Next.js app:
 
 ```typescript
 // app/api/speak/route.ts
-import { experimental_generateSpeech as generateSpeech } from 'ai';
+import { generateSpeech } from 'ai';
 import { smallestai } from 'smallestai-vercel-provider';
 
 export const runtime = 'nodejs';
@@ -84,7 +114,7 @@ export async function POST(req: Request) {
   const { text, voice } = await req.json();
 
   const { audio } = await generateSpeech({
-    model: smallestai.speech('lightning-v3.1'),
+    model: smallestai.speech('lightning_v3.1'),
     text,
     voice: voice || 'sophia',
   });
@@ -112,17 +142,13 @@ new Audio(URL.createObjectURL(blob)).play();
 
 ```typescript
 const { audio } = await generateSpeech({
-  model: smallestai.speech('lightning-v3.1'),
+  model: smallestai.speech('lightning_v3.1'),
   text: 'Hello!',
   voice: 'robert',
   providerOptions: {
     smallestai: {
       sampleRate: 44100,        // 8000 | 16000 | 24000 | 44100
-      outputFormat: 'mp3',      // pcm | mp3 | wav | ulaw | alaw
-      similarity: 0.5,          // voice similarity (0–1)
-      enhancement: 1,           // audio enhancement (0 | 1 | 2)
-      addWavHeader: false,
-      saveHistory: false,
+      outputFormat: 'mp3',      // pcm | mp3 | wav | ulaw | alaw | mulaw (alias of ulaw)
       pronunciationDicts: ['<dict-id>'],
     },
   },
@@ -169,7 +195,11 @@ const result = await transcribe({
 
 ## Streaming Speech-to-Text (WebSocket)
 
-For real-time transcription (TTFT ~64 ms server-side), the SDK exposes a WebSocket session that wraps `wss://api.smallest.ai/waves/v1/pulse/get_text` with the canonical `Authorization: Bearer` flow. WS-only flags like `itnNormalize`, `sentenceTimestamps`, `finalizeOnWords`, `maxWords`, and `eouTimeoutMs` only take effect on this path.
+For real-time transcription (TTFT ~64 ms server-side), the SDK exposes a WebSocket session that wraps `wss://api.smallest.ai/waves/v1/stt/live?model=pulse` with the canonical `Authorization: Bearer` flow. WS-only flags like `itnNormalize`, `sentenceTimestamps`, `finalizeOnWords`, `maxWords`, and `eouTimeoutMs` only take effect on this path.
+
+<Note>
+Only `pulse` streams. `pulse-pro` is batch/pre-recorded only — `transcriptionStream('pulse-pro')` rejects with an error on `connect()` rather than opening a socket the server would reject. Use `smallestai.transcription('pulse-pro')` for pre-recorded audio instead.
+</Note>
 
 ```typescript
 import { smallestai } from 'smallestai-vercel-provider';
@@ -231,7 +261,7 @@ const { transcript } = await SmallestAITranscriptionStream.transcribeOnce(
 
 ## Voice Cloning
 
-The provider exposes the voice-cloning REST endpoints alongside TTS / STT. Defaults to `lightning-v3.1`; the legacy `lightning-v2` model is rejected upstream.
+The provider exposes the voice-cloning REST endpoints alongside TTS / STT. Defaults to `lightning_v3.1` — the only cloning-capable model (the premium `lightning_v3.1_pro` pool does not support cloning).
 
 ```typescript
 import { smallestai } from 'smallestai-vercel-provider';
@@ -252,7 +282,7 @@ const all = await smallestai.voiceClone.list();
 
 // Use the cloned voice in TTS
 const { audio } = await generateSpeech({
-  model: smallestai.speech('lightning-v3.1'),
+  model: smallestai.speech('lightning_v3.1'),
   text: 'Hello in my own voice.',
   voice: clone.voiceId,
 });
@@ -482,7 +512,9 @@ What stays your job:
 
 ## Available Voices
 
-217 voices across 12 languages. Popular voices:
+200+ voices across 12 languages, split across the Standard and Pro pools. **Pair the voice with its pool** — Standard voices use `lightning_v3.1`, Pro voices require `lightning_v3.1_pro` (the API rejects a Pro voice on the standard model).
+
+**Standard pool** (`lightning_v3.1`):
 
 | Voice | Gender | Accent | Best For |
 |-------|--------|--------|----------|
@@ -490,7 +522,15 @@ What stays your job:
 | `robert` | Male | American | Professional |
 | `advika` | Female | Indian | Hindi, code-switching |
 | `vivaan` | Male | Indian | Bilingual English/Hindi |
-| `camilla` | Female | Mexican/Latin | Spanish |
+| `camilla` | Female | Spanish | Spanish content |
+
+**Pro pool** (`lightning_v3.1_pro`):
+
+| Voice | Gender | Accent | Best For |
+|-------|--------|--------|----------|
+| `meher` | Female | Indian | Premium Hindi/English code-switching |
+| `sophie` | Female | British | Broadcast-quality English |
+| `blake` | Male | American | Premium narration |
 
 Fetch the full voice list programmatically:
 
