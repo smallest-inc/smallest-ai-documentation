@@ -122,9 +122,11 @@ CASES: list[tuple[str, object]] = [
         "enabled": True,
         "endText": "CI voicemail end text.",
     }),
-    # denoisingConfig + redactionConfig both default to isEnabled: True on
-    # the platform, so we send False to force a diff entry.
-    ("denoisingConfig", {"isEnabled": False}),
+    # Send the opposite of each field's platform default to force a diff entry.
+    # denoisingConfig defaults to isEnabled: False; redactionConfig defaults to
+    # isEnabled: True (DEFAULT_DENOISING_CONFIG / DEFAULT_REDACTION_CONFIG_IS_ENABLED
+    # in atoms-types). Sending a value equal to the default produces no diff.
+    ("denoisingConfig", {"isEnabled": True}),
     ("redactionConfig", {"isEnabled": False}),
     ("pronunciationDicts", [{"word": "CITEST", "pronunciation": "see-eye-test"}]),
     ("llmIdleTimeoutConfig", {

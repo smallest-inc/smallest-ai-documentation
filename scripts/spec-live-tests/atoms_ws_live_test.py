@@ -33,6 +33,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import ssl
 import sys
 import time
 import urllib.error
@@ -80,8 +81,16 @@ async def _attempt_session(url: str, headers: dict) -> tuple[bool, dict]:
     session_id: str | None = None
     call_id: str | None = None
     error_msg: str | None = None
+    # Pin ALPN to HTTP/1.1. WebSocket upgrades only exist over HTTP/1.1 —
+    # if the TLS/CDN layer negotiates HTTP/2, the `Upgrade: websocket` header
+    # is invalid, no upgrade happens, and the request falls through to the REST
+    # route `GET /agent/:id` with :id="connect", which returns
+    # `400 {"errors":["Invalid agent id"]}` — a false failure that looks like a
+    # rejected handshake. Forcing http/1.1 in the ALPN offer prevents this.
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.set_alpn_protocols(["http/1.1"])
     try:
-        async with websockets.connect(url, additional_headers=headers, open_timeout=15) as ws:
+        async with websockets.connect(url, additional_headers=headers, open_timeout=15, ssl=ssl_ctx) as ws:
             try:
                 deadline = time.time() + 8
                 while time.time() < deadline:
