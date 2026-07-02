@@ -1358,6 +1358,118 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
+  /conversation/register-call:
+    post:
+      summary: Register a realtime agent call
+      x-fern-sdk-group-name: realtime
+      x-fern-sdk-method-name: register_call
+      description: |
+        Mint a **short-lived, single-use access token** for opening a realtime
+        [Agent WebSocket](/atoms/api-reference/api-reference/realtime-agent/realtime-agent)
+        connection. This is the **recommended** way to start a session from a
+        browser or other client-side app: your API key stays server-side, and
+        the browser only ever sees the short-lived token. (Server-side or
+        trusted clients may instead connect to the WebSocket with a raw API key
+        directly.)
+
+        Flow:
+        1. Call this endpoint with your API key and the `agent_id` (plus optional
+           `mode` and per-call `variables`). All session configuration is fixed
+           here — it is baked into the returned token.
+        2. Open a WebSocket to `wss://api.smallest.ai/atoms/v1/agent/connect?token=<access_token>`.
+           No `agent_id`, `mode`, or `variables` query params are needed on the
+           WebSocket — they come from the token.
+
+        The token is valid for `expires_in` seconds (30) and can be used for a
+        single connection. Request a fresh token for each connection.
+      tags:
+        - Realtime Agent
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id]
+              properties:
+                agent_id:
+                  type: string
+                  description: The Atoms agent to connect to.
+                  example: "69da0b4c20c0e03cfa4ee258"
+                mode:
+                  type: string
+                  enum: [webcall, chat]
+                  default: webcall
+                  description: |
+                    Session mode. `webcall` = full voice pipeline (audio in +
+                    audio out). `chat` = text-only pipeline. Defaults to `webcall`.
+                variables:
+                  type: object
+                  additionalProperties:
+                    oneOf:
+                      - type: string
+                      - type: number
+                      - type: boolean
+                  description: |
+                    Per-call prompt variables that override the agent's
+                    `defaultVariables` for this session only. Values must be
+                    `string`, `number`, or `boolean`. Reserved system-variable
+                    keys (`call_id`, `conversation_type`, `agent_number`,
+                    `user_number`, `current_date`, `current_time`, `current_day`,
+                    `agent_gender`, `default_language`, `supported_languages`,
+                    `timezone`) are populated by the server and stripped if
+                    supplied.
+                  example:
+                    customer_name: "Tanay"
+                    account_tier: "gold"
+      responses:
+        "201":
+          description: Access token created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      access_token:
+                        type: string
+                        description: |
+                          Short-lived, single-use token (prefixed `wct_`). Pass it
+                          as the `token` query param when opening the Agent
+                          WebSocket.
+                        example: "wct_9f8c2b1e-4d5a-4e6f-a7b8-c9d0e1f2a3b4"
+                      expires_in:
+                        type: integer
+                        description: Token lifetime in seconds.
+                        example: 30
+                      sample_rate:
+                        type: integer
+                        description: |
+                          Negotiated audio sample rate (Hz) for the session. Echoed
+                          back in the WebSocket `session.created` event.
+                        example: 24000
+        "400":
+          description: |
+            Validation failed (e.g. missing `agent_id`), or the organization has
+            no remaining credits.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
   /conversation:
     get:
       summary: Get all conversation logs
@@ -12223,6 +12335,8 @@ tags:
     description: Operations related to initiating and managing calls
   - name: Live Transcripts
     description: Real-time streaming of call transcript events via Server-Sent Events (SSE). Subscribe to an active call to receive user speech, agent speech, and lifecycle events in real time.
+  - name: Realtime Agent
+    description: Start a realtime voice or chat session with an agent over a WebSocket. Use `POST /conversation/register-call` to mint a short-lived access token, then open the Agent WebSocket with it.
   - name: Phone Numbers
     description: Operations related to phone numbers
   - name: Compliance

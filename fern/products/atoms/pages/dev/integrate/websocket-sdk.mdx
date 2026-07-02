@@ -65,6 +65,16 @@ await agent.connect();
 // through the default audio output. Call agent.disconnect() when done.
 ```
 
+<Tip>
+  **In the browser, don't ship your raw API key.** Instead, mint a short-lived,
+  single-use access token server-side with `POST /conversation/register-call`
+  (see the **Register Call** endpoint under **Realtime Agent** in the API
+  reference) and pass that token as `apiKey`. See the
+  [Browser Voice Cookbook](/atoms/atoms-platform/integrate/browser-voice-cookbook)
+  for the full three-step flow. Passing a raw `sk_` key still works and is fine
+  for server-side or trusted clients.
+</Tip>
+
 The CDN equivalent uses the `AtomsSdk` global:
 
 ```html
@@ -87,7 +97,7 @@ The CDN equivalent uses the `AtomsSdk` global:
 
 ```typescript
 interface AtomsAgentConfig {
-  apiKey:          string;    // Required. Smallest API key.
+  apiKey:          string;    // Required. A short-lived access token from /register-call (recommended for browsers), or a raw API key.
   agentId:         string;    // Required. Agent to connect to.
   baseUrl?:        string;    // Default: wss://api.smallest.ai. Override for local dev.
   sampleRate?:     number;    // Default: 24000. Audio sample rate in Hz.
@@ -118,7 +128,8 @@ Subscribe with `agent.on(eventName, handler)`.
 | `agent_start_talking` | None | The server begins streaming agent TTS for a turn. Useful for "agent speaking" UI state. |
 | `agent_stop_talking` | None | The server has finished the current turn. |
 | `error` | `{ code: string, message: string }` | A non-fatal session error occurred. Fatal errors also trigger `session_ended`. |
-| `transcript` | `{ role: "user" \| "agent", text: string }` | Reserved. The SDK wires this event up, but the current agent pipeline does not stream transcripts over this WebSocket. Use the [post-call conversation API](/atoms/api-reference/api-reference/logs/get-conversation-log-by-id) or the [SSE live-transcripts stream](/atoms/developer-guide/operate/analytics/sse-for-live-transcripts) for transcript data. |
+| `transcript` | `{ role: "user" \| "assistant", text: string }` | The final transcript for a completed turn — user speech after STT, or the agent's spoken text. |
+| `transcript_delta` | `{ role: "user" \| "assistant", text: string }` | Streaming, **cumulative** transcript for the in-progress turn. Replace the current bubble's text on each event; the matching `transcript` settles it. Assistant deltas are paced to the audio the user is hearing, so they double as live captions. |
 
 ## Patterns
 
@@ -247,8 +258,7 @@ Expected console output, in order: `session_started` with `session_id` and `call
 |---|---|
 | Browser runtime only | The SDK uses `navigator.mediaDevices.getUserMedia` and `AudioContext`. No React Native, Node, or Cordova build. |
 | Transport | WebSocket only (no WebRTC). |
-| TTS alignment | No per-character timing on `output_audio.delta`. Client-side caption sync is not supported. |
-| Live transcripts | `transcript` events are not emitted on this WebSocket. Use the post-call conversation API or the SSE live-transcripts stream. |
+| Caption timing | `transcript_delta` is word-level and audio-paced, not per-character. Fine for live captions; not frame-accurate lip-sync. |
 
 For non-browser runtimes, connect to the [Realtime Agent WebSocket API](/atoms/api-reference/api-reference/realtime-agent/realtime-agent) directly. A raw-protocol guide with tested reference clients for Python, React Native, Swift, and Kotlin is in progress.
 

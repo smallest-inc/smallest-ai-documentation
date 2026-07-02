@@ -1,0 +1,190 @@
+---
+title: "Browser Voice Cookbook"
+sidebarTitle: "Browser Voice Cookbook"
+description: "Connect a browser to an Atoms agent in three steps using the Agent Web SDK. Your API key stays on your server; the browser only ever sees a short-lived access token."
+---
+
+Connect a browser to an Atoms agent in three steps. Your API key stays on your
+server; the browser only ever holds a short-lived access token.
+
+## How it works
+
+```
+┌─────────────┐  1. POST /register-call             ┌──────────────────┐
+│ Your        │     Authorization: Bearer sk_…       │ Atoms API        │
+│ Backend     │     { agent_id: "...",               │                  │
+│             │       variables: {...} }      ──────▶│ Returns:         │
+│             │                                      │  access_token    │
+│             │ ◀──────────────────────────────────  │  (wct_…, 30s)    │
+└─────────────┘                                      └──────────────────┘
+       │
+       │ 2. Return access_token to browser
+       ▼
+┌─────────────┐  3. AtomsAgent({ apiKey: access_token, agentId }).connect()
+│  Browser    │ ──────────────────────────────────▶ wss://api.smallest.ai/atoms/v1
+│  + SDK      │
+└─────────────┘
+```
+
+- Your API key never reaches the browser.
+- The token is **single-use** and **expires in 30 seconds** — mint a fresh one per call.
+
+<Info>
+  You need an API key (from [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys))
+  and an agent ID. This cookbook uses the recommended token flow; server-side or
+  trusted clients can instead connect with the API key directly — see the
+  [Agent Web SDK](/atoms/atoms-platform/integrate/web-socket-sdk) reference.
+</Info>
+
+<Steps>
+  <Step title="Get an access token (server-side)">
+    Call `POST /conversation/register-call` from your backend with your API key
+    (see the **Register Call** endpoint under **Realtime Agent** in the API
+    reference). Set `agent_id`, and optionally `mode` and per-call `variables`.
+
+    ```bash
+    curl -X POST https://api.smallest.ai/atoms/v1/conversation/register-call \
+      -H "Authorization: Bearer sk_your_api_key" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "agent_id": "your_agent_id",
+        "variables": { "customer_name": "Alex" }
+      }'
+    ```
+
+    Response:
+
+    ```json
+    {
+      "status": true,
+      "data": {
+        "access_token": "wct_<uuid>",
+        "expires_in": 30,
+        "sample_rate": 24000
+      }
+    }
+    ```
+
+    `variables` is optional — it fills `{{key}}` placeholders in the agent prompt
+    for this call only.
+  </Step>
+
+  <Step title="Install the SDK">
+    <CodeBlocks>
+      ```bash npm
+      npm install @smallest-ai/agent-sdk
+      ```
+      ```bash pnpm
+      pnpm add @smallest-ai/agent-sdk
+      ```
+      ```bash yarn
+      yarn add @smallest-ai/agent-sdk
+      ```
+      ```html CDN
+      <script src="https://cdn.jsdelivr.net/npm/@smallest-ai/agent-sdk/dist/agent-sdk.browser.js"></script>
+      <!-- Loaded via CDN, the SDK is exposed on window.AtomsSdk -->
+      ```
+    </CodeBlocks>
+  </Step>
+
+  <Step title="Connect the browser">
+    Pass the `access_token` from step 1 as the SDK's `apiKey`.
+
+    ```javascript
+    import { AtomsAgent } from "@smallest-ai/agent-sdk";
+
+    // Fetch the token from your backend (which calls /register-call internally)
+    const { data } = await fetch("/start-call").then((r) => r.json());
+
+    const agent = new AtomsAgent({
+      apiKey: data.access_token, // short-lived wct_ token
+      agentId: "your_agent_id",
+    });
+
+    agent.on("session_started",     (e) => console.log("Connected:", e.call_id));
+    agent.on("transcript",          (e) => renderBubble(e.role, e.text));       // final per turn
+    agent.on("transcript_delta",    (e) => updateLiveBubble(e.role, e.text));   // streaming, cumulative
+    agent.on("agent_start_talking", ()  => showSpeakingIndicator());
+    agent.on("agent_stop_talking",  ()  => hideSpeakingIndicator());
+    agent.on("session_ended",       (e) => console.log("Ended:", e.reason));
+    agent.on("error",               (e) => console.error(e));
+
+    await agent.connect(); // microphone captured automatically
+
+    // Optional: send text (interrupts the agent if it is speaking)
+    agent.sendText("Hello");
+
+    // End the call
+    agent.disconnect();
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  `connect()` calls `navigator.mediaDevices.getUserMedia()`. Browsers only expose
+  the microphone on **secure contexts**: HTTPS in production, or
+  `http://localhost` / `http://127.0.0.1` in development. Serving from a
+  non-loopback HTTP origin throws a permission error.
+</Warning>
+
+## Events
+
+Subscribe with `agent.on(eventName, handler)`.
+
+| Event | When | Use |
+|---|---|---|
+| `session_started` | Call ready | Enable UI, store `call_id` |
+| `session_ended` | Call ended | Disable UI; `reason` is a server string or a numeric close code |
+| `transcript_delta` | Streaming text (cumulative) for the current turn | Live bubble — **replace** the text on each event |
+| `transcript` | Final text for a completed turn | Settle the bubble |
+| `agent_start_talking` | Agent TTS audio begins | Speaking indicator |
+| `agent_stop_talking` | Agent TTS audio ends | Stop indicator |
+| `error` | Protocol/server error | Log; may not be fatal |
+
+`transcript` and `transcript_delta` carry a `role` of `"user"` or `"assistant"`
+and a `text` string. Deltas are cumulative — replace the bubble's text on each
+one, then treat the matching `transcript` as the final value for that turn.
+
+## SDK config
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `apiKey` | string | required | Access token from `/register-call` (recommended) or a raw API key |
+| `agentId` | string | required | Agent ID |
+| `sampleRate` | number | `24000` | Audio sample rate (Hz) |
+| `autoCaptureMic` | boolean | `true` | Acquire the mic on `connect()` |
+| `captureDeviceId` | string | — | Specific microphone device |
+| `playbackDeviceId` | string | — | Specific speaker (Chrome only) |
+
+## Methods
+
+| Method | Description |
+|---|---|
+| `connect()` | Open the call |
+| `disconnect()` | End the call |
+| `sendText(text)` | Send a typed message |
+| `mute()` / `unmute()` | Toggle the microphone |
+| `isConnected` / `isMuted` | State getters |
+
+## Common errors
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `401` on connect | Token expired (> 30 s) or already consumed | Call `/register-call` again for a fresh token |
+| `Microphone access required` | User denied mic permission | Check browser permission settings; serve over HTTPS / localhost |
+
+## Limits
+
+- Access token: 30-second TTL, single-use.
+- Audio: PCM 16-bit, 24 kHz, mono.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Agent Web SDK reference" icon="js" href="/atoms/atoms-platform/integrate/web-socket-sdk">
+    Full SDK API — config, methods, events, and a copy-paste smoke test.
+  </Card>
+  <Card title="Realtime Agent WebSocket API" icon="plug" href="/atoms/api-reference/api-reference/realtime-agent/realtime-agent">
+    The raw wire protocol behind the SDK — the `register-call` token flow, message types, and payload shapes.
+  </Card>
+</CardGroup>

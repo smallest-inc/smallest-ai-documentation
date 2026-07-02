@@ -33,20 +33,33 @@ servers:
         query:
           type: object
           required:
-            - agent_id
+            - token
           properties:
-            agent_id:
-              type: string
-              description: The Atoms agent to connect to. Required.
-              example: "69da0b4c20c0e03cfa4ee258"
             token:
               type: string
               description: |
-                API key. Alternative to the `Authorization: Bearer <key>`
-                header — useful for browser and React Native clients where
-                setting custom headers on WebSocket handshakes is awkward.
-                Provide this OR the Authorization header, not both.
-              example: "sk_your_key"
+                The access token. Two forms are supported:
+
+                - A short-lived, single-use token (prefixed `wct_`) from
+                  `POST /atoms/v1/conversation/register-call` — **recommended
+                  for browser / client-side** use, since your API key stays
+                  server-side. With this token, `agent_id`, `mode`, and
+                  `variables` are baked in, so you don't pass them on the URL.
+                - A raw API key (prefixed `sk_`) — convenient for server-side
+                  or trusted clients. Pair it with the `agent_id` (and optional
+                  `mode` / `sample_rate` / `variables`) query params below.
+
+                Browser WebSocket clients cannot set custom headers, so the
+                token is passed as a query param rather than an `Authorization`
+                header.
+              example: "wct_9f8c2b1e-4d5a-4e6f-a7b8-c9d0e1f2a3b4"
+            agent_id:
+              type: string
+              description: |
+                The Atoms agent to connect to. Required when authenticating
+                with a raw `sk_` API key. Ignored when using a `wct_` token
+                (the agent is fixed at `register-call` time).
+              example: "69da0b4c20c0e03cfa4ee258"
             mode:
               type: string
               enum:
@@ -54,7 +67,9 @@ servers:
                 - chat
               default: webcall
               description: |
-                Session mode.
+                Session mode. Used when connecting with a raw `sk_` API key —
+                with a `wct_` token, set `mode` in the `register-call` request
+                instead.
 
                 - `webcall` — full voice pipeline (STT → LLM → TTS). The
                   client sends audio via `input_audio_buffer.append` and
@@ -71,20 +86,21 @@ servers:
               enum: [8000, 16000, 24000, 48000]
               default: 24000
               description: |
-                Optional sample rate hint for the incoming audio stream (Hz).
-                Valid values: 8000, 16000, 24000, 48000. Default: 24000.
-                Server responds with the negotiated sample rate in the
-                `session.created` event. Use 8000 for telephony-quality audio.
+                Requested audio sample rate (Hz). Honored when authenticating
+                with a raw `sk_` API key. With a `wct_` token the rate is fixed
+                at 24000 and this param is ignored. The negotiated rate is
+                always echoed in the `session.created` event. Use 8000 for
+                telephony-quality audio.
 
 channels:
   agentSession:
     address: /atoms/v1/agent/connect
     title: Agent Session
     description: |
-      A bidirectional session with an Atoms agent. Open the connection with
-      your API key and an `agent_id`; the server creates a session, bridges
-      audio and transcripts to the STT/LLM/TTS pipeline, and streams events
-      back until the client closes or the server ends the session.
+      A bidirectional session with an Atoms agent. Mint an access token, open
+      the connection with it, and the server creates a session, bridges audio
+      and transcripts to the STT/LLM/TTS pipeline, and streams events back until
+      the client closes or the server ends the session.
 
       Post-call, the full conversation (transcript + recording) is available
       at `GET /atoms/v1/conversation/{callId}` using the `call_id` from
@@ -92,27 +108,77 @@ channels:
 
       ## Connection
 
-      Open a WebSocket to `wss://api.smallest.ai/atoms/v1/agent/connect` with your
-      API key as either `Authorization: Bearer <key>` or `?token=<key>`.
+      ### Recommended: short-lived token flow
 
-      ### Query parameters
+      1. **Register the call.** Call `POST /conversation/register-call`
+         (see the **Register Call** reference in this section)
+         with your API key in the `Authorization: Bearer <key>` header and the
+         `agent_id` (plus optional `mode` and `variables`) in the body. It
+         returns a short-lived, single-use `access_token` (prefixed `wct_`,
+         valid for `expires_in` seconds).
+      2. **Open the WebSocket** with only the token:
+
+         ```
+         wss://api.smallest.ai/atoms/v1/agent/connect?token=<access_token>
+         ```
+
+         `agent_id`, `mode`, and `variables` are already baked into the token —
+         don't pass them on the URL.
+
+      This keeps your API key server-side; the browser only ever holds the
+      short-lived token.
+
+      ### Alternative: connect with your API key directly
+
+      You can also connect with a raw API key — `?token=<sk_key>` or
+      `Authorization: Bearer <sk_key>` — plus the query params below. This is
+      convenient for server-side or trusted clients. For browser / client-side
+      apps, prefer the token flow above so your API key is never exposed.
 
       | Parameter | Required | Type | Default | Description |
       | --- | --- | --- | --- | --- |
+      | `token` | Yes\* | string | — | Raw API key (`sk_…`). Alternative to the `Authorization` header. |
       | `agent_id` | Yes | string | — | The Atoms agent to connect to. |
-      | `token` | Yes\* | string | — | API key. Alternative to the `Authorization` header — useful for browser/React Native clients. |
-      | `variables` | No | string | — | URL-encoded JSON object of per-call prompt variables. Overrides the agent's `defaultVariables` for this session only. Values must be `string`, `number`, or `boolean`. Reserved keys (`call_id`, `conversation_type`, `user_number`, `agent_number`) are stripped server-side. |
+      | `variables` | No | string | — | URL-encoded JSON object of per-call prompt variables. Overrides the agent's `defaultVariables` for this session only. Values must be `string`, `number`, or `boolean`. Reserved system-variable keys are stripped server-side (they are populated by the server): `call_id`, `conversation_type`, `agent_number`, `user_number`, `current_date`, `current_time`, `current_day`, `agent_gender`, `default_language`, `supported_languages`, `timezone`. |
       | `mode` | No | `webcall` \| `chat` | `webcall` | Session mode. `webcall` = full voice pipeline (audio in + audio out). `chat` = text-only pipeline. Invalid values are rejected with a connection error. |
-      | `sample_rate` | No | integer | `24000` | Requested audio sample rate in Hz for both input and output audio. Valid values: `8000`, `16000`, `24000`, `48000`. The negotiated rate is echoed in `session.created.sample_rate`. Set to `8000` for telephony-quality audio streams. |
+      | `sample_rate` | No | integer | `24000` | Requested audio sample rate in Hz for both input and output audio. Valid values: `8000`, `16000`, `24000`, `48000`. The negotiated rate is echoed in `session.created.sample_rate`. Set to `8000` for telephony-quality audio streams. (With a `wct_` token the rate is fixed at 24000.) |
 
       \* `token` or `Authorization: Bearer <key>` — not both.
 
       ### Connection errors
 
-      - **401 Unauthorized** — invalid or missing API key, or `agent_id` not found.
+      - **401 Unauthorized** — invalid or missing token/API key, expired or
+        already-used `wct_` token, or `agent_id` not found.
       - **503 Service Unavailable** — server is gracefully draining. The HTTP upgrade is rejected before the WebSocket handshake completes. Clients should retry with exponential backoff.
 
-      ### Example: connect with per-call variables
+      ### Example: register a call, then connect (recommended)
+
+      ```javascript
+      // 1. Mint a short-lived token (server-side — keeps your API key private)
+      const res = await fetch(
+        "https://api.smallest.ai/atoms/v1/conversation/register-call",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            agent_id: agentId,
+            mode: "webcall",
+            variables: { customer_name: "Tanay", account_tier: "gold" },
+          }),
+        }
+      );
+      const { data } = await res.json(); // { access_token, expires_in, sample_rate }
+
+      // 2. Open the WebSocket with the token (e.g. in the browser)
+      const ws = new WebSocket(
+        `wss://api.smallest.ai/atoms/v1/agent/connect?token=${data.access_token}`
+      );
+      ```
+
+      ### Example: connect with your API key directly
 
       ```javascript
       const variables = { customer_name: "Tanay", account_tier: "gold" };
@@ -143,6 +209,8 @@ channels:
         $ref: "#/components/messages/outputAudioDelta"
       transcript:
         $ref: "#/components/messages/transcript"
+      transcriptDelta:
+        $ref: "#/components/messages/transcriptDelta"
       agentStartTalking:
         $ref: "#/components/messages/agentStartTalking"
       agentStopTalking:
@@ -164,7 +232,7 @@ operations:
     action: send
     channel:
       $ref: "#/channels/agentSession"
-    summary: Commit the buffered audio (force turn boundary)
+    summary: Reserved — accepted but currently a no-op
     messages:
       - $ref: "#/channels/agentSession/messages/inputAudioCommit"
   sendInputText:
@@ -213,9 +281,16 @@ operations:
     action: receive
     channel:
       $ref: "#/channels/agentSession"
-    summary: Transcript of user speech or agent response text
+    summary: Final transcript for a completed turn (user or assistant)
     messages:
       - $ref: "#/channels/agentSession/messages/transcript"
+  receiveTranscriptDelta:
+    action: receive
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: Streaming, cumulative transcript for the in-progress turn
+    messages:
+      - $ref: "#/channels/agentSession/messages/transcriptDelta"
   receiveAgentStartTalking:
     action: receive
     channel:
@@ -252,8 +327,12 @@ components:
       scheme: bearer
       bearerFormat: API Key
       description: |
-        API key passed as `Authorization: Bearer <SMALLEST_API_KEY>` on the
-        WebSocket handshake. Alternative: pass the key as `?token=` in the URL.
+        Access token for the handshake, passed as `?token=` in the URL (browser
+        WebSocket clients cannot set custom headers) or as
+        `Authorization: Bearer <token>`. The token is either a short-lived
+        `wct_` token from `POST /conversation/register-call` (recommended for
+        browser / client-side) or a raw `sk_` API key (server-side / trusted
+        clients).
 
   messages:
     inputAudioAppend:
@@ -285,13 +364,14 @@ components:
 
     inputAudioCommit:
       name: InputAudioCommit
-      title: Commit audio buffer
-      summary: Force a turn boundary — flushes whatever audio has been buffered.
+      title: Commit audio buffer (reserved)
+      summary: Reserved for a manual turn boundary — currently a no-op.
       description: |
-        Useful when the client knows the user's turn is over (e.g., push-to-talk
-        released) and wants the agent to respond immediately without waiting for
-        server-side silence detection. Optional — server-side VAD handles this
-        automatically in normal conversation flow.
+        Accepted and validated by the server but currently has **no effect** —
+        turn boundaries are handled entirely by server-side VAD. The message is
+        reserved so clients (e.g. push-to-talk UIs) can adopt it ahead of a
+        future manual-commit capability; sending it today neither flushes the
+        buffer nor forces the agent to respond.
       contentType: application/json
       payload:
         type: object
@@ -412,9 +492,15 @@ components:
           reason:
             type: string
             description: |
-              Why the session ended. Common values: `client_requested` (client
-              sent `session.close`), `websocket_closed` (socket dropped),
-              `server_error`, `timeout`, or a specific error tag.
+              Why the session ended. Observed values:
+              - `client_requested` — client sent `session.close`.
+              - `websocket_closed` — the WebSocket dropped.
+              - `ended` — the agent pipeline ended the session (e.g. the agent
+                hung up or the conversation completed).
+
+              Fatal setup/auth failures do **not** produce `session.closed` —
+              the server emits an `error` and closes the socket with code 4000
+              instead.
         examples:
           - value:
               type: session.closed
@@ -444,15 +530,20 @@ components:
 
     transcript:
       name: Transcript
-      title: Transcript
-      summary: Transcription of user speech or text of agent response.
+      title: Transcript (final)
+      summary: Authoritative final transcript for a completed turn.
       description: |
-        Emitted on turn boundaries when the server produces a text
-        representation of the utterance — user speech after STT, or
-        agent response text alongside TTS. Emission timing depends on
-        the agent pipeline configuration; not every audio chunk is
-        accompanied by a transcript, and clients should treat transcripts
-        as informational.
+        The **final** transcript for a turn. Emitted on turn boundaries:
+        - `user` — when the user's turn is committed (the agent starts
+          responding). Multi-segment speech is collapsed into a single
+          final.
+        - `assistant` — after the agent finishes speaking a turn. The text
+          reflects exactly what was spoken (an interruption truncates it to
+          what the user actually heard).
+
+        For live, in-progress text use `transcript.delta` instead. A client
+        that renders `transcript.delta` should treat the matching
+        `transcript` as the authoritative replacement when the turn ends.
       contentType: application/json
       payload:
         type: object
@@ -468,11 +559,11 @@ components:
             type: string
             enum:
               - user
-              - agent
+              - assistant
             description: Whose utterance this transcript is for.
           text:
             type: string
-            description: The transcribed (or agent-generated) text.
+            description: The transcribed (user) or spoken (assistant) text.
         examples:
           - value:
               type: transcript
@@ -480,8 +571,50 @@ components:
               text: "Tell me about your pricing."
           - value:
               type: transcript
-              role: agent
+              role: assistant
               text: "We offer three plans: Starter, Pro, and Enterprise."
+
+    transcriptDelta:
+      name: TranscriptDelta
+      title: Transcript (streaming delta)
+      summary: Cumulative, in-progress transcript for the current turn.
+      description: |
+        Live streaming transcript. Each event carries the **cumulative**
+        text for the current turn so far — the client should **replace**
+        (not append to) the current bubble's text on every delta.
+
+        - `assistant` — streamed at TTS pace, word by word, in sync with
+          the audio the user is hearing. An interruption naturally
+          truncates the stream.
+        - `user` — streamed at STT pace as the user speaks; multi-segment
+          speech accumulates into one growing bubble.
+
+        The turn is finalized by a `transcript` event with the same `role`.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+          - role
+          - text
+        properties:
+          type:
+            type: string
+            const: transcript.delta
+          role:
+            type: string
+            enum:
+              - user
+              - assistant
+            description: Whose utterance this delta is for.
+          text:
+            type: string
+            description: Cumulative transcript text for the current turn.
+        examples:
+          - value:
+              type: transcript.delta
+              role: assistant
+              text: "We offer three"
 
     agentStartTalking:
       name: AgentStartTalking
@@ -504,10 +637,13 @@ components:
           timestamp:
             type: string
             format: date-time
-            description: |
-              Server-side timestamp of when the agent turn started.
-              Note: this field is not in the typed server interface — it may arrive
-              via NATS passthrough from the pipeline. Treat as optional.
+            description: >
+              ISO 8601 server-side timestamp of when the agent turn started,
+              included with the event.
+        examples:
+          - value:
+              type: agent_start_talking
+              timestamp: "2026-07-02T10:30:45.123456"
 
     agentStopTalking:
       name: AgentStopTalking
@@ -525,10 +661,13 @@ components:
           timestamp:
             type: string
             format: date-time
-            description: |
-              Server-side timestamp of when the agent turn ended.
-              Note: this field is not in the typed server interface — it may arrive
-              via NATS passthrough from the pipeline. Treat as optional.
+            description: >
+              ISO 8601 server-side timestamp of when the agent turn ended,
+              included with the event.
+        examples:
+          - value:
+              type: agent_stop_talking
+              timestamp: "2026-07-02T10:30:47.654321"
 
     interruption:
       name: Interruption
@@ -537,16 +676,12 @@ components:
       description: |
         Emitted when the server's VAD detects user speech during an active
         agent turn. The agent's current TTS output is truncated and the
-        pipeline is re-primed with the user's new utterance. Clients should
-        stop playing any buffered `output_audio.delta` chunks from the
-        interrupted turn.
+        pipeline is re-primed with the user's new utterance. On receiving
+        this, clients should stop playing any buffered `output_audio.delta`
+        chunks from the interrupted turn.
 
         Typically followed by a new `agent_start_talking` once the agent
         produces its next response.
-
-        Note: `interruption` is not in the typed `ServerEventType` enum — it
-        arrives via NATS passthrough from the pipeline (pipecat). It is emitted
-        in practice but should be treated as best-effort rather than guaranteed.
       contentType: application/json
       payload:
         type: object
@@ -578,9 +713,11 @@ components:
           code:
             type: string
             description: |
-              Machine-readable error code. Common values: `invalid_event`,
-              `no_session`, `internal_error`, `voice_clone_timeout`,
-              HTTP status codes like `401`, `503`.
+              Machine-readable error code. Values emitted by the gateway:
+              `invalid_event` (a client message failed validation),
+              `no_session` (message received before the session was ready),
+              `internal_error`, or the HTTP status code of a setup failure as a
+              string (e.g. `401`, `400`, `503`).
           message:
             type: string
             description: Human-readable error message.
