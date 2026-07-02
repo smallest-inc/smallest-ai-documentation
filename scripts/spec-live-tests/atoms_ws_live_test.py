@@ -119,6 +119,20 @@ async def _attempt_session(url: str, headers: dict) -> tuple[bool, dict]:
                 await ws.send(json.dumps({"type": "session.close"}))
             except Exception:
                 pass
+    except websockets.exceptions.InvalidStatus as e:
+        # Surface the rejected-handshake status AND body. A 400 with body
+        # `{"errors":["Invalid agent id"]}` means the upgrade never happened and
+        # the request fell through to the REST `GET /agent/:id` route — i.e. an
+        # HTTP-version / CDN issue, not an auth/config problem. Any other body
+        # points at a genuine gateway/tenant rejection.
+        status = getattr(getattr(e, "response", None), "status_code", "?")
+        body = ""
+        try:
+            raw = getattr(e.response, "body", b"") or b""
+            body = raw.decode("utf-8", "replace")[:300]
+        except Exception:
+            pass
+        return False, {"error": f"InvalidStatus: HTTP {status} body={body!r}"}
     except Exception as e:
         return False, {"error": f"{type(e).__name__}: {e}"}
 
