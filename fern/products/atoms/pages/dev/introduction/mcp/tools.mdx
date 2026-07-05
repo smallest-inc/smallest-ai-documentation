@@ -1,7 +1,7 @@
 ---
 title: Available Tools
-subtitle: All 75 tools the Smallest MCP server provides.
-description: 'Reference for all 75 tools the Smallest MCP server exposes. The AI editor picks the right tool from your natural-language prompt — you do not call these directly.'
+subtitle: All 79 tools the Smallest MCP server provides.
+description: 'Reference for all 79 tools the Smallest MCP server exposes. The AI editor picks the right tool from your natural-language prompt — you do not call these directly.'
 ---
 
 You never call these directly — just describe what you want and the AI picks the right tool. This page is a reference.
@@ -16,7 +16,7 @@ You never call these directly — just describe what you want and the AI picks t
 |---|---|
 | `get_agents` | List all agents in your org with voice, model, language, and call stats. Supports filtering by name, workflow type, and sorting. |
 | `get_agent` | Get full details for a single agent — voice config, model, prompt, language, call behavior, timeouts, and version info. |
-| `create_agent` | Create a new voice agent with model, voice, language, and behavior settings. Defaults to gpt-4.1 with daniel voice. |
+| `create_agent` | Create a new voice agent with model, voice, language, and behavior settings. Defaults to gpt-4.1 with daniel voice. Pass `workflow_type: multi_agents` to create a Playbooks agent (see [Playbooks](#playbooks-multi-agent-agents) below). |
 | `duplicate_agent` | Duplicate an existing agent into your org (or another org). Useful for creating variants or A/B testing. |
 | `delete_agent` | Archive or unarchive an agent. Archived agents are inactive but recoverable. |
 
@@ -37,9 +37,24 @@ You never call these directly — just describe what you want and the AI picks t
 | `remove_agent_tool` | Remove a tool from an agent by name. For versioned agents, creates a draft automatically — or pass a `draft_id` to stack onto an existing draft. |
 | `set_pre_call_api` | Configure or disable an agent's pre-call API — one HTTP request made before the call connects to enrich the agent with variables (e.g. fetch a customer record by phone number). For versioned agents, creates a draft automatically — or pass a `draft_id` to stack onto an existing draft. |
 
+## Playbooks (multi-agent agents)
+
+A **multi-agent (Playbooks)** agent replaces the single monolithic prompt with an **intent router + specialist playbooks (SOPs)**: every caller turn is classified to the best-matching playbook, which runs a focused prompt with its own scoped tools — with optional mid-call re-routing when the caller changes topic. Playbooks can require **weak** (caller recognition) or **strong** (full identity proof) authentication before their tools run; the identity tools are defined once and shared across all playbooks. Create one with `create_agent` (`workflow_type: multi_agents`), then build it with these tools. All edits land on a draft — `publish_draft` makes them live.
+
+| Tool | Description |
+|---|---|
+| `get_playbooks` | Read a multi-agent's Playbooks config: the intent router (fallback + mid-call rerouting), shared auth tools, and the SOP list. Pass a `playbook_id` for one playbook's full detail (prompt, tools, intent description). Reads the active version by default, or a specific draft/version. Also reports publish-blocking gaps (missing fallback, empty auth tools, no `end_call` tool anywhere). |
+| `add_playbooks` | Add one or more playbooks (SOPs) to a draft in a single call. Each playbook = an intent (name + description the classifier routes on) + a specialist prompt + optional scoped API-call tools (same shape as `add_agent_tool`), an auth level, and convenience flags for `end_call` / `transfer_call` tools. The first playbook automatically becomes the router fallback. Names and intent names must be unique on the agent (case-insensitive, archived included). |
+| `update_playbook` | Edit one playbook — prompt, intent, auth level, tools — or **archive/restore** it (`enabled: false/true`; playbooks are never deleted so call history stays resolvable). The router fallback cannot be archived — repoint it first. |
+| `configure_playbooks` | Section-level settings: the intent router (fallback playbook, mid-call rerouting), the **conversation guide** (persona/tone/global rules injected into every playbook — define them once here, not per-SOP), and the shared weak/strong identity tools. |
+
+<Note>
+Give at least one playbook an `end_call` tool (`add_end_call_tool: true`) — without one, the agent has no way to hang up when the caller says goodbye. `get_playbooks` warns about this.
+</Note>
+
 ## Drafts
 
-On versioned agents, every config edit lands in a draft rather than going live directly. Edit tools (`update_agent_prompt`, `add_agent_tool`, `set_pre_call_api`, `remove_agent_tool`) accept an optional `draft_id` so multiple changes — prompt, pre-call API, and a full toolset — can be stacked into **one** draft and shipped with a single `publish_draft`. When adding several API-call tools to the same draft, pass them as one batch: the draft's tools section is written wholesale, so the last write defines the full set.
+On versioned agents, every config edit lands in a draft rather than going live directly. Edit tools (`update_agent_prompt`, `add_agent_tool`, `set_pre_call_api`, `remove_agent_tool`, and the Playbooks tools `add_playbooks` / `update_playbook` / `configure_playbooks`) accept an optional `draft_id` so multiple changes — prompt, pre-call API, and a full toolset — can be stacked into **one** draft and shipped with a single `publish_draft`. When adding several API-call tools to the same draft, pass them as one batch: the draft's tools section is written wholesale, so the last write defines the full set.
 
 | Tool | What it does |
 |---|---|
