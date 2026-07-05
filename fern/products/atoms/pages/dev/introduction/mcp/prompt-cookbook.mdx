@@ -82,6 +82,32 @@ No commands to memorize. Just ask in plain English — the AI picks the right to
     ```
   </Accordion>
 
+  <Accordion title="Build a multi-agent (Playbooks) agent">
+    A Playbooks agent routes every caller turn to a specialist SOP instead of one giant prompt. Describe the whole thing — the AI creates the agent, adds the SOPs, wires the auth tools, and publishes:
+
+    ```
+    Create a multi-agent called "Loan Servicing IVR" for Hindi callers with these SOPs:
+    1. EMI details — caller asks about their EMI amount or due date (needs strong auth)
+    2. Foreclosure — caller wants a foreclosure quote (needs strong auth)
+    3. General queries — anything else, make this the fallback
+    Enable the end call action so the agent can hang up politely.
+    ```
+    ```
+    Set the shared auth tools: weak = identify_by_phone (POST https://api.acme.com/identity/by-phone),
+    strong = verify_dob (POST https://api.acme.com/identity/verify-dob) — then publish
+    ```
+    ```
+    Set the conversation guide: "You are Aria, a warm female support agent for
+    Acme Finance. Mirror the caller's language. Keep answers short and spoken-style."
+    ```
+    ```
+    Show me the playbooks on "Loan Servicing IVR" — anything blocking publish?
+    ```
+    ```
+    Archive the "Foreclosure" playbook on "Loan Servicing IVR" — we're pausing that flow
+    ```
+  </Accordion>
+
   <Accordion title="Versioned agents (drafts)">
     When an agent has versioning enabled, config changes create a draft that you publish explicitly:
 
