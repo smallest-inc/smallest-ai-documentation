@@ -10,7 +10,7 @@ import { Capabilities, Capability } from "@/components/Capabilities";
 
 Lightning v3.1 Pro is a premium 44.1 kHz text-to-speech pool with improved naturalness and a curated voice catalog. Runs on dedicated inference capacity, isolated from general traffic. Concurrency, latency, and rate limits are identical to standard Lightning v3.1; the difference is voice quality and the catalog.
 
-**Jump to:** [Benchmarks](#performance--benchmarks) · [Voice Catalog](#voice-catalog) · [API Reference](/waves/api-reference/api-reference/text-to-speech/synthesize-speech) · [Pricing & Throughput](#throughput-latency--pricing) · [Quickstart](/waves/documentation/text-to-speech-lightning/quickstart)
+**Jump to:** [Benchmarks](#performance--benchmarks) · [Voice Catalog](#voice-catalog) · [API Reference](/waves/api-reference/api-reference/text-to-speech/synthesize-speech) · [Quickstart](/waves/documentation/text-to-speech-lightning/quickstart)
 
 <CardGroup cols={4}>
   <Card title="44.1 kHz" icon="waveform-lines" href="#technical-specifications">
@@ -32,12 +32,16 @@ Lightning v3.1 Pro is a premium 44.1 kHz text-to-speech pool with improved natur
 | | |
 |---|---|
 | **Developed by** | Smallest AI |
-| **Model type** | Text-to-Speech / Speech Synthesis |
-| **Languages** | English (`en` → UK + American accent), Hindi (`hi` → Indian English + Hindi code-switching). Omit `language` → defaults to `en + hi`. Plus 27 additional languages — 9 Indian, 8 Asian & Middle Eastern, 10 European — via dedicated Pro voices; see [Supported Languages](#supported-languages). |
-| **License** | Proprietary |
-| **Version** | v3.1 Pro |
-| **Model ID** | `lightning_v3.1_pro` |
-| **Native sample rate** | 44,100 Hz |
+| **Model type** | Text-to-Speech Websocket \| Text-to-Speech SSE \| Text-to-Speech HTTP |
+| **Languages** | 29 — English + Hindi, plus 27 more (9 Indian, 8 Asian & Middle Eastern, 10 European); see [Supported Languages](#supported-languages) |
+| **Audio Output formats** | PCM, MP3, WAV, ulaw, alaw |
+| **Pricing (Standard Plan)** | ~$0.195/10K characters |
+| **Concurrency (Standard Plan)** | 10 |
+| **Native Sample Rate** | 44.1 kHz |
+| **Supported sample rates** | 8,000 / 16,000 / 24,000 / 44,100 Hz |
+| **Audio channels** | Mono |
+| **Recommended GPU** | NVIDIA L40S |
+| **Max chunk size** | 250 characters (optimal throughput at ~140 characters per request) |
 
 ---
 
@@ -367,35 +371,11 @@ Need a voice not in this list? Use the standard [Lightning v3.1](/waves/model-ca
 | `https://api.smallest.ai/waves/v1/tts/live` | POST (SSE) | Server-sent events streaming |
 | `wss://api.smallest.ai/waves/v1/tts/live` | WebSocket | Real-time streaming |
 
-### Request Parameters
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `text` | string | Yes | — | Text to synthesize |
-| `voice_id` | string | Yes | — | Voice identifier (Pro catalog above) |
-| `model` | string | No | `lightning_v3.1` | Pass `lightning_v3.1_pro` to route to the Pro pool. The field is optional, but the default routes to standard Lightning v3.1 — for Pro you must set it explicitly. |
-| `sample_rate` | integer | No | `44100` | Output sample rate (Hz) |
-| `speed` | float | No | `1.0` | Speech speed (0.5–2.0) |
-| `language` | string | No | *omit → `en + hi`* | `en` → UK + American accented English; `hi` → Indian accented English + Hindi (code-switching); omit → `en + hi`. Also accepts the ISO 639-1 code of any of the 27 additional Pro languages (e.g. `ta`, `de`, `ja`) when paired with a voice from that language — see [Supported Languages](#supported-languages). |
-| `output_format` | string | No | `"pcm"` | `pcm`, `mp3`, `wav`, `ulaw`, `alaw` |
-| `pronunciation_dicts` | array | No | — | List of pronunciation dictionary IDs — works on REST sync, SSE, and WebSocket |
-| `word_timestamps` | boolean | No | `false` | Opt in to per-word timing events on WebSocket. See [Word-level timestamps on the standard v3.1 model card](/waves/model-cards/text-to-speech/lightning-v-3-1#word-level-timestamps) — same wire shape, same opt-in flag. Pro shares the Lightning v3.1 base-queue voices for English + Hindi (`meher`, `devansh`, `kartik`, `maithili`, `liam`, `avery`), so word events emit on those; other Pro-only voices fall back to silent graceful degradation (audio normal, no word events). |
+See [Synthesize Speech](/waves/api-reference/api-reference/text-to-speech/synthesize-speech) for the full request/response schema, supported parameters, and error codes. To route to the Pro pool you must set `model` to `lightning_v3.1_pro` explicitly — the field is optional but defaults to standard Lightning v3.1.
 
 <Card title="Quickstart" icon="rocket" href="/waves/documentation/text-to-speech-lightning/quickstart">
   Generate your first audio in under a minute with a single API call.
 </Card>
-
----
-
-## Throughput, Latency & Pricing
-
-| Metric | Typical | Notes |
-|---|---|---|
-| Time-to-first-byte (TTFB) | 200 ms | At 40 concurrent requests (see [benchmark methodology](#performance--benchmarks)). |
-| Real-time factor (RTF) | 3.3× | Synthesis runs ~3× faster than playback speed. |
-| Max chunk size | 250 characters | Optimal throughput at ~140 characters per request. |
-
-Pro runs on dedicated inference capacity isolated from general Lightning traffic. Concurrency, latency, and rate-limit ceilings are identical to standard [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1); the difference is voice quality and catalog. Rate limits, concurrency caps, and pricing tiers are documented on the [Concurrency & Limits](/waves/api-reference/api-references/concurrency-and-limits) page. For enterprise pricing, contact [sales@smallest.ai](mailto:sales@smallest.ai).
 
 ---
 
@@ -424,39 +404,6 @@ For comprehensive text formatting rules (numeric handling, date/time, symbols, c
 
 ---
 
-## Technical Specifications
-
-### Audio Output
-
-| Specification | Details |
-|---------------|---------|
-| **Native sample rate** | 44,100 Hz |
-| **Supported sample rates** | 8,000 / 16,000 / 24,000 / 44,100 Hz |
-| **Output formats** | PCM, MP3, WAV, ulaw, alaw |
-| **Audio channels** | Mono |
-
-### Text Formatting Guidelines
-
-| Aspect | Recommendation |
-|--------|----------------|
-| **Language scripts** | Use native script for each language. English in Latin script; Hindi in Devanagari |
-| **Break points** | Natural punctuation (`.` `!` `?` `,`) |
-| **Mixed language** | Use native script per language; avoid transliteration |
-
-<Accordion title="Compute Infrastructure">
-
-**Hardware**
-- Recommended GPU: NVIDIA L40S
-- Recommended VRAM: 48 GB
-
-**Software**
-- Server regions (AWS): India (Hyderabad), USA (Oregon)
-- Automatic geo-location based routing for lowest latency
-
-</Accordion>
-
----
-
 ## Use Cases
 
 | Direct Use | Downstream Use |
@@ -466,6 +413,34 @@ For comprehensive text formatting rules (numeric handling, date/time, symbols, c
 | Real-time narration and live streaming | Telephony and IVR systems |
 | Accessibility tools and screen readers | Podcast generation |
 | Customer service automation | |
+
+---
+
+## FAQ
+
+<Accordion title="How is Lightning v3.1 Pro different from standard Lightning v3.1?">
+Pro runs on dedicated inference capacity, isolated from general Lightning traffic, and ships a curated premium voice catalog with improved naturalness. Concurrency, latency, and rate-limit ceilings are identical to standard [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1) — the difference is voice quality and the catalog.
+</Accordion>
+
+<Accordion title="How do I route requests to the Pro pool?">
+Set `model` to `lightning_v3.1_pro` explicitly. The field is optional, but it defaults to standard Lightning v3.1 — for Pro you must pass it on every request.
+</Accordion>
+
+<Accordion title="Can I pair any voice with the Pro model?">
+Pair Pro voice IDs with `"model": "lightning_v3.1_pro"`. The API does not currently reject mismatched pairings, but pairing a Pro voice with `"model": "lightning_v3.1"` (or omitting `model`) can produce wrong or hallucinated audio. Server-side validation is on the roadmap.
+</Accordion>
+
+<Accordion title="Does Lightning v3.1 Pro support voice cloning?">
+No. Voice cloning is not available on the Pro pool. Clones continue to use standard [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1) and the existing voice-cloning flow.
+</Accordion>
+
+<Accordion title="Which languages does Lightning v3.1 Pro support?">
+Set `language: en` for UK + American accented English, or `language: hi` for Indian accented English + Hindi with native code-switching. Omitting `language` defaults to `en + hi`.
+</Accordion>
+
+<Accordion title="Are word-level timestamps supported on Pro voices?">
+Pro shares the Lightning v3.1 base-queue voices for English + Hindi (`meher`, `devansh`, `kartik`, `maithili`, `liam`, `avery`), so word events emit on those. Other Pro-only voices fall back to silent graceful degradation — audio is normal, but no word events are emitted.
+</Accordion>
 
 ---
 
