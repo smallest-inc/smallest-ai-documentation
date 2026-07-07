@@ -1,0 +1,15 @@
+---
+title: SIP termination URL — automatic normalization + corrected format guidance
+---
+
+Importing your own phone number (`POST /product/import-phone-number`) is now forgiving about the **SIP Termination URL** format. The expected value is your provider's bare hostname or IP, optionally with a port (for example `sip.telnyx.com` or `203.0.113.10:5081`) — but full SIP URIs are now accepted and automatically normalized: the `sip:`/`sips:` scheme, URI parameters (such as `;transport=udp`), and any user info are stripped before the trunk is created. Previously a pasted SIP URI failed the import with a provider-side error.
+
+Values that cannot be normalized to a valid host (for example a website URL pasted by mistake) are rejected immediately with a clear `400` explaining the expected format, instead of failing later when calls are placed.
+
+Two things to note:
+
+- Credentials must go in the dedicated **Username** / **Password** fields. Embedding them as URI parameters (`;username=...;password=...`) is not supported — those parameters are stripped during normalization.
+- All import and provider-setup documentation (Twilio, Telnyx, Vonage) has been updated to show the bare-hostname format.
+
+- [SIP Trunking Guide](/atoms/deep-dive/phone-number/sip-trunking)
+- [Phone Numbers (Dashboard)](/atoms/atoms-platform/deployment/phone-numbers)
