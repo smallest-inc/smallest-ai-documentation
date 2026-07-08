@@ -35,19 +35,29 @@ Choose the input method that best fits your use case:
 <CodeGroup>
 
 ```bash cURL - Raw Bytes
+# Download sample audio (or use your own file)
+curl -sL -o audio.wav "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
+
 curl --request POST \
   --url "https://api.smallest.ai/waves/v1/pulse/get_text?language=en&word_timestamps=true&diarize=true&gender_detection=true&emotion_detection=true" \
   --header 'Authorization: Bearer <token>' \
   --header 'Content-Type: audio/wav' \
-  --data-binary '@/path/to/your/audio.wav'
+  --data-binary '@audio.wav'
 ```
 
 ```python Python - Raw Bytes
+import os
 import requests
+
+API_KEY = os.environ.get("SMALLEST_API_KEY", "YOUR_API_KEY")
+SAMPLE_URL = "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
+
+# Download sample audio
+audio_data = requests.get(SAMPLE_URL).content
 
 url = "https://api.smallest.ai/waves/v1/pulse/get_text"
 headers = {
-    "Authorization": "Bearer YOUR_API_KEY",
+    "Authorization": f"Bearer {API_KEY}",
     "Content-Type": "audio/wav"
 }
 params = {
@@ -58,17 +68,15 @@ params = {
     "emotion_detection": "true"
 }
 
-with open("path/to/your/audio.wav", "rb") as audio_file:
-    audio_data = audio_file.read()
-
 response = requests.post(url, headers=headers, params=params, data=audio_data)
 result = response.json()
 print(f"Transcription: {result['transcription']}")
 ```
 
 ```javascript JavaScript - Raw Bytes
-const audioFile = await fetch("/path/to/audio.wav");
-const audioBuffer = await audioFile.arrayBuffer();
+// Download sample audio
+const audioResponse = await fetch("https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav");
+const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
 
 const params = new URLSearchParams({
   language: "en",
@@ -83,7 +91,7 @@ const response = await fetch(
   {
     method: "POST",
     headers: {
-      Authorization: "Bearer YOUR_API_KEY",
+      Authorization: `Bearer ${process.env.SMALLEST_API_KEY}`,
       "Content-Type": "audio/wav",
     },
     body: audioBuffer,
@@ -106,7 +114,7 @@ curl --request POST \
   --header 'Authorization: Bearer <token>' \
   --header 'Content-Type: application/json' \
   --data '{
-    "url": "https://example.com/audio.mp3"
+    "url": "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
   }'
 ```
 
@@ -127,7 +135,7 @@ params = {
     "emotion_detection": "true"
 }
 payload = {
-    "url": "https://example.com/audio.mp3"
+    "url": "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
 }
 
 response = requests.post(url, headers=headers, params=params, data=json.dumps(payload))
@@ -145,7 +153,7 @@ const params = new URLSearchParams({
 });
 
 const payload = {
-  url: "https://example.com/audio.mp3",
+  url: "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav",
 };
 
 const response = await fetch(
@@ -174,7 +182,8 @@ For the full list of supported languages, please check [**STT Supported Language
 
 <Info>
   Specify the **language** of the input audio using its [ISO
-  639-1](https://en.wikipedia.org/wiki/ISO_639-1) code. Use **`multi`** to
-  enable automatic language detection from the supported list. The default is
-  **`en`** (English).
+  639-1](https://en.wikipedia.org/wiki/ISO_639-1) code. For unknown audio on
+  pre-recorded, use `multi-eu` (European set) or `multi-asian` (East Asian set)
+  as regional aggregators. See the [Pulse model card](/waves/model-cards/speech-to-text/pulse#supported-languages)
+  for the full per-mode language matrix. The default is **`en`** (English).
 </Info>
