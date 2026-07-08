@@ -1,0 +1,168 @@
+---
+title: "Prompt"
+sidebarTitle: "Prompt"
+description: "Write your agent's instructions, and pick its model and voice."
+---
+
+<Tip>
+Looking for prompt best practices? See the [Prompting Guide](/atoms/developer-guide/build/agent-crews/llm/prompts) for voice-specific techniques, common mistakes, and a complete example blueprint.
+</Tip>
+
+The prompt editor is the center of the agent editor, where you tell your agent who to be and how to behave. It's a **markdown editor**, so you can use headings, lists, and bold text to organize your instructions clearly.
+
+---
+
+## Structure Your Prompt
+
+Cover seven things in your prompt:
+
+- **Role & Objective.** Who is this agent and what's their goal?
+- **Personality & Tone.** How should they sound? Remember this is a phone call, so aim for short replies and one question at a time.
+- **Product Knowledge.** What should the agent know cold, without guessing?
+- **Instructions.** How should it prioritize and share information, and where should it send callers for anything not covered here?
+- **Conversation Flow.** What steps should the call follow?
+- **Guardrails.** What should the agent never do?
+- **Tools.** For each tool you enable in [Agent Config](/atoms/atoms-platform/create-agent/agent-config), when should the agent use it?
+
+<Tip>
+**Product Knowledge vs. Knowledge Base.** Small, stable facts, like what your product does or how your pricing works, belong directly in the prompt so the agent always has them on hand. Large or frequently changing content, like manuals or help docs, belongs in a [Knowledge Base](/atoms/atoms-platform/create-agent/agent-config#knowledge-base) instead.
+</Tip>
+
+### Example
+
+Here's what a complete prompt looks like once all seven sections are in place:
+
+```markdown
+# Role & Objective
+
+You are Sarah, a claims support specialist for Acme Insurance. Your goal is
+to help policyholders check claim status, understand their coverage, and
+know what to do next.
+
+# Personality & Tone
+
+- Warm and empathetic. Claims are stressful for callers.
+- Clear and jargon-free: explain coverage terms in plain language.
+- This is a phone call: keep each reply to two or three sentences, and ask
+  one question at a time.
+
+# Product Knowledge
+
+Acme Insurance offers auto, home, and renters policies. Claims are typically
+reviewed within 3-5 business days, and policyholders can track status online
+or by phone. A deductible is the amount the policyholder pays before coverage
+kicks in: standard deductibles are $500 for auto and $1,000 for home.
+
+# Instructions
+
+- Verify the caller's identity (name and policy number) before discussing
+  any claim details.
+- Share information in small chunks and check in before going deeper.
+- For anything outside claims support, such as billing or new policies, do
+  not guess, transfer to the right team.
+
+# Conversation Flow
+
+1. Greet the caller and verify their identity.
+2. Ask how you can help, then look up their claim.
+3. Provide a status update, and answer follow-up questions.
+4. Confirm next steps and close.
+
+# Guardrails
+
+- Only share claim details after verifying identity.
+- Never guess at a claim decision or payout amount; if it is not in the
+  system, say so and escalate.
+- Do not make promises about payout timing or amounts.
+
+# Tools
+
+- lookup_claim: use once identity is verified and the caller provides a
+  claim number or policy number.
+- transfer_to_billing: use when the caller's question is about billing or
+  payments, not claims.
+- end_call: use after confirming the caller has what they need and they
+  say goodbye.
+```
+
+<Tip>
+**Templates are structured this way.** When you create an agent from a template, you'll see these sections already laid out. Starting from scratch? Using clear headings keeps your prompt just as organized.
+</Tip>
+
+---
+
+## Jump Between Sections
+
+Click the **Prompt Section** dropdown above the editor to jump directly to any heading in your prompt, useful once your prompt gets long.
+
+<Frame caption="The Prompt Editor with section dropdown">
+  <img src="../building-agents/images/prompt-editor.png" alt="Prompt editor" />
+</Frame>
+
+---
+
+## Using Variables
+
+Make your prompt dynamic by inserting values that change per caller:
+
+```markdown
+Hello {{customer_name}}! I see you're calling about order #{{order_id}}.
+```
+
+Variables get replaced with real values at runtime. See [Agent Config](/atoms/atoms-platform/create-agent/agent-config#variables) to create and manage them.
+
+---
+
+## Model Selection
+
+The model is your agent's brain. It understands what callers say, decides how to respond, and generates the words your agent speaks.
+
+**Location:** Prompt Section (top bar) → Model dropdown
+
+| Model | Provider | Type | Credit Usage |
+|-------|----------|------|--------------|
+| **Electron** | Smallest AI | Traditional | Lower |
+| **GPT-4o** | OpenAI | Traditional | Moderate |
+| **GPT-4.1** | OpenAI | Traditional | Moderate |
+| **GPT Realtime** | OpenAI | Emotive | Higher |
+| **GPT Realtime Mini** | OpenAI | Emotive | Higher |
+
+Emotive models pick up on caller tone and respond with natural expression.
+
+<Tip>
+Getting started? **GPT-4o** is a reliable all-rounder. Want something built for voice specifically? Try **Electron**, our own model, fast and affordable for real-time conversations.
+</Tip>
+
+You can switch models anytime. Nothing breaks when you do.
+
+---
+
+## Voice Selection
+
+Your agent's voice is often the first thing callers notice. A voice that fits your brand builds trust before your prompt says a word.
+
+**Location:** Prompt Section (top bar) → Voice dropdown
+
+| Section | What it does |
+|---------|--------------|
+| **Search** | Find voices by name or characteristic |
+| **Filters** | Narrow by language, accent, age, gender, or model type |
+| **Currently Used** | Your selected voice, shown at the top |
+| **All Voices** | The full library to browse |
+
+<Tip>
+**Always preview.** Click the play button next to any voice to hear a sample. Listen with your prompt in mind, does this voice sound like the agent you've written?
+</Tip>
+
+---
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Agent Config" icon="gear" href="/atoms/atoms-platform/create-agent/agent-config">
+    End call, transfers, knowledge base, and every other setting
+  </Card>
+  <Card title="Prompt Writing Guide" icon="book" href="/atoms/developer-guide/build/agent-crews/llm/prompts">
+    Deep dive into crafting effective prompts
+  </Card>
+</CardGroup>
