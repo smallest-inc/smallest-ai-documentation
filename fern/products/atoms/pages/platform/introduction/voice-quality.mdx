@@ -1,8 +1,85 @@
 ---
 title: "Voice & Quality"
-noindex: true
+sidebarTitle: "Voice & Quality"
+description: "The three models that power every Atoms voice agent: Pulse (STT), Electron (LLM), Lightning v3.1 (TTS)."
 ---
 
-# Voice & Quality
+Atoms is powered by three proprietary models working in sequence — transcribe speech, reason through the response, synthesize voice. End-to-end turn time under 800 ms.
 
-*Content coming soon.*
+---
+
+## Pulse — Speech-to-Text
+
+High-accuracy, low-latency ASR built for real-time transcription with regional aggregators and code-switching.
+
+| Spec | Value |
+|------|-------|
+| **Time-to-first-transcript** | 64 ms |
+| **English WER** | 4.5% |
+| **Best-in-class WER** | 3.0% (Italian), 3.2% (Spanish) |
+| **Languages** | 21 streaming + 26 pre-recorded (31 unique codes) |
+| **Concurrency** | 100 requests per GPU |
+
+**Key features:**
+- PII / PCI redaction on both streaming and pre-recorded surfaces
+- Speaker diarization
+- Keyword boosting for brand names and domain terms
+- ITN (inverse text normalization) for spoken → written form
+- Word and sentence timestamps
+
+See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the full language matrix and benchmarks.
+
+---
+
+## Electron — Language Model
+
+Voice-agent-optimized small language model. OpenAI-compatible API at `POST /waves/v1/chat/completions` with `"model": "electron"`.
+
+| Spec | Value |
+|------|-------|
+| **Time-to-first-token** | Under 300 ms |
+| **Context window** | 32 K (input + output combined) |
+| **Languages** | 70, first-class Indic support |
+| **Voice-agent tuning** | Emits short filler phrases alongside `tool_calls` so downstream TTS can mask tool-call latency |
+| **Prompt cache** | Automatic; cached input billed at 75% off |
+
+**Voice-specific behaviour:**
+- Handles interruptions gracefully — the assistant message resumes cleanly after user speech
+- Generates responses optimised for spoken delivery, not text
+- Multi-turn context retained across the full call
+
+See the [Electron model card](/waves/model-cards/llm/electron) for benchmarks and pricing.
+
+---
+
+## Lightning v3.1 — Text-to-Speech
+
+The fastest high-fidelity TTS model available. 44.1 kHz native sample rate, three transport options.
+
+| Spec | Value |
+|------|-------|
+| **Latency** | 175 ms @ 20 concurrency |
+| **Sample rate** | 44,100 Hz native |
+| **Speed control** | 0.5× to 2× |
+| **Languages** | 12 on standard, plus 27 additional on Pro |
+| **Voice cloning** | Instant (5-15 s) + Professional (45 min+) |
+| **Transports** | HTTP (sync), SSE (streaming), WebSocket (bidirectional) |
+
+**Two pools** — same latency, different voice catalogues:
+- `lightning_v3.1` — 12 documented languages, voice cloning available
+- `lightning_v3.1_pro` — curated voices across American, British, Indian accents + 27 additional languages (Beta); no voice cloning
+
+See the [Lightning v3.1 model card](/waves/model-cards/text-to-speech/lightning-v-3-1) and [Lightning v3.1 Pro model card](/waves/model-cards/text-to-speech/lightning-v-3-1-pro).
+
+---
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Voice Settings" icon="browser" href="/atoms/atoms-platform/single-prompt-agents/agent-settings/voice-settings">
+    Configure voice + model per agent
+  </Card>
+  <Card title="Voice Selection" icon="microphone" href="/atoms/atoms-platform/single-prompt-agents/prompt-section/voice-selection">
+    Pick a voice from the catalogue
+  </Card>
+</CardGroup>
