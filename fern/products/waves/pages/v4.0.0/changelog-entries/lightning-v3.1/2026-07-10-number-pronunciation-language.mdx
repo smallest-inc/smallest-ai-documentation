@@ -1,0 +1,24 @@
+---
+title: Lightning v3.1 / v3.1 Pro — control number pronunciation separately from the voice
+---
+
+You can now control how numbers, dates, and other text are read out independently of the synthesis voice. The new optional **`number_pronunciation_language`** parameter sets the **text-normalization** language and is accepted on Lightning **v3.1** and **v3.1 Pro**, across the dedicated `/waves/v1/lightning-v3.1/*` endpoints and the unified `/waves/v1/tts` route — REST, SSE streaming, and WebSocket.
+
+**Behaviour:**
+
+- **Omit `language`** → `number_pronunciation_language` becomes *both* the synthesis language (model + voice routing) and the normalization language.
+- **Set `language` explicitly** → `language` always wins for synthesis; `number_pronunciation_language` only changes normalization — for example, read digits in Hindi while an English voice speaks the surrounding words.
+- **Omit `number_pronunciation_language`** → behaviour is unchanged; normalization follows `language`.
+
+| Request | Synthesis `language` | Normalization language |
+|---|---|---|
+| `number_pronunciation_language: hi`, no `language` | `hi` | `hi` |
+| `language: en`, `number_pronunciation_language: hi` | `en` | `hi` |
+| `language: en`, no `number_pronunciation_language` | `en` | `en` |
+
+**Validation** mirrors the existing `language` field per model — `number_pronunciation_language` accepts the same language codes as `language` on that endpoint.
+
+**What changed in the docs:**
+
+- `number_pronunciation_language` added to the request schemas for the Lightning v3.1 endpoints and the unified `/waves/v1/tts` route, across REST/SSE (OpenAPI) and WebSocket (AsyncAPI).
+- Fully backwards compatible — the parameter is optional and omitting it preserves today's behaviour exactly.
