@@ -1,0 +1,128 @@
+---
+title: "TEN Framework"
+description: "Build real-time voice agents on TEN Framework using Smallest AI TTS and STT."
+icon: "diagram-project"
+---
+
+This guide walks you through using [Smallest AI](https://smallest.ai) as the STT and TTS provider in [TEN Framework](https://github.com/TEN-framework/ten-framework), an open-source framework for building real-time, multimodal conversational voice agents. TEN agents are declarative graphs — a voice agent is a pipeline of nodes (RTC transport → STT → LLM → TTS) defined in a `property.json` file, so switching to Smallest AI is a configuration change, not a code change.
+
+## Extensions
+
+Two extensions are available, one per capability:
+
+| Extension | Capability | Endpoint |
+| --- | --- | --- |
+| `smallest_asr_python` | Speech-to-text | Pulse real-time WebSocket (`wss://api.smallest.ai/waves/v1/stt/live`), 64ms TTFT, 38 languages |
+| `smallest_tts_python` | Text-to-speech | Lightning streaming (`https://api.smallest.ai/waves/v1/tts/live`), ~100ms to first audio chunk |
+
+---
+
+## Prerequisites
+
+- [Docker](https://www.docker.com/) with Docker Compose
+- An [Agora App ID](https://console.agora.io/) (TEN's default RTC transport)
+- An LLM provider key (e.g. OpenAI)
+- A Smallest AI API key — get one from the [Smallest AI dashboard](https://waves.smallest.ai)
+
+---
+
+## Setup
+
+<Steps>
+  <Step title="Clone TEN Framework">
+    ```bash
+    git clone https://github.com/TEN-framework/ten-framework.git
+    cd ten-framework/ai_agents
+    ```
+  </Step>
+  <Step title="Configure environment variables">
+    Copy `.env.example` to `.env` and set:
+
+    ```bash
+    AGORA_APP_ID=...
+    OPENAI_API_KEY=...
+    SMALLEST_API_KEY=...
+    ```
+  </Step>
+  <Step title="Point the agent graph at Smallest AI">
+    Open `agents/examples/voice-assistant/tenapp/property.json` and change the `addon` field of the `stt` and `tts` nodes:
+
+    ```json
+    {
+      "type": "extension",
+      "name": "stt",
+      "addon": "smallest_asr_python",
+      "property": {
+        "params": {
+          "language": "en",
+          "sample_rate": 16000
+        }
+      }
+    },
+    {
+      "type": "extension",
+      "name": "tts",
+      "addon": "smallest_tts_python",
+      "property": {
+        "params": {
+          "model": "lightning_v3.1",
+          "voice_id": "magnus",
+          "sample_rate": 24000
+        }
+      }
+    }
+    ```
+
+    The API key does not need to appear in the graph — both extensions read the `SMALLEST_API_KEY` environment variable by default.
+  </Step>
+  <Step title="Build and run">
+    ```bash
+    docker compose up -d
+    docker exec ten_agent_dev bash -c "cd /app/agents/examples/voice-assistant && task install"
+    docker exec -d ten_agent_dev bash -c "cd /app/agents/examples/voice-assistant && task run"
+    ```
+  </Step>
+  <Step title="Talk to your agent">
+    Open the playground at `http://localhost:3000`, join a channel, and speak. Audio flows: microphone → Agora RTC → Smallest AI Pulse → LLM → Smallest AI Lightning → speakers.
+
+    You can also swap providers visually in **TMAN Designer** (started by the same `task run`) instead of editing JSON.
+  </Step>
+</Steps>
+
+---
+
+## Configuration Reference
+
+### `smallest_asr_python` (STT)
+
+| Param | Default | Description |
+| --- | --- | --- |
+| `api_key` | `$SMALLEST_API_KEY` | Smallest AI API key |
+| `model` | `pulse` | Streaming model. Only `pulse` supports the live endpoint |
+| `language` | `en` | ISO language code (e.g. `en`, `hi`, `es`) |
+| `sample_rate` | `16000` | Input PCM sample rate in Hz |
+| `url` | `wss://api.smallest.ai/waves/v1/stt/live` | WebSocket endpoint override |
+
+Any additional key in `params` (e.g. `word_timestamps`, `eou_timeout`, `punctuate`) is forwarded verbatim as a query parameter to the live endpoint — see the [Pulse feature docs](https://docs.smallest.ai/waves/documentation/speech-to-text-pulse/overview) for the full list.
+
+### `smallest_tts_python` (TTS)
+
+| Param | Default | Description |
+| --- | --- | --- |
+| `api_key` | `$SMALLEST_API_KEY` | Smallest AI API key |
+| `model` | `lightning_v3.1` | `lightning_v3.1` (multilingual, cloning) or `lightning_v3.1_pro` (premium voices, English + Hindi) |
+| `voice_id` | `magnus` | Catalog voice or cloned voice (`voice_*`). Pair Pro voices (e.g. `meher`) with the Pro model |
+| `sample_rate` | `24000` | Output PCM sample rate in Hz (8000–44100) |
+| `speed` | `1.0` | Speech speed multiplier (0.5–2.0) |
+| `base_url` | `https://api.smallest.ai` | API base URL override |
+
+Any additional key in `params` (e.g. `language`, `pronunciation_dicts`) is forwarded verbatim in the request body — see the [TTS API reference](https://docs.smallest.ai/waves/api-reference/api-reference/text-to-speech/synthesize-speech).
+
+---
+
+## Notes
+
+- Graph-level `property.params` override the extension defaults, so different graphs in the same app can use different voices or languages.
+- Interruptions (barge-in) are handled by the framework: when the user speaks over the agent, TEN flushes the TTS extension and Lightning synthesis is cancelled mid-stream — no custom logic needed.
+- Interim transcripts stream with `final=false` for live captions; final results carry word-level timing.
+- For issues with the extensions, open an issue in the [TEN Framework repository](https://github.com/TEN-framework/ten-framework) or contact us on [Discord](https://discord.gg/9WtSXv26WE).
