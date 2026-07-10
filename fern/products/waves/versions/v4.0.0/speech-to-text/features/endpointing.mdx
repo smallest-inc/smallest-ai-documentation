@@ -1,0 +1,75 @@
+---
+title: 'Endpointing (VAD-driven finalization)'
+description: 'Opt-in `endpointing=true` mode on the Pulse STT WebSocket that finalizes transcripts off the acoustic VAD instead of the decode grid, dropping finalization latency to about 440 ms.'
+---
+
+<Badge color="purple">Real-Time</Badge>
+
+When `endpointing=true` is set on the Pulse STT WebSocket, transcripts are finalized when the acoustic VAD sees `endpointing_timeout` ms of trailing silence, instead of waiting for the model's ~1.1 second decode grid. On a 300 ms window this drops finalization latency from a variable ~0.9-2.2 seconds to a flat ~440 ms, with no change to transcript accuracy.
+
+Off by default. When `endpointing` is unset or `false`, finalization behavior is unchanged.
+
+## When to use it
+
+- **Voice agents.** Faster `is_final` means faster LLM turn, faster TTS response, lower perceived latency.
+- **Live captioning.** Steadier finalization pacing (flat ~440 ms window vs. jittery 0.9-2.2 s on the decode grid).
+- **Any interactive workload** where the client acts on `is_final=true` and the wall-clock gap from speech-end to finalize is user-visible.
+
+For batch transcription, background dictation, or workloads where you consume the full transcript at the end, leave it off; the tradeoff of accepting the decode grid buys nothing back.
+
+## Enabling
+
+Set `endpointing=true` on the WebSocket URL. Optionally set `endpointing_timeout` (default `300` ms). Default is `false`.
+
+```javascript
+const url = new URL("wss://api.smallest.ai/waves/v1/stt/live?model=pulse");
+url.searchParams.append("language", "en");
+url.searchParams.append("encoding", "linear16");
+url.searchParams.append("sample_rate", "16000");
+url.searchParams.append("endpointing", "true");
+url.searchParams.append("endpointing_timeout", "300");
+
+const ws = new WebSocket(url.toString(), {
+  headers: { Authorization: `Bearer ${API_KEY}` },
+});
+```
+
+## Parameters
+
+| Parameter | Range | Default | Effect |
+|---|---|---|---|
+| `endpointing` | `"true"` / `"false"` | `"false"` | Turns finalize-on-silence on or off. |
+| `endpointing_timeout` | 0-10000 ms | `300` | Trailing silence window before finalize fires. Also used by [`vad_events`](/waves/documentation/speech-to-text-pulse/features/vad-events) when that is enabled. |
+| `vad_threshold` | 0-1 | `0.5` | Speech probability threshold. Higher values require more confidence before treating audio as voiced. |
+| `vad_min_speech_ms` | integer ms | `120` | Minimum contiguous voiced audio before the VAD begins tracking an utterance. |
+
+The three VAD tuning parameters (`endpointing_timeout`, `vad_threshold`, `vad_min_speech_ms`) are shared with `vad_events`. When both features are enabled, they use the same VAD instance and the same silence window.
+
+## How finalization changes
+
+**Without `endpointing`** (default): finalization happens on the RNNT blank-token endpoint (default 800 ms after the last voiced token), evaluated at the encoder's decode boundaries (approximately every 1.12 s). The wall-clock delay from speech-end to `is_final` is `800 ms rounded up to the next 1.12 s tick`, which varies from ~0.9 s to ~2.2 s depending on where the speaker's pause lands.
+
+**With `endpointing=true`**: a lightweight VAD runs on the raw audio in parallel with the decoder. When it sees `endpointing_timeout` ms of trailing silence, it force-finalizes the current turn immediately, off the decode boundary. The already-decoded tokens are promoted (trailing silence is already buffered, so no words are cut). Finalization latency is roughly `endpointing_timeout + a few tens of ms`, flat.
+
+Accuracy is unchanged. Word Error Rate on internal benchmarks is 0.00% different from the default path (the same tokens are emitted; only the finalize timing changes).
+
+## Choosing `endpointing_timeout`
+
+- **200 ms** — tight barge-in, aggressive turn-taking. Risk: mid-sentence pauses (thinking, breath) can split a turn.
+- **300 ms** (default) — good balance for most voice agents. Comparable to Deepgram Nova-3's endpointing behavior.
+- **500-800 ms** — conservative; useful when speakers pause mid-thought and you want to keep the utterance whole.
+
+Longer windows are safer for whole-utterance capture but cost you the latency win. Under about 100 ms the VAD runs faster than useful signal accumulates; treat 100 ms as the practical floor.
+
+## Interaction with other params
+
+- **`vad_events`.** Independent. Both can be enabled together, sharing the VAD instance and silence window. `endpointing` changes finalization behavior; `vad_events` adds `speech_started` / `speech_ended` messages for observability. They do not conflict.
+- **`eou_timeout_ms`.** This is the RNNT blank-token endpoint (default 800 ms). When `endpointing=true`, the VAD path typically fires first, so `eou_timeout_ms` becomes a ceiling rather than the primary trigger. When `endpointing=false`, `eou_timeout_ms` alone controls finalization.
+- **`finalize_on_words`.** Word-count-based auto-finalization (default `true`). Orthogonal to endpointing; either can fire a final, whichever comes first.
+- **`finalize` message.** Client-triggered finalization always takes precedence and works with any combination of the above.
+
+## Notes
+
+- **Opt-in.** When `endpointing` is unset or `false`, behavior is byte-for-byte unchanged from the pre-VAD-endpointing path.
+- **India region only for South Indian languages.** `ta`, `te`, `kn`, `ml`, and `multi-south-indic` route through the India region gateway. Endpointing works identically on both regions.
+- **Sample rate.** The `sample_rate` query parameter must equal the rate of the PCM frames sent on the connection. Mismatched sample rates cause the VAD to misread silence gaps.

@@ -268,6 +268,53 @@ channels:
           - "false"
         required: false
         location: $message.header#/vad
+      endpointing:
+        description: |
+          Force-finalize the current utterance when the acoustic VAD sees
+          `endpointing_timeout` ms of trailing silence, off the model's
+          ~1.1s decode grid. When `false` (default) the transcript is
+          finalized on the RNNT blank-token endpoint and can only be
+          evaluated at decode-frame boundaries. When `true`, finalization
+          fires promptly off the VAD silence and typically drops
+          finalization latency to about 440 ms on a 300 ms window.
+          Independent of `vad_events`; both features can be enabled
+          together and share the same VAD instance and silence window.
+        enum:
+          - "true"
+          - "false"
+        default: "false"
+        required: false
+        location: $message.header#/endpointing
+      endpointing_timeout:
+        description: |
+          Trailing silence window (ms) before `endpointing` fires. Also
+          controls the silence gap that produces `speech_ended` events
+          when `vad_events=true` (single shared window). Bounds 0-10000.
+          Only takes effect when either `endpointing=true` or
+          `vad_events=true` is set.
+        default: 300
+        required: false
+        location: $message.header#/endpointing_timeout
+      vad_threshold:
+        description: |
+          Acoustic VAD speech-probability threshold, range 0-1. Higher
+          values require more confidence before the VAD reports voiced
+          audio (fewer false starts on background noise, at the cost of
+          missing very soft speech). Only takes effect when either
+          `endpointing=true` or `vad_events=true` is set.
+        default: 0.5
+        required: false
+        location: $message.header#/vad_threshold
+      vad_min_speech_ms:
+        description: |
+          Minimum contiguous voiced audio (ms) required before the VAD
+          reports a `speech_started` event or begins tracking speech for
+          finalization. Higher values debounce brief transients. Only
+          takes effect when either `endpointing=true` or `vad_events=true`
+          is set.
+        default: 120
+        required: false
+        location: $message.header#/vad_min_speech_ms
       eou_timeout_ms:
         description: Time in milliseconds to wait after speech ends before flushing the transcript.
         default: 800
