@@ -2,19 +2,26 @@
 title: Lightning v3.1 / v3.1 Pro — control number pronunciation separately from the voice
 ---
 
-You can now control how numbers, dates, and other text are read out independently of the synthesis voice. The new optional **`number_pronunciation_language`** parameter sets the **text-normalization** language and is accepted on Lightning **v3.1** and **v3.1 Pro**, across the dedicated `/waves/v1/lightning-v3.1/*` endpoints and the unified `/waves/v1/tts` route — REST, SSE streaming, and WebSocket.
+You can now control how **numeric content** — numbers, currency amounts, times, and the numeric parts of dates and years — is read out, independently of the synthesis voice. The new optional **`number_pronunciation_language`** parameter sets the **text-normalization** language and is accepted on Lightning **v3.1** and **v3.1 Pro**, across the dedicated `/waves/v1/lightning-v3.1/*` endpoints and the unified `/waves/v1/tts` route — REST, SSE streaming, and WebSocket.
+
+This is tuned for **Indian use cases**, where an Indic synthesis `language` (e.g. `hi`) is the natural choice and mixed-script content is common — for example a Hindi voice that reads numbers as English digits, or that keeps them in Hindi. Only numeric tokens are affected; ordinary words are not translated.
 
 **Behaviour:**
 
 - **Omit `language`** → `number_pronunciation_language` becomes *both* the synthesis language (model + voice routing) and the normalization language.
-- **Set `language` explicitly** → `language` always wins for synthesis; `number_pronunciation_language` only changes normalization — for example, read digits in Hindi while an English voice speaks the surrounding words.
+- **Set `language` explicitly** → `language` always wins for synthesis; `number_pronunciation_language` only changes how numeric content is normalized. It works in both directions — read numbers in Hindi under an English voice, or read them in English under a Hindi voice.
 - **Omit `number_pronunciation_language`** → behaviour is unchanged; normalization follows `language`.
 
-| Request | Synthesis `language` | Normalization language |
+| Request | Synthesis `language` | Number reading |
 |---|---|---|
-| `number_pronunciation_language: hi`, no `language` | `hi` | `hi` |
-| `language: en`, `number_pronunciation_language: hi` | `en` | `hi` |
-| `language: en`, no `number_pronunciation_language` | `en` | `en` |
+| `number_pronunciation_language: hi`, no `language` | `hi` | Hindi — `१२३` → `एक सौ तेईस` |
+| `language: en`, `number_pronunciation_language: hi` | `en` | Hindi — `123` → `एक सौ तेईस` |
+| `language: hi`, `number_pronunciation_language: en` | `hi` | English — `123` → `one hundred and twenty three` |
+| `language: en`, no `number_pronunciation_language` | `en` | English (unchanged) |
+
+<Note>
+Only numeric tokens are re-spoken — the words around them stay in the text `language` (e.g. the month name in a date, or `dollars` after an amount). On a cross-language request the pipeline may also render **names** in the target script (e.g. `Smith` → `स्मिथ` when `number_pronunciation_language: hi`); for native-language voices this is generally the desired reading.
+</Note>
 
 **Validation** mirrors the existing `language` field per model — `number_pronunciation_language` accepts the same language codes as `language` on that endpoint.
 
