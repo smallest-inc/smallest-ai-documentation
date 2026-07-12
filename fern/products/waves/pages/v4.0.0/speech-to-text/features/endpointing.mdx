@@ -1,33 +1,32 @@
 ---
-title: 'Endpointing (VAD-driven finalization)'
-description: 'Opt-in `endpointing=true` mode on the Pulse STT WebSocket that finalizes transcripts on trailing silence, cutting finalization latency to about 440 ms.'
+title: 'Endpointing'
+description: 'On-by-default `endpointing` mode on the Pulse STT WebSocket that finalizes transcripts on trailing silence. Set `endpointing=false` to disable.'
 ---
 
 <Badge color="purple">Real-Time</Badge>
 
-When `endpointing=true` is set on the Pulse STT WebSocket, the server finalizes each turn after it detects `endpointing_timeout` ms of silence at the end of the speaker's audio. On a 300 ms window, `is_final` typically arrives about 440 ms after the speaker stops, versus 0.9-2.2 seconds without it. Transcript accuracy is unchanged.
+Pulse STT streaming finalizes each turn on trailing silence. When the speaker stops, the server emits `is_final: true` promptly instead of waiting for the model's internal finalization cadence. Transcript accuracy is unchanged.
 
-Off by default. When `endpointing` is unset or `false`, finalization behavior is unchanged.
+On by default. Set `endpointing=false` on the WebSocket URL to opt out.
 
 ## When to use it
 
+Leave `endpointing=true` (the default) for:
+
 - **Voice agents.** Faster `is_final` means faster LLM turn, faster TTS response, lower perceived latency.
-- **Live captioning.** Steadier finalization pacing (about 440 ms) instead of a variable 0.9-2.2 s wait between the speaker stopping and the caption settling.
+- **Live captioning.** Steadier finalization pacing between the speaker stopping and the caption settling.
 - **Any interactive workload** where the client acts on `is_final=true` and the wait between speech-end and finalize is user-visible.
 
-For batch transcription or background dictation, leave it off. The extra latency isn't user-visible in those workloads.
+Set `endpointing=false` for batch-style workloads that consume the full transcript at the end and don't care about per-turn finalize timing.
 
-## Enabling
-
-Set `endpointing=true` on the WebSocket URL. Optionally set `endpointing_timeout` (default `300` ms). Default is `false`.
+## Disabling
 
 ```javascript
 const url = new URL("wss://api.smallest.ai/waves/v1/stt/live?model=pulse");
 url.searchParams.append("language", "en");
 url.searchParams.append("encoding", "linear16");
 url.searchParams.append("sample_rate", "16000");
-url.searchParams.append("endpointing", "true");
-url.searchParams.append("endpointing_timeout", "300");
+url.searchParams.append("endpointing", "false");
 
 const ws = new WebSocket(url.toString(), {
   headers: { Authorization: `Bearer ${API_KEY}` },
@@ -36,40 +35,27 @@ const ws = new WebSocket(url.toString(), {
 
 ## Parameters
 
-| Parameter | Range | Default | Effect |
+| Parameter | Values | Default | Effect |
 |---|---|---|---|
-| `endpointing` | `"true"` / `"false"` | `"false"` | Turns finalize-on-silence on or off. |
-| `endpointing_timeout` | 0-10000 ms | `300` | Trailing silence window before finalize fires. Also used by [`vad_events`](/waves/documentation/speech-to-text-pulse/features/vad-events) when that is enabled. |
-| `vad_threshold` | 0-1 | `0.5` | Speech probability threshold. Higher values require more confidence before treating audio as voiced. |
-| `vad_min_speech_ms` | integer ms | `120` | Minimum contiguous voiced audio before the VAD begins tracking an utterance. |
-
-The three VAD tuning parameters (`endpointing_timeout`, `vad_threshold`, `vad_min_speech_ms`) are shared with `vad_events`. When both features are enabled, they use the same VAD instance and the same silence window.
+| `endpointing` | `"true"` / `"false"` | `"true"` | Finalize-on-silence. Set to `"false"` to fall back to the model's internal finalization cadence. |
 
 ## How finalization changes
 
-**Without `endpointing`** (default): the model finalizes each turn on its own internal cadence. The delay from when a speaker stops to when `is_final` arrives ranges from about 0.9 s to 2.2 s, depending on where the pause lands in that cycle.
+**With `endpointing=true`** (default): the connection watches for a silence gap on the audio and finalizes as soon as one is detected. No tokens are lost.
 
-**With `endpointing=true`**: the connection watches for a silence gap on the audio and finalizes as soon as one is detected. No tokens are lost. Finalization latency is roughly `endpointing_timeout` plus a few tens of milliseconds, and stays flat between turns.
+**With `endpointing=false`**: the model finalizes each turn on its own internal cadence, which is slower than trailing-silence detection and varies with where the speaker's pause lands.
 
 Accuracy is unchanged. The same tokens are emitted either way. Only the finalize timing changes.
 
-## Choosing `endpointing_timeout`
-
-- **200 ms:** tight barge-in, aggressive turn-taking. Risk: mid-sentence pauses (thinking, breath) can split a turn.
-- **300 ms** (default): good balance for most voice agents.
-- **500-800 ms:** conservative. Useful when speakers pause mid-thought and you want to keep the utterance whole.
-
-Longer windows are safer for whole-utterance capture but cost you the latency win. Values under 100 ms are not recommended because the VAD needs at least that much audio to make a reliable silence call.
-
 ## Interaction with other params
 
-- **`vad_events`.** Independent. Both can be enabled together and share the same VAD instance and silence window. `endpointing` changes finalization timing. `vad_events` adds `speech_started` / `speech_ended` messages for observability. They do not conflict.
-- **`eou_timeout_ms`.** The model's own end-of-utterance timer (default 800 ms). When `endpointing=true`, the silence-based path usually fires first, so `eou_timeout_ms` acts as a ceiling. When `endpointing=false`, it controls finalization alone.
+- **`vad_events`.** Independent. `endpointing` controls when the current turn's transcript is finalized. `vad_events` adds `speech_started` / `speech_ended` messages for observability. They do not conflict.
+- **`eou_timeout_ms`.** The model's own end-of-utterance timer. When `endpointing=true`, silence detection usually fires first, so `eou_timeout_ms` acts as a ceiling. When `endpointing=false`, it controls finalization alone.
 - **`finalize_on_words`.** Word-count-based auto-finalization (default `true`). Independent of endpointing. Whichever condition fires first triggers the final.
 - **`finalize` message.** Client-triggered finalization always takes precedence and works with any combination of the above.
 
 ## Notes
 
-- **Opt-in.** When `endpointing` is unset or `false`, finalization behavior is unchanged.
+- **On by default.** Existing streaming clients get the new behavior automatically. Accuracy is unchanged.
+- **Opt-out.** Set `endpointing=false` to restore the previous finalization behavior.
 - **India region only for South Indian languages.** `ta`, `te`, `kn`, `ml`, and `multi-south-indic` route through the India region gateway. Endpointing works identically on both regions.
-- **Sample rate.** The `sample_rate` query parameter must equal the rate of the PCM frames sent on the connection. Mismatched sample rates cause the VAD to misread silence gaps.

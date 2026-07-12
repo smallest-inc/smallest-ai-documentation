@@ -118,34 +118,11 @@ async for raw in ws:
         handle_transcript(m)
 ```
 
-## Tuning
-
-Three optional query parameters tune the acoustic VAD. All are shared with [`endpointing`](/waves/documentation/speech-to-text-pulse/features/endpointing) when that is also enabled (both features run on the same VAD instance).
-
-| Parameter | Range | Default | Effect |
-|---|---|---|---|
-| `endpointing_timeout` | 0-10000 ms | `300` | Trailing silence window before `speech_ended` fires. Larger values wait longer between utterances before reporting the end of speech. |
-| `vad_threshold` | 0-1 | `0.5` | Speech probability threshold. Higher values require more confidence before reporting voiced audio (fewer false starts on background noise, at the cost of missing very soft speech). |
-| `vad_min_speech_ms` | integer ms | `120` | Minimum contiguous voiced audio before `speech_started` fires. Higher values debounce brief transients (coughs, keystrokes). |
-
-Example with tuning:
-
-```javascript
-const url = new URL("wss://api.smallest.ai/waves/v1/stt/live?model=pulse");
-url.searchParams.append("language", "en");
-url.searchParams.append("encoding", "linear16");
-url.searchParams.append("sample_rate", "16000");
-url.searchParams.append("vad_events", "true");
-url.searchParams.append("endpointing_timeout", "500");
-url.searchParams.append("vad_threshold", "0.6");
-url.searchParams.append("vad_min_speech_ms", "200");
-```
-
 ## Notes
 
 - **Opt-in.** When `vad_events` is unset or `false`, the connection emits only `transcription` messages.
+- **No tuning parameters.** VAD sensitivity and silence-gap thresholds are fixed and not exposed as query parameters.
 - **Acoustic, not lexical.** Boundaries are derived from the audio signal, independent of `is_final`. They do not coincide with word boundaries.
-- **`speech_ended` requires trailing silence.** The event fires after `endpointing_timeout` ms of silence following a voiced region. If the connection closes while the audio still contains voiced energy, no `speech_ended` is emitted for the final voiced region. To force emission at the end of a finite audio file, append a short pad (about 1 second) of zero-valued PCM before sending `close_stream`.
+- **`speech_ended` requires trailing silence.** The event fires after a silence gap following a voiced region. If the connection closes while the audio still contains voiced energy, no `speech_ended` is emitted for the final voiced region. To force emission at the end of a finite audio file, append a short pad (about 1 second) of zero-valued PCM before sending `close_stream`.
 - **`timestamp`** is measured in seconds from the first audio frame received on the connection.
 - **Sample rate.** The `sample_rate` query parameter must equal the rate of the PCM frames sent on the connection. Mismatch causes timing drift on both transcripts and VAD timestamps.
-- **Shared with `endpointing`.** The three tuning parameters above apply to `endpointing` too. When both `vad_events` and `endpointing` are enabled, they use the same VAD instance and the same silence window.
