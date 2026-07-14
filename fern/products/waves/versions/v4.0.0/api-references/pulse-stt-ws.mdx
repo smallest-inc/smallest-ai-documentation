@@ -23,10 +23,10 @@ The WebSocket connection accepts the following query parameters:
 
 | Parameter  | Type   | Default    | Description |
 | ---------- | ------ | ---------- | ----------- |
-| `language` | string | `multi-eu` | Language code for transcription. Set explicitly to the known language for best accuracy. For unknown audio, pick `multi-eu` (European set) or `multi-indic` (Indic set). Supported single-language codes (39): `en`, `hi`, `es`, `pt`, `it`, `fr`, `de`, `nl`, `ru`, `uk`, `pl`, `cs`, `sk`, `ro`, `bg`, `hu`, `da`, `fi`, `sv`, `lt`, `lv`, `et`, `mt`, `mr`, `gu`, `bn`, `pa`, `ta`, `te`, `kn`, `ml`, `or`, `ja`, `yue`, `zh`, `ko`, `tl`, `id`, `ms`. Auto-detection aggregators: `multi-eu`, `multi-indic`. |
+| `language` | string | (no explicit default) | Language code for transcription. Set explicitly for predictable behavior. Server behavior when omitted is not guaranteed by this spec. **Streaming-supported single-language codes (21):** `en`, `hi`, `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `zh`, `yue`, `ja`, `ko`, `gu`, `mr`, `or`, `bn`, `ta`, `te`, `kn`, `ml`. South Indian codes (`ta`, `te`, `kn`, `ml`) are in **Beta**. Accuracy improvements are ongoing. **Streaming auto-detect aggregators:** `north_indic` (auto-detects across `en`, `hi`, `gu`, `mr`, `bn`, `or`), `multi-asian` (auto-detects across `zh`, `yue`, `ko`, `ja`, `en`; US region only), `multi-south-indic` (auto-detects across `ta`, `te`, `kn`, `ml` and English code-switching; India region only). See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the full per-mode language matrix. |
 
 <Warning>
-If `language` is omitted, the server routes to `multi-eu`. This can mis-detect on non-European audio (for example, returning Russian for English input). Set `language` explicitly to the known language whenever you can.
+Set `language` explicitly to match the audio. East Asian codes (`zh`, `yue`, `ja`, `ko`) and the `multi-asian` aggregator are served only from `wss://api.us.smallest.ai/...`. South Indian codes (`ta`, `te`, `kn`, `ml`) and `multi-south-indic` are served only from the India region (`wss://api.smallest.ai/...`). Requests to the wrong region are rejected.
 </Warning>
 
 ### Feature Flags
@@ -232,11 +232,11 @@ SAMPLE_URL = (
 )
 
 params = {
-    "language": "en",          # set explicitly for best accuracy; use "multi-eu" for unknown European-language audio
+    "language": "en",          # set explicitly for best accuracy; use "north_indic" for unknown Indian-language audio
     "encoding": "linear16",
     "sample_rate": "24000",    # must match the source audio sample rate
-    "redact_pii": "true",      # mask names, addresses, phone numbers in the transcript
-    "redact_pci": "true",      # mask credit-card / CVV / account numbers
+    "redact_pii": "false",     # set "true" to mask names, addresses, phone numbers (requires PII Redaction add-on)
+    "redact_pci": "false",     # set "true" to mask credit-card / CVV / account numbers (requires PII Redaction add-on)
     "itn_normalize": "true",   # convert spoken dates, times, currency to written form
     "keywords": "NVIDIA:5",    # boost a brand name the model might otherwise miss
 }
@@ -464,7 +464,7 @@ Mic example uses `sample_rate=16000` (the natural rate for most laptop mics and 
 </Note>
 
 <Note>
-Set `language` explicitly to match the audio (`en`, `hi`, `es`, etc.) for the best accuracy. For unknown audio, pick the regional aggregator that matches your audio (`multi-eu` or `multi-indic`). Reconstruct a session-level transcript on the client by concatenating each `is_final=true` `transcript` value, as shown above.
+Set `language` explicitly to match the audio (`en`, `hi`, `es`, etc.) for the best accuracy. For unknown audio on streaming, pick `north_indic` (Indian languages) or `multi-asian` (East Asian, US region only). Reconstruct a session-level transcript on the client by concatenating each `is_final=true` `transcript` value, as shown above.
 </Note>
 
 <Tip>

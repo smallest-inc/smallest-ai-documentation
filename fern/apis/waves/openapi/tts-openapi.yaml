@@ -131,14 +131,50 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/TtsRequest'
-            example:
-              text: Hello from Waves TTS.
-              voice_id: kaitlyn
-              model: lightning_v3.1_pro
-              language: en
-              output_format: mp3
-              sample_rate: 44100
-              speed: 1.0
+            examples:
+              pro-default-en-hi:
+                summary: 'Lightning v3.1 Pro: default (omit language, uses en + hi)'
+                description: |
+                  On `lightning_v3.1_pro`, omitting `language` defaults to
+                  `en + hi` (mixed Indian + Western English coverage,
+                  auto-detected from input text).
+                value:
+                  text: Hello from Waves TTS.
+                  voice_id: kaitlyn
+                  model: lightning_v3.1_pro
+                  output_format: mp3
+                  sample_rate: 44100
+                  speed: 1.0
+              pro-explicit-en:
+                summary: 'Lightning v3.1 Pro: language=en (UK + American accented English)'
+                value:
+                  text: Hello from Waves TTS.
+                  voice_id: kaitlyn
+                  model: lightning_v3.1_pro
+                  language: en
+                  output_format: mp3
+                  sample_rate: 44100
+                  speed: 1.0
+              pro-explicit-hi:
+                summary: 'Lightning v3.1 Pro: language=hi (Indian accented English + Hindi)'
+                value:
+                  text: Hello from Waves TTS.
+                  voice_id: meher
+                  model: lightning_v3.1_pro
+                  language: hi
+                  output_format: mp3
+                  sample_rate: 44100
+                  speed: 1.0
+              standard:
+                summary: 'Lightning v3.1 (standard): explicit language from 12-language catalog'
+                value:
+                  text: Hello from Waves TTS.
+                  voice_id: jordan
+                  model: lightning_v3.1
+                  language: en
+                  output_format: mp3
+                  sample_rate: 44100
+                  speed: 1.0
       responses:
         '200':
           description: Synthesized speech retrieved successfully.
@@ -361,6 +397,10 @@ components:
             Language code for synthesis. Influences pronunciation, number/date
             normalization, and phoneme selection.
 
+            **Default on `lightning_v3.1_pro`:** when `language` is omitted, the
+            Pro pool defaults to **`en + hi`** (mixed Indian + Western English
+            coverage, auto-detected from the input text).
+
             Each voice has its own `tags.language` set in the voice catalog —
             query `GET /waves/v1/lightning-v3.1/get_voices`. Pass a language
             the voice was trained on; passing other codes is accepted by the
@@ -372,7 +412,7 @@ components:
             - Pass `en` → UK + American accented English.
             - Pass `hi` → Indian accented English + Hindi (code-switching).
             - Pass the ISO 639-1 code of any other Pro language (e.g. `ta`, `de`, `ja`) with a matching Pro voice — 27 additional languages (9 Indian, 8 Asian & Middle Eastern, 10 European) have dedicated Pro voices.
-            - Omit `language` → defaults to `en + hi` (mixed Indian + Western English coverage).
+            - Omit `language` → defaults to `en + hi` (mixed Indian + Western English coverage, auto-detected from input text).
           enum:
           - en
           - hi
