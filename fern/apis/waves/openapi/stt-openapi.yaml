@@ -6,7 +6,7 @@ info:
 
     Supported models:
     - `pulse-pro`: leaderboard-ranked English STT (5.42% ESB avg WER, #2 tied on Open ASR Leaderboard). HTTP only.
-    - `pulse`: high-accuracy multilingual STT (17 streaming + 26 pre-recorded languages), supports pre-recorded HTTP and streaming WebSocket.
+    - `pulse`: high-accuracy multilingual STT (21 streaming + 26 pre-recorded languages), supports pre-recorded HTTP and streaming WebSocket.
 
     The path mirrors the unified TTS shape (`POST /waves/v1/tts/` + `WS /waves/v1/tts/live`). Adding a new ASR model in the future means adding a new `?model=` value; the path stays stable.
 
@@ -26,7 +26,7 @@ paths:
         Transcribe an audio file. The model is chosen via `?model=`:
 
         - `?model=pulse-pro`: English-only, leaderboard-ranked accuracy. Raw bytes only; pass `webhook_url` to receive transcription asynchronously on long files.
-        - `?model=pulse`: multilingual transcription (17 streaming + 26 pre-recorded languages), supports both raw bytes and audio-by-URL.
+        - `?model=pulse`: multilingual transcription (21 streaming + 26 pre-recorded languages), supports both raw bytes and audio-by-URL.
 
         ## When to use this
 
@@ -155,6 +155,7 @@ paths:
             - ko
             - multi-eu
             - multi-asian
+            - multi-indic
         description: |
           Language of the audio file. This endpoint is **Pre-Recorded (HTTP)** — for streaming, switch to `WSS /waves/v1/stt/live` (different supported language set).
 
@@ -163,9 +164,10 @@ paths:
           **Regional auto-detect aggregators** for unknown audio:
           - `multi-eu` — auto-detects across all 21 European codes plus `en`.
           - `multi-asian` — auto-detects across `zh`, `ko`, `ja`, `en`.
+          - `multi-indic`: auto-detects across `en`, `hi`, `gu`, `mr`, `bn`, `or`. India region only.
 
           - **Pulse Pro**: pass `en`.
-          - **Pulse**: pass any of the single-language codes above, or use the `multi-eu` / `multi-asian` aggregator for unknown audio. See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the full table with language names.
+          - **Pulse**: pass any of the single-language codes above, or use the `multi-eu` / `multi-asian` / `multi-indic` aggregator for unknown audio. See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the full table with language names.
       - name: word_timestamps
         in: query
         required: false
@@ -215,6 +217,10 @@ paths:
           `[PHONENUMBER_*]`, addresses → `[ADDRESS_*]`, etc. The redaction
           tokens use sequential indices so multiple occurrences of the same
           entity get distinct labels (`[FIRSTNAME_1]`, `[FIRSTNAME_2]`).
+
+          **Language support:** currently effective only on `en` and `hi`.
+          Setting `redact_pii=true` on other language codes is accepted
+          but does not redact.
       - name: redact_pci
         in: query
         required: false
@@ -227,6 +233,10 @@ paths:
           numbers, etc.). Replaces matches with `[ACCOUNTNUMBER_*]` tokens.
           Use alongside `redact_pii=true` for full PCI-compliant transcript
           handling.
+
+          **Language support:** currently effective only on `en` and `hi`.
+          Setting `redact_pci=true` on other language codes is accepted
+          but does not redact.
       - name: emotion_detection
         in: query
         required: false

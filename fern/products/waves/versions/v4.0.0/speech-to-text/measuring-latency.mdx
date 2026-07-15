@@ -13,7 +13,7 @@ Plus **RTFx** for pre-recorded HTTP transcription.
 
 Track p50 and p95 for whichever metric matches your workload — averages hide tail behaviour, and the tail is what users notice.
 
-This page defines each metric, attributes total latency to the four components of the streaming pipeline, and gives a copy-pasteable Python snippet for every measurement.
+This page defines each metric, attributes total latency to the four components of the streaming pipeline, and lists the common measurement pitfalls. For copy-pasteable measurement scripts (WER + latency at p50/p90/p95) see the [cookbook reference scripts](#reference-scripts-and-cross-references) at the end of the page.
 
 ## What "streaming latency" actually means
 
@@ -95,128 +95,13 @@ Smallest STT ships two models. Only one of them does streaming — pick by the q
 
 | Workload | Use | Why |
 |---|---|---|
-| Voice agent (English or multilingual) | **Pulse** (`?model=pulse`) | Sub-100 ms server transcription, full streaming WebSocket with `finalize` support, 17 streaming languages including English. |
+| Voice agent (English or multilingual) | **Pulse** (`?model=pulse`) | ~150 ms streaming TTFT at 1 concurrency, full streaming WebSocket with `finalize` support, 21 streaming languages including English. |
 | Live captioning UI | **Pulse** | Streaming endpoint with interim transcripts; word-level timing via `word_timestamps=true` for per-word emission tracking. |
-| Multilingual transcription (streaming or batch) | **Pulse** | 17 streaming + 26 pre-recorded languages with regional aggregators. |
+| Multilingual transcription (streaming or batch) | **Pulse** | 21 streaming + 26 pre-recorded languages with regional aggregators. |
 | Offline / pre-recorded English where accuracy is the goal | **Pulse Pro** (`?model=pulse-pro`) | Tied #2 on the public Open ASR Leaderboard at 5.42% ESB avg WER. HTTP-only, no streaming worker. |
 | Long-form audio batch jobs | **Either** — measured by RTFx, not EOT | Both models run RTFx ≥50× on production hardware. |
 
 See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) and [Pulse Pro model card](/waves/model-cards/speech-to-text/pulse-pro) for benchmark detail and per-language coverage.
-
-## Measuring each metric
-
-### End-of-turn (EOT) latency
-
-EOT is the time between a speaker stopping and the corresponding finalised transcript arriving:
-
-```
-eot_latency = t_final_arrived - t_audio_silence_started
-```
-
-Pulse doesn't know when your speaker stopped — your client does. There are three patterns; the **finalize-on-VAD** pattern is the recommended one for voice agents.
-
-**Pattern A — finalize on VAD (recommended).** Run a client-side voice activity detector. When it reports silence, send a `finalize` control message immediately and measure time until the next `is_final=true` returns.
-
-```python
-import json, time
-
-silence_started_at = None
-
-# When client-side VAD reports silence:
-silence_started_at = time.perf_counter()
-ws.send(json.dumps({"type": "finalize"}))
-
-def on_message(raw):
-    global silence_started_at
-    msg = json.loads(raw)
-    if msg.get("is_final") and silence_started_at is not None:
-        eot_ms = (time.perf_counter() - silence_started_at) * 1000
-        print(f"eot_latency = {eot_ms:.0f} ms")
-        silence_started_at = None
-```
-
-**Pattern B — server-side silence timer.** Configure `eou_timeout_ms` on the connection. Pulse emits `is_final=true` automatically after that many ms of silence in the inbound audio. EOT in this mode is bounded below by `eou_timeout_ms` (plus server-processing + network round-trip) — easier to set up, but EOT can never beat the timer.
-
-**Pattern C — VAD without finalize.** Mark the silence timestamp on your VAD and wait passively for the next `is_final=true`. Equivalent to Pattern B without the explicit timer — useful only if you're avoiding `finalize` for protocol reasons.
-
-### Time to first partial
-
-Elapsed time between sending the first chunk and the first interim transcript arriving back:
-
-```python
-import time, json
-
-t_start = time.perf_counter()
-got_first_partial = False
-
-def on_message(raw):
-    global got_first_partial
-    msg = json.loads(raw)
-    if msg.get("type") == "transcription" and not got_first_partial:
-        ttfp_ms = (time.perf_counter() - t_start) * 1000
-        print(f"time_to_first_partial = {ttfp_ms:.0f} ms")
-        got_first_partial = True
-```
-
-This is a startup health check, not a steady-state metric. The first session on a fresh process pays the connection-setup tax (see [Latency components](#latency-components)). **Always exclude the first session from any average.**
-
-## Pre-recorded latency (RTFx)
-
-For `POST /waves/v1/stt/`, the audio arrives in one request body and the transcript in one response. The natural metric is wall-clock time from request start to transcript received, normalised by audio duration so file lengths don't dominate:
-
-```
-RTFx = audio_duration_seconds / processing_time_seconds
-```
-
-An RTFx of 50 means a 60-second file came back in 1.2 seconds. **Higher is better.** RTFx is the standard cross-vendor comparison for pre-recorded transcription because it normalises across audio length.
-
-```python
-import time, requests, os
-
-t0 = time.perf_counter()
-response = requests.post(
-    "https://api.smallest.ai/waves/v1/stt/",
-    params={"model": "pulse-pro", "language": "en"},
-    headers={
-        "Authorization": f"Bearer {os.environ['SMALLEST_API_KEY']}",
-        "Content-Type": "application/octet-stream",
-    },
-    data=open("call.wav", "rb").read(),
-    timeout=120,
-)
-response.raise_for_status()
-wall_clock = time.perf_counter() - t0
-audio_duration = response.json()["metadata"]["duration"]
-print(f"RTFx (wall-clock) = {audio_duration / wall_clock:.1f}")
-```
-
-The response includes `metadata.processing_time_ms` — the server's internal measurement, which **excludes** network round-trip and request body upload. Use it for attribution: if wall-clock RTFx is far worse than server-time RTFx, the bottleneck is your network or upload bandwidth, not the model.
-
-## Latency expectations
-
-Approximate, observed ranges on the production deployment. Use these to calibrate your own measurements — if your numbers are inside the ranges your client and network are healthy, if they're well above, work through the [next section](#when-latencies-are-higher-than-expected).
-
-| Metric | Typical range | Notes |
-|---|---|---|
-| Connection setup | 20–80 ms | One-time per session. Geo-dependent (Mumbai vs Oregon). |
-| Network transit (one-way) | 5–30 ms intra-region · 80–200 ms cross-region | Pin region: `api.smallest.ai` (Mumbai) or `api.us.smallest.ai` (Oregon). |
-| Server transcription (Pulse streaming) | ~150 ms at 1 concurrency · ~300 ms at 100 concurrency | See the [Pulse model card](/waves/model-cards/speech-to-text/pulse) for the concurrency curve. |
-| End-of-turn (EOT) latency | 150–500 ms | Pattern-dependent — finalize-on-VAD is fastest, server-side timer is bounded by `eou_timeout_ms`. |
-| Time to first partial | 100–300 ms first session · 50–150 ms warm | Always exclude the first session when averaging. |
-| RTFx (Pulse pre-recorded) | 50× or higher | Wall-clock; `metadata.processing_time_ms` will be higher (excludes network). |
-
-Latency varies session-to-session. Track p50 and p95 over a representative window — single-shot measurements are noisy and hide tail behaviour that drives the user experience.
-
-## When latencies are higher than expected
-
-If you're consistently above the ranges in the table, the [Latency components](#latency-components) section tells you which knob to turn. Common cases:
-
-- **Connection setup is slow on every session.** You're not reusing the WebSocket. Pool sockets across turns within the same conversation; reconnect only when the session is genuinely over or after a long idle.
-- **Network transit dominates.** Your client and `api.smallest.ai` are in different regions. Switch endpoint: clients in the Americas should hit `api.us.smallest.ai` (Oregon); clients in EMEA / South Asia should hit `api.smallest.ai` (Mumbai). For East Asian streaming languages you're locked to `api.us.smallest.ai` regardless — that's a wire constraint, not a tuning choice.
-- **Server transcription is slow even at low concurrency.** Open a support ticket and include the `X-Request-Id` from a slow session. If you're at high concurrency, you may be queueing behind other tenants — contact sales about dedicated capacity.
-- **Client overhead is high.** Audio encoding or the WebSocket loop is on the main thread, or a UI render is blocking on `on_transcript`. Move encoding to a worker thread, decouple render from receive.
-- **EOT specifically is slow.** You're probably using the server-side silence timer (Pattern B) — switch to finalize-on-VAD (Pattern A) for voice agents. The server timer can never beat `eou_timeout_ms`; finalize-on-VAD can.
-- **Buffer size is wrong.** Chunks below 10 ms or above 500 ms both hurt. Stay in 20–100 ms.
 
 ## Common measurement pitfalls
 
@@ -233,7 +118,6 @@ If you're consistently above the ranges in the table, the [Latency components](#
 - **TTFT and EOT are different metrics.** First-partial timing matters for startup health and live-captioning first-paint; EOT is what voice agents are judged on. They can move independently.
 - **Four components, attributed individually.** Connection setup, network transit, server transcription, client overhead. If a number is bad, walk the four to find which one to fix.
 - **Pulse for streaming, Pulse Pro for offline English accuracy.** Pulse Pro has no streaming worker.
-- **Voice agents should use finalize-on-VAD.** It's the fastest of the three EOT patterns by design — the server timer is bounded below by `eou_timeout_ms`.
 - **Set `word_timestamps=true`** on every streaming connection you want to measure. Without it the `end` field is missing and the send-time lookup has nothing to key on.
 - **Track p50 and p95.** Single-shot averages hide the tail. The tail is what users notice.
 
