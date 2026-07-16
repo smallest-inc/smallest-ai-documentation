@@ -1,0 +1,14 @@
+---
+title: TTS deprecated endpoints hidden from API ref; delete-voice endpoint retired from docs
+---
+
+Nine deprecated TTS endpoints are hidden from the v4 API-reference sidebar. Old bookmarked URLs 301-redirect to the current unified endpoints on `/waves/v1/tts` and `/waves/v1/voice-cloning`. Wire-level behavior is unchanged. Existing customer code keeps working.
+
+**Hidden from sidebar:**
+- `POST /waves/v1/lightning-v3.1/get_speech`, `POST /waves/v1/lightning-v3.1/stream`, `WSS /waves/v1/lightning-v3.1/get_speech/stream` (superseded by `POST /waves/v1/tts` + `POST /waves/v1/tts/live` + `WSS /waves/v1/tts/live`)
+- `POST /waves/v1/lightning-v2/get_speech`, `POST /waves/v1/lightning-v2/stream`, `WSS /waves/v1/lightning-v2/get_speech/stream` (deprecated, superseded by the same unified routes)
+- `POST /waves/v1/lightning-large/add_voice` (superseded by `POST /waves/v1/voice-cloning`)
+- `GET /waves/v1/lightning-large/get_cloned_voices` (superseded by `GET /waves/v1/voice-cloning`)
+
+**Retired from docs:**
+- `DELETE /waves/v1/lightning-large` (previously documented as "Delete a Voice Clone") returns `HTTP 410 MODEL_DEPRECATED` on the platform today and no longer works. Its OpenAPI spec, override, and how-to guide have been removed from the docs. **API delete is currently only available from the dashboard** at [app.smallest.ai](https://app.smallest.ai) → Voices → Delete. Platform work to expose a bearer-key-authenticated `POST /waves/v1/voice-cloning/delete` route is tracked separately; the endpoint will be re-documented once available.
