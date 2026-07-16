@@ -1,0 +1,94 @@
+---
+title: "Agno"
+description: "Give Agno agents a voice with Smallest AI Lightning text-to-speech."
+icon: "robot"
+---
+
+This guide walks you through using [Smallest AI](https://smallest.ai) text-to-speech inside [Agno](https://github.com/agno-agi/agno), the open-source Python framework for building multi-agent systems. The `SmallestTools` toolkit lets any Agno agent generate natural speech with the Lightning v3.1 and Lightning v3.1 Pro models as part of its tool-calling loop.
+
+## Code Example
+
+The complete runnable example lives in the Agno repository:
+
+[Agno Cookbook — Smallest AI Tools](https://github.com/agno-agi/agno/blob/main/cookbook/91_tools/smallest_tools.py)
+
+## Setup
+
+### 1. Install Agno
+
+```bash
+pip install agno
+```
+
+The Smallest AI toolkit uses Agno's built-in HTTP client — no extra packages are required.
+
+### 2. Set your API key
+
+Get an API key from the [Smallest AI dashboard](https://app.smallest.ai/dashboard) (Developer → API Keys) and export it:
+
+```bash
+export SMALLEST_API_KEY=...
+```
+
+---
+
+## Usage
+
+Attach `SmallestTools` to an agent and it gains two tools: `text_to_speech` and `get_voices`.
+
+```python
+from agno.agent import Agent
+from agno.tools.smallest import SmallestTools
+
+agent = Agent(
+    tools=[SmallestTools(voice_id="magnus")],
+    description="You are an AI agent that can generate audio using the Smallest AI API.",
+)
+
+response = agent.run("Generate a short audio welcoming listeners to the show.")
+```
+
+Generated audio is returned to the agent run as an audio artifact (`response.audio`), and can optionally be written to disk with `target_directory`.
+
+### Premium voices with Lightning v3.1 Pro
+
+For broadcast-quality voices across American, British, and Indian accents, use the Pro pool:
+
+```python
+SmallestTools(voice_id="meher", model="lightning_v3.1_pro")
+```
+
+---
+
+## Configuration
+
+| Parameter          | Type    | Default          | Description                                                              |
+| ------------------ | ------- | ---------------- | ------------------------------------------------------------------------ |
+| `voice_id`         | `str`   | `magnus`         | Default voice for synthesis                                              |
+| `api_key`          | `str`   | env var          | Smallest AI API key; falls back to `SMALLEST_API_KEY`                    |
+| `model`            | `str`   | `lightning_v3.1` | TTS model. One of `lightning_v3.1`, `lightning_v3.1_pro`                 |
+| `sample_rate`      | `int`   | `24000`          | Output sample rate in Hz (8000–44100)                                    |
+| `speed`            | `float` | `1.0`            | Speech speed multiplier (0.5–2.0)                                        |
+| `output_format`    | `str`   | `wav`            | Audio output format: `wav`, `mp3`, `pcm`, `ulaw`, `alaw`                 |
+| `target_directory` | `str`   | `None`           | If set, generated audio is also saved to this directory                  |
+| `timeout`          | `int`   | `30`             | HTTP request timeout in seconds                                          |
+
+### Models
+
+| Model                | Languages                                                       | Notes                                                                                              |
+| -------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `lightning_v3.1`     | English, Hindi, Spanish + 9 Indian languages                    | Default. Supports [cloned voices](/waves/documentation/voice-cloning/instant-clone-api)            |
+| `lightning_v3.1_pro` | English, Hindi                                                  | Premium voice pool; Indian voices code-switch English+Hindi automatically. No cloning              |
+
+### Tools
+
+- **`text_to_speech(prompt, voice_id=None)`** — synthesizes speech via the unified `/waves/v1/tts` route and attaches the audio to the agent's response. The optional `voice_id` overrides the toolkit default per call.
+- **`get_voices()`** — lists the voice catalog for the configured model. The standard and Pro models have separate catalogs, so the toolkit queries the endpoint matching `model`.
+
+---
+
+## Notes
+
+- Pair voices with the right model: Pro voices (e.g. `meher`) require `model="lightning_v3.1_pro"`; standard voices (e.g. `magnus`) use the default. Mismatched pairings are not rejected by the API but can produce wrong audio.
+- Cloned voices (`voice_*` IDs) work on `lightning_v3.1` only.
+- For any issues or questions, open an issue in the [Agno repository](https://github.com/agno-agi/agno) or contact us on [Discord](https://discord.gg/9WtSXv26WE).
