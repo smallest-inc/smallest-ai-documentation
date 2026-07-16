@@ -147,8 +147,9 @@ def collect_pages_for_nav(nav_file: Path, url_prefix: str) -> list[dict]:
         tab_key = tab["tab"]
         if tab_key in SKIP_TABS:
             continue
-        display = (tabs_meta.get(tab_key) or {}).get("display-name") or tab_key
-        tab_slug = slugify(display)
+        tab_meta = tabs_meta.get(tab_key) or {}
+        display = tab_meta.get("display-name") or tab_key
+        tab_slug = tab_meta.get("slug") or slugify(display)
         for item in tab.get("layout", []) or []:
             if isinstance(item, dict):
                 item["_base"] = base
