@@ -6,72 +6,113 @@ icon: "bolt"
 
 ## Overview
 
-Smallest AI API implements concurrency limits to ensure fair usage and optimal performance across all users. Understanding these limits is crucial for building robust applications that integrate with our services.
+Concurrency and rate-limit caps on the Smallest AI API are **per-organization, per-feature, and plan-based**. Each Waves model (Pulse, Pulse Pro, Lightning, Hydra, Electron, Text Intelligence) carries its own limits — they do not share a single pool. The table below is the canonical reference. For specific Enterprise capacity sizing, contact your account manager.
 
-## What is Concurrency?
+## Plan-tier limits
 
-**Concurrency** refers to the number of simultaneous requests that can be processed at any given moment. In the context of Smallest AI API:
+All numbers are per-organization. Standard-plan numbers represent the default ceiling on every new account; Enterprise customers run on dedicated capacity with the limits noted below (or higher, by contract). Exceeding a limit returns `429 Too Many Requests` (HTTP) or a server-full error (WebSocket).
 
-- **1 TTS request concurrency**: Only 1 Text-to-Speech request can be actively processed at a time per account
-- This applies to every Lightning v3.1 TTS endpoint (sync, SSE, WebSocket) and the deprecated Lightning v2 endpoints
+### Waves Speech-to-Text (Pulse / Pulse Pro)
 
-## How Concurrency Works
+| Feature | Standard | Enterprise |
+|---|---:|---:|
+| Pulse pre-recorded HTTP — requests per minute | 25 RPM | Unlimited |
+| Pulse Pro pre-recorded HTTP — requests per minute | 25 RPM | Unlimited |
+| Pulse streaming WebSocket — concurrent sessions | 100 sessions | Unlimited |
 
-### HTTP API Requests
+### Waves Text-to-Speech (Lightning v3.1 / v3.1 Pro)
 
-- Each HTTP API call (POST request) counts as **1 concurrency unit** while being processed
-- Once the request completes and returns a response, the concurrency slot is freed
-- If you attempt to make a second HTTP request while one is already being processed, you'll receive a `429 Too Many Requests` error
+TTS does not enforce a per-organization concurrency cap on Standard. Per-model latency targets (model card: ~200 ms TTFB at 40 concurrent on the production benchmark) are reached on Enterprise-tier dedicated capacity.
 
-### WebSocket Connections
+### Waves Speech-to-Speech (Hydra)
 
-- You can establish up to **5 WebSocket connections** simultaneously (5 × concurrency limit)
-- However, only **1 concurrent request** can be processed across all WebSocket connections
-- Additional requests sent through any WebSocket while one is being processed will be rejected with an error
+| Feature | Standard | Enterprise |
+|---|---:|---:|
+| Concurrent WebSocket sessions | 1 session | 16 sessions |
 
-## Monitoring Your Usage
+### Waves Chat Completions (Electron LLM)
 
-### Dashboard Monitoring
+| Feature | Standard | Enterprise |
+|---|---:|---:|
+| Requests per minute | 50 RPM | 200 RPM |
+| Concurrent in-flight requests | 2 | 20 |
 
-Check your usage patterns in the Waves dashboard to:
+### Waves Text Intelligence
 
-- Monitor request patterns
-- Identify peak usage times
-- Plan capacity requirements
+| Feature | Standard | Enterprise |
+|---|---:|---:|
+| Requests per minute | 60 RPM | 400 RPM |
+| Concurrent in-flight requests | 5 | 32 |
 
-Link to dashboard: https://app.smallest.ai/dashboard/developers/usage?utm_source=documentation&utm_medium=api-references
+### Waves Post-Call Analytics (PCA)
 
-## Parallel Conversational Bots
+| Feature | Standard | Enterprise |
+|---|---:|---:|
+| Requests per minute | Not available | 400 RPM |
+| Concurrent in-flight requests | Not available | 32 |
 
-For conversational applications, you can potentially support approximately **4x your concurrency limit** in parallel conversations. This is based on the typical speaking patterns where users don't speak continuously.
+PCA is Enterprise-only. Standard accounts receive `403 Forbidden` on the PCA endpoint.
 
-### How It Works
+### Voice cloning (Lightning)
 
-- **Concurrency limit**: 1 active TTS request
-- **Potential parallel conversations**: ~4 conversations simultaneously
-- **Reasoning**: In natural conversation, users speak intermittently with pauses between responses
-  <Warning>
-    This is a **rough estimate** and may fail when multiple conversations
-    simultaneously request TTS generation. Your application must handle 429
-    errors gracefully when the actual concurrency limit is reached.
-  </Warning>
+| Feature | Standard | Enterprise |
+|---|---:|---:|
+| Instant voice clones (per org) | 10 | Unlimited |
+| Professional voice clones (per org) | 0 (not available) | Unlimited |
 
-## Upgrading Limits
+## How concurrency works
 
-If your application requires higher concurrency limits, please contact our support team to discuss enterprise plans with increased limits.
+### HTTP API requests
 
-<Note>
-  Concurrency limits are account basis. If you are using multiple models, all
-  models share the same concurrency limit.
-</Note>
+- Each HTTP call counts as **1 concurrency unit** while being processed.
+- The slot is released as soon as the response returns.
+- A request sent while you're already at the concurrency cap returns `429 Too Many Requests` (HTTP) immediately.
+- RPM rate limits are sliding-window — the cap resets continuously over the trailing 60-second window, not at fixed 60-second boundaries.
+
+### WebSocket sessions
+
+- Each open WebSocket counts against the streaming-concurrency cap for the relevant model (Pulse streaming STT or Hydra S2S).
+- Closing a socket frees the slot immediately.
+- New connections beyond the cap receive a server-full error and close (`code: "server_full"` + close code `1013` on Hydra; equivalent rejection on Pulse streaming).
+- Back off with jitter and retry — capacity frees continuously as other sessions end.
+
+## Designing for the limits
+
+For conversational applications where you anticipate running multiple concurrent calls:
+
+- Pulse streaming STT on Standard supports 100 concurrent sessions, which comfortably covers most voice-agent deployments at small/medium scale.
+- Hydra S2S on Standard is capped at 1 session — for parallel voice agents, either upgrade to Enterprise (16 sessions) or use the [Pulse + Lightning + Electron pipeline](/waves/documentation/cookbooks/voice-agent-electron-pulse-lightning) (each model has higher Standard limits).
+- Electron on Standard supports 2 concurrent + 50 RPM — sufficient for low-volume voice agents; scale up by upgrading.
+
+If you bursty above the cap repeatedly, your application must handle `429` gracefully — exponential backoff with jitter is the standard pattern.
+
+## Monitoring your usage
+
+The [Smallest AI dashboard](https://app.smallest.ai/dashboard/developers/usage?utm_source=documentation&utm_medium=api-references) shows per-model request volume, peak concurrency, and 429 rate. Use it to:
+
+- Identify peak usage windows.
+- Predict when you'll need to upgrade.
+- Catch hot-spot agents that are burning concurrency.
+
+## Upgrading
+
+Contact your Smallest AI account manager (or [sales@smallest.ai](mailto:sales@smallest.ai)) to upgrade to Enterprise. Enterprise contracts can configure per-feature limits above the defaults listed above — typical sizing decisions:
+
+- Sustained concurrent voice agents (Hydra or Pulse + Lightning + Electron).
+- Bulk pre-recorded STT throughput (raise the 25 RPM ceiling).
+- Dedicated TTFT / TTFB SLOs (run on isolated infrastructure).
 
 ## Regions
 
 Waves runs in two regions and automatically routes every request to the cluster nearest the client. No region selector is required — the routing is transparent to your application.
 
-| Region | Location |
-|---|---|
-| India | Mumbai |
-| USA | Oregon |
+| Region | Hostname | Location |
+|---|---|---|
+| India | `api.smallest.ai` | Mumbai |
+| USA | `api.us.smallest.ai` | Oregon |
 
 Routing is based on network proximity and latency. If you need region-pinned traffic for data-residency or compliance reasons, contact [support@smallest.ai](mailto:support@smallest.ai).
+
+<Note>
+**East Asian streaming languages on Pulse STT** (`zh`, `yue`, `ja`, `ko`, `multi-asian`) are served from the **US region only**. Connect to `wss://api.us.smallest.ai/waves/v1/stt/live?model=pulse` for these — the Mumbai host closes the connection without a transcription frame when an East Asian streaming language is requested. Contact sales for `multi-asian` access in the India region.
+</Note>
