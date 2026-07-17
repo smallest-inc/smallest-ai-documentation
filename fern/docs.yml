@@ -1216,6 +1216,38 @@ redirects:
     destination: /waves/v-4-0-0/documentation/voice-cloning/instant-clone-ui
     permanent: true
 
+  # Tab-level catches for URL spaces that no longer exist in v4.0.0.
+  # - v3.0.1 + v2.2.0 had `api-reference` tabs that auto-generated pages
+  #   from a Lightning-v1/v2/large-focused OpenAPI. v4 renders a completely
+  #   different unified OpenAPI, so most auto-generated slugs (e.g.
+  #   /api-reference/api-references/lightning-v-2/text-to-speech-sse)
+  #   don't exist in v4. Land them on the v4 API-ref auth page.
+  # - v3.0.1 + v2.2.0 had a `client-libraries` tab that v4 dropped
+  #   in favour of SDK-integration pages under the Models overview.
+  # - v3.0.1 + v2.2.0 had `changelog` tabs with per-version entries
+  #   that we deleted. Land them on the current v4 changelog index.
+  # Placed after the explicit page-level redirects above so Fern
+  # matches those first; placed before the tail wildcards below so
+  # unknown tab-scoped paths land on a real page instead of 404'ing.
+  - source: /waves/v-3-0-1/api-reference/:path*
+    destination: /waves/v-4-0-0/api-reference/api-references/authentication
+    permanent: true
+  - source: /waves/v-2-2-0/api-reference/:path*
+    destination: /waves/v-4-0-0/api-reference/api-references/authentication
+    permanent: true
+  - source: /waves/v-3-0-1/client-libraries/:path*
+    destination: /waves/v-4-0-0/documentation/getting-started/models
+    permanent: true
+  - source: /waves/v-2-2-0/client-libraries/:path*
+    destination: /waves/v-4-0-0/documentation/getting-started/models
+    permanent: true
+  - source: /waves/v-3-0-1/changelog/:path*
+    destination: /waves/v-4-0-0/changelog/general
+    permanent: true
+  - source: /waves/v-2-2-0/changelog/:path*
+    destination: /waves/v-4-0-0/changelog/general
+    permanent: true
+
   # Tail wildcards catch pages that kept their slug shape into v4 plus
   # anything not covered by the explicit block above. Placed last so
   # Fern matches most-specific-first.
