@@ -11,10 +11,8 @@ Usage:
     python3 scripts/audit_frontmatter.py --json
     python3 scripts/audit_frontmatter.py --fail-on-missing  # CI gate
 
-Frozen versions (v2.2.0, v3.0.1) and the auto-generated
-`api-references` directory are excluded — those have stable content
-that we do not edit, and the API reference pages get descriptions from
-their OpenAPI/AsyncAPI source.
+The auto-generated `api-references` directory is excluded because the
+API reference pages get descriptions from their OpenAPI/AsyncAPI source.
 """
 from __future__ import annotations
 
