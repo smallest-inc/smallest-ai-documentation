@@ -33,7 +33,7 @@ import urllib.request
 # per page is enough to catch the silent-drop class of bug.
 PAGES = [
     {
-        "path": "/waves/api-reference/api-reference/speech-to-text/speech-to-text",
+        "path": "/models/api-reference/api-reference/speech-to-text/speech-to-text",
         "name": "Unified STT API reference",
         "markers": [
             # The three send operations — sendFinalize was missing for months
@@ -46,22 +46,9 @@ PAGES = [
         ],
     },
     {
-        # Yash flagged this v-4-0-0 versioned URL specifically. Same content,
-        # different slug — Fern renders both. Both must have sendFinalize.
-        "path": "/waves/v-4-0-0/api-reference/api-reference/speech-to-text/speech-to-text",
-        "name": "Unified STT API reference — v-4-0-0",
-        "markers": [
-            "sendAudio",
-            "sendFinalize",
-            "sendClose",
-            "close_stream",
-            "finalize",
-        ],
-    },
-    {
         # Lightning v3.1 model card — must surface the new word-timestamp section
         # after PR-#feat-lightning-v31-word-timestamps deploys.
-        "path": "/waves/model-cards/text-to-speech/lightning-v-3-1",
+        "path": "/models/model-cards/text-to-speech/lightning-v-3-1",
         "name": "Lightning v3.1 model card",
         "markers": [
             "word_timestamps",
@@ -69,14 +56,14 @@ PAGES = [
         ],
     },
     {
-        "path": "/waves/api-reference/api-reference/text-to-speech/tts",
+        "path": "/models/api-reference/api-reference/text-to-speech/tts",
         "name": "Unified TTS API reference",
         "markers": [
             "word_timestamps",
         ],
     },
     {
-        "path": "/waves/v-4-0-0/documentation/speech-to-text-pulse/realtime-web-socket/response-format",
+        "path": "/models/documentation/speech-to-text-pulse/realtime-web-socket/response-format",
         "name": "Pulse STT response-format page",
         "markers": [
             "is_final",
@@ -85,7 +72,7 @@ PAGES = [
         ],
     },
     {
-        "path": "/waves/v-4-0-0/documentation/speech-to-text-pulse/features/inverse-text-normalization",
+        "path": "/models/documentation/speech-to-text-pulse/features/inverse-text-normalization",
         "name": "Pulse STT ITN feature page",
         "markers": [
             "itn_normalize",

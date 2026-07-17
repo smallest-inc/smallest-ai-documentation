@@ -25,7 +25,7 @@ graph LR
     style Prom fill:#E6522C
     style ASR fill:#0D9373
 ```
-/* The original had a syntax error in Mermaid—edges must connect nodes, not labels.
+/* The original had a syntax error in Mermaid—edges must connect nodes, not labels. 
 "Metrics" is now a node, and edge directions/names are consistent.
 */
 
@@ -236,7 +236,7 @@ prometheus-adapter:
           matches: "^(.*)$"
           as: "${1}"
         metricsQuery: "asr_active_requests{<<.LabelMatchers>>}"
-
+      
       - seriesQuery: "asr_batch_queue_depth"
         resources:
           overrides:
@@ -362,7 +362,7 @@ kube-prometheus-stack:
           scrape_interval: 15s
           static_configs:
             - targets: ['lightning-asr:2269']
-
+      
       additionalPrometheusRulesMap:
         asr-rules:
           groups:
@@ -371,7 +371,7 @@ kube-prometheus-stack:
               rules:
                 - record: asr:requests:active_avg
                   expr: avg(asr_active_requests) by (namespace)
-
+                
                 - record: asr:batch_queue:depth_avg
                   expr: avg(asr_batch_queue_depth) by (namespace)
 
@@ -405,7 +405,7 @@ kube-prometheus-stack:
                   annotations:
                     summary: "ASR batch queue depth is high"
                     description: "{{ $value }} requests are waiting in the batch queue"
-
+                
                 - alert: HighStreamQueueDepth
                   expr: asr_stream_queue_depth > 30
                   for: 2m
@@ -414,7 +414,7 @@ kube-prometheus-stack:
                   annotations:
                     summary: "ASR stream queue depth is high"
                     description: "{{ $value }} streaming sessions are waiting in Redis"
-
+                
                 - alert: HighActiveStreams
                   expr: asr_active_streams > 100
                   for: 5m
@@ -559,18 +559,18 @@ kube-prometheus-stack:
 <AccordionGroup>
   <Accordion title="Use Recording Rules" icon="clock">
     Pre-compute expensive queries:
-
+    
     ```yaml
     - record: asr:batch_queue:depth_avg
       expr: avg(asr_batch_queue_depth) by (namespace)
     ```
-
+    
     Then use this in your autoscaling logic instead of a raw query
   </Accordion>
 
   <Accordion title="Set Appropriate Scrape Intervals" icon="stopwatch">
     Balance responsiveness vs storage:
-
+    
     - Fast autoscaling: 15s
     - Normal: 30s
     - Cost-optimized: 60s
@@ -578,7 +578,7 @@ kube-prometheus-stack:
 
   <Accordion title="Enable Persistence" icon="database">
     Always persist Prometheus data:
-
+    
     ```yaml
     storageSpec:
       volumeClaimTemplate:
@@ -591,7 +591,7 @@ kube-prometheus-stack:
 
   <Accordion title="Monitor Prometheus Itself" icon="chart-bar">
     Track Prometheus performance:
-
+    
     - Query duration
     - Scrape duration
     - Memory usage
@@ -600,9 +600,9 @@ kube-prometheus-stack:
 
   <Accordion title="Use Grafana for Visualization" icon="chart-line">
     Don't rely on Prometheus UI
-
+    
     Use Grafana dashboards for ops
-
+    
     See [Grafana Dashboards](/models/self-host/kubernetes-setup/autoscaling/grafana-dashboards)
   </Accordion>
 </AccordionGroup>
