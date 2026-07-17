@@ -1,0 +1,23 @@
+---
+title: Atoms API reference cleanup — hidden endpoints + deprecated Agent Versioning
+---
+
+Three sets of changes to the Atoms API reference. Wire-level behaviour is unchanged; specs still ship in the SDK. This is a docs-sidebar cleanup.
+
+**Hidden from the public API reference:**
+
+- `POST /agent/with-ai` — generates a Single Prompt agent from a questionnaire or free-text description
+- `GET /agent/prompt-config` — returns the questionnaire configuration used by the flow
+
+These back the in-dashboard **Create with AI** flow. The security check inside `POST /agent/with-ai` assumes the caller is authenticated as a dashboard user, not an org-scoped API key, so exposing them alongside the customer-facing endpoints risked customers integrating against surfaces they shouldn't call directly.
+
+- `GET /agent/{id}/workflow` — legacy prompt + tools reader
+- `PATCH /workflow/{id}` — legacy prompt + tools writer that bypasses versioning
+
+Both were already marked deprecated on the sidebar. They're removed entirely now because the versioned successors (`GET /agent/{id}/versions/{versionId}` and `PATCH /agent/{id}/drafts/{draftId}/config`) cover every legitimate use case and the legacy writer has a documented data-loss failure mode when used on a versioned agent.
+
+**Marked deprecated (still visible in the sidebar with a Deprecated badge):**
+
+Every endpoint under **Agent Versioning - Drafts** and **Agent Versioning - Versions** is now marked `deprecated: true`. A new set of versioning methods is in flight and will be documented in a follow-up. Existing SDK methods keep working; no wire changes.
+
+All hidden endpoints remain in the OpenAPI spec, so SDK generators, internal tools, and any existing programmatic consumers keep working. If any of the hidden endpoints are later re-scoped for public use, removing `x-fern-ignore: true` brings them back with no other changes needed.
