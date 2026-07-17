@@ -37,8 +37,8 @@ OUTPUT_FILE = REPO_ROOT / "fern" / "llms.txt"
 # and (b) the *display* of the product in the output. Order here is the order
 # sections appear in the output.
 NAV_SOURCES: list[tuple[Path, str, str]] = [
-    (REPO_ROOT / "fern" / "products" / "atoms.yml", "/atoms", "Voice Agents (Atoms)"),
-    (REPO_ROOT / "fern" / "products" / "waves" / "versions" / "v4.0.0.yml", "/waves/v-4-0-0", "Models (Waves) — v4.0.0"),
+    (REPO_ROOT / "fern" / "products" / "atoms.yml", "/voice-agents", "Voice Agents"),
+    (REPO_ROOT / "fern" / "products" / "waves" / "versions" / "v4.0.0.yml", "/models", "Models"),
 ]
 
 # Tabs whose pages are *not* surfaced in llms.txt. Reasons:

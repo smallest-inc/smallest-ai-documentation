@@ -96,7 +96,7 @@ console.log(response.choices[0].message.content);
 
 - **Messages** — same `system`, `user`, `assistant`, `tool` role conventions.
 - **Streaming** — same SSE format, same `[DONE]` marker, same delta chunks. With `stream_options.include_usage: true`, you get the final usage chunk just like OpenAI.
-- **Tool calling** — same `tools` array, same `tool_calls` in response, same multi-turn pattern. (Electron adds a voice-friendly filler in `content` alongside `tool_calls` — see [Tool Calling](/waves/documentation/llm-electron/tool-function-calling).)
+- **Tool calling** — same `tools` array, same `tool_calls` in response, same multi-turn pattern. (Electron adds a voice-friendly filler in `content` alongside `tool_calls` — see [Tool Calling](/models/documentation/llm-electron/tool-function-calling).)
 - **Error envelope** — `{"error": {"message", "type", "details", "request_id"}}`. (Electron uses `details: [{code, message, path}]` for validation errors where OpenAI uses `param`; otherwise the envelope shape is the same.)
 - **OpenAI SDKs** — Python, JavaScript, Go, Java, Ruby, etc. All work without code changes beyond the two strings above.
 
@@ -106,12 +106,12 @@ console.log(response.choices[0].message.content);
 |---|---|---|
 | `n > 1` | Supported | **Rejected** — make multiple requests if you need multiple completions |
 | `prompt_logprobs` | Supported on some models | **Rejected** |
-| `content` on tool-call turns | `null` | Often a short natural-language filler (see [Tool Calling](/waves/documentation/llm-electron/tool-function-calling)) |
+| `content` on tool-call turns | `null` | Often a short natural-language filler (see [Tool Calling](/models/documentation/llm-electron/tool-function-calling)) |
 | Model IDs | `gpt-4o`, `gpt-4-turbo`, etc. | `electron` (only public model today) |
 | Pricing | Per model, varies | Single Electron rate; contact your Smallest AI account manager |
 | Prefix caching | Automatic on some models | Automatic — see `usage.prompt_tokens_details.cached_tokens` |
 | Context window | Varies | 32,768 tokens combined input + output |
-| Rate limits | Per-tier OpenAI tiers | Standard: 10 RPM / 3 concurrent. Enterprise: 200 RPM / 20 concurrent. See [Concurrency and Limits](/waves/api-reference/api-references/concurrency-and-limits). |
+| Rate limits | Per-tier OpenAI tiers | Standard: 10 RPM / 3 concurrent. Enterprise: 200 RPM / 20 concurrent. See [Concurrency and Limits](/models/api-reference/api-references/concurrency-and-limits). |
 
 ## Common migration questions
 
@@ -121,7 +121,7 @@ console.log(response.choices[0].message.content);
   </Accordion>
 
   <Accordion title="What about function-calling formats — does it work with my existing tool definitions?">
-    Yes. Pass your existing `tools` array unchanged. Electron returns `tool_calls` in the same JSON shape as OpenAI. The only behavioral difference: Electron may also populate `content` with a short filler phrase on tool-call turns — see [Tool Calling](/waves/documentation/llm-electron/tool-function-calling).
+    Yes. Pass your existing `tools` array unchanged. Electron returns `tool_calls` in the same JSON shape as OpenAI. The only behavioral difference: Electron may also populate `content` with a short filler phrase on tool-call turns — see [Tool Calling](/models/documentation/llm-electron/tool-function-calling).
   </Accordion>
 
   <Accordion title="Does `response_format: {type: 'json_object'}` work?">
@@ -129,7 +129,7 @@ console.log(response.choices[0].message.content);
   </Accordion>
 
   <Accordion title="How do I get the equivalent of OpenAI's tier-1/2/3 rate limits?">
-    Electron uses per-plan limits documented in [Concurrency and Limits](/waves/api-reference/api-references/concurrency-and-limits). Contact sales for higher limits if your workload needs more than 200 RPM / 20 concurrent.
+    Electron uses per-plan limits documented in [Concurrency and Limits](/models/api-reference/api-references/concurrency-and-limits). Contact sales for higher limits if your workload needs more than 200 RPM / 20 concurrent.
   </Accordion>
 
   <Accordion title="Are there any prompts that work on OpenAI but don't work on Electron?">

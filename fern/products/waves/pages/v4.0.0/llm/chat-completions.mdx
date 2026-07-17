@@ -30,19 +30,19 @@ Authorization: Bearer $SMALLEST_API_KEY
 | `temperature` | number ≥ 0 | `1.0` | Sampling temperature. |
 | `top_p` | number 0–1 | `1.0` | Nucleus sampling. |
 | `max_tokens` | int | model max | Cap on **output** tokens for this completion. The 32,768-token model ceiling is on **combined input + output**, so `max_tokens` is effectively `32,768 − prompt_tokens`. |
-| `stream` | bool | `false` | When `true`, response is Server-Sent Events. See [Streaming](/waves/documentation/llm-electron/streaming). |
+| `stream` | bool | `false` | When `true`, response is Server-Sent Events. See [Streaming](/models/documentation/llm-electron/streaming). |
 | `stream_options.include_usage` | bool | `false` | When `true` (with `stream: true`), final SSE chunk carries the `usage` block. |
 | `stop` | string \| array of strings | — | Up to 4 stop sequences. |
 | `seed` | int | random | Best-effort determinism. |
 | `response_format` | object | — | `{"type":"text"}` (default) or `{"type":"json_object"}`. |
-| `tools` | array | — | Standard OpenAI function-calling tools array. Max 64 entries. See [Tool Calling](/waves/documentation/llm-electron/tool-function-calling). |
+| `tools` | array | — | Standard OpenAI function-calling tools array. Max 64 entries. See [Tool Calling](/models/documentation/llm-electron/tool-function-calling). |
 | `tool_choice` | string \| object | `"auto"` | `"auto"`, `"required"`, `"none"`, or `{"type":"function","function":{"name":"…"}}`. |
 | `logit_bias` | object | — | Per-token id biases. |
 | `logprobs` | bool | `false` | Return log-probabilities. |
 | `top_logprobs` | int 0–20 | — | Top-N log-probs (requires `logprobs: true`). |
 | `presence_penalty`, `frequency_penalty` | number −2 to 2 | `0` | Standard OpenAI knobs. |
 
-Unrecognized parameters not in the supported set are accepted by the schema but may be ignored by the model. See [Supported Parameters](/waves/documentation/llm-electron/supported-parameters) for the full passthrough table.
+Unrecognized parameters not in the supported set are accepted by the schema but may be ignored by the model. See [Supported Parameters](/models/documentation/llm-electron/supported-parameters) for the full passthrough table.
 
 ### Explicitly rejected fields
 
@@ -92,7 +92,7 @@ Standard OpenAI `chat.completion` object:
 | Field | Description |
 |---|---|
 | `prompt_tokens` | Total input tokens (cached + uncached). |
-| `prompt_tokens_details.cached_tokens` | Subset of `prompt_tokens` served from prefix cache. Billed at the discounted rate. See [Prefix Caching](/waves/documentation/llm-electron/prefix-caching). |
+| `prompt_tokens_details.cached_tokens` | Subset of `prompt_tokens` served from prefix cache. Billed at the discounted rate. See [Prefix Caching](/models/documentation/llm-electron/prefix-caching). |
 | `completion_tokens` | Generated output tokens. |
 | `total_tokens` | `prompt_tokens + completion_tokens`. |
 
@@ -107,7 +107,7 @@ Standard OpenAI `chat.completion` object:
 
 ### Streaming
 
-When `stream: true`, the response is `text/event-stream` SSE. See [Streaming](/waves/documentation/llm-electron/streaming) for chunk format and example consumer code.
+When `stream: true`, the response is `text/event-stream` SSE. See [Streaming](/models/documentation/llm-electron/streaming) for chunk format and example consumer code.
 
 ## Errors
 
@@ -138,7 +138,7 @@ All errors follow the OpenAI-style envelope. Validation failures additionally in
 | 400 | Bad request (validation, model rejected the body, context length exceeded). |
 | 401 | Missing or invalid API key. |
 | 403 | API key valid but no access to Electron on this plan. |
-| 429 | Rate limit (RPM) or concurrency cap hit. See [Concurrency and Limits](/waves/api-reference/api-references/concurrency-and-limits). |
+| 429 | Rate limit (RPM) or concurrency cap hit. See [Concurrency and Limits](/models/api-reference/api-references/concurrency-and-limits). |
 | 503 | Endpoint temporarily disabled, or upstream model overloaded. |
 | 502 | Upstream model unavailable. Retry after a short backoff. |
 

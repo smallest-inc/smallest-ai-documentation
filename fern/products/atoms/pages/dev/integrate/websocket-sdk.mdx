@@ -4,7 +4,7 @@ sidebarTitle: "Agent Web SDK"
 description: "JavaScript SDK for connecting to a Smallest agent from a web page. Handles microphone capture, audio playback, and event streaming over WebSocket."
 ---
 
-A JavaScript library that opens a live voice conversation with a Smallest agent from a web page. Published on npm as [`@smallest-ai/agent-sdk`](https://www.npmjs.com/package/@smallest-ai/agent-sdk). Wraps the [Realtime Agent WebSocket API](/atoms/api-reference/api-reference/realtime-agent/realtime-agent), plus microphone capture, PCM playback, and an event API.
+A JavaScript library that opens a live voice conversation with a Smallest agent from a web page. Published on npm as [`@smallest-ai/agent-sdk`](https://www.npmjs.com/package/@smallest-ai/agent-sdk). Wraps the [Realtime Agent WebSocket API](/voice-agents/api-reference/api-reference/realtime-agent/realtime-agent), plus microphone capture, PCM playback, and an event API.
 
 ## When to use it
 
@@ -17,12 +17,12 @@ A JavaScript library that opens a live voice conversation with a Smallest agent 
 
 | Runtime | Use |
 |---|---|
-| React Native, iOS, Android, Flutter | Talk to the [Realtime Agent WebSocket API](/atoms/api-reference/api-reference/realtime-agent/realtime-agent) directly. The SDK calls `navigator.mediaDevices.getUserMedia` and `AudioContext`, neither of which exists in those runtimes. |
+| React Native, iOS, Android, Flutter | Talk to the [Realtime Agent WebSocket API](/voice-agents/api-reference/api-reference/realtime-agent/realtime-agent) directly. The SDK calls `navigator.mediaDevices.getUserMedia` and `AudioContext`, neither of which exists in those runtimes. |
 | Python, Go, Node, any server-side process | Same. Use the raw WebSocket API with the platform's native WebSocket and audio libraries. |
-| Outbound phone calls | Use [Campaigns](/atoms/developer-guide/build/campaigns/creating-campaigns). |
+| Outbound phone calls | Use [Campaigns](/voice-agents/developer-guide/build/campaigns/creating-campaigns). |
 
 <Info>
-  You need an API key (from [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys)) and an agent ID. Create an agent from the [Agents dashboard](https://app.smallest.ai/dashboard/agents) or follow the [Developer Quickstart](/atoms/developer-guide/get-started/quickstart).
+  You need an API key (from [app.smallest.ai/dashboard/api-keys](https://app.smallest.ai/dashboard/api-keys)) and an agent ID. Create an agent from the [Agents dashboard](https://app.smallest.ai/dashboard/agents) or follow the [Developer Quickstart](/voice-agents/developer-guide/get-started/quickstart).
 </Info>
 
 ## Install
@@ -70,7 +70,7 @@ await agent.connect();
   single-use access token server-side with `POST /conversation/register-call`
   (see the **Register Call** endpoint under **Realtime Agent** in the API
   reference) and pass that token as `apiKey`. See the
-  [Browser Voice Cookbook](/atoms/atoms-platform/integrate/browser-voice-cookbook)
+  [Browser Voice Cookbook](/voice-agents/platform/integrate/browser-voice-cookbook)
   for the full three-step flow. Passing a raw `sk_` key still works and is fine
   for server-side or trusted clients.
 </Tip>
@@ -123,7 +123,7 @@ Subscribe with `agent.on(eventName, handler)`.
 
 | Event | Payload | Fires when |
 |---|---|---|
-| `session_started` | `{ session_id: string, call_id: string }` | The server accepts the connection and creates a session. Use `call_id` to look up the call log or subscribe to [live transcripts via SSE](/atoms/developer-guide/operate/analytics/sse-for-live-transcripts). |
+| `session_started` | `{ session_id: string, call_id: string }` | The server accepts the connection and creates a session. Use `call_id` to look up the call log or subscribe to [live transcripts via SSE](/voice-agents/developer-guide/operate/analytics/sse-for-live-transcripts). |
 | `session_ended` | `{ reason: string }` | The session has ended. `reason` is either a string sent by the server (`client_requested`, `websocket_closed`, or an error tag) or, when the WebSocket closes without a server-side `session.closed` frame, the numeric close code as a string (`"1005"`, `"1006"`, `"1000"`, etc.). |
 | `agent_start_talking` | None | The server begins streaming agent TTS for a turn. Useful for "agent speaking" UI state. |
 | `agent_stop_talking` | None | The server has finished the current turn. |
@@ -260,18 +260,18 @@ Expected console output, in order: `session_started` with `session_id` and `call
 | Transport | WebSocket only (no WebRTC). |
 | Caption timing | `transcript_delta` is word-level and audio-paced, not per-character. Fine for live captions; not frame-accurate lip-sync. |
 
-For non-browser runtimes, connect to the [Realtime Agent WebSocket API](/atoms/api-reference/api-reference/realtime-agent/realtime-agent) directly. A raw-protocol guide with tested reference clients for Python, React Native, Swift, and Kotlin is in progress.
+For non-browser runtimes, connect to the [Realtime Agent WebSocket API](/voice-agents/api-reference/api-reference/realtime-agent/realtime-agent) directly. A raw-protocol guide with tested reference clients for Python, React Native, Swift, and Kotlin is in progress.
 
 ## Next steps
 
 <CardGroup cols={3}>
-  <Card title="Realtime Agent WebSocket API" icon="plug" href="/atoms/api-reference/api-reference/realtime-agent/realtime-agent">
+  <Card title="Realtime Agent WebSocket API" icon="plug" href="/voice-agents/api-reference/api-reference/realtime-agent/realtime-agent">
     Wire protocol: message types, payload shapes, error codes.
   </Card>
-  <Card title="Post-Call Analytics" icon="chart-bar" href="/atoms/developer-guide/operate/analytics/post-call-analytics">
+  <Card title="Post-Call Analytics" icon="chart-bar" href="/voice-agents/developer-guide/operate/analytics/post-call-analytics">
     Disposition metrics and full transcripts after each call.
   </Card>
-  <Card title="Live Transcripts (SSE)" icon="rss" href="/atoms/developer-guide/operate/analytics/sse-for-live-transcripts">
+  <Card title="Live Transcripts (SSE)" icon="rss" href="/voice-agents/developer-guide/operate/analytics/sse-for-live-transcripts">
     Stream user and agent utterances mid-call.
   </Card>
 </CardGroup>

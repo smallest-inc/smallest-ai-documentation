@@ -13,7 +13,7 @@ Mic audio  →  Pulse (STT)  →  Electron (LLM + tools)  →  Lightning (TTS)  
 The same pattern underlies most production voice agents — customer support, sales calls, voice-driven UIs. Each piece is independently optimizable; this guide shows the minimum viable wiring.
 
 <Tip>
-If you want a full voice-agent platform with built-in telephony, campaigns, knowledge base, and call analytics, see [**Atoms**](/atoms/atoms-platform/get-started/quick-start) — it's built on top of this exact stack. Use this cookbook when you want to build the pipeline yourself.
+If you want a full voice-agent platform with built-in telephony, campaigns, knowledge base, and call analytics, see [**Atoms**](/voice-agents/platform/get-started/quick-start) — it's built on top of this exact stack. Use this cookbook when you want to build the pipeline yourself.
 </Tip>
 
 ## Architecture
@@ -25,7 +25,7 @@ If you want a full voice-agent platform with built-in telephony, campaigns, know
   <Card title="Electron" icon="wand-magic-sparkles">
     Chat completions + tool calling. Generates a filler phrase before tool calls so the user hears natural speech while tools run.
   </Card>
-  <Card title="Lightning" icon="waveform-lines" href="/waves/model-cards/text-to-speech/lightning-v-3-1">
+  <Card title="Lightning" icon="waveform-lines" href="/models/model-cards/text-to-speech/lightning-v-3-1">
     Streaming TTS. 44.1 kHz audio, ~200 ms TTFB, 12 TTS languages including Indic. See the model card for the full latency profile.
   </Card>
 </CardGroup>
@@ -96,7 +96,7 @@ async def transcribe_loop(audio_in, transcripts_out):
             async for msg in ws:
                 event = json.loads(msg)
                 # Pulse WS frames: {"type": "transcription", "is_final": true|false, "transcript": "..."}
-                # See /waves/documentation/speech-to-text-pulse/realtime-web-socket/response-format
+                # See /models/documentation/speech-to-text-pulse/realtime-web-socket/response-format
                 if event.get("type") == "transcription" and event.get("is_final"):
                     await transcripts_out.put(event["transcript"])
 
@@ -218,16 +218,16 @@ Without the filler-phrase pattern, the user would hear silence from 0 ms to ~110
 ## Related
 
 <CardGroup cols={2}>
-  <Card title="Pulse Realtime quickstart" icon="microphone" href="/waves/documentation/speech-to-text-pulse/realtime-web-socket/quickstart">
+  <Card title="Pulse Realtime quickstart" icon="microphone" href="/models/documentation/speech-to-text-pulse/realtime-web-socket/quickstart">
     Streaming STT setup.
   </Card>
-  <Card title="Lightning Streaming" icon="bars-staggered" href="/waves/documentation/text-to-speech-lightning/streaming">
+  <Card title="Lightning Streaming" icon="bars-staggered" href="/models/documentation/text-to-speech-lightning/streaming">
     Streaming TTS setup.
   </Card>
-  <Card title="Electron Tool Calling" icon="screwdriver-wrench" href="/waves/documentation/llm-electron/tool-function-calling">
+  <Card title="Electron Tool Calling" icon="screwdriver-wrench" href="/models/documentation/llm-electron/tool-function-calling">
     Filler-phrase pattern in depth.
   </Card>
-  <Card title="Atoms — managed voice agents" icon="phone" href="/atoms/atoms-platform/get-started/quick-start">
+  <Card title="Atoms — managed voice agents" icon="phone" href="/voice-agents/platform/get-started/quick-start">
     Skip the wiring and use the platform.
   </Card>
 </CardGroup>
