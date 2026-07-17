@@ -32,8 +32,6 @@ NAV_IGNORE_FILE = REPO_ROOT / "scripts" / ".nav-ignore"
 NAV_CONFIGS = [
     REPO_ROOT / "fern" / "products" / "atoms.yml",
     REPO_ROOT / "fern" / "products" / "waves" / "versions" / "v4.0.0.yml",
-    REPO_ROOT / "fern" / "products" / "waves" / "versions" / "v3.0.1.yml",
-    REPO_ROOT / "fern" / "products" / "waves" / "versions" / "v2.2.0.yml",
 ]
 
 # Directories that contain customer-facing pages. Every .mdx in here must be

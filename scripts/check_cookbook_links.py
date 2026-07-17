@@ -30,9 +30,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-# Where to scan. Frozen versions (v2.2.0, v3.0.1) are intentionally
-# excluded — we don't ship them anymore and they reference cookbook
-# state from a prior era.
+# Where to scan.
 SCAN_PATHS = [
     REPO_ROOT / "fern" / "products" / "waves" / "pages",
     REPO_ROOT / "fern" / "products" / "atoms" / "pages",
