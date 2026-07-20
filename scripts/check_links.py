@@ -186,12 +186,23 @@ def nav_derived_urls() -> set[str]:
                 urls.add("/" + "/".join(p for p in parts if p).lstrip("/"))
                 return
             if "section" in node and "contents" in node:
-                walk(node["contents"], tab_slug, breadcrumb + [node["section"]], url_prefix)
+                # skip-slug: true drops this section from the URL path
+                if node.get("skip-slug"):
+                    walk(node["contents"], tab_slug, breadcrumb, url_prefix)
+                else:
+                    walk(node["contents"], tab_slug, breadcrumb + [node["section"]], url_prefix)
+                return
+            if "api" in node and "layout" in node:
+                # `- api:` block: recurse into its layout with the api-name
+                # as breadcrumb, unless skip-slug: true
+                api_name = node["api"]
+                sub_bc = breadcrumb if node.get("skip-slug") else breadcrumb + [api_name]
+                walk(node["layout"], tab_slug, sub_bc, url_prefix)
                 return
             if "endpoint" in node:
                 title = node.get("title") or node["endpoint"].rsplit(" ", 1)[-1]
                 page_slug = node.get("slug") or _slugify(title)
-                parts = [url_prefix.rstrip("/"), tab_slug, "api-reference"] + [_slugify(s) for s in breadcrumb] + [page_slug]
+                parts = [url_prefix.rstrip("/"), tab_slug] + [_slugify(s) for s in breadcrumb] + [page_slug]
                 urls.add("/" + "/".join(p for p in parts if p).lstrip("/"))
                 return
             if "changelog" in node:
@@ -406,7 +417,11 @@ def main() -> int:
                 # from the spec at build time. Tolerate the URL shape as
                 # pending-deploy when the product-slug matches a real
                 # product in docs.yml.
-                is_auto_apiref = bool(re.match(r'^/[a-z0-9-]+/api-reference/api-reference/[^/]+/[^/]+$', url_bare))
+                # /<product>/api-reference/(api-reference/)?<tag>/<op-slug>
+                # The optional /api-reference/ layer accepts pre-skip-slug and
+                # post-skip-slug shapes so tolerance doesn't break during the
+                # migration between the two.
+                is_auto_apiref = bool(re.match(r'^/[a-z0-9-]+/api-reference/(?:api-reference/)?[^/]+/[^/]+$', url_bare))
                 if last_segment in pending_stems or url_bare in pending_full_urls or is_auto_apiref:
                     pending.append((url, code, url_sources[url]))
                 else:
