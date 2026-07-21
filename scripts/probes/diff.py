@@ -103,9 +103,10 @@ DOCS_TO_AUDIT_BY_SERVICE: dict[str, list[str]] = {
         "`fern/products/waves/pages/v4.0.0/speech-to-text/features/word-boosting.mdx`",
         "New changelog entry under `fern/products/waves/pages/v4.0.0/changelog-entries/`",
     ],
-    "lightning-tts": [
-        "`fern/apis/waves/openapi/lightning-v3.1-openapi.yaml`",
-        "`fern/apis/waves/asyncapi/lightning-v3.1-ws.yaml`",
+    "tts": [
+        "`fern/apis/waves/openapi/tts-openapi.yaml`",
+        "`fern/apis/waves/asyncapi/tts-ws.yaml`",
+        "`fern/apis/waves/asyncapi/stream-tts-ws.yaml`",
         "`fern/products/waves/pages/v4.0.0/text-to-speech/`",
         "New changelog entry under `fern/products/waves/pages/v4.0.0/changelog-entries/`",
     ],

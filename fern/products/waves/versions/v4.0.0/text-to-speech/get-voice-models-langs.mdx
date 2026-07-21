@@ -5,20 +5,217 @@ description: "Find your voice ID, list available voices, filter by language and 
 icon: "toolbox"
 ---
 
-Use this page to query the voice catalog, find voice IDs, and filter by language, accent, gender, or model. Every voice's metadata (`tags.language`, `tags.accent`, `tags.gender`) is the source of truth for what each voice supports.
+Curated voice IDs you can paste straight into a TTS request, plus the API call for filtering the full 217-voice catalog. The model cards remain the canonical source for the complete catalog — this page is the fastest path from "I need a voice" to "I have a `voice_id`".
 
-<CardGroup cols={2}>
-  <Card title="Lightning v3.1 Pro — curated catalog" icon="sparkles" href="/waves/model-cards/text-to-speech/lightning-v-3-1-pro">
-    Premium voice catalog across American, British, and Indian accents. English + Hindi (Indian voices code-switch).
-  </Card>
-  <Card title="Lightning v3.1 — full catalog" icon="id-card" href="/waves/model-cards/text-to-speech/lightning-v-3-1">
-    The Lightning v3.1 model card has the full voice catalog, "Best Voices" tables per language, and the canonical supported-language list.
-  </Card>
-</CardGroup>
+<Tip>
+**Pairing rule.** Lightning v3.1 voice IDs only work with `"model": "lightning_v3.1"` (or with `model` omitted — the default). Lightning v3.1 Pro voice IDs only work with `"model": "lightning_v3.1_pro"`. Mismatched pairing returns synthesised audio in the wrong voice or no audio at all. See the [Pro model card](/models/model-cards/text-to-speech/lightning-v-3-1-pro) and [v3.1 model card](/models/model-cards/text-to-speech/lightning-v-3-1) for the full catalogs.
+</Tip>
 
-## Fetch Available Voices
+## Quick pick by use case
 
-Query `GET /waves/v1/lightning-v3.1/get_voices` to list every voice in the catalog. The response includes both standard Lightning v3.1 voices and Pro voices — Pro voices are tagged so you can filter for them.
+| Use case | Recommended voice | Model | Why |
+|---|---|---|---|
+| US conversational, female | `kaitlyn` | `lightning_v3.1_pro` | Pro pool, natural American accent |
+| US conversational, male | `blake` | `lightning_v3.1_pro` | Pro pool, natural American accent |
+| UK conversational, female | `sophie` | `lightning_v3.1_pro` | Pro pool, British accent |
+| UK conversational, male | `sam` | `lightning_v3.1_pro` | Pro pool, British accent |
+| Indian English + Hindi, female | `meher` | `lightning_v3.1_pro` | Pro pool, Indian voices code-switch en↔hi |
+| Indian English + Hindi, male | `aviraj` | `lightning_v3.1_pro` | Pro pool, Indian voices code-switch en↔hi |
+| US English, broad coverage | `magnus` (M) / `olivia` (F) | `lightning_v3.1` | Standard pool, 217-voice catalog access |
+| Hindi (Devanagari script) | `devansh` (M) / `sunidhi` (F) | `lightning_v3.1` | Standard pool, Hindi-trained voices |
+| Tamil | `jeevan` (M) / `rajeshwari` (F) | `lightning_v3.1` | Standard pool, Tamil-trained voices |
+| Spanish (European) | `marcos` (M) / `daniella` (F) | `lightning_v3.1` | Standard pool, Spanish-trained voices |
+
+## Lightning v3.1 Pro — by accent + gender
+
+Premium pool with a curated catalog. The accent pools below are English-focused; Indian Pro voices additionally code-switch to Hindi when `language: hi` is set (or `language` is omitted, defaulting to `en + hi`). The Pro pool also includes dedicated voices for 29 additional languages — 9 Indic, 8 Asian & Middle Eastern, 12 European (including Dutch and Swedish) — listed in the accordions below. Pass the matching ISO 639-1 code in the `language` body parameter, or use `auto` to route across all supported languages with any English/Hindi voice.
+
+<AccordionGroup>
+
+<Accordion title="American (18 voices)">
+
+**Female:** `kaitlyn`, `savannah`, `amelia`, `zoe`, `ruby`, `leah`, `jenna`, `kate`, `molly`, `sara`, `fiona`
+
+**Male:** `blake`, `austin`, `henry`, `jack`, `leo`, `luke`, `owen`
+
+</Accordion>
+
+<Accordion title="British (12 voices)">
+
+**Female:** `sophie`, `ellie`, `cressida`, `ottilie`, `elowen`, `seraphina`
+
+**Male:** `sam`, `henry`, `benedict`, `cormac`, `rupert`, `finley`
+
+</Accordion>
+
+<Accordion title="Indian (13 voices — code-switch English + Hindi)">
+
+**Female:** `rhea`, `zariya`, `kareena`, `mishka`, `inaaya`, `saira`, `meher`, `aarini`
+
+**Male:** `aviraj`, `vyom`, `zoravar`, `reyansh`, `ahan`
+
+</Accordion>
+
+<Accordion title="Indian languages (67 voices — 9 languages)">
+
+Pair each voice with its language code, e.g. `"language": "ta"` with a Tamil voice.
+
+| Language | Code | Female voices | Male voices |
+|---|---|---|---|
+| Marathi | `mr` | `mrunal`, `manasi`, `ketaki`, `tejaswini` | `mandar`, `tushar` |
+| Tamil | `ta` | `malar`, `nila`, `tamilselvi` | `mathan`, `dinesh`, `prabhu`, `ezhil`, `kavin`, `tamizh`, `barath`, `sakthi`, `murugan` |
+| Malayalam | `ml` | `parvathy`, `lakshmi` | `vishnu`, `sreenath`, `unni`, `aravindan` |
+| Telugu | `te` | `sravani`, `swathi` | `naveen`, `charan`, `sasank`, `bhaskar`, `gopal`, `manohar` |
+| Kannada | `kn` | `spoorthi`, `rashmi`, `varsha`, `sahana` | `rakshith`, `kishore`, `yogesh`, `gowtham`, `shankar`, `basava` |
+| Punjabi | `pa` | `jasleen`, `manmeet` | `rajdeep`, `tejinder`, `sukhdeep`, `amrit`, `gagandeep` |
+| Bengali | `bn` | — | `rajib`, `tanmoy`, `subhro`, `arghya`, `indranil` |
+| Odia | `or` | `sasmita`, `ankita` | `subrat`, `debasish`, `sambit`, `pratik`, `rakesh`, `smruti` |
+| Gujarati | `gu` | `krupa`, `riddhi` | `jignesh`, `mit`, `keval` |
+
+</Accordion>
+
+<Accordion title="Asian & Middle Eastern languages (21 voices — 8 languages)">
+
+| Language | Code | Female voices | Male voices |
+|---|---|---|---|
+| Arabic | `ar` | `layla` | `adam` |
+| Chinese (Mandarin) | `zh` | `hazel`, `vivian` | `dylan`, `silas`, `eli` |
+| Indonesian | `id` | `nora` | `bryce`, `miles`, `cole` |
+| Japanese | `ja` | `aria`, `mila`, `daisy` | `jasper` |
+| Korean | `ko` | `june` | — |
+| Malay | `ms` | `sasha` | `roman` |
+| Turkish | `tr` | — | `beau`, `wes` |
+| Vietnamese | `vi` | — | `kai` |
+
+</Accordion>
+
+<Accordion title="European languages (61 voices — 10 languages)">
+
+| Language | Code | Female voices | Male voices |
+|---|---|---|---|
+| German | `de` | `hanna`, `lea`, `petra` | `max`, `ben`, `markus`, `finn` |
+| Spanish | `es` | `martina`, `ines`, `paula` | `sebastian`, `mateo`, `gabriel` |
+| French | `fr` | `manon`, `juliette`, `lucie`, `elise`, `amelie` | `louis`, `nicolas`, `maxime`, `raphael` |
+| Italian | `it` | `silvia`, `concetta`, `arianna` | `davide`, `luca`, `leonardo` |
+| Portuguese (Brazilian) | `pt` | `juliana`, `leticia` | `gustavo`, `thiago`, `bruno` |
+| Portuguese (European) | `pt` | `catarina` | `francisco` |
+| Russian | `ru` | `anastasia`, `ekaterina`, `olga`, `irina` | `andrei`, `nikolai`, `maksim` |
+| Greek | `el` | `katerina`, `dimitra`, `athina` | `dimitris`, `vasilis` |
+| Finnish | `fi` | `aino`, `helmi`, `venla` | `mika`, `timo`, `matti` |
+| Norwegian | `no` | `solveig`, `marit` | `kristian`, `espen` |
+| Polish | `pl` | `ewa`, `joanna` | `tomasz`, `jakub` |
+
+</Accordion>
+
+</AccordionGroup>
+
+See the [Pro model card voice catalog](/models/model-cards/text-to-speech/lightning-v-3-1-pro#voice-catalog) for ranking notes.
+
+## Lightning v3.1 — standard pool
+
+217 voices total across 12 languages — English (176), Hindi (115), Tamil (13), Spanish (11), Kannada (10), Marathi (9), Telugu (8), Odia (8), Punjabi (8), Malayalam (6), Gujarati (5), Bengali (4). Voices below are the curated short-list; the [v3.1 model card](/models/model-cards/text-to-speech/lightning-v-3-1#voice-catalog) has the full catalog.
+
+<AccordionGroup>
+
+<Accordion title="English (American) — 20 voices">
+
+**Male:** `jordan`, `robert`, `johnny`, `lucas`, `magnus`, `ronald`, `blofeld`, `zorin`, `felix`, `malcolm`
+
+**Female:** `lauren`, `hannah`, `vanessa`, `brooke`, `olivia`, `rachel`, `nicole`, `elizabeth`, `ilsa`, `christine`
+
+</Accordion>
+
+<Accordion title="English (other accents) — 3 voices">
+
+| Voice ID | Gender | Accent |
+|---|---|---|
+| `william` | Male | Canadian |
+| `erica` | Female | Canadian |
+| `chloe` | Female | Australian |
+
+</Accordion>
+
+<Accordion title="Indic (Hindi + Indian-English) — 21 voices">
+
+**Female:** `sunidhi`, `chinmayi`, `aanya`, `siya`, `anuja`, `avni`, `ishani`, `yuvika`, `advika`, `sana`, `sameera`, `srishti`, `sakshi`, `maya`
+
+**Male:** `wasim`, `rehan`, `parth`, `atharv`, `vivaan`, `devansh`, `aarush`
+
+</Accordion>
+
+<Accordion title="Tamil — 2 voices">
+
+| Voice ID | Gender |
+|---|---|
+| `jeevan` | Male |
+| `rajeshwari` | Female |
+
+</Accordion>
+
+<Accordion title="Telugu — 2 voices">
+
+| Voice ID | Gender |
+|---|---|
+| `srihari` | Male |
+| `padmaja` | Female |
+
+</Accordion>
+
+<Accordion title="Kannada — 2 voices">
+
+| Voice ID | Gender |
+|---|---|
+| `pranav` | Male |
+| `deepashri` | Female |
+
+</Accordion>
+
+<Accordion title="Malayalam — 2 voices">
+
+| Voice ID | Gender |
+|---|---|
+| `vaisakh` | Male |
+| `shibi` | Female |
+
+</Accordion>
+
+<Accordion title="Marathi — 2 voices">
+
+| Voice ID | Gender |
+|---|---|
+| `nilesh` | Male |
+| `rupali` | Female |
+
+</Accordion>
+
+<Accordion title="Gujarati — 2 voices">
+
+| Voice ID | Gender |
+|---|---|
+| `dhruvit` | Male |
+| `niharika` | Female |
+
+</Accordion>
+
+<Accordion title="Spanish — 7 voices">
+
+| Voice ID | Gender |
+|---|---|
+| `marcos` | Male |
+| `david` | Male |
+| `miguel` | Male |
+| `daniella` | Female |
+| `camilla` | Female |
+| `alba` | Female |
+| `nerea` | Female |
+
+</Accordion>
+
+</AccordionGroup>
+
+## Fetch the full catalog programmatically
+
+For filtering by language / accent / gender / use case across the full 217 voices, query the live catalog. The response includes both standard Lightning v3.1 voices and Pro voices, distinguished by their tags.
 
 <CodeGroup>
 
@@ -49,6 +246,10 @@ print(f"{len(indian_voices)} Indian-accent voices")
 # Filter by gender
 female_voices = [v for v in voices if v["tags"].get("gender") == "female"]
 print(f"{len(female_voices)} female voices")
+
+# Use a voice
+voice_id = english_voices[0]["voiceId"]   # e.g. "kaitlyn"
+print(f"Selected: {voice_id}")
 ```
 
 ```javascript JavaScript
@@ -68,7 +269,7 @@ console.log(`${english.length} English, ${indian.length} Indian-accent, ${female
 
 </CodeGroup>
 
-## Voice Object Shape
+## Voice object shape
 
 Each entry in the `voices` array has:
 
@@ -77,24 +278,48 @@ Each entry in the `voices` array has:
 | `voiceId` | string | Use this with the `voice_id` body field in synthesis requests. |
 | `displayName` | string | Human-readable name. |
 | `tags.language` | string[] | Languages the voice was trained on (e.g., `["english"]`, `["english", "hindi"]`). |
-| `tags.accent` | string | One of `american`, `british`, `indian`. |
+| `tags.accent` | string | One of `american`, `british`, `indian`, `canadian`, `australian`. |
 | `tags.gender` | string | `male` or `female`. |
 | `tags.age` | string | `young`, `middle-aged`, `senior`. |
 | `tags.usecases` | string[] | Recommended use cases (e.g., `["conversational"]`, `["narration"]`). |
 
-## Identify Pro vs Standard Voices
+## Supported languages
 
-Pro voices are listed in the [Pro model card's voice catalog](/waves/model-cards/text-to-speech/lightning-v-3-1-pro#voice-catalog). All Pro voice IDs (e.g., `meher`, `rhea`, `aviraj`, `cressida`, `willow`, `maverick`) appear in the `get_voices` response alongside standard v3.1 voices. Use them with `"model": "lightning_v3.1_pro"` to route to the Pro pool — see the [Pro model card](/waves/model-cards/text-to-speech/lightning-v-3-1-pro) for usage.
+| Language | Code | v3.1 voices | v3.1 Pro voices |
+|---|---|---:|---:|
+| English (US, UK, Indian) | `en` | 176 | 43 |
+| Hindi | `hi` | 115 | 13 (Indian voices) |
+| Tamil | `ta` | 13 | 12 |
+| Spanish | `es` | 11 | 6 |
+| Kannada | `kn` | 10 | 10 |
+| Marathi | `mr` | 9 | 6 |
+| Telugu | `te` | 8 | 8 |
+| Odia | `or` | 8 | 8 |
+| Punjabi | `pa` | 8 | 7 |
+| Malayalam | `ml` | 6 | 6 |
+| Gujarati | `gu` | 5 | 5 |
+| Bengali | `bn` | 4 | 5 |
+| German | `de` | — | 7 |
+| French | `fr` | — | 9 |
+| Italian | `it` | — | 6 |
+| Portuguese (Brazilian + European) | `pt` | — | 7 |
+| Russian | `ru` | — | 7 |
+| Greek | `el` | — | 5 |
+| Finnish | `fi` | — | 6 |
+| Norwegian | `no` | — | 4 |
+| Polish | `pl` | — | 4 |
+| Arabic | `ar` | — | 2 |
+| Chinese (Mandarin) | `zh` | — | 5 |
+| Indonesian | `id` | — | 4 |
+| Japanese | `ja` | — | 4 |
+| Korean | `ko` | — | 1 |
+| Malay | `ms` | — | 2 |
+| Turkish | `tr` | — | 2 |
+| Vietnamese | `vi` | — | 1 |
 
-## Supported Languages
+For per-language voice counts that always reflect the live catalog, query `GET /waves/v1/lightning-v3.1/get_voices` and group by `tags.language`. For the canonical per-voice metadata, see the [Lightning v3.1 model card voice catalog](/models/model-cards/text-to-speech/lightning-v-3-1#voice-catalog) and [Lightning v3.1 Pro voice catalog](/models/model-cards/text-to-speech/lightning-v-3-1-pro#voice-catalog).
 
-For the full language list per model and per-language voice counts, see:
+## Need help?
 
-- [Lightning v3.1 supported languages](/waves/model-cards/text-to-speech/lightning-v-3-1#supported-languages) — 12 languages plus auto-detect
-- [Lightning v3.1 Pro supported languages](/waves/model-cards/text-to-speech/lightning-v-3-1-pro#supported-languages) — English (and Hindi on Indian voices)
-
-## Need Help?
-
-If you have any questions or encounter issues, our community is here to help!
 - Join our [Discord server](https://discord.gg/9WtSXv26WE) to connect with other developers and get real-time support.
 - Contact us via email: [support@smallest.ai](mailto:support@smallest.ai).

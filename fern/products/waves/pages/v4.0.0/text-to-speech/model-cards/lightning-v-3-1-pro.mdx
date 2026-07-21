@@ -1,6 +1,6 @@
 ---
 title: "Lightning v3.1 Pro"
-description: "Model card for Lightning v3.1 Pro. Premium 44.1 kHz TTS pool with a curated voice catalog across American, British, and Indian accents, English + Hindi code-switching, and improved naturalness."
+description: "Model card for Lightning v3.1 Pro. Premium 44.1 kHz TTS pool with a curated voice catalog across American, British, and Indian accents, English + Hindi code-switching, 31 supported languages plus `auto` routing, and improved naturalness."
 icon: "sparkles"
 ---
 
@@ -10,7 +10,7 @@ import { Capabilities, Capability } from "@/components/Capabilities";
 
 Lightning v3.1 Pro is a premium 44.1 kHz text-to-speech pool with improved naturalness and a curated voice catalog. Runs on dedicated inference capacity, isolated from general traffic. Concurrency, latency, and rate limits are identical to standard Lightning v3.1; the difference is voice quality and the catalog.
 
-**Jump to:** [Benchmarks](#performance--benchmarks) · [Voice Catalog](#voice-catalog) · [API Reference](/waves/api-reference/api-reference/text-to-speech/synthesize-speech) · [Quickstart](/waves/documentation/text-to-speech-lightning/quickstart)
+**Jump to:** [Benchmarks](#performance--benchmarks) · [Voice Catalog](#voice-catalog) · [API Reference](/models/api-reference/text-to-speech/synthesize-speech) · [Quickstart](/models/documentation/text-to-speech-lightning/quickstart)
 
 <CardGroup cols={4}>
   <Card title="44.1 kHz" icon="waveform-lines" href="#technical-specifications">
@@ -19,8 +19,8 @@ Lightning v3.1 Pro is a premium 44.1 kHz text-to-speech pool with improved natur
   <Card title="200ms" icon="bolt" href="#performance--benchmarks">
     TTFB at 40 concurrent requests
   </Card>
-  <Card title="29 Languages" icon="globe" href="#supported-languages">
-    English + Hindi, plus 27 more — 9 Indian, 8 Asian & Middle Eastern, 10 European
+  <Card title="31 Languages" icon="globe" href="#supported-languages">
+    10 Indic, 8 Asian & Middle Eastern, 13 European; plus `auto` routing
   </Card>
   <Card title="3.3x" icon="gauge-high" href="#performance--benchmarks">
     Real-time factor (faster than playback)
@@ -33,7 +33,7 @@ Lightning v3.1 Pro is a premium 44.1 kHz text-to-speech pool with improved natur
 |---|---|
 | **Developed by** | Smallest AI |
 | **Model type** | Text-to-Speech Websocket \| Text-to-Speech SSE \| Text-to-Speech HTTP |
-| **Languages** | 29 — English + Hindi, plus 27 more (9 Indian, 8 Asian & Middle Eastern, 10 European); see [Supported Languages](#supported-languages) |
+| **Languages** | 31 — 10 Indic, 8 Asian & Middle Eastern, 13 European; plus `auto` routing. See [Supported Languages](#supported-languages). |
 | **Audio Output formats** | PCM, MP3, WAV, ulaw, alaw |
 | **Pricing (Standard Plan)** | ~$0.195/10K characters |
 | **Concurrency (Standard Plan)** | 10 |
@@ -55,7 +55,7 @@ Lightning v3.1 Pro is a premium 44.1 kHz text-to-speech pool with improved natur
     HTTP, SSE, and WebSocket transports for real-time playback.
   </Capability>
   <Capability icon="globe" name="Multi-Language" href="#supported-languages">
-    `language: en` → UK + American accented English. `language: hi` → Indian accented English + Hindi (code-switching). Omit → defaults to `en + hi`. Plus 27 additional languages via dedicated Pro voices — pass the ISO 639-1 code (e.g. `ta`, `de`, `ja`).
+    `language: en` → UK + American accented English. `language: hi` → Indian accented English + Hindi (code-switching). Omit → defaults to `en + hi`. Plus 29 additional languages via dedicated Pro voices — pass the ISO 639-1 code (e.g. `ta`, `de`, `ja`), or use `auto` for cross-language routing.
   </Capability>
   <Capability icon="waveform-lines" name="High Fidelity">
     Broadcast-quality 44.1 kHz audio with natural prosody, intonation, and conversational rhythm.
@@ -72,7 +72,7 @@ Lightning v3.1 Pro is a premium 44.1 kHz text-to-speech pool with improved natur
 
 ## Performance & Benchmarks
 
-Pro improves on standard Lightning v3.1 across accuracy, expressiveness, delivery, and MOS quality. Tables below pair Pro with the same competitor set documented on the [Lightning v3.1 model card](/waves/model-cards/text-to-speech/lightning-v-3-1); refer to that card for Pro-vs-Standard comparisons. Open the accordion under each category to see what each metric measures.
+Pro improves on standard Lightning v3.1 across accuracy, expressiveness, delivery, and MOS quality. Tables below pair Pro with the same competitor set documented on the [Lightning v3.1 model card](/models/model-cards/text-to-speech/lightning-v-3-1); refer to that card for Pro-vs-Standard comparisons. Open the accordion under each category to see what each metric measures.
 
 ### Naturalness — higher is better
 
@@ -168,7 +168,7 @@ Mixed direction — WER, CER, Hallucination, and Deletion are *lower is better*;
 - **WV-MOS** — A predicted MOS from the WavLM-based WV-MOS reference model — another automated proxy commonly reported alongside UTMOS for cross-validation.
 </Accordion>
 
-Want to reproduce these results? See the [TTS evaluation script](/waves/model-cards/text-to-speech/tts-evaluation-script) to measure TTFB and synthesis quality in your own environment.
+Want to reproduce these results? See the [TTS evaluation script](/models/model-cards/text-to-speech/tts-evaluation-script) to measure TTFB and synthesis quality in your own environment.
 
 ---
 
@@ -185,9 +185,9 @@ Pass the `language` body parameter to steer the Pro pool's output:
 
 ### Additional Pro languages
 
-27 additional languages have dedicated Pro voices. Pass the ISO 639-1 code in the `language` body parameter and pick a `voice_id` from the matching [Voice Catalog](#voice-catalog) section.
+29 additional languages have dedicated Pro voices. Pass the ISO 639-1 code in the `language` body parameter and pick a `voice_id` from the matching [Voice Catalog](#voice-catalog) section. Pass `auto` to route across all supported languages using any English or Hindi voice.
 
-**Indian**
+**Indic** — 9 languages
 
 | Language | Code | Pro voices |
 |---|---|---:|
@@ -201,7 +201,7 @@ Pass the `language` body parameter to steer the Pro pool's output:
 | Odia | `or` | 8 |
 | Gujarati | `gu` | 5 |
 
-**Asian & Middle Eastern**
+**Asian & Middle Eastern** — 8 languages
 
 | Language | Code | Pro voices |
 |---|---|---:|
@@ -214,7 +214,7 @@ Pass the `language` body parameter to steer the Pro pool's output:
 | Turkish | `tr` | 2 |
 | Vietnamese | `vi` | 1 |
 
-**European**
+**European** — 12 languages
 
 | Language | Code | Pro voices |
 |---|---|---:|
@@ -222,6 +222,8 @@ Pass the `language` body parameter to steer the Pro pool's output:
 | Spanish | `es` | 6 |
 | French | `fr` | 9 |
 | Italian | `it` | 6 |
+| Dutch | `nl` | — |
+| Swedish | `sv` | — |
 | Portuguese (Brazilian + European) | `pt` | 7 |
 | Russian | `ru` | 7 |
 | Greek | `el` | 5 |
@@ -229,7 +231,9 @@ Pass the `language` body parameter to steer the Pro pool's output:
 | Norwegian | `no` | 4 |
 | Polish | `pl` | 4 |
 
-For other languages, use the standard [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1) model (12 languages, full voice catalog).
+Dutch and Swedish accept the codes on Pro; voice-count data pending as new Pro voice trains for those roll out.
+
+For other languages, use the standard [Lightning v3.1](/models/model-cards/text-to-speech/lightning-v-3-1) model (20 accepted codes; 12 with a trained voice catalog).
 
 ---
 
@@ -356,7 +360,7 @@ Pair each voice with its matching `language` code (e.g. `"language": "ta"` with 
 | Polish | `pl` | `ewa`, `joanna` | `tomasz`, `jakub` |
 
 <Tip>
-Need a voice not in this list? Use the standard [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1) catalog (217 voices, more languages, voice cloning). Pass `"model": "lightning_v3.1"` (or omit the field) instead of `lightning_v3.1_pro`.
+Need a voice not in this list? Use the standard [Lightning v3.1](/models/model-cards/text-to-speech/lightning-v-3-1) catalog (217 voices, more languages, voice cloning). Pass `"model": "lightning_v3.1"` (or omit the field) instead of `lightning_v3.1_pro`.
 </Tip>
 
 ---
@@ -371,9 +375,9 @@ Need a voice not in this list? Use the standard [Lightning v3.1](/waves/model-ca
 | `https://api.smallest.ai/waves/v1/tts/live` | POST (SSE) | Server-sent events streaming |
 | `wss://api.smallest.ai/waves/v1/tts/live` | WebSocket | Real-time streaming |
 
-See [Synthesize Speech](/waves/api-reference/api-reference/text-to-speech/synthesize-speech) for the full request/response schema, supported parameters, and error codes. To route to the Pro pool you must set `model` to `lightning_v3.1_pro` explicitly — the field is optional but defaults to standard Lightning v3.1.
+See [Synthesize Speech](/models/api-reference/text-to-speech/synthesize-speech) for the full request/response schema, supported parameters, and error codes. To route to the Pro pool you must set `model` to `lightning_v3.1_pro` explicitly — the field is optional but defaults to standard Lightning v3.1.
 
-<Card title="Quickstart" icon="rocket" href="/waves/documentation/text-to-speech-lightning/quickstart">
+<Card title="Quickstart" icon="rocket" href="/models/documentation/text-to-speech-lightning/quickstart">
   Generate your first audio in under a minute with a single API call.
 </Card>
 
@@ -398,9 +402,9 @@ Per-voice metadata still lives in `tags.language` on the voice catalog (`GET /wa
 
 - **Chunk boundaries.** Segment input at natural prosodic boundaries (`.` `!` `?` `,`). Maximum chunk size is 250 characters; optimal throughput at 140 characters per request.
 - **Script integrity.** Use native script for each language. Mixed-script input within a single language token produces unpredictable phoneme mappings.
-- **Lexicon overrides.** Use [pronunciation dictionaries](/waves/documentation/text-to-speech-lightning/pronunciation-dictionaries) for domain-specific terms, brand names, and acronyms where default grapheme-to-phoneme conversion is insufficient.
+- **Lexicon overrides.** Use [pronunciation dictionaries](/models/documentation/text-to-speech-lightning/pronunciation-dictionaries) for domain-specific terms, brand names, and acronyms where default grapheme-to-phoneme conversion is insufficient.
 
-For comprehensive text formatting rules (numeric handling, date/time, symbols, chunking logic), see [TTS Best Practices](/waves/documentation/best-practices/tts-best-practices).
+For comprehensive text formatting rules (numeric handling, date/time, symbols, chunking logic), see [TTS Best Practices](/models/documentation/best-practices/tts-best-practices).
 
 ---
 
@@ -419,7 +423,7 @@ For comprehensive text formatting rules (numeric handling, date/time, symbols, c
 ## FAQ
 
 <Accordion title="How is Lightning v3.1 Pro different from standard Lightning v3.1?">
-Pro runs on dedicated inference capacity, isolated from general Lightning traffic, and ships a curated premium voice catalog with improved naturalness. Concurrency, latency, and rate-limit ceilings are identical to standard [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1) — the difference is voice quality and the catalog.
+Pro runs on dedicated inference capacity, isolated from general Lightning traffic, and ships a curated premium voice catalog with improved naturalness. Concurrency, latency, and rate-limit ceilings are identical to standard [Lightning v3.1](/models/model-cards/text-to-speech/lightning-v-3-1) — the difference is voice quality and the catalog.
 </Accordion>
 
 <Accordion title="How do I route requests to the Pro pool?">
@@ -431,7 +435,7 @@ Pair Pro voice IDs with `"model": "lightning_v3.1_pro"`. The API does not curren
 </Accordion>
 
 <Accordion title="Does Lightning v3.1 Pro support voice cloning?">
-No. Voice cloning is not available on the Pro pool. Clones continue to use standard [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1) and the existing voice-cloning flow.
+No. Voice cloning is not available on the Pro pool. Clones continue to use standard [Lightning v3.1](/models/model-cards/text-to-speech/lightning-v-3-1) and the existing voice-cloning flow.
 </Accordion>
 
 <Accordion title="Which languages does Lightning v3.1 Pro support?">
@@ -448,7 +452,7 @@ Pro shares the Lightning v3.1 base-queue voices for English + Hindi (`meher`, `d
 
 ### Known Limitations
 
-- **No voice cloning.** Voice cloning is not available on the Pro pool. Clones continue to use standard [Lightning v3.1](/waves/model-cards/text-to-speech/lightning-v-3-1) and the existing voice-cloning flow.
+- **No voice cloning.** Voice cloning is not available on the Pro pool. Clones continue to use standard [Lightning v3.1](/models/model-cards/text-to-speech/lightning-v-3-1) and the existing voice-cloning flow.
 
 <Warning>
   Lightning v3.1 Pro must **not** be used for impersonation or fraud, generating deceptive audio content (deepfakes), creating content that violates consent or privacy, harassment or abuse, or any illegal or unethical purposes.
@@ -468,5 +472,5 @@ For compliance documentation (GDPR, SOC2, HIPAA), contact [support@smallest.ai](
 <CardGroup cols={3}>
   <Card title="Support" icon="envelope" href="mailto:support@smallest.ai" />
   <Card title="Console" icon="desktop" href="https://app.smallest.ai/dashboard" />
-  <Card title="Documentation" icon="book-open" href="/waves/documentation/text-to-speech-lightning/quickstart" />
+  <Card title="Documentation" icon="book-open" href="/models/documentation/text-to-speech-lightning/quickstart" />
 </CardGroup>

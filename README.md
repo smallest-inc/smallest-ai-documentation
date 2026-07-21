@@ -39,10 +39,12 @@
 
 This repository contains the source files for the Smallest AI documentation site at [docs.smallest.ai](https://docs.smallest.ai). The docs are built with [Fern](https://buildwithfern.com) and cover two products:
 
-| Product | Display Name | Description | Docs URL |
+| Product | Internal Name | Description | Docs URL |
 |---|---|---|---|
-| **Atoms** | Voice Agents | End-to-end voice AI agents for telephony, web, and mobile | [docs.smallest.ai/atoms](https://docs.smallest.ai/atoms) |
-| **Waves** | Models | Text-to-Speech (Lightning) and Speech-to-Text (Pulse) APIs | [docs.smallest.ai/waves](https://docs.smallest.ai/waves) |
+| **Voice Agents** | Atoms | End-to-end voice AI agents for telephony, web, and mobile | [docs.smallest.ai/voice-agents](https://docs.smallest.ai/voice-agents) |
+| **Models** | Waves | Text-to-Speech (Lightning) and Speech-to-Text (Pulse) APIs | [docs.smallest.ai/models](https://docs.smallest.ai/models) |
+
+> **Note on naming:** the rendered URL space and product display names are `voice-agents` and `models`. The internal folder + spec names in this repo are still `atoms/` and `waves/` — that's intentional so SDK generation and internal tooling don't break. When editing content, work in `atoms/` and `waves/` folders; when writing an internal link or redirect, target `/voice-agents/*` and `/models/*`.
 
 ## Repository Structure
 
@@ -62,7 +64,7 @@ This repository contains the source files for the Smallest AI documentation site
 │   ├── products/
 │   │   ├── atoms.yml                     # Voice Agents navigation config
 │   │   ├── atoms/pages/                  # Voice Agents documentation pages (MDX)
-│   │   ├── waves/versions/               # Models version configs (v4.0.0, v3.0.1, v2.2.0)
+│   │   ├── waves/versions/               # Models content root (v4.0.0 — no version dropdown)
 │   │   └── waves/pages/                  # Models documentation pages (MDX)
 │   └── snippets/                         # Shared MDX snippets
 ├── .github/workflows/
@@ -109,11 +111,11 @@ This repository contains the source files for the Smallest AI documentation site
 > **Important — three spec layers for waves**:
 > 1. **Base spec** at `fern/apis/waves/{openapi,asyncapi}/*.yaml` — source of truth for structure.
 > 2. **SDK overrides** at `fern/apis/waves/{openapi,asyncapi}/*-overrides.yaml` (siblings of base) — drive SDK method names, examples, and deprecations via `fern/apis/unified/generators.yml`.
-> 3. **v4 docs overrides** at `fern/apis/waves-v4/overrides/*.yaml` — drive what renders on the `docs.smallest.ai/waves` API reference pages via `fern/apis/waves-v4/generators.yml`.
+> 3. **v4 docs overrides** at `fern/apis/waves-v4/overrides/*.yaml` — drive what renders on the `docs.smallest.ai/models/api-reference/*` pages via `fern/apis/waves-v4/generators.yml`. The `-v4` directory name is a historical carry-over from when the docs had a `v4.0.0` version dropdown; the version dropdown is gone but the folder name stays for tooling reasons (SDK-gen configs reference it by path).
 >
 > A `description`, `default`, `enum`, or `example` set in the v4 docs override **wins** on docs render. Editing the same field in the base spec alone is invisible. Always update both layers in lockstep, and run `python3 scripts/spec-live-tests/spec_drift_check.py` before pushing — CI runs it on every PR that touches `fern/apis/waves/**` or `fern/apis/waves-v4/overrides/**`.
 >
-> **Atoms has its own base + override pairs** (REST under `fern/apis/atoms/openapi/` and WS under `fern/apis/atoms/asyncapi/`). The atoms WebSocket endpoint at `WSS /atoms/v1/agent/connect` lives in `agent-ws.yaml` and renders at `/atoms/api-reference/api-reference/realtime-agent/realtime-agent` — easy to miss if you only audit `openapi/`. The drift check script auto-discovers all atoms and waves layers.
+> **Atoms has its own base + override pairs** (REST under `fern/apis/atoms/openapi/` and WS under `fern/apis/atoms/asyncapi/`). The atoms WebSocket endpoint at `WSS /atoms/v1/agent/connect` lives in `agent-ws.yaml` and renders at `/voice-agents/api-reference/api-reference/realtime-agent/realtime-agent` — easy to miss if you only audit `openapi/`. The drift check script auto-discovers all atoms and waves layers.
 
 ## Setup
 

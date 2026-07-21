@@ -1,14 +1,14 @@
 ---
 title: "Lightning v3.1"
-description: "Model card for Lightning v3.1. High-fidelity, low-latency text-to-speech at 44 kHz with voice cloning, streaming, and 12 language support plus auto-detect."
+description: "Model card for Lightning v3.1. High-fidelity, low-latency text-to-speech at 44 kHz with voice cloning, streaming, and 20 supported language codes plus `auto` routing."
 icon: "sparkles"
 ---
 
 import { Capabilities, Capability } from "@/components/Capabilities";
 
-Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering natural, expressive, and realistic speech at 44 kHz. Optimized for real-time applications with ultra-low latency and voice cloning support, it delivers broadcast-quality audio with genuinely conversational characteristics. Supports 12 languages across English, Hindi, Spanish, and 9 Indian languages.
+Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering natural, expressive, and realistic speech at 44 kHz. Optimized for real-time applications with ultra-low latency and voice cloning support, it delivers broadcast-quality audio with genuinely conversational characteristics. Accepts 20 language codes (10 European + 10 Indic) plus `auto` for cross-language routing. The trained voice catalog covers 12 of these languages directly; the other 8 route through English or Hindi voices.
 
-**Jump to:** [Benchmarks](#performance--benchmarks) · [Voice Catalog](#voice-catalog) · [Supported Languages](#supported-languages) · [API Reference](/waves/api-reference/api-reference/text-to-speech/synthesize-speech) · [Pricing & Throughput](#throughput-latency--pricing) · [Quickstart](/waves/documentation/text-to-speech-lightning/quickstart)
+**Jump to:** [Benchmarks](#performance--benchmarks) · [Voice Catalog](#voice-catalog) · [Supported Languages](#supported-languages) · [API Reference](/models/api-reference/text-to-speech/synthesize-speech) · [Pricing & Throughput](#throughput-latency--pricing) · [Quickstart](/models/documentation/text-to-speech-lightning/quickstart)
 
 <CardGroup cols={4}>
   <Card title="44.1 kHz" icon="waveform-lines" href="#technical-specifications">
@@ -17,8 +17,8 @@ Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering n
   <Card title="200ms" icon="bolt" href="#performance--benchmarks">
     TTFB at 40 concurrent requests
   </Card>
-  <Card title="12 Languages" icon="globe" href="#supported-languages">
-    Auto-detection + code-switching
+  <Card title="20 Languages" icon="globe" href="#supported-languages">
+    `auto` routing + code-switching; 12 with voices
   </Card>
   <Card title="3.3x" icon="gauge-high" href="#performance--benchmarks">
     Real-time factor (faster than playback)
@@ -31,7 +31,7 @@ Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering n
 |---|---|
 | **Developed by** | Smallest AI |
 | **Model type** | Text-to-Speech / Speech Synthesis |
-| **Languages** | 12 (auto-detection + code-switching) |
+| **Languages** | 20 accepted codes + `auto` (12 with trained voices; other 8 route via English/Hindi voices) |
 | **License** | Proprietary |
 | **Version** | v3.1 |
 | **Native sample rate** | 44,100 Hz |
@@ -51,7 +51,7 @@ Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering n
     HTTP, SSE, and WebSocket transports for real-time playback.
   </Capability>
   <Capability icon="globe" name="Multi-Language" href="#supported-languages">
-    12 languages plus auto-detect, with automatic identification and code-switching mid-utterance.
+    20 accepted language codes plus `auto` routing; automatic identification and code-switching mid-utterance across the 12 languages with trained voices.
   </Capability>
   <Capability icon="waveform-lines" name="High Fidelity">
     Broadcast-quality 44.1 kHz audio with natural prosody, intonation, and conversational rhythm.
@@ -162,16 +162,18 @@ Mixed direction — most are *lower is better*; the Whisper-judged Pronunciation
 </Accordion>
 
 <Note>
-\*For Pronunciation and WER, the residual gap on Lightning v3.1 is concentrated in proper-noun rendering. Use a [pronunciation dictionary](/waves/documentation/text-to-speech-lightning/pronunciation-dictionaries) to pin names, brands, and acronyms; with the dictionary applied, both metrics close to parity.
+\*For Pronunciation and WER, the residual gap on Lightning v3.1 is concentrated in proper-noun rendering. Use a [pronunciation dictionary](/models/documentation/text-to-speech-lightning/pronunciation-dictionaries) to pin names, brands, and acronyms; with the dictionary applied, both metrics close to parity.
 </Note>
 
-Want to reproduce these results? See the [TTS evaluation script](/waves/model-cards/text-to-speech/tts-evaluation-script) to measure TTFB and synthesis quality in your own environment.
+Want to reproduce these results? See the [TTS evaluation script](/models/model-cards/text-to-speech/tts-evaluation-script) to measure TTFB and synthesis quality in your own environment.
 
 ---
 
 ## Supported Languages
 
 Pass the language code on each request to match the language of your input text. Each voice supports a subset of these languages — check `tags.language` on the voice via `GET /waves/v1/lightning-v3.1/get_voices`.
+
+### Voice catalog — 12 languages with trained voices
 
 | Language | Code | Voice count |
 |----------|------|-------------|
@@ -188,8 +190,27 @@ Pass the language code on each request to match the language of your input text.
 | Gujarati | `gu` | 5 |
 | Bengali | `bn` | 4 |
 
+### Additional accepted language codes — 8 routed via English/Hindi voices
+
+The model accepts these ISO 639-1 codes but has no dedicated trained voices — pronunciation and normalization are handled through the English or Hindi voice you pick.
+
+| Language | Code |
+|----------|------|
+| French | `fr` |
+| German | `de` |
+| Italian | `it` |
+| Dutch | `nl` |
+| Swedish | `sv` |
+| Portuguese | `pt` |
+| Polish | `pl` |
+| Russian | `ru` |
+
+### `auto` — cross-language routing
+
+Pass `language: auto` to let the platform route based on input text. Any English or Hindi voice can then be used across all supported languages without needing an explicit code per call. See [DS-576](https://linear.app/smallest/issue/DS-576) for the design.
+
 <Note>
-The list above reflects the **voice catalog** as the source of truth — languages for which Lightning v3.1 has at least one trained voice.
+The voice-catalog table above reflects languages with at least one trained voice. The 20 accepted codes + `auto` are the full language surface accepted by the `language` request field.
 </Note>
 
 ---
@@ -339,9 +360,7 @@ Need something not in this short-list? Call `GET /waves/v1/lightning-v3.1/get_vo
 
 ### Endpoints
 
-<Note>New integrations should use the unified `/waves/v1/tts*` routes and select the model with `"model": "lightning_v3.1"`. The model-named routes below remain live but are deprecated.</Note>
-
-**Recommended (unified routes — model selected via `model` body field):**
+Route selection is via the `model` body field on the unified endpoints. Pass `"model": "lightning_v3.1"` for the standard pool documented on this card, or `"model": "lightning_v3.1_pro"` for the [Pro pool](/models/model-cards/text-to-speech/lightning-v-3-1-pro).
 
 | Endpoint | Method | Use Case |
 |----------|--------|----------|
@@ -349,21 +368,13 @@ Need something not in this short-list? Call `GET /waves/v1/lightning-v3.1/get_vo
 | `https://api.smallest.ai/waves/v1/tts/live` | POST (SSE) | Server-sent events streaming |
 | `wss://api.smallest.ai/waves/v1/tts/live` | WebSocket | Real-time streaming (same URL as SSE, protocol-dispatched) |
 
-**Legacy (deprecated — kept for backwards compatibility):**
-
-| Endpoint | Method | Use Case |
-|----------|--------|----------|
-| `https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech` | POST | Synchronous synthesis |
-| `https://api.smallest.ai/waves/v1/lightning-v3.1/stream` | POST (SSE) | Server-sent events streaming |
-| `wss://api.smallest.ai/waves/v1/lightning-v3.1/get_speech/stream` | WebSocket | Real-time streaming |
-
 ### Request Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `text` | string | Yes | — | Text to synthesize |
 | `voice_id` | string | Yes | — | Voice identifier |
-| `model` | string | No | `lightning_v3.1` | TTS pool to use. Pass `lightning_v3.1_pro` to route to the [Pro pool](/waves/model-cards/text-to-speech/lightning-v-3-1-pro). |
+| `model` | string | No | `lightning_v3.1` | TTS pool to use. Pass `lightning_v3.1_pro` to route to the [Pro pool](/models/model-cards/text-to-speech/lightning-v-3-1-pro). |
 | `sample_rate` | integer | No | 44100 | Output sample rate (Hz) |
 | `speed` | float | No | 1.0 | Speech speed (0.5-2.0) |
 | `language` | string | No | `"en"` | Language code matching the voice (`en`, `hi`, `ta`, `es`, `kn`, `mr`, `te`, `or`, `pa`, `ml`, `gu`, `bn`). |
@@ -371,7 +382,7 @@ Need something not in this short-list? Call `GET /waves/v1/lightning-v3.1/get_vo
 | `pronunciation_dicts` | array | No | — | Custom pronunciation IDs (WebSocket only) |
 | `word_timestamps` | boolean | No | `false` | Opt in to per-word timing events. WebSocket only. See [Word-level timestamps](#word-level-timestamps). |
 
-<Card title="Quickstart" icon="rocket" href="/waves/documentation/text-to-speech-lightning/quickstart">
+<Card title="Quickstart" icon="rocket" href="/models/documentation/text-to-speech-lightning/quickstart">
   Generate your first audio in under a minute with a single API call.
 </Card>
 
@@ -385,7 +396,7 @@ Need something not in this short-list? Call `GET /waves/v1/lightning-v3.1/get_vo
 | Real-time factor (RTF) | 3.3× | Synthesis runs ~3× faster than playback speed. |
 | Max chunk size | 250 characters | Optimal throughput at ~140 characters per request. |
 
-Rate limits, concurrency caps, and pricing tiers are documented on the [Concurrency & Limits](/waves/api-reference/api-references/concurrency-and-limits) page. For enterprise pricing, contact [sales@smallest.ai](mailto:sales@smallest.ai).
+Rate limits, concurrency caps, and pricing tiers are documented on the [Concurrency & Limits](/models/api-reference/concurrency-and-limits) page. For enterprise pricing, contact [sales@smallest.ai](mailto:sales@smallest.ai).
 
 ---
 
@@ -500,8 +511,7 @@ ws.onmessage = (event) => {
 
 | Surface | Word timestamps |
 |---|---|
-| `WSS /waves/v1/tts/live` (unified) | ✅ |
-| `WSS /waves/v1/lightning-v3.1/get_speech/stream` (legacy, retiring 2026-07-14) | ✅ |
+| `wss://api.smallest.ai/waves/v1/tts/live` (WebSocket) | ✅ |
 | `POST /waves/v1/tts` (sync HTTP) | ❌ — flag accepted, silently ignored |
 | `POST /waves/v1/tts/live` (HTTP SSE) | ❌ — same |
 
@@ -578,16 +588,16 @@ Intra-group switching is unrestricted. Any language within the same group can be
 - **Script encoding.** Input text must use native script for each language (Devanagari for Hindi/Marathi/Gujarati, respective Brahmic scripts for Dravidian languages, Latin for European languages). Transliterated input degrades synthesis quality.
 - **Group constraint.** Cloned voices follow the same language group routing rules. A session initialized in the Indic group cannot switch to Global-exclusive languages, regardless of the voice's source language.
 
-For detailed recording examples and expressive cloning techniques, see [Voice Cloning Best Practices](/waves/documentation/best-practices/voice-cloning-best-practices).
+For detailed recording examples and expressive cloning techniques, see [Voice Cloning Best Practices](/models/documentation/best-practices/voice-cloning-best-practices).
 
 ### Text Formatting
 
 - **Chunk boundaries.** Segment input at natural prosodic boundaries (`.` `!` `?` `,`). Maximum chunk size is 250 characters; optimal throughput at 140 characters per request.
 - **Script integrity.** Avoid transliteration. Use native script for each language. Mixed-script input within a single language token produces unpredictable phoneme mappings.
 - **Numeric normalization.** Use standard formats (`DD/MM/YYYY`, `HH:MM`). Phone numbers default to 3-4-3 digit grouping.
-- **Lexicon overrides.** Use [pronunciation dictionaries](/waves/documentation/text-to-speech-lightning/pronunciation-dictionaries) for domain-specific terms, brand names, and acronyms where default grapheme-to-phoneme conversion is insufficient.
+- **Lexicon overrides.** Use [pronunciation dictionaries](/models/documentation/text-to-speech-lightning/pronunciation-dictionaries) for domain-specific terms, brand names, and acronyms where default grapheme-to-phoneme conversion is insufficient.
 
-For comprehensive text formatting rules (numeric handling, date/time, symbols, chunking logic), see [TTS Best Practices](/waves/documentation/best-practices/tts-best-practices).
+For comprehensive text formatting rules (numeric handling, date/time, symbols, chunking logic), see [TTS Best Practices](/models/documentation/best-practices/tts-best-practices).
 
 ---
 
@@ -652,7 +662,7 @@ For comprehensive text formatting rules (numeric handling, date/time, symbols, c
 - Mixed-language text (transliteration) may produce suboptimal results. Hindi text should be in Devanagari script (e.g., "namaste" in Devanagari), not Latin. English text should be in Latin script, not Devanagari. Each language should use its native script.
 
 <Note>
-  **Recommendations:** Use proper script for each language. Break long text at natural punctuation points. Use [pronunciation dictionaries](/waves/documentation/text-to-speech-lightning/pronunciation-dictionaries) for specialized vocabulary. Test voice selection for your specific use case.
+  **Recommendations:** Use proper script for each language. Break long text at natural punctuation points. Use [pronunciation dictionaries](/models/documentation/text-to-speech-lightning/pronunciation-dictionaries) for specialized vocabulary. Test voice selection for your specific use case.
 </Note>
 
 <Warning>
@@ -675,5 +685,5 @@ For compliance documentation (GDPR, SOC2, HIPAA), contact [support@smallest.ai](
 <CardGroup cols={3}>
   <Card title="Support" icon="envelope" href="mailto:support@smallest.ai" />
   <Card title="Console" icon="desktop" href="https://app.smallest.ai/dashboard" />
-  <Card title="Documentation" icon="book-open" href="/waves/documentation/text-to-speech-lightning/quickstart" />
+  <Card title="Documentation" icon="book-open" href="/models/documentation/text-to-speech-lightning/quickstart" />
 </CardGroup>

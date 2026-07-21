@@ -3,7 +3,7 @@ title: 'Evaluation Walkthrough'
 description: 'Step-by-step guide to evaluate Pulse STT accuracy and performance against your own dataset using the Pulse REST API.'
 ---
 
-Our evaluation guide outlines a repeatable process: choose representative audio, generate transcripts, compute WER/CER/latency, and document findings. The ready-to-run snippets below call the [Pulse pre-recorded REST endpoint](/waves/api-reference/api-reference/speech-to-text/transcribe) directly so you can audit the methodology and adapt it to any HTTP client.
+Our evaluation guide outlines a repeatable process: choose representative audio, generate transcripts, compute WER/CER/latency, and document findings. The ready-to-run snippets below call the [Pulse pre-recorded REST endpoint](/models/api-reference/speech-to-text/transcribe) directly so you can audit the methodology and adapt it to any HTTP client.
 
 <Note>
 This guide uses the Pulse REST API directly (via `requests`) rather than the `smallestai` Python SDK. The SDK is a convenience wrapper; the REST endpoint is the contract. Use the same approach in any language with an HTTP client — the request and response shapes are identical.
@@ -131,7 +131,7 @@ print(summary)
 
 - **WER / CER** per use case and language.
 - **End-to-end latency** (p50 / p90 / p95) from `latency_ms`.
-- **RTF** from `rtf` — values **below 1.0** mean Pulse processed audio faster than real-time. Pulse STT typically runs near 0.4 on clean inputs (see [Metrics Overview](/waves/documentation/speech-to-text-pulse/benchmarks/metrics-overview#real-time-factor-rtf)).
+- **RTF** from `rtf` — values **below 1.0** mean Pulse processed audio faster than real-time. Pulse STT typically runs near 0.4 on clean inputs (see [Metrics Overview](/models/documentation/speech-to-text-pulse/benchmarks/metrics-overview#real-time-factor-rtf)).
 - **Diarization coverage**: share of `utterances` entries that include a `speaker` field.
 
 ## 5. Error analysis
@@ -146,7 +146,7 @@ outliers = breakdown(df)
 
 - Classify errors into substitutions, deletions, insertions (`jiwer.process_words(ref, hyp).alignments` gives the alignment).
 - Highlight audio traits (noise, accent, telephony codec) that correlate with higher WER.
-- For proper-noun mistakes, queue them for a [pronunciation dictionary](/waves/documentation/text-to-speech-lightning/pronunciation-dictionaries) if you also use Lightning TTS, or for the Pulse [keyword boosting](/waves/documentation/speech-to-text-pulse/features/keyword-boosting) feature on the streaming endpoint.
+- For proper-noun mistakes, queue them for a [pronunciation dictionary](/models/documentation/text-to-speech-lightning/pronunciation-dictionaries) if you also use Lightning TTS, or for the Pulse [keyword boosting](/models/documentation/speech-to-text-pulse/features/keyword-boosting) feature on the streaming endpoint.
 
 ## 6. Compare configurations
 
@@ -194,7 +194,7 @@ Include:
 ```
 
 <Note>
-The `latency_ms` you measure with `time.perf_counter()` includes network round-trip from your client to `api.smallest.ai`, so numbers vary with client region. Pulse's published **server-side TTFT of ~64 ms** is measured at the inference pod (see the [Pulse model card](/waves/model-cards/speech-to-text/pulse#time-to-first-transcript-ttft)) — your wall-clock measurement is typically higher because of network. RTF stays meaningful either way: it's `processing_time / audio_duration`, so longer audio dilutes per-request overhead.
+The `latency_ms` you measure with `time.perf_counter()` includes network round-trip from your client to `api.smallest.ai`, so numbers vary with client region. Pulse's published **server-side TTFT of ~64 ms** is measured at the inference pod (see the [Pulse model card](/models/model-cards/speech-to-text/pulse#time-to-first-transcript-ttft)) — your wall-clock measurement is typically higher because of network. RTF stays meaningful either way: it's `processing_time / audio_duration`, so longer audio dilutes per-request overhead.
 </Note>
 
 This completes the process of self-metric evaluation. With these steps, you can identify strengths and weaknesses of Pulse STT — or compare it against any other ASR system that returns a similar response shape — on workloads representative of your production traffic.

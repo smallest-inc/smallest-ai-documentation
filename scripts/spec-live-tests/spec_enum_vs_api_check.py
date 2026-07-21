@@ -61,29 +61,39 @@ def post(url: str, body: dict) -> tuple[int, dict | str]:
             return e.code, body_text
 
 
-def lightning_v31_post(field: str, bogus_value):
+def unified_tts_post(field: str, bogus_value, model: str | None = None):
+    """Live-probe the unified TTS endpoint. `model` optionally sets the
+    request's `model` field to force the base vs Pro pool."""
     body = {"text": "hi", "voice_id": "magnus", "sample_rate": 24000, field: bogus_value}
-    return post("https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech", body)
+    if model:
+        body["model"] = model
+    return post("https://api.smallest.ai/waves/v1/tts", body)
 
 
 CHECKS = [
     (
-        "lightning-v3.1 / language",
-        lambda: lightning_v31_post("language", "__bogus__"),
-        "fern/apis/waves/openapi/lightning-v3.1-openapi.yaml",
-        ["components", "schemas", "LightningV31Request", "properties", "language", "enum"],
+        "unified /waves/v1/tts (model=lightning_v3.1) / language",
+        lambda: unified_tts_post("language", "__bogus__", model="lightning_v3.1"),
+        "fern/apis/waves/openapi/tts-openapi.yaml",
+        ["components", "schemas", "TtsRequest", "properties", "language", "enum"],
     ),
     (
-        "lightning-v3.1 / output_format",
-        lambda: lightning_v31_post("output_format", "__bogus__"),
-        "fern/apis/waves/openapi/lightning-v3.1-openapi.yaml",
-        ["components", "schemas", "LightningV31Request", "properties", "output_format", "enum"],
+        "unified /waves/v1/tts (model=lightning_v3.1_pro) / language",
+        lambda: unified_tts_post("language", "__bogus__", model="lightning_v3.1_pro"),
+        "fern/apis/waves/openapi/tts-openapi.yaml",
+        ["components", "schemas", "TtsRequest", "properties", "language", "enum"],
     ),
     (
-        "lightning-v3.1 / sample_rate",
-        lambda: lightning_v31_post("sample_rate", 99999),
-        "fern/apis/waves/openapi/lightning-v3.1-openapi.yaml",
-        ["components", "schemas", "LightningV31Request", "properties", "sample_rate", "enum"],
+        "unified /waves/v1/tts / output_format",
+        lambda: unified_tts_post("output_format", "__bogus__"),
+        "fern/apis/waves/openapi/tts-openapi.yaml",
+        ["components", "schemas", "TtsRequest", "properties", "output_format", "enum"],
+    ),
+    (
+        "unified /waves/v1/tts / sample_rate",
+        lambda: unified_tts_post("sample_rate", 99999),
+        "fern/apis/waves/openapi/tts-openapi.yaml",
+        ["components", "schemas", "TtsRequest", "properties", "sample_rate", "enum"],
     ),
 ]
 
@@ -98,14 +108,37 @@ def get_at(node, path):
     return cur
 
 
+import re as _re
+
+_SUPPORTED_RE = _re.compile(
+    r"Supported\s+(?:languages?|formats?|values?|options?)\s*:\s*([^\.\n\}\"']+)",
+    _re.IGNORECASE,
+)
+
+
 def extract_options(error_body) -> list | None:
-    """Walk the error body and find the `options` array. Format varies a
-    little across endpoints — most use `{"error":[{"code":"invalid_enum_value","options":[...]}]}`.
-    Returns None if no options array found."""
+    """Walk the error body and find the canonical accepted-values list.
+
+    Two shapes handled:
+      1. Zod-style `{"options": [...]}` under `code: "invalid_enum_value"`.
+      2. Platform-style `"code": "custom", "message": "Language 'X' is
+         not supported on the lightning_v3.1 model. Supported languages:
+         en, hi, mr, ..."` — parse the comma-separated tail out of the
+         message.
+
+    Returns None if neither shape matches."""
     def recurse(n):
         if isinstance(n, dict):
             if "options" in n and isinstance(n["options"], list):
                 return n["options"]
+            msg = n.get("message")
+            if isinstance(msg, str):
+                m = _SUPPORTED_RE.search(msg)
+                if m:
+                    tail = m.group(1)
+                    parts = [p.strip() for p in tail.split(",") if p.strip()]
+                    if parts:
+                        return parts
             for v in n.values():
                 r = recurse(v)
                 if r is not None:
@@ -158,6 +191,19 @@ def main() -> int:
         # 4. compare. Normalize types (sample_rate uses ints, others strings).
         spec_set = {str(x) for x in spec_enum}
         api_set = {str(x) for x in api_enum}
+
+        # Filter platform-accepted values not blessed by product-mgmt as
+        # publicly supported. Add codes here with a linked source-of-truth.
+        # `he` (Hebrew) — accepted on base `lightning_v3.1` HTTP but PM's
+        # canonical language list (see DS-576 lineup brief, 2026-07-21)
+        # excludes it. Treated as platform-side residue, not documented.
+        KNOWN_UNBLESSED_PLATFORM_CODES = {"he"}
+        api_set_filtered = api_set - KNOWN_UNBLESSED_PLATFORM_CODES
+        removed = api_set - api_set_filtered
+        if removed:
+            print(f"  (filtering platform-only unblessed codes: {sorted(removed)})")
+        api_set = api_set_filtered
+
         if spec_set == api_set:
             print(f"  ✓ enum matches API ({len(api_set)} values)")
             continue
@@ -165,21 +211,24 @@ def main() -> int:
         only_in_spec = sorted(spec_set - api_set)
         only_in_api = sorted(api_set - spec_set)
 
-        # Spec broader than API = real bug: docs claim a value the platform
-        # silently rejects. Fail.
-        # Spec narrower than API = deliberate curation (e.g. Lightning v3.1
-        # language enum only documents codes that have voices in the
-        # catalog; the schema accepts more but the model can't produce
-        # them). Allowed — the spec_enum_vs_voice_catalog check covers
-        # this dimension separately.
-        if only_in_spec:
-            print(f"  ✗ DRIFT detected:")
-            print(f"     in spec but API REJECTS:  {only_in_spec}")
+        # Under the unified TTS spec, one enum covers BOTH `lightning_v3.1`
+        # and `lightning_v3.1_pro` — but validation runs per-model. So
+        # "spec has values the current model rejects" is expected (Pro
+        # codes probed against base, or vice versa) and only warned.
+        # The docs-side prose (tts-openapi.yaml `language` description)
+        # already carves out which codes belong to which model.
+        #
+        # "API accepts a value the spec doesn't list" is a real docs
+        # gap — customers can't discover it — and always fails.
+        if only_in_api:
+            print(f"  ✗ DRIFT — API accepts values NOT documented in spec:")
+            print(f"     {only_in_api}")
             print(f"     spec has {len(spec_set)}, API has {len(api_set)}")
             drift_count += 1
-        elif only_in_api:
-            print(f"  ✓ spec narrower than API ({len(spec_set)}/{len(api_set)} — deliberate curation)")
-            print(f"     accepted by API, not in spec: {only_in_api}")
+        if only_in_spec:
+            print(f"  ⚠ spec broader than this model's API surface ({len(spec_set)} vs {len(api_set)})")
+            print(f"     documented but rejected by this model: {only_in_spec}")
+            print(f"     (expected on unified spec: enum covers both v3.1 base + Pro pools)")
 
     print()
     print("=" * 78)

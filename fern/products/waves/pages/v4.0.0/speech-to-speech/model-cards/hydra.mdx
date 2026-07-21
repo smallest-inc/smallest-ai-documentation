@@ -10,7 +10,7 @@ import { Capabilities, Capability } from "@/components/Capabilities";
 
 Hydra is Smallest AI's **speech-to-speech model**. A single WebSocket carries microphone audio from your client to the model and streams synthesised response audio back. There is no STT → LLM → TTS pipeline in the middle, and no transcript on the wire.
 
-**Jump to:** [Benchmarks](#performance--benchmarks) · [Voices](#voices) · [API Reference](/waves/api-reference/api-reference/speech-to-speech/speech-to-speech) · [Pricing & Throughput](#throughput-latency--pricing) · [Quickstart](/waves/documentation/speech-to-speech-hydra/quickstart)
+**Jump to:** [Benchmarks](#performance--benchmarks) · [Voices](#voices) · [API Reference](/models/api-reference/speech-to-speech/speech-to-speech) · [Pricing & Throughput](#throughput-latency--pricing) · [Quickstart](/models/documentation/speech-to-speech-hydra/quickstart)
 
 <CardGroup cols={4}>
   <Card title="Audio in, audio out" icon="arrow-right-arrow-left" href="#how-to-use-it">
@@ -67,15 +67,15 @@ Hydra is Smallest AI's **speech-to-speech model**. A single WebSocket carries mi
 
 ## How to use it
 
-See the [Hydra quickstart](/waves/documentation/speech-to-speech-hydra/quickstart) for a working end-to-end browser client — clone the reference repo, paste your API key, and talk to Hydra. Hydra is selected via the `model` query parameter on the unified Speech-to-Speech endpoint: `wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=$SMALLEST_API_KEY`. For browser clients, mint a short-lived token server-side rather than embedding the long-lived key in the page.
+See the [Hydra quickstart](/models/documentation/speech-to-speech-hydra/quickstart) for a working end-to-end browser client — clone the reference repo, paste your API key, and talk to Hydra. Hydra is selected via the `model` query parameter on the unified Speech-to-Speech endpoint: `wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=$SMALLEST_API_KEY`. For browser clients, mint a short-lived token server-side rather than embedding the long-lived key in the page.
 
-The [Overview](/waves/documentation/speech-to-speech-hydra/overview) covers the full event catalog (session config, tool calling, interruption, errors).
+The [Overview](/models/documentation/speech-to-speech-hydra/overview) covers the full event catalog (session config, tool calling, interruption, errors).
 
 ---
 
 ## Performance & Benchmarks
 
-Hydra is benchmarked against eight other production-grade voice / realtime models. Full methodology and metric definitions live on the dedicated [Performance](/waves/documentation/speech-to-speech-hydra/benchmarks/performance) and [Metrics Overview](/waves/documentation/speech-to-speech-hydra/benchmarks/metrics-overview) pages.
+Hydra is benchmarked against eight other production-grade voice / realtime models. Full methodology and metric definitions live on the dedicated [Performance](/models/documentation/speech-to-speech-hydra/benchmarks/performance) and [Metrics Overview](/models/documentation/speech-to-speech-hydra/benchmarks/metrics-overview) pages.
 
 ### AIEWF S2S — 10 runs × 30 turns, `aiwf_medium_context`
 
@@ -141,7 +141,7 @@ Six voice IDs are accepted on `session.configure.session.voice` and frozen at ha
 |---|---|---|
 | `wss://api.smallest.ai/waves/v1/s2s?model=hydra` | WebSocket | Realtime full-duplex speech-to-speech |
 
-See [Hydra (Realtime / WebSocket)](/waves/api-reference/api-reference/speech-to-speech/speech-to-speech) for the full event schema. The [documentation hub](/waves/documentation/speech-to-speech-hydra/overview) covers the event catalog, session config, tool calling, interruption handling, and errors end-to-end.
+See [Hydra (Realtime / WebSocket)](/models/api-reference/speech-to-speech/speech-to-speech) for the full event schema. The [documentation hub](/models/documentation/speech-to-speech-hydra/overview) covers the event catalog, session config, tool calling, interruption handling, and errors end-to-end.
 
 ---
 
@@ -166,7 +166,7 @@ Pricing: Contact your Smallest AI account manager. Hydra is billed by session mi
 - **Handle `code: "server_full"` with jittered backoff.** Capacity is per-plan WebSocket pool; surface a "please retry" UX rather than a hard error to the user.
 - **Mint short-lived tokens for browser clients.** Don't embed the long-lived `SMALLEST_API_KEY` in client-side code — mint a session token server-side.
 - **Live-patch `tools` via `session.update`** rather than reconnecting. Reconnects pay handshake cost; `session.update` does not.
-- **For compliance transcripts, mirror the PCM through [Pulse STT](/waves/documentation/speech-to-text-pulse/overview)** after the session — Hydra itself does not emit transcripts on the wire.
+- **For compliance transcripts, mirror the PCM through [Pulse STT](/models/documentation/speech-to-text-pulse/overview)** after the session — Hydra itself does not emit transcripts on the wire.
 
 ---
 
@@ -195,7 +195,7 @@ Pricing: Contact your Smallest AI account manager. Hydra is billed by session mi
 
 ### Downstream Use
 
-- **Conversational analytics** over recorded phone-call audio (transcribe the captured audio with [Pulse STT](/waves/documentation/speech-to-text-pulse/overview) afterwards).
+- **Conversational analytics** over recorded phone-call audio (transcribe the captured audio with [Pulse STT](/models/documentation/speech-to-text-pulse/overview) afterwards).
 - **Multi-agent voice systems** where Hydra is one specialised speaker.
 - **Hybrid voice + text agents** where a text fallback is needed for compliance.
 
@@ -205,7 +205,7 @@ Pricing: Contact your Smallest AI account manager. Hydra is billed by session mi
 
 Hydra is intended for voice-agent and conversational workloads. Customers building user-facing applications should layer their own content moderation, prompt-injection defenses, and PII handling appropriate to their domain. Hydra does not currently apply content moderation server-side — outputs reflect the model's training and the prompts you provide.
 
-For voice-agent applications handling regulated content (financial, healthcare), the standard pattern applies: keep PII out of prompts where practical, apply post-processing redaction on outputs, and — if you need a transcript for compliance — transcribe the PCM you sent/received via the [Pulse STT API](/waves/documentation/speech-to-text-pulse/overview) and store that transcript with your moderation log.
+For voice-agent applications handling regulated content (financial, healthcare), the standard pattern applies: keep PII out of prompts where practical, apply post-processing redaction on outputs, and — if you need a transcript for compliance — transcribe the PCM you sent/received via the [Pulse STT API](/models/documentation/speech-to-text-pulse/overview) and store that transcript with your moderation log.
 
 For compliance documentation (GDPR, SOC2, HIPAA), contact [support@smallest.ai](mailto:support@smallest.ai).
 
