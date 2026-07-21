@@ -6,10 +6,10 @@ description: "Every call and chat your agent has handled, searchable, filterable
 slug: /voice-agents/platform/features/conversation-logs
 ---
 
-Every call your agent takes lands here. The **Conversations** tab is a per-agent log of every voice call, web call, chat, and WhatsApp conversation, with drill-down into the transcript, recording, tool calls, latency, and cost of any single one.
+Every call your agent takes lands here. The **Conversations** tab (titled **Call Logs**) is a per-agent log of every voice call, web call, chat, and WhatsApp conversation, with drill-down into the transcript, recording, tool calls, latency, and cost of any single one.
 
-<Frame caption="Conversation logs">
-  <img src="../building-agents/images/conversation-logs.png" alt="Conversation logs list" />
+<Frame caption="Call Logs">
+  <img src="../building-agents/images/conversation-logs.png" alt="Call Logs list with Export menu open" />
 </Frame>
 
 ## The List
@@ -19,12 +19,15 @@ Each row is one conversation:
 | Column | What it shows |
 |---|---|
 | **Call Date** | When the conversation started |
-| **Call ID** | Unique identifier, click to copy. Hovering the icon next to it shows the channel: Telephony Inbound/Outbound, Web Call, Chat, or WhatsApp Chat/Voice |
-| **From / To** | Caller and receiver numbers |
+| **Call ID** | Unique identifier, click to copy. The icon next to it shows the channel: Telephony Inbound/Outbound, Web Call, Chat, or WhatsApp |
+| **From** | Caller number (blank for web calls and chats) |
+| **To** | Receiver number |
 | **Duration** | Total call length |
 | **Avg Latency** | Average agent response latency for that call |
-| **Status** | Completed, Failed, No Answer, Blocked, In Progress, and others, hover a Failed or Blocked pill to see why |
+| **Status** | Completed, No Answer, Failed, In Progress, and others, hover a Failed or Blocked pill to see why |
 | **Version** | Which agent version handled the call, with a **Test** tag for test calls |
+| **Retries** | How many times the call was retried |
+| **Details** | Opens the full call detail view |
 
 <Note>
   Calls that are still Pending, Queued, or In Progress refresh automatically every couple of seconds, you don't need to reload the page to watch a live call's status change.
@@ -34,17 +37,9 @@ If a call was retried, its row is expandable, click the chevron to reveal every 
 
 ## Filtering & Search
 
-Filters live in a single dropdown and combine with each other:
+Filters live in the **Filter By** dropdown and combine with each other. You can filter by conversation type, status, end reason, call type (all attempts, retries only, initial attempts only), and duration.
 
-| Filter | Options |
-|---|---|
-| **Conversation Type** | Inbound, Outbound, Web |
-| **Status** | Pending, In Queue, In Progress, Active, Completed, Failed, Cancelled, No Answer, Processing, Blocked |
-| **End Reason** | Dial No Answer, User Hangup, Error, Voicemail |
-| **Call Type** | All Attempts, Retry Attempts only, Initial Attempts only |
-| **Duration** | 0-30s, 30-60s, 1-3 min, 3-5 min |
-
-Plus a **date/time range** picker (quick presets 7 days, 30 days, or a fully custom range), a **sort by** dropdown (Completed At, Created On, Duration, Avg Latency), and a **free-text search** box.
+Alongside the filters are a **Date Range** picker (quick presets or a custom range), a **Sort by** dropdown (Completed At, Created On, Duration, Avg Latency), and a **Search Logs** box.
 
 <Tip>
   Search matches the Call ID and the From/To phone numbers. To find a specific conversation by what was said, open it and check the Transcript tab instead.
@@ -60,16 +55,20 @@ Plus a **date/time range** picker (quick presets 7 days, 30 days, or a fully cus
 
 ## Call Detail
 
-Click **Details** on any row to open the full call detail. At the top sits an audio player (0.5x-2x playback speed, download button) for calls with a recording. Calls with no audio, chat conversations, or ones that never connected show an explanatory empty state instead.
+Click **Details** on any row to open the full call detail. At the top sits an audio player (with playback-speed control and a download button) for calls with a recording. Calls with no audio, chat conversations, or ones that never connected show an explanatory empty state instead. The detail view is organized into tabs:
+
+<Frame caption="The call detail view, here on the Metrics tab showing extracted call dispositions">
+  <img src="../building-agents/images/conversation-logs-detail.png" alt="Call detail view showing the Metrics tab with a disposition breakdown" />
+</Frame>
 
 <AccordionGroup>
 
   <Accordion title="Overview">
-    Call summary, agent name, model, voice, timestamps, disconnection reason, and average latency. Also includes a **cost breakdown**: LLM, TTS, STT, telephony, and platform, each shown as rate × quantity, plus any discount applied.
+    Call summary plus the essentials: agent name, model, voice, date and time, disconnection reason, and average latency. Includes a **Cost (Credits)** breakdown you can expand to see the per-component cost.
   </Accordion>
 
   <Accordion title="Input Variables">
-    Every variable value the conversation started with, name and value.
+    Every input variable the conversation started with, both the system values (`call_id`, `conversation_type`, `supported_languages`, `default_language`, `timezone`, `current_date`, and similar) and any custom variables you defined.
   </Accordion>
 
   <Accordion title="Transcript">
@@ -77,35 +76,31 @@ Click **Details** on any row to open the full call detail. At the top sits an au
   </Accordion>
 
   <Accordion title="Events">
-    A chronological timeline of everything that happened mid-call: pre-call API calls (with latency and any variables extracted), tool calls (function name, latency, errors), and LLM/transcription events. For multi-agent (Playbook) agents, this is grouped by node instead, with a merged view of every variable extracted along the way.
-  </Accordion>
-
-  <Accordion title="Trace">
-    Multi-agent (Playbook) calls only. A per-turn breakdown of how the Playbook handled each turn and why, with classify/LLM/tool-call spans shown as timing bars, and token usage (input, output, cache-read) at each step.
+    An **Event Timeline** of everything that happened mid-call: each turn, pre-call and mid-call API/tool calls, and the final call-end marker, all timestamped.
   </Accordion>
 
   <Accordion title="Metrics">
-    Results of your configured Post-Call Metrics for this specific call, each with its extracted value and the AI's reasoning behind it.
+    The **Disposition**: results of your configured Post-Call Metrics for this call, each with its type (Boolean, String, Integer, Enum), its extracted value, and expandable reasoning.
   </Accordion>
 
   <Accordion title="Turn Latency">
-    Per-turn latency: when the caller stopped speaking, when the agent started responding, and the gap between the two, plus averages across the whole call.
+    Per-turn response latency. Summary cards show Turns, Avg Latency, Median, and Min / Max, and a table breaks down each turn: when the user stopped speaking (**User Ends**), when the agent started (**Agent Starts**), and the gap between the two (**Latency**).
   </Accordion>
 
 </AccordionGroup>
 
 <Tip>
-  For multi-agent calls, click **View SOP graph** to see the entire routing path as an interactive graph, complete with a replay button that walks through the path node by node.
+  For multi-agent (Playbook) calls, click **View SOP graph** in the detail header to see the entire routing path as an interactive graph, with a replay button that walks through the path node by node.
 </Tip>
 
 ## Exporting
 
-- **Export** at the top of the list downloads every conversation matching your current filters, as CSV or JSON.
+- **Export** at the top of the list downloads every conversation matching your current filters. Choose **Download as JSON** or **Download as CSV**.
 - **Export** inside a single conversation's detail view downloads just that call as JSON.
 - The download button on the audio player saves that call's recording directly.
 
 <Note>
-  CSV export uses a lighter column set (date, Call ID, hangup cause, status) than the JSON export, which includes everything shown in the detail view.
+  CSV export uses a lighter column set than the JSON export, which includes everything shown in the detail view.
 </Note>
 
 ## Related
