@@ -3,7 +3,7 @@ title: "Concurrency"
 sidebarTitle: "Concurrency"
 subtitle: "Control how many simultaneous calls your agents can handle, with an org-wide limit and optional per-agent reservations."
 description: "Control how many simultaneous calls your agents can handle, with an org-wide limit and optional per-agent reservations."
-slug: /voice-agents/platform/features/concurrency
+slug: /voice-agents/platform/create-agent/concurrency
 ---
 
 **Concurrency** is how many calls, across all your agents combined, can run at the same time. Your organization has a fixed number of slots; when a call starts it takes one, when it ends the slot is freed for the next call in line.
@@ -27,7 +27,9 @@ Prefer to watch? Here's a quick walkthrough of setting up concurrency and reserv
   The limit applies across **all call types** together, webcall, chat, telephony outbound, and telephony inbound all draw from the same pool. Your exact org limit isn't fixed across all plans, it's shown live at the top of the Concurrency page ("X reserved of Y concurrencies"), and depends on your plan, check **Billing** or talk to your account team to change it.
 </Note>
 
-If every slot is full, new calls are **queued** until one frees up. No calls are ever dropped, they just wait.
+If every slot is full, new **outbound**, **webcall**, and **chat** requests are **queued** until a slot frees up. They wait, they are not dropped.
+
+**Inbound telephony is different.** Incoming phone calls cannot be queued: when no slot is available, the caller hears a ring for ~30 seconds. If a slot frees within that window the call connects, otherwise it is disconnected. Plan headroom on inbound accordingly, either raise your org limit or reserve slots for the inbound agent. See the [inbound overflow FAQ](#faq) for detail.
 
 ## Reserved vs. Shared
 
@@ -106,7 +108,17 @@ Once you reserve for more than one agent, the top bar shows each agent's share o
 
 <AccordionGroup>
   <Accordion title="What happens when the org hits its concurrency limit?">
-    New calls queue and are dispatched in order as slots free up. Nothing is dropped.
+    **Outbound, webcall, and chat** requests queue and are dispatched in order as slots free up. Nothing is dropped.
+
+    **Inbound telephony behaves differently, see the next entry.**
+  </Accordion>
+  <Accordion title="What happens to an inbound call when all my inbound slots are full?">
+    Unlike outbound, webcall, and chat calls — which are queued until a slot frees up — an inbound telephony call cannot be queued. When no slot (reserved or shared) is available, the incoming call **rings for ~30 seconds**; if a slot frees within that window the call connects, otherwise it is **disconnected**.
+
+    **Recommendations**
+    - Watch inbound utilisation on the Analytics page. If you regularly see peaks near the limit, callers are being disconnected without your knowledge.
+    - Reserve inbound slots for the agent that handles your production inbound number. Reserved slots are guaranteed and cannot be taken by outbound/webcall/chat traffic on other agents.
+    - If your inbound traffic is bursty, raise the org concurrency limit (talk to your account team) rather than relying on reservations alone.
   </Accordion>
   <Accordion title="Can I reserve more than my org's total limit?">
     No, total reservations across all agents can never exceed the org limit, the UI and the backend both enforce this.
