@@ -69,7 +69,7 @@ title: Short descriptive headline
 Two to four lines of body. What shipped. Link to the full docs
 page for anyone who wants the detail.
 
-→ [Full guide](/atoms/atoms-platform/features/versioning)
+→ [Full guide](/voice-agents/platform/features/versioning)
 ```
 
 ### When to add a changelog entry
