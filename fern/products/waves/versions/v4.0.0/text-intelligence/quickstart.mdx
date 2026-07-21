@@ -1,0 +1,157 @@
+---
+title: "Quickstart"
+description: "Run topics, intents, and sentiment analysis on a conversation transcript in a single API call. Each feature is opt-in; you only pay for what you enable."
+icon: "rocket"
+---
+
+The Text Intelligence API analyses a piece of conversation text and returns structured topics, intents, and sentiment in one call. Use it on Pulse STT transcripts for post-call analytics, on inbound customer messages for intent-based routing, or aggregated across many conversations for trend tracking.
+
+## Step 1: Get your API key
+
+Use any existing Smallest AI API key — Text Intelligence shares the same auth as Lightning TTS, Pulse STT, and Electron.
+
+```bash
+export SMALLEST_API_KEY="your-api-key-here"
+```
+
+New here? Open the [API Keys page](https://app.smallest.ai/dashboard/api-keys?utm_source=documentation&utm_medium=text-intelligence-quickstart) in the Smallest AI console.
+
+## Step 2: Analyze a transcript
+
+Three features are independently opt-in: `topics`, `intents`, `sentiment`. Set at least one to `true`. Sending `text` alone (or an empty `features` object) returns `400`.
+
+```bash
+curl -X POST "https://api.smallest.ai/waves/v1/text-intelligence" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Customer: my order is 5 days late and I want a refund. Agent: Im sorry, expediting now and refunding if it doesnt arrive tomorrow. Customer: okay, thank you.",
+    "features": {
+      "topics": true,
+      "intents": true,
+      "sentiment": true
+    }
+  }'
+```
+
+You'll get back:
+
+```json
+{
+  "topics": [
+    {"topic": "Shipping Delay", "confidence": 0.95},
+    {"topic": "Refund Request", "confidence": 0.85}
+  ],
+  "intents": [
+    {"intent": "Complaint", "confidence": 0.95},
+    {"intent": "Request for Resolution", "confidence": 0.9},
+    {"intent": "Acceptance", "confidence": 0.8}
+  ],
+  "sentiment": {
+    "overall": "neutral",
+    "shift": "Started negative due to the delay, ended neutral after the agent offered a resolution."
+  },
+  "request_id": "bc6a6133-099e-408f-a09b-d1f3270801ef"
+}
+```
+
+<Tip>
+Confidence scores are floats in `[0.0, 1.0]`. A threshold around `0.7` is a sensible default for downstream routing — below that, treat the prediction as low-confidence.
+</Tip>
+
+## Step 3: Enable only what you need
+
+The response only contains the fields you requested. Below is the typical pattern for an intent-based router that doesn't care about sentiment or topic trends.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST "https://api.smallest.ai/waves/v1/text-intelligence" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Can you cancel my subscription?", "features": {"intents": true}}'
+```
+
+```python Python
+import os
+import requests
+
+response = requests.post(
+    "https://api.smallest.ai/waves/v1/text-intelligence",
+    headers={
+        "Authorization": f"Bearer {os.environ['SMALLEST_API_KEY']}",
+        "Content-Type": "application/json",
+    },
+    json={
+        "text": "Can you cancel my subscription?",
+        "features": {"intents": True},
+    },
+    timeout=30,
+)
+response.raise_for_status()
+print(response.json()["intents"])
+```
+
+```javascript JavaScript
+const response = await fetch("https://api.smallest.ai/waves/v1/text-intelligence", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.SMALLEST_API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    text: "Can you cancel my subscription?",
+    features: { intents: true },
+  }),
+});
+if (!response.ok) throw new Error(await response.text());
+const result = await response.json();
+console.log(result.intents);
+```
+
+</CodeGroup>
+
+Response (only the requested field is returned):
+
+```json
+{
+  "intents": [
+    { "intent": "Cancellation Request", "confidence": 0.95 }
+  ],
+  "request_id": "..."
+}
+```
+
+## Limits & input handling
+
+| Aspect | Value |
+|---|---|
+| **Max input length** | 16,000 characters per request. Longer → `400 too_big`. |
+| **Min input length** | 1 character (non-empty). Empty → `400 "text is required"`. |
+| **Input language** | Any. Hindi, English, Hinglish, or mixed transcripts all work. |
+| **Output language** | Always English — topics, intents, and sentiment-shift commentary are normalised so they can serve as join keys across multilingual sessions. |
+| **Concurrency** | Same as Waves account-level concurrency limits. See [Concurrency and Limits](/waves/api-reference/api-references/concurrency-and-limits). |
+| **Auth** | `Authorization: Bearer $SMALLEST_API_KEY` |
+
+## Common errors
+
+| Status | Cause | Fix |
+|---|---|---|
+| `400 too_small` | `text` is empty or missing | Send a non-empty string |
+| `400 too_big` | `text` longer than 16000 chars | Chunk the input and call multiple times |
+| `400 "enable at least one feature"` | `features` is empty, missing, or contains only unrecognised keys | Set at least one of `topics`, `intents`, `sentiment` to `true` |
+| `401` | Invalid or missing API key | Verify `$SMALLEST_API_KEY` is set and active |
+
+## When to use what
+
+- **Topics** — high-level themes. Aggregate across many calls to surface what customers talk about most. Good for product-team dashboards.
+- **Intents** — speaker intent (complaint, refund request, confirmation, etc.). Use for routing decisions or for tagging conversations downstream.
+- **Sentiment** — overall tone (`negative` | `neutral` | `positive`) plus a one-sentence English description of how sentiment evolved across the conversation. Use `shift` when you care about trajectory rather than the endpoint snapshot.
+
+## Need help?
+
+<Card title="Join Discord" icon="fa-brands fa-discord" href="https://discord.gg/9WtSXv26WE">
+  Ask questions and get help from the community.
+</Card>
+
+Or email [support@smallest.ai](mailto:support@smallest.ai).
