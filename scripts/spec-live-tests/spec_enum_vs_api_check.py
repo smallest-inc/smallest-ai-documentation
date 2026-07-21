@@ -61,29 +61,30 @@ def post(url: str, body: dict) -> tuple[int, dict | str]:
             return e.code, body_text
 
 
-def lightning_v31_post(field: str, bogus_value):
+def unified_tts_post(field: str, bogus_value):
+    """Live-probe the unified TTS endpoint. Model defaults to lightning_v3.1."""
     body = {"text": "hi", "voice_id": "magnus", "sample_rate": 24000, field: bogus_value}
-    return post("https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech", body)
+    return post("https://api.smallest.ai/waves/v1/tts", body)
 
 
 CHECKS = [
     (
-        "lightning-v3.1 / language",
-        lambda: lightning_v31_post("language", "__bogus__"),
-        "fern/apis/waves/openapi/lightning-v3.1-openapi.yaml",
-        ["components", "schemas", "LightningV31Request", "properties", "language", "enum"],
+        "unified /waves/v1/tts / language",
+        lambda: unified_tts_post("language", "__bogus__"),
+        "fern/apis/waves/openapi/tts-openapi.yaml",
+        ["components", "schemas", "TtsRequest", "properties", "language", "enum"],
     ),
     (
-        "lightning-v3.1 / output_format",
-        lambda: lightning_v31_post("output_format", "__bogus__"),
-        "fern/apis/waves/openapi/lightning-v3.1-openapi.yaml",
-        ["components", "schemas", "LightningV31Request", "properties", "output_format", "enum"],
+        "unified /waves/v1/tts / output_format",
+        lambda: unified_tts_post("output_format", "__bogus__"),
+        "fern/apis/waves/openapi/tts-openapi.yaml",
+        ["components", "schemas", "TtsRequest", "properties", "output_format", "enum"],
     ),
     (
-        "lightning-v3.1 / sample_rate",
-        lambda: lightning_v31_post("sample_rate", 99999),
-        "fern/apis/waves/openapi/lightning-v3.1-openapi.yaml",
-        ["components", "schemas", "LightningV31Request", "properties", "sample_rate", "enum"],
+        "unified /waves/v1/tts / sample_rate",
+        lambda: unified_tts_post("sample_rate", 99999),
+        "fern/apis/waves/openapi/tts-openapi.yaml",
+        ["components", "schemas", "TtsRequest", "properties", "sample_rate", "enum"],
     ),
 ]
 

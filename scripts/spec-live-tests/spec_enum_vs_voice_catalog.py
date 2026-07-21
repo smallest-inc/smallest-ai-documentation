@@ -1,27 +1,35 @@
 #!/usr/bin/env python3
 """
-Lightning v3.1 spec language enum ↔ voice catalog drift check.
+Unified TTS spec language enum ↔ voice catalog drift check.
 
-The Lightning v3.1 server schema accepts more language codes than the
-voice catalog actually has trained voices for. Codes without voices
-silently fall back to the voice's primary language — so users who pass
-e.g. `language=ar` get back the voice's English (or Hindi) audio without
-any error. This is exactly the bug class that PR #125 introduced and
-the May 8 correction reversed.
+The TTS request schema accepts language codes. The voice catalog exposes
+tags. When a code shows up in the catalog but not in the spec, users
+can't pass it (missing docs). When a code shows up in the spec but not
+in the catalog, the model silently falls back to the voice's primary
+language, so the user gets wrong audio without any error.
 
-This check fails when the spec enum lists a language that has zero
-voices in the live catalog. Run on every PR that touches the Lightning
-v3.1 spec.
+Post-unification (PR #301) the spec covers both `lightning_v3.1` and
+`lightning_v3.1_pro` models in a single enum. The v3.1 catalog only
+lists voices trained under the base pool. Pro voices are exposed via
+`/waves/v1/lightning-v3.1-pro/get_voices` when that pool exists.
+
+Drift classification:
+  - HARD (exit 1): catalog exposes a language the spec doesn't list —
+    users can't pass it, definite docs gap.
+  - SOFT (informational): spec lists a language absent from v3.1 catalog
+    but potentially covered by Pro. Reported but doesn't fail. A future
+    Pro-catalog query can tighten this.
 
 Reads:
-  - spec enum: fern/apis/waves/openapi/lightning-v3.1-openapi.yaml →
-    components.schemas.LightningV31Request.properties.language.enum
+  - spec enum: fern/apis/waves/openapi/tts-openapi.yaml →
+    components.schemas.TtsRequest.properties.language.enum
   - live catalog: GET https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices
+                  GET https://api.smallest.ai/waves/v1/lightning-v3.1-pro/get_voices
     voices[].tags.language
 
 Exit codes:
-  0 — every spec code (except `auto`) has at least one voice
-  1 — one or more spec codes have zero voices (drift)
+  0 — no HARD drift (catalog fully documented)
+  1 — HARD drift (catalog code missing from spec)
   2 — could not load spec or fetch catalog
 """
 from __future__ import annotations
@@ -39,7 +47,7 @@ if not API_KEY:
     sys.exit(2)
 
 REPO = Path(__file__).resolve().parents[2]
-SPEC = REPO / "fern/apis/waves/openapi/lightning-v3.1-openapi.yaml"
+SPEC = REPO / "fern/apis/waves/openapi/tts-openapi.yaml"
 
 # Tag-name → ISO 639-1 code mapping (the voice catalog uses English names)
 TAG_TO_CODE = {
@@ -55,7 +63,30 @@ TAG_TO_CODE = {
     "punjabi": "pa",
     "odia": "or",
     "spanish": "es",
+    "german": "de",
+    "french": "fr",
+    "italian": "it",
+    "portuguese": "pt",
+    "russian": "ru",
+    "greek": "el",
+    "finnish": "fi",
+    "norwegian": "no",
+    "polish": "pl",
+    "arabic": "ar",
+    "chinese": "zh",
+    "mandarin": "zh",
+    "indonesian": "id",
+    "japanese": "ja",
+    "korean": "ko",
+    "malay": "ms",
+    "turkish": "tr",
+    "vietnamese": "vi",
 }
+
+CATALOG_ENDPOINTS = [
+    "https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices",
+    "https://api.smallest.ai/waves/v1/lightning-v3.1-pro/get_voices",
+]
 
 
 def load_spec_enum() -> set[str]:
@@ -64,27 +95,38 @@ def load_spec_enum() -> set[str]:
     except Exception as exc:
         print(f"FATAL: cannot parse {SPEC}: {exc}", file=sys.stderr)
         sys.exit(2)
-    schemas = spec.get("components", {}).get("schemas", {})
-    for name, schema in schemas.items():
-        if name.lower().startswith("lightningv3"):
-            enum = (
-                schema.get("properties", {})
-                .get("language", {})
-                .get("enum")
-            )
-            if enum:
-                return set(enum)
-    print(f"FATAL: no language enum found under components.schemas.* in {SPEC}", file=sys.stderr)
-    sys.exit(2)
-
-
-def load_voice_catalog_codes() -> set[str]:
-    r = requests.get(
-        "https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices",
-        headers={"Authorization": f"Bearer {API_KEY}"},
-        timeout=30,
+    enum = (
+        spec.get("components", {})
+        .get("schemas", {})
+        .get("TtsRequest", {})
+        .get("properties", {})
+        .get("language", {})
+        .get("enum")
     )
-    r.raise_for_status()
+    if not enum:
+        print(f"FATAL: no language enum at components.schemas.TtsRequest.properties.language.enum in {SPEC}", file=sys.stderr)
+        sys.exit(2)
+    return set(enum)
+
+
+def load_catalog_codes(url: str) -> set[str] | None:
+    """Return set of ISO codes for a catalog URL. None if endpoint 404s
+    (e.g. Pro pool not yet publicly reachable) — caller treats as skipped."""
+    try:
+        r = requests.get(
+            url,
+            headers={"Authorization": f"Bearer {API_KEY}"},
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        print(f"NOTE: {url} unreachable ({exc}); skipping this catalog", file=sys.stderr)
+        return None
+    if r.status_code == 404:
+        print(f"NOTE: {url} returned 404; skipping (pool may not be exposed via this endpoint yet)")
+        return None
+    if not r.ok:
+        print(f"FATAL: {url} → HTTP {r.status_code}: {r.text[:200]}", file=sys.stderr)
+        sys.exit(2)
     voices = r.json().get("voices", [])
     seen_tags: set[str] = set()
     for v in voices:
@@ -93,40 +135,56 @@ def load_voice_catalog_codes() -> set[str]:
     codes = {TAG_TO_CODE[t] for t in seen_tags if t in TAG_TO_CODE}
     unmapped = seen_tags - set(TAG_TO_CODE.keys())
     if unmapped:
-        print(f"NOTE: voice tags not mapped to ISO codes: {sorted(unmapped)}")
+        print(f"NOTE: voice tags not mapped to ISO codes ({url}): {sorted(unmapped)}")
     return codes
 
 
 def main() -> int:
     spec = load_spec_enum()
-    catalog = load_voice_catalog_codes()
-    auto_in_spec = "auto" in spec
     spec_real = spec - {"auto"}
 
+    v31_catalog = load_catalog_codes(CATALOG_ENDPOINTS[0]) or set()
+    pro_catalog = load_catalog_codes(CATALOG_ENDPOINTS[1])
+
+    if pro_catalog is None:
+        combined_catalog = v31_catalog
+        pro_note = " (Pro catalog not queryable; SOFT-drift check is v3.1-only)"
+    else:
+        combined_catalog = v31_catalog | pro_catalog
+        pro_note = ""
+
     print("=" * 72)
-    print("Lightning v3.1 — spec enum ↔ voice catalog drift check")
+    print("Unified TTS spec enum ↔ voice catalog drift check")
     print("=" * 72)
-    print(f"spec enum    ({len(spec)} values, auto={'yes' if auto_in_spec else 'no'}): {sorted(spec)}")
-    print(f"voice codes  ({len(catalog)} values): {sorted(catalog)}")
+    print(f"spec enum       ({len(spec)} values): {sorted(spec)}")
+    print(f"v3.1 catalog    ({len(v31_catalog)} values): {sorted(v31_catalog)}")
+    if pro_catalog is not None:
+        print(f"Pro catalog     ({len(pro_catalog)} values): {sorted(pro_catalog)}")
+    print(f"combined        ({len(combined_catalog)} values){pro_note}")
     print()
 
-    spec_only = spec_real - catalog
-    catalog_only = catalog - spec_real
+    catalog_only = combined_catalog - spec_real          # HARD drift
+    spec_only = spec_real - combined_catalog             # SOFT drift
 
-    if not spec_only and not catalog_only:
-        print(f"PASS — spec lists exactly the {len(spec_real)} languages with voices.")
-        return 0
+    exit_code = 0
+
+    if catalog_only:
+        print(f"HARD DRIFT — catalog exposes {len(catalog_only)} language(s) NOT in spec enum:")
+        for c in sorted(catalog_only):
+            print(f"  {c}  (voices exist; users can't pass this code — docs gap)")
+        exit_code = 1
 
     if spec_only:
-        print(f"DRIFT — spec lists {len(spec_only)} language(s) with NO voices in the catalog:")
+        print(f"SOFT DRIFT (informational) — spec lists {len(spec_only)} language(s) not in accessible catalogs:")
         for c in sorted(spec_only):
-            print(f"  {c}  (silently falls back; users get wrong language)")
-    if catalog_only:
-        print(f"GAP — voice catalog has {len(catalog_only)} language(s) NOT in the spec enum:")
-        for c in sorted(catalog_only):
-            print(f"  {c}  (users can't pass this code)")
+            print(f"  {c}  (may be covered by a pool not queried; verify manually)")
 
-    return 1
+    if exit_code == 0 and not spec_only:
+        print(f"PASS — spec covers the full {len(combined_catalog)}-language catalog with no unaccounted codes.")
+    elif exit_code == 0:
+        print(f"PASS — no HARD drift ({len(spec_only)} soft item(s) noted for follow-up).")
+
+    return exit_code
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ name: API Spec Live Test
 # document is actually what the platform implements.
 #
 #   - Atoms (fern/apis/atoms/**)        → scripts/spec-live-tests/atoms_live_test.py
-#   - Waves TTS Lightning v3.1          → scripts/spec-live-tests/waves_tts_live_test.py
+#   - Waves TTS (unified)               → scripts/spec-live-tests/waves_tts_live_test.py
 #   - Waves STT Pulse                   → scripts/spec-live-tests/waves_stt_live_test.py
 #
 # Why: PR #121 added 14 documented fields to CreateAgentRequest. `fern
@@ -24,9 +24,9 @@ on:
   pull_request:
     paths:
       - 'fern/apis/atoms/**'
-      - 'fern/apis/waves/openapi/lightning-v3.1*'
+      - 'fern/apis/waves/openapi/tts-openapi*'
       - 'fern/apis/waves/openapi/pulse-stt*'
-      - 'fern/apis/waves/asyncapi/lightning-v3.1*'
+      - 'fern/apis/waves/asyncapi/tts-ws*'
       - 'fern/apis/waves/asyncapi/pulse-stt*'
       - 'fern/apis/waves/asyncapi/stream-tts-ws*'
       - 'scripts/spec-live-tests/**'
@@ -61,8 +61,8 @@ jobs:
               - 'scripts/spec-live-tests/atoms_ws_live_test.py'
               - '.github/workflows/api-spec-live-test.yml'
             tts:
-              - 'fern/apis/waves/openapi/lightning-v3.1*'
-              - 'fern/apis/waves/asyncapi/lightning-v3.1*'
+              - 'fern/apis/waves/openapi/tts-openapi*'
+              - 'fern/apis/waves/asyncapi/tts-ws*'
               - 'fern/apis/waves/asyncapi/stream-tts-ws*'
               - 'scripts/spec-live-tests/waves_tts_live_test.py'
               - '.github/workflows/api-spec-live-test.yml'
@@ -239,7 +239,7 @@ jobs:
         run: python3 scripts/spec-live-tests/spec_enum_vs_api_check.py
 
   spec-enum-vs-voice-catalog:
-    name: Lightning v3.1 spec language enum ↔ voice catalog
+    name: TTS spec language enum ↔ voice catalog
     needs: detect-changes
     if: (needs.detect-changes.outputs.tts == 'true') && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
