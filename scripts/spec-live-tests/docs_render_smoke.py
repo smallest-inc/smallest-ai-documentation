@@ -31,23 +31,21 @@ import urllib.request
 # are short strings that should be present in the rendered text — operation
 # names, signal payloads, section titles, etc. Stay focused: one or two
 # per page is enough to catch the silent-drop class of bug.
+#
+# NOTE: Only MDX pages are checked here. Fern's auto-generated
+# `/api-reference/**` pages render client-side (the SSR HTML is a shell
+# with just the site chrome), so `curl | grep` for operation names on
+# those pages always returns nothing — a false alarm dressed up as a
+# real one. The PR #189 class of bug — silently-dropped spec content —
+# is now caught by `spec_enum_vs_api_check.py` on the spec side and
+# `check_nav.py` on the nav side, both of which run pre-deploy.
+#
+# For MDX pages the SSR body contains the actual content, so the
+# marker check works. Everything below points at an MDX page.
 PAGES = [
     {
-        "path": "/models/api-reference/api-reference/speech-to-text/speech-to-text",
-        "name": "Unified STT API reference",
-        "markers": [
-            # The three send operations — sendFinalize was missing for months
-            # because the unified /stt/live spec didn't declare it at all.
-            "sendAudio",
-            "sendFinalize",
-            "sendClose",
-            "close_stream",
-            "finalize",
-        ],
-    },
-    {
-        # Lightning v3.1 model card — must surface the new word-timestamp section
-        # after PR-#feat-lightning-v31-word-timestamps deploys.
+        # Lightning v3.1 model card — surfaces the word-timestamp
+        # feature. Deleting this section from the MDX would fail here.
         "path": "/models/model-cards/text-to-speech/lightning-v-3-1",
         "name": "Lightning v3.1 model card",
         "markers": [
@@ -56,10 +54,13 @@ PAGES = [
         ],
     },
     {
-        "path": "/models/api-reference/api-reference/text-to-speech/tts",
-        "name": "Unified TTS API reference",
+        # TTS word-timestamps how-to — mirror of the above from the
+        # documentation nav path, since users often land here first.
+        "path": "/models/documentation/text-to-speech-lightning/word-timestamps",
+        "name": "TTS word-timestamps how-to",
         "markers": [
             "word_timestamps",
+            "word_timestamp",
         ],
     },
     {
