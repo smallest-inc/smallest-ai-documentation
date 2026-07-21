@@ -105,10 +105,21 @@ def walk_nav(node, url_prefix: str, tab_slug: str, breadcrumb: list[str]) -> Ite
         if "page" in node and "path" in node:
             title = node["page"]
             mdx_path = (node["_base"] / node["path"]).resolve() if "_base" in node else None
-            page_slug = node.get("slug") or slugify(title)
-            parts = [url_prefix.rstrip("/"), tab_slug] + [slugify(s) for s in breadcrumb] + [page_slug]
-            url = "/".join(parts)
             fm = read_frontmatter(mdx_path) if mdx_path else {}
+            # URL precedence, matching how Fern resolves a page's slug:
+            #   1. an absolute frontmatter `slug:` (leading "/") is the full site
+            #      path and overrides the nav hierarchy entirely. This is how a
+            #      page keeps its URL stable after being moved to a new nav
+            #      section, so llms.txt must follow the pin, not the breadcrumb.
+            #   2. a relative frontmatter/nav-node `slug:` overrides just the leaf.
+            #   3. otherwise the leaf is derived from the title.
+            fm_slug = (fm.get("slug") or "").strip()
+            if fm_slug.startswith("/"):
+                url = "/" + fm_slug.strip("/")
+            else:
+                page_slug = fm_slug or node.get("slug") or slugify(title)
+                parts = [url_prefix.rstrip("/"), tab_slug] + [slugify(s) for s in breadcrumb] + [page_slug]
+                url = "/".join(parts)
             yield {
                 "title": title,
                 "description": (fm.get("description") or "").strip(),
