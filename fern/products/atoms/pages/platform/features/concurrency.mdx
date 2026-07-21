@@ -24,7 +24,7 @@ By default, every slot is **shared**: any agent can use any open slot, first-com
 
 If some agents matter more (say, support or payments vs. a low-priority internal test agent), you can **reserve** slots for them, per call type. Reserved slots are guaranteed to that agent and no one else can touch them, even while they sit idle.
 
-Everything not reserved falls into the **shared pool**, available to any agen is exhausted.
+Everything not reserved falls into the **shared pool**, available to any agent on a first-come, first-served basis.
 
 **Example:** Your org limit is 20. Agent A reserves 12 slots, Agent B reserves 5. The shared pool has 3.
 - **Agent A** can handle up to 15 simultaneous calls: its 12 reserved slots plus the 3 shared slots.
@@ -32,7 +32,7 @@ Everything not reserved falls into the **shared pool**, available to any agen is
 - **At full capacity** (12 + 3 + 5 = 20), any further calls for either agent are queued.
 
 <Warning>
-  Reserved slots are exclusive. If Agent A reserves 12 slots but is only usin they are **not** available to Agent B or anyone else.
+  Reserved slots are exclusive. If Agent A reserves 12 slots but is only using 4, the other 8 still sit idle and are **not** available to Agent B or anyone else.
 </Warning>
 
 ## Who Can Use What
@@ -40,27 +40,34 @@ Everything not reserved falls into the **shared pool**, available to any agen is
 | Slot Type | Who can use it? | When? |
 |---|---|---|
 | **Agent's own reserved slots** | Only that agent | Always available, guaranteed |
-| **Shared pool** | Any agent | First-come first-served, once reserved slots
+| **Shared pool** | Any agent | First-come first-served, once an agent's own reserved slots are used up |
 | **Another agent's reserved slots** | Nobody else | Never, reserved slots are exclusive |
 
 ## Setting Up Reservations
 
 <Steps>
   ### Open Concurrency
-  Go to **Concurrency** in the sidebar. The bar at the top shows total reserved vs. shared capacity; the **Reserved Concurrency** table below lists every agent with an active
-reservation.
+  Go to **Concurrency** in the sidebar. The bar at the top shows total reserved vs. shared capacity; the **Reserved Concurrency** table below lists every agent with an active reservation.
 
   ### Add a reservation
-  Click **Add**, search for and select an agent, then set how many slots to reserve for each call type: **Web Call**, **Chat**, **Telephony Outbound**, **Telephony Inbound**. Click
-**Save**.
+  Click **Add**, search for and select an agent, then set how many slots to reserve for each call type: **Web Call**, **Chat**, **Telephony Outbound**, **Telephony Inbound**. The panel shows the running **Total reserved concurrency** and how much **Shared concurrency** is left as you go. Click **Save**.
+
+  <Frame caption="Reserving per-channel slots for an agent. The panel tracks the running total and shared slots left.">
+    <img src="../building-agents/images/concurrency-reserve-agent.png" alt="Reserve concurrency panel with per-channel sliders for one agent" />
+  </Frame>
 
   ### Edit or remove one
-  Open the **⋯** menu on any row in the table and choose **Edit reservations** to change the numbers, or **Remove agent** to release all of that agent's reserved slots back to the
-shared pool.
+  Open the **⋯** menu on any row in the table and choose **Edit reservations** to change the numbers, or **Remove agent** to release all of that agent's reserved slots back to the shared pool.
 </Steps>
 
+Once you reserve for more than one agent, the top bar shows each agent's share of the pool. Here two agents split a 20-slot pool: the receptionist reserves 18, the car-loan agent reserves 2, which fills the pool completely and leaves the shared pool at zero.
+
+<Frame caption="Two agents sharing a 20-slot pool (18 + 2), with the pool fully reserved">
+  <img src="../building-agents/images/concurrency-two-agents.png" alt="Concurrency page with two agents reserved, pool fully allocated" />
+</Frame>
+
 <Note>
-  You can't reserve more than your org has: the Save button disables itself ishared pool below zero, and the same limit is enforced server-side. Only orgadmins can add, edit, or remove reservations.
+  You can't reserve more than your org has: the Save button disables itself if a reservation would push the shared pool below zero, and the same limit is enforced server-side. Only org admins can add, edit, or remove reservations.
 </Note>
 
 <Tip>
@@ -71,16 +78,16 @@ shared pool.
 
 <AccordionGroup>
   <Accordion title="Start without reservations">
-    If you have one agent, or several with equal priority, the shared pool alrve anything until you actually need to guarantee capacity for somethingspecific.
+    If you have one agent, or several with equal priority, the shared pool already covers you. Don't reserve anything until you actually need to guarantee capacity for something specific.
   </Accordion>
   <Accordion title="Reserve only for what actually matters">
-    Reserve slots for agents handling critical flows, support, payments, anytueue. Leave lower-priority agents on the shared pool.
+    Reserve slots for agents handling critical flows, support, payments, anything you can't afford to have queue. Leave lower-priority agents on the shared pool.
   </Accordion>
   <Accordion title="Don't reserve everything">
     Reserving 100% of your limit leaves nothing in the shared pool, agents can still work, but none of them can borrow capacity from an idle reservation. Leave some headroom.
   </Accordion>
   <Accordion title="Watch it during peak hours">
-    If agents are consistently queuing, that's a sign to either rebalance res org's overall limit.
+    If agents are consistently queuing, that's a sign to either rebalance reservations or raise your org's overall limit.
   </Accordion>
 </AccordionGroup>
 
@@ -88,18 +95,18 @@ shared pool.
 
 <AccordionGroup>
   <Accordion title="What happens when the org hits its concurrency limit?">
-    New calls queue and are dispatched in order as slots free up. Nothing is
+    New calls queue and are dispatched in order as slots free up. Nothing is dropped.
   </Accordion>
   <Accordion title="Can I reserve more than my org's total limit?">
     No, total reservations across all agents can never exceed the org limit, the UI and the backend both enforce this.
   </Accordion>
   <Accordion title="Are reservations per call type or one combined number?">
-    Per call type (webcall, chat, outbound, inbound), each with its own slideservation is the sum of all four.
+    Per call type (webcall, chat, outbound, inbound), each with its own slider. An agent's total reservation is the sum of all four.
   </Accordion>
   <Accordion title="Can I change reservations while calls are active?">
     Yes. It applies immediately to new calls; anything already in progress runs to completion untouched.
   </Accordion>
   <Accordion title="How do I increase my org's concurrency limit?">
-    Your limit is tied to your plan. Check the **Billing** page for your currr account team to raise it.
+    Your limit is tied to your plan. Check the **Billing** page for your current plan, or talk to your account team to raise it.
   </Accordion>
 </AccordionGroup>
