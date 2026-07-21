@@ -116,12 +116,13 @@ console.log("voice_id:", data.voiceId);
 Use `data.voiceId` directly in any TTS call:
 
 ```bash
-curl -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech" \
+curl -X POST "https://api.smallest.ai/waves/v1/tts" \
   -H "Authorization: Bearer $SMALLEST_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "text": "Hello, this is my cloned voice.",
-    "voice_id": "voice_dLP5T67Qw7"
+    "voice_id": "voice_dLP5T67Qw7",
+    "model": "lightning_v3.1"
   }' \
   -o output.wav
 ```
@@ -152,8 +153,8 @@ curl -H "Authorization: Bearer $SMALLEST_API_KEY" \
 
 | `modelIds` contains | Works with |
 |---|---|
-| `lightning-v3.1` | `POST /waves/v1/lightning-v3.1/get_speech` and the streaming/WebSocket v3.1 endpoints |
-| `lightning-large` only | `POST /waves/v1/lightning-large/get_speech` only — will return an empty audio response on `lightning-v3.1` |
+| `lightning-v3.1` | `POST /waves/v1/tts` (with `model: lightning_v3.1` or `lightning_v3.1_pro`) and the unified TTS streaming/WebSocket endpoints |
+| `lightning-large` only | Deprecated `lightning-large` endpoints only — will return an empty audio response on the current `lightning_v3.1` pool |
 
 Clones created via the current `POST /waves/v1/voice-cloning` endpoint always produce `lightning-v3.1`-compatible voices. The older `POST /waves/v1/lightning-large/add_voice` endpoint (deprecated) only produces `lightning-large`-compatible voices — those will not work if you try to use them with `lightning-v3.1`.
 

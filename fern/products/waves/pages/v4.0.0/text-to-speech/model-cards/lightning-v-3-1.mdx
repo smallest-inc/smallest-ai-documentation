@@ -370,13 +370,15 @@ Need something not in this short-list? Call `GET /waves/v1/lightning-v3.1/get_vo
 | `https://api.smallest.ai/waves/v1/tts/live` | POST (SSE) | Server-sent events streaming |
 | `wss://api.smallest.ai/waves/v1/tts/live` | WebSocket | Real-time streaming (same URL as SSE, protocol-dispatched) |
 
-**Legacy (deprecated — kept for backwards compatibility):**
+**Legacy (deprecated — no longer documented, but still callable for existing integrations):**
 
-| Endpoint | Method | Use Case |
-|----------|--------|----------|
-| `https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech` | POST | Synchronous synthesis |
-| `https://api.smallest.ai/waves/v1/lightning-v3.1/stream` | POST (SSE) | Server-sent events streaming |
-| `wss://api.smallest.ai/waves/v1/lightning-v3.1/get_speech/stream` | WebSocket | Real-time streaming |
+The model-name-based routes below still function on the platform for backwards compatibility with older SDKs and integrations. They are no longer documented in the API reference — new work should use the unified routes above with `model: lightning_v3.1`.
+
+| Endpoint | Method | Migration target |
+|----------|--------|------------------|
+| `https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech` | POST | `POST /waves/v1/tts` with `model: lightning_v3.1` |
+| `https://api.smallest.ai/waves/v1/lightning-v3.1/stream` | POST (SSE) | `POST /waves/v1/tts/live` with `model: lightning_v3.1` |
+| `wss://api.smallest.ai/waves/v1/lightning-v3.1/get_speech/stream` | WebSocket | `wss://api.smallest.ai/waves/v1/tts/live` with `model: lightning_v3.1` |
 
 ### Request Parameters
 
@@ -522,7 +524,7 @@ ws.onmessage = (event) => {
 | Surface | Word timestamps |
 |---|---|
 | `WSS /waves/v1/tts/live` (unified) | ✅ |
-| `WSS /waves/v1/lightning-v3.1/get_speech/stream` (legacy, retiring 2026-07-14) | ✅ |
+| `WSS /waves/v1/lightning-v3.1/get_speech/stream` (legacy, no longer documented) | ✅ |
 | `POST /waves/v1/tts` (sync HTTP) | ❌ — flag accepted, silently ignored |
 | `POST /waves/v1/tts/live` (HTTP SSE) | ❌ — same |
 
