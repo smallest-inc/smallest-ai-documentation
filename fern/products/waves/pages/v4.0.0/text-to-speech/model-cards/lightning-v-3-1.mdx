@@ -360,25 +360,13 @@ Need something not in this short-list? Call `GET /waves/v1/lightning-v3.1/get_vo
 
 ### Endpoints
 
-<Note>New integrations should use the unified `/waves/v1/tts*` routes and select the model with `"model": "lightning_v3.1"`. The model-named routes below remain live but are deprecated.</Note>
-
-**Recommended (unified routes — model selected via `model` body field):**
+Route selection is via the `model` body field on the unified endpoints. Pass `"model": "lightning_v3.1"` for the standard pool documented on this card, or `"model": "lightning_v3.1_pro"` for the [Pro pool](/models/model-cards/text-to-speech/lightning-v-3-1-pro).
 
 | Endpoint | Method | Use Case |
 |----------|--------|----------|
 | `https://api.smallest.ai/waves/v1/tts` | POST | Synchronous synthesis |
 | `https://api.smallest.ai/waves/v1/tts/live` | POST (SSE) | Server-sent events streaming |
 | `wss://api.smallest.ai/waves/v1/tts/live` | WebSocket | Real-time streaming (same URL as SSE, protocol-dispatched) |
-
-**Legacy (deprecated — no longer documented, but still callable for existing integrations):**
-
-The model-name-based routes below still function on the platform for backwards compatibility with older SDKs and integrations. They are no longer documented in the API reference — new work should use the unified routes above with `model: lightning_v3.1`.
-
-| Endpoint | Method | Migration target |
-|----------|--------|------------------|
-| `https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech` | POST | `POST /waves/v1/tts` with `model: lightning_v3.1` |
-| `https://api.smallest.ai/waves/v1/lightning-v3.1/stream` | POST (SSE) | `POST /waves/v1/tts/live` with `model: lightning_v3.1` |
-| `wss://api.smallest.ai/waves/v1/lightning-v3.1/get_speech/stream` | WebSocket | `wss://api.smallest.ai/waves/v1/tts/live` with `model: lightning_v3.1` |
 
 ### Request Parameters
 
@@ -523,8 +511,7 @@ ws.onmessage = (event) => {
 
 | Surface | Word timestamps |
 |---|---|
-| `WSS /waves/v1/tts/live` (unified) | ✅ |
-| `WSS /waves/v1/lightning-v3.1/get_speech/stream` (legacy, no longer documented) | ✅ |
+| `wss://api.smallest.ai/waves/v1/tts/live` (WebSocket) | ✅ |
 | `POST /waves/v1/tts` (sync HTTP) | ❌ — flag accepted, silently ignored |
 | `POST /waves/v1/tts/live` (HTTP SSE) | ❌ — same |
 
