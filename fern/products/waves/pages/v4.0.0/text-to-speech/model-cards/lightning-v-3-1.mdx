@@ -1,12 +1,12 @@
 ---
 title: "Lightning v3.1"
-description: "Model card for Lightning v3.1. High-fidelity, low-latency text-to-speech at 44 kHz with voice cloning, streaming, and 12 language support plus auto-detect."
+description: "Model card for Lightning v3.1. High-fidelity, low-latency text-to-speech at 44 kHz with voice cloning, streaming, and 20 supported language codes plus `auto` routing."
 icon: "sparkles"
 ---
 
 import { Capabilities, Capability } from "@/components/Capabilities";
 
-Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering natural, expressive, and realistic speech at 44 kHz. Optimized for real-time applications with ultra-low latency and voice cloning support, it delivers broadcast-quality audio with genuinely conversational characteristics. Supports 12 languages across English, Hindi, Spanish, and 9 Indian languages.
+Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering natural, expressive, and realistic speech at 44 kHz. Optimized for real-time applications with ultra-low latency and voice cloning support, it delivers broadcast-quality audio with genuinely conversational characteristics. Accepts 20 language codes (10 European + 10 Indic) plus `auto` for cross-language routing. The trained voice catalog covers 12 of these languages directly; the other 8 route through English or Hindi voices.
 
 **Jump to:** [Benchmarks](#performance--benchmarks) · [Voice Catalog](#voice-catalog) · [Supported Languages](#supported-languages) · [API Reference](/models/api-reference/text-to-speech/synthesize-speech) · [Pricing & Throughput](#throughput-latency--pricing) · [Quickstart](/models/documentation/text-to-speech-lightning/quickstart)
 
@@ -17,8 +17,8 @@ Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering n
   <Card title="200ms" icon="bolt" href="#performance--benchmarks">
     TTFB at 40 concurrent requests
   </Card>
-  <Card title="12 Languages" icon="globe" href="#supported-languages">
-    Auto-detection + code-switching
+  <Card title="20 Languages" icon="globe" href="#supported-languages">
+    `auto` routing + code-switching; 12 with voices
   </Card>
   <Card title="3.3x" icon="gauge-high" href="#performance--benchmarks">
     Real-time factor (faster than playback)
@@ -31,7 +31,7 @@ Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering n
 |---|---|
 | **Developed by** | Smallest AI |
 | **Model type** | Text-to-Speech / Speech Synthesis |
-| **Languages** | 12 (auto-detection + code-switching) |
+| **Languages** | 20 accepted codes + `auto` (12 with trained voices; other 8 route via English/Hindi voices) |
 | **License** | Proprietary |
 | **Version** | v3.1 |
 | **Native sample rate** | 44,100 Hz |
@@ -51,7 +51,7 @@ Lightning v3.1 is a high-fidelity, low-latency text-to-speech model delivering n
     HTTP, SSE, and WebSocket transports for real-time playback.
   </Capability>
   <Capability icon="globe" name="Multi-Language" href="#supported-languages">
-    12 languages plus auto-detect, with automatic identification and code-switching mid-utterance.
+    20 accepted language codes plus `auto` routing; automatic identification and code-switching mid-utterance across the 12 languages with trained voices.
   </Capability>
   <Capability icon="waveform-lines" name="High Fidelity">
     Broadcast-quality 44.1 kHz audio with natural prosody, intonation, and conversational rhythm.
@@ -173,6 +173,8 @@ Want to reproduce these results? See the [TTS evaluation script](/models/model-c
 
 Pass the language code on each request to match the language of your input text. Each voice supports a subset of these languages — check `tags.language` on the voice via `GET /waves/v1/lightning-v3.1/get_voices`.
 
+### Voice catalog — 12 languages with trained voices
+
 | Language | Code | Voice count |
 |----------|------|-------------|
 | English | `en` | 176 |
@@ -188,8 +190,27 @@ Pass the language code on each request to match the language of your input text.
 | Gujarati | `gu` | 5 |
 | Bengali | `bn` | 4 |
 
+### Additional accepted language codes — 8 routed via English/Hindi voices
+
+The model accepts these ISO 639-1 codes but has no dedicated trained voices — pronunciation and normalization are handled through the English or Hindi voice you pick.
+
+| Language | Code |
+|----------|------|
+| French | `fr` |
+| German | `de` |
+| Italian | `it` |
+| Dutch | `nl` |
+| Swedish | `sv` |
+| Portuguese | `pt` |
+| Polish | `pl` |
+| Russian | `ru` |
+
+### `auto` — cross-language routing
+
+Pass `language: auto` to let the platform route based on input text. Any English or Hindi voice can then be used across all supported languages without needing an explicit code per call. See [DS-576](https://linear.app/smallest/issue/DS-576) for the design.
+
 <Note>
-The list above reflects the **voice catalog** as the source of truth — languages for which Lightning v3.1 has at least one trained voice.
+The voice-catalog table above reflects languages with at least one trained voice. The 20 accepted codes + `auto` are the full language surface accepted by the `language` request field.
 </Note>
 
 ---

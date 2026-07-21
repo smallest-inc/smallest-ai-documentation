@@ -191,6 +191,19 @@ def main() -> int:
         # 4. compare. Normalize types (sample_rate uses ints, others strings).
         spec_set = {str(x) for x in spec_enum}
         api_set = {str(x) for x in api_enum}
+
+        # Filter platform-accepted values not blessed by product-mgmt as
+        # publicly supported. Add codes here with a linked source-of-truth.
+        # `he` (Hebrew) — accepted on base `lightning_v3.1` HTTP but PM's
+        # canonical language list (see DS-576 lineup brief, 2026-07-21)
+        # excludes it. Treated as platform-side residue, not documented.
+        KNOWN_UNBLESSED_PLATFORM_CODES = {"he"}
+        api_set_filtered = api_set - KNOWN_UNBLESSED_PLATFORM_CODES
+        removed = api_set - api_set_filtered
+        if removed:
+            print(f"  (filtering platform-only unblessed codes: {sorted(removed)})")
+        api_set = api_set_filtered
+
         if spec_set == api_set:
             print(f"  ✓ enum matches API ({len(api_set)} values)")
             continue
