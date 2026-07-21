@@ -1,0 +1,17 @@
+---
+title: Agent Locking retired — superseded by Agent Versioning
+---
+
+The Agent Locking feature is retired. Its use case (protecting a production agent from accidental edits) is fully covered by Agent Versioning: keep production traffic on a **published** version, iterate on a **draft**, and only promote when you are ready to switch traffic over.
+
+**Docs changes**
+
+- The `platform/analytics/locking.mdx` page has been removed.
+- The **Monitor > Locking** sidebar entry is gone. Monitor now matches the platform sidebar: **Analytics** + **Evaluations**.
+- Any inbound links to the old Locking URLs redirect to the [Versioning](/voice-agents/platform/features/versioning) page.
+
+**API surface change**
+
+- `isLocked` is removed from the Agent response schema. The field was the only API-side trace of the feature and is no longer meaningful. Clients that read `isLocked` will now get `undefined` on the next SDK regen. If you still rely on this field, switch to checking `activeVersionId` and the agent's current published version instead.
+
+**No new endpoint** — Locking was UI-only aside from the `isLocked` flag, and Versioning already exposes the endpoints you need (draft management + publish + rollback).
