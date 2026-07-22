@@ -20,6 +20,10 @@ Define what you want to know such as satisfaction scores, call outcomes, issue c
 4. **Data populated**: Your metrics get filled in automatically
 5. **Access anywhere**: View in logs, receive via webhook, export
 
+<Warning>
+  After the call, the transcript is sent to the post-call-analytics (PCA) model, which outputs a value for **every** metric you configured. Each output is validated (type check, enum membership, and so on) before it is stored and displayed. **If any single metric fails validation, the whole post-call result for that call is rejected, none of the other metrics show up.** So one bad field costs you the entire call's analytics. Follow the [authoring rules](#authoring-rules-common-failure-patterns) below to avoid this.
+</Warning>
+
 
 ## Creating a New Metric
 
@@ -31,7 +35,7 @@ Click the **Add Metrics +** button to open the configuration panel. You'll see t
       ![Disposition metrics](../building-agents/images/post-call-disposition.png)
     </Frame>
     
-    Build a custom metric from scratch. Fill in the Identifier, Data Type, and Prompt — see details below.
+    Build a custom metric from scratch. Fill in the Identifier, Data Type, and Prompt. See details below.
     
     Use **Add Another +** to create multiple metrics at once.
     
@@ -45,7 +49,7 @@ Click the **Add Metrics +** button to open the configuration panel. You'll see t
       ![Metric templates](../building-agents/images/post-call-templates.png)
     </Frame>
     
-    Choose from pre-built metrics for common use cases. Just select the ones you want — no manual configuration needed.
+    Choose from pre-built metrics for common use cases. Just select the ones you want. No manual configuration needed.
     
     <Note>
     Don't forget to hit **Save** in the Disposition tab once you're done.
@@ -104,6 +108,37 @@ This is the question the AI answers by analyzing the transcript. Be specific.
 **Start with 3-5 metrics.** Too many can slow analysis and clutter your data. Add more as you learn what insights matter most.
 </Tip>
 
+## Authoring rules & common failure patterns
+
+Get any of these wrong and the PCA model's output fails validation for that call. When that happens no metric at all is stored for it, not just the one that broke. The five rules below cover most of the failure patterns we see in production.
+
+<Steps>
+  ### Enum outputs must be fully enumerated
+  Anything you ask the model to output has to exist in the choices list. If the prompt can lead the model to emit a value (including `null` or `"none"`) that isn't in the enum, validation fails.
+
+  If you want **"none"** or **"null"** to be a valid outcome, add it as an explicit choice.
+
+  ### Never use skip / omit conditions on a metric
+  Conditions like *"Omit this metric if callback_requested is No"* cause the model to drop the field entirely, which fails validation and takes down the whole call's analysis.
+
+  Keep the field always-present and use an explicit sentinel value instead. For example, *"Return NA if callback is not requested"* (with `NA` present in the enum).
+
+  ### Datatype must match the prompt
+  An integer-typed metric must never be instructed to output a string.
+
+  **Common failure:** an integer `promised_amount` field with a fallback like *"output 'Not Applicable' if no amount was promised"*. The string fails the integer type check.
+
+  Use a valid in-type sentinel instead (or a nullable/allowed value that matches the declared type).
+
+  ### Don't create dependencies between metrics
+  One metric should not depend on another (e.g. `lead_disposition` depending on `final_disposition`, or a score depending on a disposition).
+
+  Metrics are extracted independently, not sequentially like variables in code, so cross-references are unreliable.
+
+  ### Fully specify any aggregation or weighting
+  If a rating is *"a weighted score"* across sub-metrics, define the weights explicitly (or state *"simple average"*).
+</Steps>
+
 ## Example Metrics
 
 <Tabs>
@@ -142,7 +177,7 @@ This is the question the AI answers by analyzing the transcript. Be specific.
 
 ## Configuring via API
 
-Post-call metrics are set through the **agent versioning** flow: edit a draft's config, publish it as a new version, and activate the version. There is no standalone post-call-analytics endpoint — configuration lives on the agent's active version.
+Post-call metrics are set through the **agent versioning** flow: edit a draft's config, publish it as a new version, and activate the version. There is no standalone post-call-analytics endpoint. Configuration lives on the agent's active version.
 
 ### Full flow
 
@@ -226,7 +261,7 @@ Two analytics flags apply globally:
 | Field | Default | Description |
 |-------|---------|-------------|
 | `useInternalAnalyticsModel` | `true` | Use the internal analytics model. When `false`, the agent's own LLM evaluates metrics. |
-| `useReasoningModel` | `false` | Route evaluation through the reasoning model — higher quality, higher latency/cost. |
+| `useReasoningModel` | `false` | Route evaluation through the reasoning model (higher quality, higher latency/cost). |
 
 ### Reading current metrics
 
@@ -237,6 +272,25 @@ curl -H "Authorization: Bearer $SMALLEST_API_KEY" \
 ```
 
 The active version's metrics are surfaced under `_resolvedConfig.postCallAnalyticsConfig`. Each entry round-trips exactly as sent: `identifier`, `dispositionMetricPrompt`, `dispositionMetricType`, and `choices` (when the type is `ENUM`).
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Why is my post-call analysis missing / not showing up?">
+    Post-call analytics runs after the call ends, so it takes a moment to populate. If a call finished cleanly but nothing shows in the Conversations log after a minute, it is almost always a validation failure on one of the metrics you configured. Check the [authoring rules](#authoring-rules-common-failure-patterns). A single mis-authored field (wrong datatype, missing enum value, skip condition, etc.) rejects the entire call's analytics.
+  </Accordion>
+  <Accordion title="Why does my agent hallucinate values on some calls?">
+    Almost always one of the authoring patterns above. The most common causes:
+    - An enum that doesn't cover every value the model can produce.
+    - A metric prompt that asks the model to output a value in a type other than what's declared (e.g. a string fallback on an integer field).
+    - A "weighted score" or "aggregate" metric with no weights defined, so the model invents them.
+
+    Review the metric definition against the [authoring rules](#authoring-rules-common-failure-patterns).
+  </Accordion>
+  <Accordion title="Can one metric reference another?">
+    No. Each metric is extracted independently, not sequentially. If `lead_disposition` depends on the value the model returned for `final_disposition`, the reference is unreliable. Encode any cross-metric logic inside the individual metric's prompt (using the transcript as the source of truth), not by referencing sibling metrics.
+  </Accordion>
+</AccordionGroup>
 
 ## Related
 
