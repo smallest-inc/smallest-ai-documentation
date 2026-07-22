@@ -1,0 +1,83 @@
+---
+title: "Deprecation Notices"
+sidebarTitle: "Deprecation Notices"
+description: "Index of Atoms API endpoints that are deprecated or scheduled for removal, with the migration target for each."
+slug: /voice-agents/api-reference/deprecation-notices
+---
+
+This page lists Atoms API endpoints that are deprecated. Each row shows the current status, the migration target, and, once fixed, the sunset date.
+
+## How to read this page
+
+- **Deprecated**: the endpoint still works, but new integrations should use the migration target. Deprecated endpoints return the header `Deprecation: true`.
+- **Rejects with 409**: the endpoint returns HTTP `409` with `error_type: "<identifier>"` and does not process the request. Migrate immediately.
+- **Removed**: the endpoint no longer exists. Requests return HTTP `404`.
+
+When an endpoint has a fixed removal date, the response also carries a `Sunset:` header with the RFC 7231-formatted timestamp.
+
+<Note>
+Deprecation state is machine-readable via the `Deprecation`, `Sunset`, and (for `409` responses) the JSON body's `error_type` field. Log these in your integration so you can pull affected code paths automatically.
+</Note>
+
+## Currently deprecated
+
+### Agents
+
+| Endpoint | Deprecated since | Status | Migrate to |
+|---|---|---|---|
+| `PATCH /agent/{id}` (in-place config edits) | 2026-04-20 | Rejects with `400` | Fork a draft via the branch API, edit, publish. See [versioning lifecycle](/voice-agents/developer-guide/build/agent-crews/versioning-lifecycle). |
+| `PATCH /workflow/{workflowId}` (direct workflow graph edits) | 2026-06-11 | Rejects with `400` | Same as above &mdash; edit the `workflow` field on a draft, then publish. |
+
+### Agent Versioning &mdash; Drafts (v1)
+
+**All entries below rejected on launch of the v2 branch model with `409 versioning_v2_migration_required`.**
+
+| Endpoint | Status | Migrate to |
+|---|---|---|
+| `POST /agent/{id}/drafts` | Rejects with `409` | `PUT /agent/{id}/branches/{branchId}/draft` |
+| `GET /agent/{id}/drafts` | Rejects with `409` | `GET /agent/{id}/branches` (`openDraftId` / `hasOpenDraft` on each branch) |
+| `PATCH /agent/{id}/drafts/{draftId}` | Rejects with `409` | Not migrated. Drafts are no longer independently named. |
+| `DELETE /agent/{id}/drafts/{draftId}` | Rejects with `409` | `DELETE /agent/{id}/branches/{branchId}/draft` |
+| `POST /agent/{id}/drafts/{draftId}/publish` | Rejects with `409` | `POST /agent/{id}/branches/{branchId}/draft/publish` |
+| `PATCH /agent/{id}/drafts/{draftId}/config` | Rejects with `409` | `PUT /agent/{id}/branches/{branchId}/draft` |
+
+**Kept unchanged** during the coexistence window (~1 month post-launch), then removed:
+
+| Endpoint | Status | Migrate to |
+|---|---|---|
+| `GET /agent/{id}/drafts/{draftId}` | Deprecated (still works) | `GET /agent/{id}/branches/{branchId}/draft` |
+| `GET /agent/{id}/drafts/{draftId}/diff` | Deprecated (still works) | `GET /agent/{id}/diff?a=<branchId>:draft&b=<revisionId>` |
+| `POST /agent/{id}/drafts/{draftId}/test-call` | Deprecated (still works) | `POST /agent/{id}/branches/{branchId}/test-call` with `includeDraft: true` |
+
+### Agent Versioning &mdash; Versions (v1)
+
+**Rejected on launch of the v2 branch model with `409 versioning_v2_migration_required`.**
+
+| Endpoint | Status | Migrate to |
+|---|---|---|
+| `GET /agent/{id}/versions` | Rejects with `409` | `GET /agent/{id}/branches/{branchId}/revisions` |
+| `PATCH /agent/{id}/versions/{versionId}` | Rejects with `409` (external callers) | Metadata edits removed on v2. Set `label` at publish via `POST .../draft/publish`. |
+| `PATCH /agent/{id}/versions/{versionId}/activate` | Rejects with `409` | `POST /agent/{id}/branches/{branchId}/live` or `POST /agent/{id}/branches/{branchId}/revisions/{revisionId}/restore` |
+
+**Kept unchanged** during the coexistence window (~1 month post-launch), then removed. A v1 `versionId` equals its migrated `revisionId`, so IDs stored by existing integrations continue to resolve.
+
+| Endpoint | Status | Migrate to |
+|---|---|---|
+| `GET /agent/{id}/versions/{versionId}` | Deprecated (still works) | `GET /agent/{id}/branches/{branchId}/revisions/{revisionId}` |
+| `GET /agent/{id}/versions/diff` | Deprecated (still works) | `GET /agent/{id}/diff?a=<revisionId>&b=<revisionId>` |
+| `GET /agent/{id}/versions/{versionId}/compare-metrics` | Deprecated (still works) | No change |
+| `POST /agent/{id}/versions/{versionId}/test-call` | Deprecated (still works) | `POST /agent/{id}/branches/{branchId}/test-call` with `revisionId` |
+
+Full migration walkthrough with worked examples: [v1 → v2 migration guide](/voice-agents/api-reference/versioning-v2-migration).
+
+## Recently removed
+
+Endpoints that returned `404` after removal.
+
+| Endpoint | Removed | Notes |
+|---|---|---|
+| `GET /agent/{id}/resolved-config` | 2026-06-01 | Unused by the console. The same data is served inline on `GET /agent/{id}?draftId=X`, which merges `_resolvedConfig` into the agent DTO. |
+
+## Reporting a break
+
+If a v1 endpoint you rely on returns `409` unexpectedly or you spot a mapping error on this page, open a ticket and quote the endpoint path and the `error_type` from the response body. That's the minimum needed to trace and reroute.

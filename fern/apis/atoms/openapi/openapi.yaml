@@ -6460,9 +6460,13 @@ paths:
   /agent/{id}/drafts:
     post:
       summary: Create a draft
+      deprecated: true
       x-fern-sdk-group-name: agent_versioning_drafts
       x-fern-sdk-method-name: create_draft
-      description: Create a new draft from an existing published version or another draft. At least one of sourceVersionId or sourceDraftId is required (both may be sent simultaneously).
+      description: |
+        **Deprecated on the v2 branch model.** Migrate to `PUT /agent/{id}/branches/{branchId}/draft`. When `ENABLE_BRANCH_MODEL` is on, this endpoint returns `409 versioning_v2_migration_required` with the `Deprecation: true` header. See the [migration guide](/voice-agents/api-reference/versioning-v2-migration).
+        
+        Create a new draft from an existing published version or another draft. At least one of sourceVersionId or sourceDraftId is required (both may be sent simultaneously).
       tags:
         - Agent Versioning - Drafts
       security:
@@ -6496,12 +6500,18 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
         "404":
           description: Agent not found
+        "409":
+          $ref: "#/components/responses/VersioningV2MigrationRequired"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
     get:
       summary: List active drafts
-      description: List all active (non-discarded) drafts for an agent.
+      deprecated: true
+      description: |
+        **Deprecated on the v2 branch model.** Migrate to `GET /agent/{id}/branches (`openDraftId` / `hasOpenDraft`)`. When `ENABLE_BRANCH_MODEL` is on, this endpoint returns `409 versioning_v2_migration_required` with the `Deprecation: true` header. See the [migration guide](/voice-agents/api-reference/versioning-v2-migration).
+        
+        List all active (non-discarded) drafts for an agent.
       tags:
         - Agent Versioning - Drafts
       security:
@@ -6536,6 +6546,8 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
         "404":
           description: Agent not found
+        "409":
+          $ref: "#/components/responses/VersioningV2MigrationRequired"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -6594,9 +6606,13 @@ paths:
 
     patch:
       summary: Rename a draft
+      deprecated: true
       x-fern-sdk-group-name: agent_versioning_drafts
       x-fern-sdk-method-name: rename_draft
       description: |
+        **Deprecated on the v2 branch model.** Migrate to `PUT /agent/{id}/branches/{branchId}/draft`. When `ENABLE_BRANCH_MODEL` is on, this endpoint returns `409 versioning_v2_migration_required` with the `Deprecation: true` header. See the [migration guide](/voice-agents/api-reference/versioning-v2-migration).
+        
+        |
         Rename a draft. For config changes, use PATCH /agent/{id}/drafts/{draftId}/config instead.
       tags:
         - Agent Versioning - Drafts
@@ -6643,14 +6659,20 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
         "404":
           description: Agent or draft not found
+        "409":
+          $ref: "#/components/responses/VersioningV2MigrationRequired"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
     delete:
       summary: Discard a draft
+      deprecated: true
       x-fern-sdk-group-name: agent_versioning_drafts
       x-fern-sdk-method-name: discard_draft
-      description: Discard (soft-delete) a draft. Only the draft creator or an admin can discard.
+      description: |
+        **Deprecated on the v2 branch model.** Migrate to `DELETE /agent/{id}/branches/{branchId}/draft`. When `ENABLE_BRANCH_MODEL` is on, this endpoint returns `409 versioning_v2_migration_required` with the `Deprecation: true` header. See the [migration guide](/voice-agents/api-reference/versioning-v2-migration).
+        
+        Discard (soft-delete) a draft. Only the draft creator or an admin can discard.
       tags:
         - Agent Versioning - Drafts
       security:
@@ -6684,6 +6706,8 @@ paths:
                 $ref: "#/components/schemas/BadRequestErrorResponse"
         "404":
           description: Agent or draft not found
+        "409":
+          $ref: "#/components/responses/VersioningV2MigrationRequired"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -6751,9 +6775,13 @@ paths:
   /agent/{id}/drafts/{draftId}/publish:
     post:
       summary: Publish a draft
+      deprecated: true
       x-fern-sdk-group-name: agent_versioning_drafts
       x-fern-sdk-method-name: publish_draft
-      description: Publish a draft as a new versioned release. Optionally activate it immediately.
+      description: |
+        **Deprecated on the v2 branch model.** Migrate to `POST /agent/{id}/branches/{branchId}/draft/publish`. When `ENABLE_BRANCH_MODEL` is on, this endpoint returns `409 versioning_v2_migration_required` with the `Deprecation: true` header. See the [migration guide](/voice-agents/api-reference/versioning-v2-migration).
+        
+        Publish a draft as a new versioned release. Optionally activate it immediately.
       tags:
         - Agent Versioning - Drafts
       security:
@@ -6788,6 +6816,8 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
         "404":
           description: Agent or draft not found
+        "409":
+          $ref: "#/components/responses/VersioningV2MigrationRequired"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -6840,9 +6870,13 @@ paths:
   /agent/{id}/drafts/{draftId}/config:
     patch:
       summary: Edit draft config (prompt, tools, post-call metrics, voice, etc.)
+      deprecated: true
       x-fern-sdk-group-name: agent_versioning_drafts
       x-fern-sdk-method-name: update_draft_config
       description: |
+        **Deprecated on the v2 branch model.** Migrate to `PUT /agent/{id}/branches/{branchId}/draft`. When `ENABLE_BRANCH_MODEL` is on, this endpoint returns `409 versioning_v2_migration_required` with the `Deprecation: true` header. See the [migration guide](/voice-agents/api-reference/versioning-v2-migration).
+        
+        |
         Update the configuration of a draft. This single endpoint is how every
         agent-level config field is changed: prompt, tools, voice, language,
         **post-call analytics (disposition metrics)**, and more. There is no
@@ -6907,6 +6941,8 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
         "404":
           description: Agent or draft not found
+        "409":
+          $ref: "#/components/responses/VersioningV2MigrationRequired"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -6915,7 +6951,11 @@ paths:
   /agent/{id}/versions:
     get:
       summary: List published versions
+      deprecated: true
       description: |
+        **Deprecated on the v2 branch model.** Migrate to `GET /agent/{id}/branches/{branchId}/revisions`. When `ENABLE_BRANCH_MODEL` is on, this endpoint returns `409 versioning_v2_migration_required` with the `Deprecation: true` header. See the [migration guide](/voice-agents/api-reference/versioning-v2-migration).
+        
+        |
         List published versions for an agent with pagination and optional pin filter.
         The `total` value currently represents the total number of published versions
         for the agent, not necessarily the filtered count when `isPinned` is used.
@@ -6992,6 +7032,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BadRequestErrorResponse"
+        "409":
+          $ref: "#/components/responses/VersioningV2MigrationRequired"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -7168,9 +7210,13 @@ paths:
 
     patch:
       summary: Update version metadata (label, description, pin only)
+      deprecated: true
       x-fern-sdk-group-name: agent_versioning_versions
       x-fern-sdk-method-name: update_version_metadata
       description: |
+        **Deprecated on the v2 branch model.** Migrate to `Metadata edits removed on v2. Set `label` at publish via `POST /agent/{id}/branches/{branchId}/draft/publish`.`. When `ENABLE_BRANCH_MODEL` is on, this endpoint returns `409 versioning_v2_migration_required` with the `Deprecation: true` header. See the [migration guide](/voice-agents/api-reference/versioning-v2-migration).
+        
+        |
         Update a published version's label, description, or pinned status. At least one field is required.
         Published versions (both active and inactive) are config-immutable — their agent
         configuration cannot be changed. To modify config, create a new draft from the version,
@@ -7213,15 +7259,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BadRequestErrorResponse"
+        "409":
+          $ref: "#/components/responses/VersioningV2MigrationRequired"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
   /agent/{id}/versions/{versionId}/activate:
     patch:
       summary: Activate a version
+      deprecated: true
       x-fern-sdk-group-name: agent_versioning_versions
       x-fern-sdk-method-name: activate_version
       description: |
+        **Deprecated on the v2 branch model.** Migrate to `POST /agent/{id}/branches/{branchId}/live or POST /agent/{id}/branches/{branchId}/revisions/{revisionId}/restore`. When `ENABLE_BRANCH_MODEL` is on, this endpoint returns `409 versioning_v2_migration_required` with the `Deprecation: true` header. See the [migration guide](/voice-agents/api-reference/versioning-v2-migration).
+        
+        |
         Set a published version as the active version for the agent. The previously
         active version is deactivated. This does not modify the version's config — it
         only changes which version serves live traffic. Activation is idempotent: if
@@ -7259,6 +7311,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BadRequestErrorResponse"
+        "409":
+          $ref: "#/components/responses/VersioningV2MigrationRequired"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
@@ -7329,6 +7383,862 @@ paths:
                 $ref: "#/components/schemas/BadRequestErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
+
+  # ══════════════════════════════════════════════════════════════════════
+  # Agent Versioning v2: Branches, Drafts, Revisions
+  # Base: /agent/{id}/branches
+  # Feature-gated behind ENABLE_BRANCH_MODEL. See the migration guide at
+  # /voice-agents/api-reference/versioning-v2-migration for the mapping
+  # from v1 Drafts/Versions endpoints.
+  # ══════════════════════════════════════════════════════════════════════
+
+  /agent/{id}/branches:
+    post:
+      summary: Create a branch
+      x-fern-sdk-group-name: agent_versioning_branches
+      x-fern-sdk-method-name: create_branch
+      description: |
+        Fork a new branch from an existing branch. The source branch must have at least one committed revision. Branch names are unique per agent; the name `Main` is reserved for the default branch. Creating from a branch whose latest draft is still `scanning` returns `409 source_scanning`.
+      tags:
+        - Agent Versioning - Branches
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBranchRequest"
+      responses:
+        "201":
+          description: Branch created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Branch"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "409":
+          $ref: "#/components/responses/ConflictErrorResponse"
+        "423":
+          $ref: "#/components/responses/LockedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+    get:
+      summary: List branches
+      x-fern-sdk-group-name: agent_versioning_branches
+      x-fern-sdk-method-name: list
+      description: List all non-archived branches for an agent, with per-branch draft and revision counts.
+      tags:
+        - Agent Versioning - Branches
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      responses:
+        "200":
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      branches:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/BranchSummary"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/branches/{branchId}:
+    get:
+      summary: Get branch
+      x-fern-sdk-group-name: agent_versioning_branches
+      x-fern-sdk-method-name: get
+      description: Return a single branch summary, including draft state (`openDraftId`, `hasOpenDraft`) and head revision.
+      tags:
+        - Agent Versioning - Branches
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "200":
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/BranchSummary"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+    patch:
+      summary: Rename a branch
+      x-fern-sdk-group-name: agent_versioning_branches
+      x-fern-sdk-method-name: rename
+      description: Rename a non-default, non-archived branch. `Main` cannot be renamed; a name that is already in use on this agent returns `409 branch_name_exists`.
+      tags:
+        - Agent Versioning - Branches
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/BranchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameBranchRequest"
+      responses:
+        "200":
+          description: Renamed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Branch"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Forbidden. Attempting to rename `Main`, or the caller lacks write access.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "409":
+          $ref: "#/components/responses/ConflictErrorResponse"
+        "423":
+          $ref: "#/components/responses/LockedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/branches/{branchId}/archive:
+    post:
+      summary: Archive a branch
+      x-fern-sdk-group-name: agent_versioning_branches
+      x-fern-sdk-method-name: archive
+      description: |
+        Archive a branch. `Main` cannot be archived. The live branch cannot be archived; make another branch live first. Archived branches are hidden from list views but their revisions remain queryable by ID.
+      tags:
+        - Agent Versioning - Branches
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "200":
+          description: Archived.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      archived:
+                        type: boolean
+                        example: true
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Forbidden. `Main` cannot be archived, the live branch cannot be archived, or the caller lacks write access.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "423":
+          $ref: "#/components/responses/LockedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/branches/{branchId}/live:
+    post:
+      summary: Make a branch live
+      x-fern-sdk-group-name: agent_versioning_branches
+      x-fern-sdk-method-name: make_live
+      description: |
+        Make this branch the live branch. Its `headRevisionId` becomes the config that serves production traffic. The previously-live branch becomes not-live automatically. The branch must be non-archived, must have at least one `committed` (security-passed) revision, and its head revision must have passed the security scan.
+      tags:
+        - Agent Versioning - Branches
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "200":
+          description: Branch is now live.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/BranchSummary"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Forbidden. Branch is archived, security scan has not passed on the head revision, or the caller lacks write access.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "409":
+          $ref: "#/components/responses/ConflictErrorResponse"
+        "423":
+          $ref: "#/components/responses/LockedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/branches/{branchId}/draft:
+    put:
+      summary: Write to draft
+      x-fern-sdk-group-name: agent_versioning_branches
+      x-fern-sdk-method-name: update_draft
+      description: |
+        Upsert the open draft on this branch. If no draft is open, one is created automatically. The request body is a free-form agent config partial and must contain at least one recognized field (`prompt`, `voice`, `model`, `tools`, `post_call_analytics`, etc.); the server merges it into the existing draft and returns the resulting draft as a revision-shaped snapshot.
+      tags:
+        - Agent Versioning - Branches
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/BranchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Agent config partial. Must contain at least one recognized top-level field.
+              additionalProperties: true
+      responses:
+        "200":
+          description: Draft updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Revision"
+        "400":
+          description: Bad request. Empty body, no recognized field, or validation error on the config partial.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "423":
+          $ref: "#/components/responses/LockedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+    get:
+      summary: Get open draft
+      x-fern-sdk-group-name: agent_versioning_branches
+      x-fern-sdk-method-name: get_draft
+      description: Return the currently-open draft on this branch, including per-edit history.
+      tags:
+        - Agent Versioning - Branches
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "200":
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/DraftDetail"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: No open draft on this branch, or the branch does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+    delete:
+      summary: Discard open draft
+      x-fern-sdk-group-name: agent_versioning_branches
+      x-fern-sdk-method-name: discard_draft
+      description: Discard the open draft on this branch. Any unpublished edits are lost. The last committed revision remains the branch head.
+      tags:
+        - Agent Versioning - Branches
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "200":
+          description: Discarded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      discarded:
+                        type: boolean
+                        example: true
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: No open draft on this branch, or the branch does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/branches/{branchId}/draft/publish:
+    post:
+      summary: Publish draft
+      x-fern-sdk-group-name: agent_versioning_branches
+      x-fern-sdk-method-name: publish_draft
+      description: |
+        Publish the open draft on this branch as a new revision.
+
+        The response is `200` with `state: "committed"` when the security scan finishes synchronously, and `202` with `state: "scanning"` when the scan is deferred. A `scanning` revision is visible in history but cannot be restored or made live until it becomes `committed`. If the scan fails, the revision is left in `scanning` state and this endpoint returns `409` on subsequent publishes until the scan is retried.
+
+        Publishing on the live branch pushes to production immediately.
+      tags:
+        - Agent Versioning - Branches
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/BranchId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishDraftRequest"
+      responses:
+        "200":
+          description: Draft committed synchronously.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/RestoreRevisionResult"
+        "202":
+          description: Security scan queued. Poll `GET /agent/{id}/branches/{branchId}/revisions` until the returned revision transitions to `committed`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/RestoreRevisionResult"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Forbidden. Branch is archived or the caller lacks write access.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "404":
+          description: No open draft on this branch, or the branch does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "409":
+          $ref: "#/components/responses/ConflictErrorResponse"
+        "423":
+          $ref: "#/components/responses/LockedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/branches/{branchId}/draft/publish/cancel:
+    post:
+      summary: Cancel in-flight publish
+      x-fern-sdk-group-name: agent_versioning_branches
+      x-fern-sdk-method-name: cancel_publish
+      description: Cancel a publish that is currently scanning. Idempotent. Returns `200` even if no scan is active.
+      tags:
+        - Agent Versioning - Branches
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "200":
+          description: Cancel processed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      cancelled:
+                        type: boolean
+                        example: true
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/branches/{branchId}/revisions:
+    get:
+      summary: List revisions on a branch
+      x-fern-sdk-group-name: agent_versioning_revisions
+      x-fern-sdk-method-name: list
+      description: Paginated list of committed and scanning revisions on this branch, newest first.
+      tags:
+        - Agent Versioning - Revisions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/BranchId"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: skip
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      revisions:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Revision"
+                      total:
+                        type: integer
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/branches/{branchId}/revisions/{revisionId}:
+    get:
+      summary: Get revision
+      x-fern-sdk-group-name: agent_versioning_revisions
+      x-fern-sdk-method-name: get
+      description: Return a single revision plus its `resolvedConfig` (the fully-merged agent config at that revision).
+      tags:
+        - Agent Versioning - Revisions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/BranchId"
+        - $ref: "#/components/parameters/RevisionId"
+      responses:
+        "200":
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      revision:
+                        $ref: "#/components/schemas/Revision"
+                      resolvedConfig:
+                        type: object
+                        description: Fully-merged agent config at this revision.
+                        additionalProperties: true
+        "400":
+          description: Bad request. Invalid ID, or the revision does not belong to this branch.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/branches/{branchId}/revisions/{revisionId}/history:
+    get:
+      summary: Get revision publish trail
+      x-fern-sdk-group-name: agent_versioning_revisions
+      x-fern-sdk-method-name: get_history
+      description: |
+        Return the publish trail for a revision: who published it, and the ordered list of prior revisions on this branch with the sections that changed at each step.
+      tags:
+        - Agent Versioning - Revisions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/BranchId"
+        - $ref: "#/components/parameters/RevisionId"
+      responses:
+        "200":
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      revision:
+                        $ref: "#/components/schemas/Revision"
+                      publishedBy:
+                        type: string
+                      trail:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            revision:
+                              $ref: "#/components/schemas/Revision"
+                            changedSections:
+                              type: array
+                              items:
+                                type: string
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/branches/{branchId}/revisions/{revisionId}/restore:
+    post:
+      summary: Restore a revision
+      x-fern-sdk-group-name: agent_versioning_revisions
+      x-fern-sdk-method-name: restore
+      description: |
+        Republish an older revision as a new revision at the head of this branch. Restore does not overwrite history; the older revision keeps its ID, and a new revision is committed on top.
+
+        The response mirrors `POST /agent/{id}/branches/{branchId}/draft/publish`: `200 committed` if the scan is synchronous, `202 scanning` if deferred. Only one publish or restore can be in flight per branch at a time.
+      tags:
+        - Agent Versioning - Revisions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/BranchId"
+        - $ref: "#/components/parameters/RevisionId"
+      responses:
+        "200":
+          description: Restored synchronously.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/RestoreRevisionResult"
+        "202":
+          description: Security scan queued.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/RestoreRevisionResult"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Forbidden. Source revision has not passed its security scan, or the caller lacks write access.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "409":
+          $ref: "#/components/responses/ConflictErrorResponse"
+        "423":
+          $ref: "#/components/responses/LockedErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/branches/{branchId}/test-call:
+    post:
+      summary: Start a test call against a branch
+      x-fern-sdk-group-name: agent_versioning_branches
+      x-fern-sdk-method-name: test_call
+      description: |
+        Start a test call using the branch's current config. Send `includeDraft: true` to test the open draft, or send `revisionId` to test a specific committed revision on the branch. Sending both is a validation error.
+
+        The response always includes `conversationId` and `callId`. For `webcall` and `chat`, it also includes `token`, `roomName`, and `host`. Those fields are omitted for `telephony`.
+      tags:
+        - Agent Versioning - Branches
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/BranchId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestCallV2Request"
+      responses:
+        "200":
+          description: Test call initiated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/TestCallResult"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/WorkflowGraphAgentAccessForbiddenError"
+        "404":
+          description: "Branch, agent, or referenced revision not found. Also returned when `includeDraft: true` is sent and no draft is open."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "409":
+          description: The branch has no committed revision to test against.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/diff:
+    get:
+      summary: Diff two revisions or drafts
+      x-fern-sdk-group-name: agent_versioning_revisions
+      x-fern-sdk-method-name: diff
+      description: |
+        Compare any two references on this agent and return per-section diffs. Each side (`a` and `b`) is either a `revisionId` or the string `<branchId>:draft` to reference the open draft on a branch. Sides may cross branches. Both references must resolve to configs on the same agent.
+      tags:
+        - Agent Versioning - Revisions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - name: a
+          in: query
+          required: true
+          description: Left-hand side. Either a `revisionId` or `<branchId>:draft`.
+          schema:
+            type: string
+        - name: b
+          in: query
+          required: true
+          description: Right-hand side. Either a `revisionId` or `<branchId>:draft`.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/DiffResult"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  # ══════════════════════════════════════════════════════════════════════
+  # end v2 branch model
+  # ══════════════════════════════════════════════════════════════════════
 
   # ── GET /agent/{id}/resolved-config — REMOVED ──────────────────────────
   # Unused by UI. Resolved config is served via GET /agent/{id}?draftId=X
@@ -9612,6 +10522,22 @@ components:
       schema:
         type: string
         pattern: "^[a-f\\d]{24}$"
+    BranchId:
+      name: branchId
+      in: path
+      required: true
+      description: The branch ID.
+      schema:
+        type: string
+        pattern: "^[a-f\\d]{24}$"
+    RevisionId:
+      name: revisionId
+      in: path
+      required: true
+      description: The revision ID. Equal to the v1 `versionId` for revisions that were migrated from the v1 model.
+      schema:
+        type: string
+        pattern: "^[a-f\\d]{24}$"
 
   schemas:
     WebEngageIntegrationSet:
@@ -11241,6 +12167,294 @@ components:
           description: |
             Phone number to call. Required only when `mode` is `telephony`. Omit for `webcall` and `chat`.
 
+    # ── v2 branch model schemas ─────────────────────────────────────────
+    Branch:
+      type: object
+      description: An editable copy of an agent. Each branch has its own draft state and its own revision history.
+      properties:
+        _id:
+          type: string
+          description: Branch ID (24-character MongoDB ObjectId).
+        agentId:
+          type: string
+          description: Agent this branch belongs to.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Human-readable branch name. Must be unique per agent. The name `Main` is reserved for the default branch and cannot be used for new branches.
+        isDefault:
+          type: boolean
+          description: "True for the `Main` branch. Only one branch per agent has `isDefault: true`. The default branch cannot be renamed, deleted, or archived."
+        isLive:
+          type: boolean
+          description: "True when this branch is currently serving production traffic. Exactly one branch per agent has `isLive: true`."
+        isArchived:
+          type: boolean
+          description: "Archived branches cannot receive new drafts or be made live. Archive is reversible via `POST /agent/{id}/branches/{branchId}/live` when `isArchived: false` and a committed revision exists."
+        openDraftId:
+          type: string
+          nullable: true
+          description: "ID of the open draft on this branch, or `null` when no draft is open."
+        hasOpenDraft:
+          type: boolean
+          description: "Convenience mirror of `openDraftId != null`."
+        headRevisionId:
+          type: string
+          nullable: true
+          description: ID of the most recent committed revision on this branch. `null` on a freshly-created branch that has not yet published.
+        createdBy:
+          type: string
+          description: User ID that created the branch.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    BranchSummary:
+      allOf:
+        - $ref: "#/components/schemas/Branch"
+        - type: object
+          description: Adds counts to `Branch` for listing views. Returned by `GET /agent/{id}/branches` and `GET /agent/{id}/branches/{branchId}`.
+          properties:
+            revisionCount:
+              type: integer
+              description: Total number of committed revisions on this branch.
+            lastPublishedAt:
+              type: string
+              format: date-time
+              nullable: true
+              description: Timestamp of the most recent committed revision, or `null` if the branch has never published.
+
+    Revision:
+      type: object
+      description: An immutable snapshot of an agent's configuration, created when a draft is published on a branch. A revision's `_id` is stable and is what the v1 `versionId` maps to on migration.
+      properties:
+        _id:
+          type: string
+          description: Revision ID (equal to the v1 `versionId` for migrated versions).
+        agentId:
+          type: string
+        branchId:
+          type: string
+          description: Branch this revision was committed on.
+        revisionNumber:
+          type: integer
+          description: Monotonic revision counter per branch, starting at 1.
+        label:
+          type: string
+          maxLength: 200
+          nullable: true
+          description: Optional label set at publish time. Displayed as the revision's short name in the UI (`Version 1`, `Version 2`, ...).
+        state:
+          type: string
+          enum: [scanning, committed]
+          description: |
+            `scanning` means the security scan is still running. `committed` means the revision passed its scan and is available on the branch. `scanning` revisions are visible in history but cannot be restored or made live.
+        publishedBy:
+          type: string
+          description: User ID that published the revision.
+        publishedAt:
+          type: string
+          format: date-time
+        changedSections:
+          type: array
+          items:
+            type: string
+          description: Config sections that changed between this revision and its predecessor (`prompt`, `voice`, `model`, `tools`, `post_call_analytics`, etc.). Empty on the first revision.
+
+    DraftDetail:
+      type: object
+      description: Returned by `GET /agent/{id}/branches/{branchId}/draft`.
+      properties:
+        latest:
+          type: object
+          description: The current in-progress draft config. Mirrors the agent-config shape sent to `PUT /agent/{id}/branches/{branchId}/draft`.
+        editHistory:
+          type: array
+          items:
+            type: object
+            properties:
+              editedAt:
+                type: string
+                format: date-time
+              editedBy:
+                type: string
+              changedSections:
+                type: array
+                items:
+                  type: string
+          description: Ordered list of edits on the current draft, newest first.
+        editCount:
+          type: integer
+          description: Total number of edits on this draft.
+
+    DiffChange:
+      type: object
+      properties:
+        path:
+          type: string
+          description: JSON pointer to the changed field (e.g. `/prompt`, `/voice/id`).
+        oldValue:
+          nullable: true
+          description: Value on side `a`.
+        newValue:
+          nullable: true
+          description: Value on side `b`.
+
+    DiffSection:
+      type: object
+      properties:
+        section:
+          type: string
+          description: Config section the changes belong to (`prompt`, `voice`, `model`, `tools`, `post_call_analytics`, etc.).
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiffChange"
+
+    DiffResult:
+      type: object
+      description: Returned by `GET /agent/{id}/diff`.
+      properties:
+        unchangedSections:
+          type: array
+          items:
+            type: string
+          description: Sections that are identical between the two references.
+        diffs:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiffSection"
+
+    TestCallResult:
+      type: object
+      description: Returned by `POST /agent/{id}/branches/{branchId}/test-call`.
+      required:
+        - conversationId
+        - callId
+      properties:
+        conversationId:
+          type: string
+        callId:
+          type: string
+        token:
+          type: string
+          description: LiveKit access token. Returned for `webcall` and `chat` modes only.
+        roomName:
+          type: string
+          description: Returned for `webcall` and `chat` modes only.
+        host:
+          type: string
+          description: Returned for `webcall` and `chat` modes only.
+
+    CreateBranchRequest:
+      type: object
+      required:
+        - sourceBranchId
+        - name
+      properties:
+        sourceBranchId:
+          type: string
+          description: Branch to fork from. Must have at least one committed revision.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: New branch name. Must be unique per agent. `Main` is reserved.
+
+    RenameBranchRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    PublishDraftRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          maxLength: 200
+          nullable: true
+          description: Optional short label to attach to the resulting revision.
+
+    RestoreRevisionResult:
+      type: object
+      description: Envelope returned by publish and restore.
+      properties:
+        state:
+          type: string
+          enum: [committed, scanning]
+        revision:
+          $ref: "#/components/schemas/Revision"
+
+    TestCallV2Request:
+      type: object
+      properties:
+        includeDraft:
+          type: boolean
+          description: When `true`, the test call uses the open draft config on the branch. Mutually exclusive with `revisionId`.
+        revisionId:
+          type: string
+          description: "Test call against a specific committed revision on the branch. Mutually exclusive with `includeDraft: true`."
+        mode:
+          type: string
+          enum: [webcall, chat, telephony]
+          default: webcall
+        toPhone:
+          type: string
+          description: E.164-formatted number. Required when `mode` is `telephony`; omit for `webcall` and `chat`.
+
+    ConflictErrorResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: false
+        error_type:
+          type: string
+          description: Machine-readable identifier for the conflict (e.g. `branch_name_exists`, `source_has_no_commit`, `source_scanning`, `publish_in_progress`).
+        errors:
+          type: array
+          items:
+            type: string
+
+    LockedErrorResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: false
+        error_type:
+          type: string
+          enum: [config_freeze_active]
+        errors:
+          type: array
+          items:
+            type: string
+
+    VersioningV2MigrationRequiredResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: false
+        error_type:
+          type: string
+          enum: [versioning_v2_migration_required]
+        errors:
+          type: array
+          items:
+            type: string
+          example: ["This endpoint is deprecated on the v2 branch model. See the migration guide for the v2 equivalent."]
+    # ── end v2 branch model schemas ─────────────────────────────────────
+
     WebhookAgent:
       type: object
       properties:
@@ -12279,7 +13493,7 @@ components:
             $ref: "#/components/schemas/BadRequestErrorResponse"
 
     NotFoundErrorResponse:
-      description: Resource not found — the referenced ID does not exist or does not belong to the caller's organization.
+      description: Resource not found. The referenced ID does not exist or does not belong to the caller's organization.
       content:
         application/json:
           schema:
@@ -12293,6 +13507,34 @@ components:
                 items:
                   type: string
                 example: ["Resource not found"]
+
+    ConflictErrorResponse:
+      description: Conflict. The request cannot be completed because of the current state of the resource (name already exists, another publish or restore is in progress, the source draft failed its security scan, or a similar in-flight collision).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ConflictErrorResponse"
+
+    LockedErrorResponse:
+      description: Locked. A configuration freeze is active on this agent, or the resource is temporarily locked for another write. Retry after the freeze window ends.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/LockedErrorResponse"
+
+    VersioningV2MigrationRequired:
+      description: |
+        The v1 versioning endpoint is deprecated on the branch model and will not process this request. The response body carries `error_type: "versioning_v2_migration_required"` and the response includes the `Deprecation: true` header. See the [migration guide](/voice-agents/api-reference/versioning-v2-migration) for the v2 equivalent.
+      headers:
+        Deprecation:
+          description: Always `true` for deprecated endpoints.
+          schema:
+            type: string
+            example: "true"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/VersioningV2MigrationRequiredResponse"
 
 tags:
   - name: Integrations
@@ -12331,10 +13573,18 @@ tags:
     description: Operations related to webhooks and webhook subscriptions
   - name: Audience
     description: Operations related to audience management and CSV uploads
+  - name: Agent Versioning - Branches
+    description: |
+      Manage editable copies of an agent. Every editable copy is a branch. Each agent has a `Main` branch by default; you can create more branches from any branch that has at least one committed revision. Exactly one branch per agent is **live** and serves production traffic. `Main` cannot be renamed or deleted; the live branch cannot be deleted or archived until another branch is made live. Requires `ENABLE_BRANCH_MODEL`.
+  - name: Agent Versioning - Revisions
+    description: |
+      Read and restore committed revisions on a branch. A revision is an immutable snapshot of an agent's configuration created when a draft is published. Revisions belong to exactly one branch. Restoring a revision republishes it as a new revision on the same branch. Requires `ENABLE_BRANCH_MODEL`.
   - name: Agent Versioning - Drafts
-    description: Operations for creating, editing, diffing, and publishing agent configuration drafts
+    description: |
+      **Deprecated on the v2 branch model.** Use `PUT`/`GET`/`DELETE /agent/{id}/branches/{branchId}/draft` and `POST /agent/{id}/branches/{branchId}/draft/publish`. When `ENABLE_BRANCH_MODEL` is on, list + write endpoints under this tag return `409 versioning_v2_migration_required` with `Deprecation: true`. See the [migration guide](/voice-agents/api-reference/versioning-v2-migration).
   - name: Agent Versioning - Versions
-    description: Operations for listing, comparing, activating, and testing published agent versions. Published versions (active or inactive) are config-immutable — only metadata (label, description, isPinned) can be updated. To change config, create a draft and publish a new version.
+    description: |
+      **Deprecated on the v2 branch model.** Under the branch model, `activate` is gone (a branch is made live via `POST /agent/{id}/branches/{branchId}/live`) and only `label` (set at publish) is metadata-editable. When `ENABLE_BRANCH_MODEL` is on, list + write endpoints under this tag return `409 versioning_v2_migration_required` with `Deprecation: true`. By-id reads and test-calls are kept unchanged and resolve across branches (a v1 `versionId` equals its migrated `revisionId`). See the [migration guide](/voice-agents/api-reference/versioning-v2-migration).
   - name: Post-Call Analytics
     description: |
       Configure disposition metrics that are automatically extracted from each completed call (call resolved, satisfaction score, call outcome, summary, etc.). Post-call analytics is not a standalone endpoint — it is configured through the versioning system by setting the `postCallAnalyticsConfig` field in the body of `PATCH /agent/{id}/drafts/{draftId}/config`, then publishing and activating the draft. See the [Post-Call Metrics guide](/atoms/atoms-platform/features/post-call-metrics) for the full walkthrough.

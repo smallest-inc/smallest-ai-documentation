@@ -1,0 +1,182 @@
+---
+title: "Migrating from v1 to the branch/revision API"
+sidebarTitle: "v1 → v2 migration guide"
+description: "Endpoint-by-endpoint mapping from the old /agent/{id}/drafts + /agent/{id}/versions API to the branch-and-revision API."
+slug: /voice-agents/api-reference/versioning-v2-migration
+---
+
+The Atoms agent-versioning API moved to a branch-and-revision model. This page walks through what changed and gives you a concrete, endpoint-by-endpoint mapping to move existing integrations across.
+
+## What changed
+
+The v1 model had two loose concepts (**drafts** and **versions**) that lived side-by-side on one linear history per agent. The v2 model wraps them in a **branch**:
+
+- Every editable copy of an agent is a **branch**. Each agent has a `Main` branch by default.
+- Each branch has one open **draft** at a time. Draft edits are upserts.
+- Publishing a draft commits a **revision** on the branch. Revisions are immutable and equivalent to the old `version`.
+- Exactly one branch per agent is **live** and serves production traffic. `activate` on a specific version is gone; you make a whole branch live.
+
+Existing IDs carry over. A v1 `versionId` equals its migrated `revisionId`, so any code that stores version IDs can keep resolving them via the by-id endpoints (which are kept, see below).
+
+## Endpoint mapping
+
+| v1 endpoint | v1 status after launch | v2 equivalent |
+|---|---|---|
+| `POST /agent/{id}/drafts` | **409** `versioning_v2_migration_required` | `PUT /agent/{id}/branches/{branchId}/draft` (auto-opens a draft) |
+| `GET /agent/{id}/drafts` | **409** | `GET /agent/{id}/branches` (each branch surface exposes `openDraftId` / `hasOpenDraft`) |
+| `GET /agent/{id}/drafts/{draftId}` | **kept** | `GET /agent/{id}/branches/{branchId}/draft` |
+| `PATCH /agent/{id}/drafts/{draftId}` | **409** | Not migrated. Rename is per-branch; drafts are no longer named. |
+| `DELETE /agent/{id}/drafts/{draftId}` | **409** | `DELETE /agent/{id}/branches/{branchId}/draft` |
+| `PATCH /agent/{id}/drafts/{draftId}/config` | **409** | `PUT /agent/{id}/branches/{branchId}/draft` |
+| `GET /agent/{id}/drafts/{draftId}/diff` | **kept** | `GET /agent/{id}/diff?a=<branchId>:draft&b=<revisionId>` |
+| `POST /agent/{id}/drafts/{draftId}/publish` | **409** | `POST /agent/{id}/branches/{branchId}/draft/publish` |
+| `POST /agent/{id}/drafts/{draftId}/test-call` | **kept** | `POST /agent/{id}/branches/{branchId}/test-call` with `includeDraft: true` |
+| `GET /agent/{id}/versions` | **409** | `GET /agent/{id}/branches/{branchId}/revisions` |
+| `GET /agent/{id}/versions/{versionId}` | **kept** | `GET /agent/{id}/branches/{branchId}/revisions/{revisionId}` |
+| `GET /agent/{id}/versions/diff` | **kept** | `GET /agent/{id}/diff?a=<revisionId>&b=<revisionId>` |
+| `GET /agent/{id}/versions/{versionId}/compare-metrics` | **kept** | No change |
+| `PATCH /agent/{id}/versions/{versionId}` | **409** (external) | Metadata edits removed. Set `label` at publish time via `POST .../draft/publish`. |
+| `PATCH /agent/{id}/versions/{versionId}/activate` | **409** | `POST /agent/{id}/branches/{branchId}/live` or `POST /agent/{id}/branches/{branchId}/revisions/{revisionId}/restore` |
+| `POST /agent/{id}/versions/{versionId}/test-call` | **kept** | `POST /agent/{id}/branches/{branchId}/test-call` with `revisionId` |
+
+**409 endpoints** return a body of the form `{ "status": false, "error_type": "versioning_v2_migration_required", "errors": [...] }` and set `Deprecation: true`. The kept endpoints continue to accept the same request shape and return the same response.
+
+<Note>
+The SDK routes under `/sdk/agents/*` are unaffected by this migration.
+</Note>
+
+## Timeline
+
+- **Launch day**: v1 write endpoints and v1 list reads begin returning `409`. Kept endpoints and the SDK routes continue to work. The v2 branch endpoints go live behind the same base URL.
+- **~1 month coexistence**: kept v1 endpoints continue to work so by-id reads and test-calls do not break.
+- **Sunset**: v1 endpoints are removed. Date is not yet fixed. This page and the [Deprecation Notices](/voice-agents/api-reference/deprecation-notices) page will carry the final sunset date once it lands, along with the `Sunset:` header on the affected endpoints.
+
+## Worked examples
+
+### 1. Create a draft, edit it, publish it
+
+**Before (v1):**
+
+```bash
+DRAFT=$(curl -s -X POST "$BASE/agent/$AGENT_ID/drafts" \
+  -H "$AUTH" -H "$CT" \
+  -d "{\"sourceVersionId\": \"$ACTIVE_VERSION_ID\"}" | jq -r '.data._id')
+
+curl -s -X PATCH "$BASE/agent/$AGENT_ID/drafts/$DRAFT/config" \
+  -H "$AUTH" -H "$CT" \
+  -d '{"prompt": "..."}'
+
+curl -s -X POST "$BASE/agent/$AGENT_ID/drafts/$DRAFT/publish" \
+  -H "$AUTH" -H "$CT" -d '{"label": "..."}'
+```
+
+**After (v2):**
+
+```bash
+# 1. Find the branch you want to publish on.
+MAIN_BRANCH_ID=$(curl -s "$BASE/agent/$AGENT_ID/branches" -H "$AUTH" \
+  | jq -r '.data.branches[] | select(.isDefault==true) | ._id')
+
+# 2. Write to the branch's draft. If no draft is open, one is created.
+curl -s -X PUT "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/draft" \
+  -H "$AUTH" -H "$CT" \
+  -d '{"prompt": "..."}'
+
+# 3. Publish.
+curl -s -X POST "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/draft/publish" \
+  -H "$AUTH" -H "$CT" -d '{"label": "..."}'
+```
+
+### 2. Activate an older revision
+
+**Before (v1):**
+
+```bash
+curl -X PATCH "$BASE/agent/$AGENT_ID/versions/$VERSION_ID/activate" -H "$AUTH"
+```
+
+**After (v2):** `activate` is replaced by two options:
+
+- **Make the branch that owns the revision live.** Sets the branch's head as production traffic.
+
+  ```bash
+  curl -X POST "$BASE/agent/$AGENT_ID/branches/$BRANCH_ID/live" -H "$AUTH"
+  ```
+
+- **Restore an older revision on the current branch.** Republishes it as a new revision at the head of the branch.
+
+  ```bash
+  curl -X POST \
+    "$BASE/agent/$AGENT_ID/branches/$BRANCH_ID/revisions/$REVISION_ID/restore" \
+    -H "$AUTH"
+  ```
+
+### 3. List past versions
+
+**Before (v1):**
+
+```bash
+curl "$BASE/agent/$AGENT_ID/versions?limit=20" -H "$AUTH"
+```
+
+**After (v2):** list per branch.
+
+```bash
+curl "$BASE/agent/$AGENT_ID/branches/$BRANCH_ID/revisions?limit=20" -H "$AUTH"
+```
+
+Revisions returned here have the same `_id` as v1 `versionId`.
+
+### 4. Diff a draft against the active version
+
+**Before (v1):**
+
+```bash
+curl "$BASE/agent/$AGENT_ID/drafts/$DRAFT/diff" -H "$AUTH"
+```
+
+**After (v2):** diff endpoint takes two refs; each side is either a `revisionId` or `<branchId>:draft`.
+
+```bash
+curl "$BASE/agent/$AGENT_ID/diff?a=$BRANCH_ID:draft&b=$ACTIVE_REVISION_ID" -H "$AUTH"
+```
+
+### 5. Test call against a draft or a specific revision
+
+**Before (v1):** two different endpoints.
+
+```bash
+# Draft
+curl -X POST "$BASE/agent/$AGENT_ID/drafts/$DRAFT/test-call" -H "$AUTH" \
+  -d '{"mode":"webcall"}'
+# Version
+curl -X POST "$BASE/agent/$AGENT_ID/versions/$VERSION_ID/test-call" -H "$AUTH" \
+  -d '{"mode":"webcall"}'
+```
+
+**After (v2):** one endpoint on the branch, differentiated by body.
+
+```bash
+# Draft on this branch
+curl -X POST "$BASE/agent/$AGENT_ID/branches/$BRANCH_ID/test-call" -H "$AUTH" \
+  -d '{"includeDraft": true, "mode": "webcall"}'
+# Specific revision on this branch
+curl -X POST "$BASE/agent/$AGENT_ID/branches/$BRANCH_ID/test-call" -H "$AUTH" \
+  -d '{"revisionId": "'$REVISION_ID'", "mode": "webcall"}'
+```
+
+## Handling the 409 response
+
+Deprecated endpoints return:
+
+```json
+{
+  "status": false,
+  "error_type": "versioning_v2_migration_required",
+  "errors": ["This endpoint is deprecated on the v2 branch model. See the migration guide for the v2 equivalent."]
+}
+```
+
+With header `Deprecation: true`.
+
+Client code should treat this as a `409` and route to the v2 equivalent from the table above. For automated tooling, the `error_type` field is the stable identifier.
