@@ -187,34 +187,37 @@ servers:
                 tracking turns client-side.
             keywords:
               type: string
-              example: "I:20,smiling:26"
+              example: "Blackwell:1,Jensen Huang:2"
               description: |
-                Boost recognition of specific words or phrases for this session.
-                Useful for product names, jargon, proper nouns, and other
-                domain-specific terms the model might otherwise mis-transcribe.
+                Boost recognition of specific words or phrases for this
+                session. Useful for product names, jargon, proper nouns, and
+                other domain-specific terms the model might otherwise
+                mis-transcribe.
 
-                **Format:** a single comma-separated string (not a JSON array).
-                Each entry is a word or phrase, optionally followed by
-                `:INTENSIFIER` — a numeric boost multiplier. Defaults to `1.0`
-                when omitted.
+                **Format:** a single comma-separated string (not a JSON
+                array). Each entry is a word or phrase, optionally followed
+                by `:INTENSIFIER`, a numeric boost multiplier that defaults
+                to `1.0` when omitted.
 
-                **Example:** `I:20,smiling:26`
+                **Example:** `Blackwell:1,Jensen Huang:2`
 
-                - Phrases can include spaces (`small language model:3.5`).
-                - Intensifier accepts integers or decimals (`2`, `2.5`, `0.5`).
+                - Phrases can include spaces (`small language model:2`).
+                - Intensifier accepts integers or decimals (`1`, `1.5`, `2`).
                 - Mixing entries with and without intensifiers is fine.
-                - Maximum 100 keywords per session.
+                - Keyword matching is case-sensitive. Provide the exact
+                  casing you want in the output.
+                - Up to 10,000 keywords per session.
 
-                **INTENSIFIER range:** `0` to `20`. Recommended value is `6`.
-                Higher values bias recognition more aggressively toward the
-                keyword, but also **increase the risk of hallucination and
-                repetition** in the transcript. Values of `10` or above are
-                not recommended — the model may insert the keyword even when
-                it was not spoken. Start around `3–6` and tune from there.
+                **INTENSIFIER guidance.** Default is `1.0`. Recommended
+                tuning range is `1` to `3`. Values above `5` push the model
+                into hallucination: it may insert the keyword even when it
+                was not spoken, or repeat it inside utterances. Start every
+                keyword at `1` and only raise it if the word is still being
+                missed.
 
                 **Wire format:** pass as a query-string parameter, URL-encoded.
                 `URLSearchParams` in JavaScript and `urlencode()` in Python
-                handle the encoding for you — pass the raw string, not a
+                handle the encoding for you. Pass the raw string, not a
                 JSON-encoded array.
 channels:
   transcription:
