@@ -185,52 +185,37 @@ servers:
               description: Enable speaker diarization to identify different speakers in the audio.
             keywords:
               type: string
-              description: 'Boost recognition of specific words or phrases for this session.
+              example: "Blackwell:1,Jensen Huang:2"
+              description: |
+                Boost recognition of specific words or phrases for this
+                session. Useful for product names, jargon, proper nouns, and
+                other domain-specific terms the model might otherwise
+                mis-transcribe.
 
-                Useful for product names, jargon, proper nouns, and other
-
-                domain-specific terms the model might otherwise mis-transcribe.
-
-                **Streaming (WebSocket) only** — not supported on the HTTP
-
+                **Streaming (WebSocket) only.** Not supported on the HTTP
                 `/pulse/get_text` endpoint.
 
+                **Format:** a single comma-separated string (not a JSON
+                array). Each entry is a word or phrase, optionally followed
+                by `:INTENSIFIER`, a numeric boost multiplier that defaults
+                to `1.0` when omitted.
 
-                **Format:** a single comma-separated string (not a JSON array).
+                **Example:** `Blackwell:1,Jensen Huang:2`
 
-                Each entry is a word or phrase, optionally followed by
-
-                `:INTENSIFIER` — a numeric boost multiplier. Defaults to `1.0`
-
-                when omitted.
-
-
-                **Example:** `I:20,smiling:26`
-
-
-                - Phrases can include spaces (`small language model:3.5`).
-
-                - Intensifier accepts integers or decimals (`2`, `2.5`, `0.5`).
-
+                - Phrases can include spaces (`small language model:2`).
+                - Intensifier accepts integers or decimals (`1`, `1.5`, `2`).
                 - Mixing entries with and without intensifiers is fine.
+                - Keyword matching is case-sensitive. Provide the exact
+                  casing you want in the output (`Blackwell`, not
+                  `blackwell`, if you want the brand name capitalized).
+                - Up to 10,000 keywords per session.
 
-                - Maximum 100 keywords per session.
-
-
-                **INTENSIFIER range:** `0` to `20`. Recommended value is `6`.
-
-                Higher values bias recognition more aggressively toward the
-
-                keyword, but also **increase the risk of hallucination and
-
-                repetition** in the transcript. Values of `10` or above are
-
-                not recommended — the model may insert the keyword even when
-
-                it was not spoken. Start around `3–6` and tune from there.
-
-                '
-              example: I:20,smiling:26
+                **INTENSIFIER guidance.** Default is `1.0`. Recommended
+                tuning range is `1` to `3`. Values above `5` push the model
+                into hallucination: it may insert the keyword even when it
+                was not spoken, or repeat it inside utterances. Start every
+                keyword at `1` and only raise it if the word is still being
+                missed.
             itn_normalize:
               type: string
               enum:
