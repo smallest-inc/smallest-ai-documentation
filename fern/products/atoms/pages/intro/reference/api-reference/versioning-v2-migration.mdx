@@ -180,3 +180,43 @@ Deprecated endpoints return:
 With header `Deprecation: true`.
 
 Client code should treat this as a `409` and route to the v2 equivalent from the table above. For automated tooling, the `error_type` field is the stable identifier.
+
+**Python:**
+
+```python
+import requests
+
+resp = requests.post(f"{BASE}/agent/{agent_id}/drafts", headers=headers, json={...})
+
+if resp.status_code == 409 and resp.json().get("error_type") == "versioning_v2_migration_required":
+    # Route to v2. See the endpoint mapping table above for your specific v1 call.
+    branches = requests.get(f"{BASE}/agent/{agent_id}/branches", headers=headers).json()["data"]["branches"]
+    main = next(b for b in branches if b["isDefault"])
+    resp = requests.put(f"{BASE}/agent/{agent_id}/branches/{main['_id']}/draft", headers=headers, json={...})
+
+resp.raise_for_status()
+```
+
+**Node:**
+
+```javascript
+const resp = await fetch(`${BASE}/agent/${agentId}/drafts`, {
+  method: "POST",
+  headers,
+  body: JSON.stringify({ /* ... */ }),
+});
+
+if (resp.status === 409) {
+  const body = await resp.json();
+  if (body.error_type === "versioning_v2_migration_required") {
+    // Route to v2. See the endpoint mapping table above.
+    const branches = (await fetch(`${BASE}/agent/${agentId}/branches`, { headers }).then(r => r.json())).data.branches;
+    const main = branches.find(b => b.isDefault);
+    await fetch(`${BASE}/agent/${agentId}/branches/${main._id}/draft`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ /* ... */ }),
+    });
+  }
+}
+```
