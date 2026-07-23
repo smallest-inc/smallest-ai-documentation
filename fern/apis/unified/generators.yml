@@ -101,7 +101,12 @@ groups:
             filename: client.py
           pydantic_config:
             skip_validation: true
-          exclude_types_from_init_exports: true
+          # Flipped from true to false 2026-07-23. The stopgap that kept this
+          # true was to work around missing sub-package __init__ type exports;
+          # the SDK-side .fernignore additions for webhooks + prompt_scoring
+          # made the workaround unnecessary. Confirmed safe on a box-verified
+          # regen ahead of 5.2.0 (no manual __init__ patches needed).
+          exclude_types_from_init_exports: false
           should_generate_websocket_clients: true
           extra_dependencies:
             fastapi: ">=0.115.0"
