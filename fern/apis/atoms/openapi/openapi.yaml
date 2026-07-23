@@ -12326,6 +12326,14 @@ components:
           type: string
           format: date-time
           nullable: true
+        publishedByName:
+          type: string
+          nullable: true
+          description: Display name of the publisher. `null` when unresolvable.
+        restoredFromLabel:
+          type: string
+          nullable: true
+          description: On a commit produced by restore, the label of the revision it copied.
         draftId:
           type: string
           nullable: true
@@ -12536,13 +12544,19 @@ components:
     PublishResult:
       type: object
       description: |
-        Result of publish or restore. `state: "committed"` returns HTTP `200`; `state: "scanning"` returns HTTP `202` and the commit happens on scan pass.
+        Result of publish or restore.
 
-        The response body carries only `state`. It does not include the new revision object or its ID. To get the ID of the just-committed revision, list the branch's revisions newest-first (`GET /agent/{id}/branches/{branchId}/revisions?limit=1`) after this call returns. On that revision doc, the field is `status` (not `state`), with values `published`, `draft`, or `archived`; the security-scan lifecycle is reflected on the nested `securityCheck.status`.
+        - `state: "committed"` (HTTP `200`) is returned when the commit is synchronous. This happens for restore (the source revision has already been scanned) and for publishes whose content does not need a fresh scan. The response includes the new revision object under `revision`.
+        - `state: "scanning"` (HTTP `202`) is returned when a security scan is deferred. In this case the response body carries only `state`. `revision` is absent, and clients must list the branch's revisions newest-first (`GET /agent/{id}/branches/{branchId}/revisions?limit=1`) to obtain the new revision ID. Then poll `GET /agent/{id}/branches/{branchId}/revisions/{revisionId}` until `revision.status` flips from any transient value to `"published"`. On the revision doc the lifecycle field is `status` (not `state`), and the security-scan sub-lifecycle is on the nested `securityCheck.status`.
       properties:
         state:
           type: string
           enum: [scanning, committed]
+        revision:
+          nullable: true
+          description: The newly committed revision. Populated on `state: "committed"`, absent on `state: "scanning"`.
+          allOf:
+            - $ref: "#/components/schemas/Revision"
 
     TestCallV2Request:
       type: object
