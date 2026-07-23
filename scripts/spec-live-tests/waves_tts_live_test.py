@@ -79,7 +79,7 @@ async def test_ws_streaming() -> tuple[bool, str]:
 
     The documented shape is `{status: "chunk", data: {audio: <base64>}}`
     until a final `{status: "complete"}`. See
-    fern/products/waves/versions/v4.0.0/text-to-speech/stream-tts.mdx.
+    fern/products/waves/pages/text-to-speech/stream-tts.mdx.
     """
     import base64
     headers = {"Authorization": f"Bearer {API_KEY}"}

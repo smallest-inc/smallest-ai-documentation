@@ -6,7 +6,7 @@ removed in the cookbook repo, the doc link silently 404s — link-check.py
 won't catch it because it only audits internal slugs.
 
 This script:
-  1. Walks v4 MDX (fern/products/{waves,atoms}/pages and v4.0.0 versions).
+  1. Walks v4 MDX (fern/products/{waves,atoms}/pages)).
   2. Extracts every `https://github.com/smallest-inc/cookbook/...` URL.
   3. Issues a small GET against each one (HEAD doesn't work for GitHub
      blob/tree URLs — they redirect HEAD to a login wall).
@@ -34,7 +34,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCAN_PATHS = [
     REPO_ROOT / "fern" / "products" / "waves" / "pages",
     REPO_ROOT / "fern" / "products" / "atoms" / "pages",
-    REPO_ROOT / "fern" / "products" / "waves" / "versions" / "v4.0.0",
+    REPO_ROOT / "fern" / "products" / "waves" / "pages",
 ]
 
 # Match cookbook URLs. Stop at whitespace, markdown bracket/paren

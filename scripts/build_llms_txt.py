@@ -38,7 +38,7 @@ OUTPUT_FILE = REPO_ROOT / "fern" / "llms.txt"
 # sections appear in the output.
 NAV_SOURCES: list[tuple[Path, str, str]] = [
     (REPO_ROOT / "fern" / "products" / "atoms.yml", "/voice-agents", "Voice Agents"),
-    (REPO_ROOT / "fern" / "products" / "waves" / "versions" / "v4.0.0.yml", "/models", "Models"),
+    (REPO_ROOT / "fern" / "products" / "waves.yml", "/models", "Models"),
 ]
 
 # Tabs whose pages are *not* surfaced in llms.txt. Reasons:
