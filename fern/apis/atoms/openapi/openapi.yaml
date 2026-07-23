@@ -10478,6 +10478,125 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
+  /dnc:
+    get:
+      summary: List DNC entries for the organization
+      x-fern-sdk-group-name: dnc
+      x-fern-sdk-method-name: list
+      description: |
+        Lists Do-Not-Call entries for the caller's organization with pagination, search,
+        and sort. Optionally scope to a single agent via `agentId`.
+
+        Each entry records a phone number that was flagged (via call outcome or manual
+        upload) as not-to-be-called for either the org or a specific agent.
+      tags:
+        - DNC
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Optional 24-character hex agent ID. When present, restricts results to entries
+            for this agent. Returns 400/404 if the ID isn't valid or doesn't belong to
+            the caller's org.
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Free-text search across phone numbers.
+        - name: sortField
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [createdAt, phoneNumber]
+            default: createdAt
+        - name: sortOrder
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "1"
+          description: Page number (string-encoded positive integer, ≥ 1).
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "50"
+          description: Page size (string-encoded; server clamps to 1–500).
+      responses:
+        "200":
+          description: Paginated DNC entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      entries:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            agentId:
+                              type: string
+                            orgId:
+                              type: string
+                            phoneNumber:
+                              type: string
+                            source:
+                              type: string
+                            detectedInCallId:
+                              type: string
+                              nullable: true
+                            createdAt:
+                              type: string
+                              format: date-time
+                            updatedAt:
+                              type: string
+                              format: date-time
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                          offset:
+                            type: integer
+                          total:
+                            type: integer
+                          totalPages:
+                            type: integer
+                          hasMore:
+                            type: boolean
+        "400":
+          $ref: "#/components/responses/BadRequestErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
 components:
   securitySchemes:
     BearerAuth:
@@ -13804,6 +13923,8 @@ components:
             $ref: "#/components/schemas/VersioningV2MigrationRequiredResponse"
 
 tags:
+  - name: DNC
+    description: Do-Not-Call registry entries scoped to the organization (optionally further scoped to a single agent). Entries are added automatically from call outcomes or manually via CSV upload.
   - name: Integrations
     description: Third-party platform integrations. Currently supports WebEngage — a customer engagement platform. Credentials are stored per organization as one or more integration sets.
   - name: Concurrency
