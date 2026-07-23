@@ -33,6 +33,10 @@ If every slot is full, new **outbound**, **webcall**, and **chat** requests are 
 
 ## Reserved vs. Shared
 
+<Warning>
+**Reserved concurrency is a guaranteed floor, not a cap.** An agent with a reservation still borrows from the shared pool once its reserved slots are full. A `reserved: 5` agent can run more than 5 concurrent calls when the shared pool has capacity. The ceiling is the org's total concurrency limit, not the reservation.
+</Warning>
+
 By default, every slot is **shared**: any agent can use any open slot, first-come first-served. That's fine for a single agent, or several agents of equal priority.
 
 If some agents matter more (say, support or payments vs. a low-priority internal test agent), you can **reserve** slots for them, per call type. Reserved slots are guaranteed to that agent and no one else can touch them, even while they sit idle.
@@ -107,6 +111,16 @@ Once you reserve for more than one agent, the top bar shows each agent's share o
 ## FAQ
 
 <AccordionGroup>
+  <Accordion title="Can my agent exceed its reserved concurrency?">
+    **Yes.** Reserved concurrency is a floor, not a ceiling. The dispatcher tries the agent's reserved slots first; once those are full, it falls back to the org's shared pool. So an agent with `reserved: 5` can run up to `5 + (shared pool size)` concurrent calls, bounded only by the org's total concurrency limit.
+
+    Set the reservation to guarantee minimum capacity for a high-priority agent, not to cap it. To hard-limit a single agent below the org total, this feature does not cover that case; talk to your account team.
+  </Accordion>
+  <Accordion title="Why does the Analytics dashboard show higher concurrency than my agent's reservation?">
+    The per-agent concurrency metric on the Analytics dashboard is the **total slots the agent held in that minute**: reserved slots plus any shared slots it acquired. So a `reserved: 5` agent that also borrowed 40 shared slots shows 45 for that minute, not 5. This is expected under the floor-not-cap model described above.
+
+    If the dashboard number looks abnormally high (peak values well above the org total, or sustained values that do not match your call volume), that can indicate stuck calls where `call_end` events were not emitted. Contact support with a specific `callId` window and we can investigate.
+  </Accordion>
   <Accordion title="What happens when the org hits its concurrency limit?">
     **Outbound, webcall, and chat** requests queue and are dispatched in order as slots free up. Nothing is dropped.
 
