@@ -27,20 +27,30 @@ Every agent starts with a `Main` branch. `Main` cannot be renamed or deleted. Wh
 
 ## Editing a branch
 
-Selecting a branch from the branch dropdown at the top of the editor puts you on that branch. Any change you make (prompt, voice, tools, model, phone numbers, post-call metrics) is saved as a **draft** on the current branch. The header switches to a `Draft` badge while unpublished changes exist.
+Selecting a branch from the branch dropdown at the top of the editor puts you on that branch. **Any edit to a setting or the prompt on that branch automatically switches it to Draft.** The header shows a `Draft` badge and a "You have unsaved changes" bar appears at the bottom with **Discard** and **Save** actions.
 
-<Frame caption="Editing a branch. Unpublished changes appear at the top of the version history.">
-  ![Draft state with Unpublished changes entry](../building-agents/images/agent-versioning-v2/07-draft-with-unpublished-changes.png)
+<Frame caption="Any edit converts the branch to Draft. The unsaved-changes bar surfaces Discard and Save.">
+  ![Auto-converts to draft on edit](../building-agents/images/agent-versioning-v2/12-any-edit-auto-converts-to-draft.png)
 </Frame>
 
 Every branch has **at most one open draft**. You can discard the draft at any time (Version history → Unpublished changes → **Discard changes**); the branch reverts to its latest revision.
+
+<Frame caption="Version history with an Unpublished changes entry above the committed revisions.">
+  ![Draft state with Unpublished changes entry](../building-agents/images/agent-versioning-v2/07-draft-with-unpublished-changes.png)
+</Frame>
 
 ## Publishing a draft
 
 Clicking **Publish** opens the Review changes modal with a side-by-side diff of the published revision vs the current draft. Add an optional **Version label** and click **Run checks and publish**.
 
 <Frame caption="Review changes. The diff shows what the publish will commit.">
-  ![Review changes modal](../building-agents/images/agent-versioning-v2/09-review-changes-diff.png)
+  ![Review changes modal](../building-agents/images/agent-versioning-v2/13-publish-review-diff.png)
+</Frame>
+
+**Security checks run on every publish.** The button switches to `Running security checks` while the scan is in progress. If the scan fails, the revision is **not** published; fix the flagged content in the draft and click Publish again. Only revisions that pass the scan land on the branch and become eligible for `Make live` or `Restore`.
+
+<Frame caption="Security check running as part of the publish flow.">
+  ![Running security checks](../building-agents/images/agent-versioning-v2/14-running-security-checks.png)
 </Frame>
 
 Publishing commits the draft as a new revision on the branch. Revisions are **immutable**: their config cannot be edited after publish. The revision counter (`Version 1`, `Version 2`, ...) is per-branch.
@@ -49,8 +59,8 @@ Publishing commits the draft as a new revision on the branch. Revisions are **im
 Publishing on the **live** branch pushes to production immediately. The Review modal shows a banner when this is the case.
 </Warning>
 
-<Frame caption="Published toast confirms the revision landed on this branch.">
-  ![Publish success](../building-agents/images/agent-versioning-v2/10-agent-editor-published.png)
+<Frame caption="Published. The Active badge sits on the branch's newest revision.">
+  ![Publish success](../building-agents/images/agent-versioning-v2/15-published-active-status.png)
 </Frame>
 
 ## Version history
@@ -73,7 +83,25 @@ Each row has:
 
 ## Reverting to an older revision
 
-Reverting **republishes** an older revision as a new revision at the head of the branch. History is preserved: the older revision keeps its ID, and a new revision is committed on top. If the branch you revert on is live, the revert ships to production immediately.
+Reverting **does not overwrite the older revision.** It takes that older revision's config as the base and publishes it as a **new revision** at the head of the branch. So if the branch has `Version 1`, `Version 2`, `Version 3` and you revert to `Version 1`, the branch ends up with `Version 1`, `Version 2`, `Version 3`, and a fresh `Version 4` whose content matches `Version 1`. `Version 4` becomes active and the earlier revisions keep their IDs.
+
+Open the Version history panel, click the three-dot menu on the revision you want to revert to, and choose **Revert to this version**.
+
+<Frame caption="Revert to this version option on an older revision.">
+  ![Revert menu on older version](../building-agents/images/agent-versioning-v2/16-revert-menu-on-older-version.png)
+</Frame>
+
+If the branch you're reverting on is **live**, the confirmation modal flags it explicitly. Confirming ships the new revision to production immediately.
+
+<Frame caption="Reverting on the Live branch publishes to production immediately.">
+  ![Revert live-branch confirmation](../building-agents/images/agent-versioning-v2/17-revert-live-branch-confirmation.png)
+</Frame>
+
+After confirming, Version history shows the new head revision (`Version 4` in the example below), annotated with "You reverted to Version 1". Original `Version 1`, `Version 2`, and `Version 3` remain in history at their original IDs.
+
+<Frame caption="Post-revert. Version 4 is Active with the reverted content; earlier revisions retained.">
+  ![Post-revert active](../building-agents/images/agent-versioning-v2/18-post-revert-v4-active.png)
+</Frame>
 
 ## Creating additional branches
 

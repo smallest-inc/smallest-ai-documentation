@@ -31,7 +31,9 @@ A few points worth internalizing before you touch the API:
 - Every agent starts with a `Main` branch, and `Main` is live on day one. `Main`'s `Version 1` is the config the agent serves.
 - Edits on any branch stack up as a single draft on that branch. You call `PUT .../draft` as many times as you want; each call merges into the same open draft.
 - Publish commits the draft as a revision. Revisions are immutable.
+- **Every publish runs a security scan.** If the scan fails, the revision is not committed and the branch head does not move. The response returns `409` (or leaves the revision in `scanning` state depending on timing); fix the draft and publish again.
 - Publishing on the live branch pushes to production immediately. Publish on a non-live branch first if you want to stage.
+- **Restore does not overwrite the older revision.** It takes that older revision's config and publishes it as a **new** revision at the head of the branch. So a branch with `v1, v2, v3` restored to `v1` ends up with `v1, v2, v3, v4`, where `v4`'s content matches `v1` and `v4` is the head.
 
 ---
 
