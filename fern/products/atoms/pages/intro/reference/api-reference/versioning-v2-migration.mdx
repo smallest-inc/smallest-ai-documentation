@@ -48,8 +48,8 @@ The SDK routes under `/sdk/agents/*` are unaffected by this migration.
 ## Timeline
 
 - **Launch day**: v1 write endpoints and v1 list reads begin returning `409`. Kept endpoints and the SDK routes continue to work. The v2 branch endpoints go live behind the same base URL.
-- **~1 month coexistence**: kept v1 endpoints continue to work so by-id reads and test-calls do not break.
-- **Sunset**: v1 endpoints are removed. Date is not yet fixed. This page and the [Deprecation Notices](/voice-agents/api-reference/deprecation-notices) page will carry the final sunset date once it lands, along with the `Sunset:` header on the affected endpoints.
+- **Coexistence window**: kept v1 endpoints (by-id reads + both test-calls) continue to work so existing integrations that store `versionId` values do not break. A v1 `versionId` equals its migrated `revisionId`, so by-id lookups continue to resolve.
+- **Sunset**: v1 endpoints are removed. **No removal date is published yet.** When the backend owner fixes a date, this page and the [Deprecation Notices](/voice-agents/api-reference/deprecation-notices) page will carry it, and the affected endpoints will start returning a `Sunset:` header (RFC 8594) with an RFC 7231 date.
 
 ## Worked examples
 
@@ -173,7 +173,9 @@ Deprecated endpoints return:
 {
   "status": false,
   "error_type": "versioning_v2_migration_required",
-  "errors": ["This endpoint is deprecated on the v2 branch model. See the migration guide for the v2 equivalent."]
+  "errors": [
+    "This endpoint is deprecated under the branch model. Use the /agents/:id/branches APIs — publish, make-live and config edits now happen on branches. If you are calling this via the MCP server, update the MCP tool to its branch-model version as well."
+  ]
 }
 ```
 

@@ -7694,9 +7694,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              description: Agent config partial. Must contain at least one recognized top-level field.
-              additionalProperties: true
+              $ref: "#/components/schemas/UpdateBranchDraftRequest"
       responses:
         "200":
           description: Draft updated.
@@ -7850,7 +7848,7 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    $ref: "#/components/schemas/RestoreRevisionResult"
+                    $ref: "#/components/schemas/PublishResult"
         "202":
           description: Security scan queued. Poll `GET /agent/{id}/branches/{branchId}/revisions` until the returned revision transitions to `committed`.
           content:
@@ -7862,7 +7860,7 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    $ref: "#/components/schemas/RestoreRevisionResult"
+                    $ref: "#/components/schemas/PublishResult"
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
@@ -8124,7 +8122,7 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    $ref: "#/components/schemas/RestoreRevisionResult"
+                    $ref: "#/components/schemas/PublishResult"
         "202":
           description: Security scan queued.
           content:
@@ -8136,7 +8134,7 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    $ref: "#/components/schemas/RestoreRevisionResult"
+                    $ref: "#/components/schemas/PublishResult"
         "400":
           $ref: "#/components/responses/BadRequestError"
         "401":
@@ -8230,15 +8228,19 @@ paths:
         - name: a
           in: query
           required: true
-          description: Left-hand side. Either a `revisionId` or `<branchId>:draft`.
+          description: Left-hand side. Either a `revisionId` (24-hex ObjectId) or the token `<branchId>:draft`.
           schema:
             type: string
+            minLength: 1
+            maxLength: 64
         - name: b
           in: query
           required: true
-          description: Right-hand side. Either a `revisionId` or `<branchId>:draft`.
+          description: Right-hand side. Either a `revisionId` (24-hex ObjectId) or the token `<branchId>:draft`.
           schema:
             type: string
+            minLength: 1
+            maxLength: 64
       responses:
         "200":
           description: Successful response.
@@ -12197,42 +12199,46 @@ components:
     # ── v2 branch model schemas ─────────────────────────────────────────
     Branch:
       type: object
-      description: An editable copy of an agent. Each branch has its own draft state and its own revision history.
+      description: An `AgentBranch` document. An editable copy of an agent with its own draft slot and revision chain.
       properties:
         _id:
           type: string
-          description: Branch ID (24-character MongoDB ObjectId).
-        agentId:
+          description: Branch ID (24-character ObjectId).
+        agent:
           type: string
-          description: Agent this branch belongs to.
+          description: ID of the agent this branch belongs to.
         name:
           type: string
           minLength: 1
           maxLength: 100
-          description: Human-readable branch name. Must be unique per agent. The name `Main` is reserved for the default branch and cannot be used for new branches.
+          description: Branch name (unique per agent among active branches). `main` is reserved for the default branch.
         isDefault:
           type: boolean
-          description: "True for the `Main` branch. Only one branch per agent has `isDefault: true`. The default branch cannot be renamed, deleted, or archived."
-        isLive:
-          type: boolean
-          description: "True when this branch is currently serving production traffic. Exactly one branch per agent has `isLive: true`."
-        isArchived:
-          type: boolean
-          description: "Archived branches cannot receive new drafts or be made live. Archive is reversible via `POST /agent/{id}/branches/{branchId}/live` when `isArchived: false` and a committed revision exists."
-        openDraftId:
+          description: "True for the seeded `main` branch. The default branch cannot be renamed or archived."
+        sourceBranchId:
           type: string
           nullable: true
-          description: "ID of the open draft on this branch, or `null` when no draft is open."
-        hasOpenDraft:
-          type: boolean
-          description: "Convenience mirror of `openDraftId != null`."
+          description: Head of the source branch at fork time. `null` for `main`.
+        sourceRevisionId:
+          type: string
+          nullable: true
+          description: Revision the branch was forked from. `null` for `main`.
         headRevisionId:
           type: string
           nullable: true
-          description: ID of the most recent committed revision on this branch. `null` on a freshly-created branch that has not yet published.
+          description: ID of the branch's latest committed revision. `null` until the first commit.
+        openDraftId:
+          type: string
+          nullable: true
+          description: ID of the branch's single open draft. `null` when no draft is open.
+        status:
+          type: string
+          enum: [active, archived]
+          description: Archived branches are hidden from list views and cannot receive draft edits or be made live.
         createdBy:
           type: string
-          description: User ID that created the branch.
+        updatedBy:
+          type: string
         createdAt:
           type: string
           format: date-time
@@ -12241,102 +12247,244 @@ components:
           format: date-time
 
     BranchSummary:
-      allOf:
-        - $ref: "#/components/schemas/Branch"
-        - type: object
-          description: Adds counts to `Branch` for listing views. Returned by `GET /agent/{id}/branches` and `GET /agent/{id}/branches/{branchId}`.
-          properties:
-            revisionCount:
-              type: integer
-              description: Total number of committed revisions on this branch.
-            lastPublishedAt:
-              type: string
-              format: date-time
-              nullable: true
-              description: Timestamp of the most recent committed revision, or `null` if the branch has never published.
+      type: object
+      description: Branch document plus derived fields used by list and detail views.
+      properties:
+        branch:
+          $ref: "#/components/schemas/Branch"
+        isLive:
+          type: boolean
+          description: True when the agent's live config points at this branch.
+        hasOpenDraft:
+          type: boolean
+        revisionsCount:
+          type: integer
+        headRevisionNumber:
+          type: integer
+          nullable: true
+
+    VersionBlocks:
+      type: object
+      description: ObjectId references to the `AgentConfigBlock` docs that make up a revision, one per config section.
+      properties:
+        workflow_prompt:
+          type: string
+        workflow_tools:
+          type: string
+        workflow_graph:
+          type: string
+        llm:
+          type: string
+        voice:
+          type: string
+        language:
+          type: string
+        call_handling:
+          type: string
+        detection:
+          type: string
+        analytics:
+          type: string
+        timeouts:
+          type: string
+        audio:
+          type: string
+        privacy:
+          type: string
+        widget:
+          type: string
+        playbooks:
+          type: string
+          description: Only present on revisions created after multi-agent playbooks shipped.
+
+    PromptScore:
+      type: object
+      nullable: true
+      description: Result of the prompt-scoring pass, if any.
+      properties:
+        overall_score:
+          type: number
+        overall_grade:
+          type: string
+        band:
+          type: string
+        estimated_ttft_overhead_ms:
+          type: number
+        scoredAt:
+          type: string
+          format: date-time
+        dimensions:
+          type: array
+          items:
+            type: object
+            properties:
+              tier:
+                type: integer
+              level:
+                type: string
+              evidence_span:
+                type: string
+              title:
+                type: string
+              description:
+                type: string
 
     Revision:
       type: object
-      description: An immutable snapshot of an agent's configuration, created when a draft is published on a branch. A revision's `_id` is stable and is what the v1 `versionId` maps to on migration.
+      description: |
+        An `AgentVersion` document. Represents either a committed revision (`status: published`, with `branch` + `revisionNumber`) or an in-progress draft revision (`status: draft`, with `draftId` + `draftRevision`). Fields that do not apply to a given row are `null`.
       properties:
         _id:
           type: string
-          description: Revision ID (equal to the v1 `versionId` for migrated versions).
-        agentId:
+        agent:
           type: string
-        branchId:
+        status:
           type: string
-          description: Branch this revision was committed on.
+          enum: [published, draft, archived]
+        branch:
+          type: string
+          nullable: true
+          description: Owning branch (v2). `null` on legacy rows until backfilled.
         revisionNumber:
           type: integer
-          description: Monotonic revision counter per branch, starting at 1.
+          nullable: true
+          description: Monotonic per-branch commit number. Only set on committed rows.
+        versionNumber:
+          type: integer
+          nullable: true
+          description: Legacy v1 published-version number. `null` for branch revisions and drafts.
         label:
           type: string
-          maxLength: 200
           nullable: true
-          description: Optional label set at publish time. Displayed as the revision's short name in the UI (`Version 1`, `Version 2`, ...).
-        state:
+        description:
           type: string
-          enum: [scanning, committed]
-          description: |
-            `scanning` means the security scan is still running. `committed` means the revision passed its scan and is available on the branch. `scanning` revisions are visible in history but cannot be restored or made live.
+          nullable: true
+        isPinned:
+          type: boolean
         publishedBy:
           type: string
-          description: User ID that published the revision.
+          nullable: true
         publishedAt:
           type: string
           format: date-time
-        changedSections:
-          type: array
-          items:
-            type: string
-          description: Config sections that changed between this revision and its predecessor (`prompt`, `voice`, `model`, `tools`, `post_call_analytics`, etc.). Empty on the first revision.
+          nullable: true
+        draftId:
+          type: string
+          nullable: true
+        draftName:
+          type: string
+          nullable: true
+        draftRevision:
+          type: integer
+          nullable: true
+        sourceVersionId:
+          type: string
+          nullable: true
+        blocks:
+          $ref: "#/components/schemas/VersionBlocks"
+        workflowType:
+          type: string
+          description: The `WorkflowType` enum for this revision.
+        parentVersion:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        activatedBy:
+          type: string
+          nullable: true
+        activatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        securityCheck:
+          type: object
+          nullable: true
+          description: Populated after publish. `null` on pre-feature versions.
+          properties:
+            status:
+              type: string
+              description: The `SecurityCheckStatus` enum.
+            reason:
+              type: string
+              nullable: true
+            triggeredAt:
+              type: string
+              format: date-time
+              nullable: true
+            completedAt:
+              type: string
+              format: date-time
+              nullable: true
+        pendingPublish:
+          type: object
+          nullable: true
+          description: Set while a publish is armed against this draft revision.
+          properties:
+            state:
+              type: string
+              enum: [active, cancelled]
+            startedBy:
+              type: string
+            startedAt:
+              type: string
+              format: date-time
+        restoredFromRevisionId:
+          type: string
+          nullable: true
+          description: On a commit produced by restore, the revision it copied.
+        sourceDraftId:
+          type: string
+          nullable: true
+        promptScore:
+          $ref: "#/components/schemas/PromptScore"
+        promptScoreStale:
+          type: boolean
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
 
     DraftDetail:
       type: object
       description: Returned by `GET /agent/{id}/branches/{branchId}/draft`.
       properties:
         latest:
-          type: object
-          description: The current in-progress draft config. Mirrors the agent-config shape sent to `PUT /agent/{id}/branches/{branchId}/draft`.
+          $ref: "#/components/schemas/Revision"
+        editCount:
+          type: integer
         editHistory:
           type: array
           items:
             type: object
             properties:
-              editedAt:
-                type: string
-                format: date-time
-              editedBy:
-                type: string
+              revision:
+                $ref: "#/components/schemas/Revision"
               changedSections:
                 type: array
                 items:
                   type: string
-          description: Ordered list of edits on the current draft, newest first.
-        editCount:
-          type: integer
-          description: Total number of edits on this draft.
 
     DiffChange:
       type: object
       properties:
         path:
           type: string
-          description: JSON pointer to the changed field (e.g. `/prompt`, `/voice/id`).
+          description: Dot-path to the changed leaf field.
         oldValue:
           nullable: true
-          description: Value on side `a`.
         newValue:
           nullable: true
-          description: Value on side `b`.
 
     DiffSection:
       type: object
       properties:
         section:
           type: string
-          description: Config section the changes belong to (`prompt`, `voice`, `model`, `tools`, `post_call_analytics`, etc.).
         changes:
           type: array
           items:
@@ -12350,7 +12498,6 @@ components:
           type: array
           items:
             type: string
-          description: Sections that are identical between the two references.
         diffs:
           type: array
           items:
@@ -12385,12 +12532,13 @@ components:
       properties:
         sourceBranchId:
           type: string
-          description: Branch to fork from. Must have at least one committed revision.
+          pattern: "^[a-f\\d]{24}$"
+          description: Branch to fork from. Its head revision must exist.
         name:
           type: string
           minLength: 1
           maxLength: 100
-          description: New branch name. Must be unique per agent. `Main` is reserved.
+          description: New branch name. Unique per agent among active branches. `main` is reserved.
 
     RenameBranchRequest:
       type: object
@@ -12402,6 +12550,18 @@ components:
           minLength: 1
           maxLength: 100
 
+    UpdateBranchDraftRequest:
+      type: object
+      description: |
+        Free-form agent config partial. Must carry at least one recognized config field (`workflow_prompt`, `llm`, `voice`, `language`, `call_handling`, `detection`, `analytics`, `timeouts`, `audio`, `privacy`, `widget`, `playbooks`, and their leaf fields). Any other top-level key is treated as a config field, except the reserved `expectedRevision` control below.
+      additionalProperties: true
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 0
+          description: |
+            Optimistic-concurrency control. The `draftRevision` the client's edit was based on. When present, the server runs a field-level conflict check and rejects with `409 DraftConflictError` if the same field was changed by another edit since. Omit for last-write-wins semantics (which is also how a client force-overwrites after a `409`).
+
     PublishBranchDraftRequest:
       type: object
       properties:
@@ -12409,51 +12569,90 @@ components:
           type: string
           maxLength: 200
           nullable: true
-          description: Optional short label to attach to the resulting revision.
+          description: Optional label saved on the committed revision.
 
-    RestoreRevisionResult:
+    PublishResult:
       type: object
-      description: Envelope returned by publish and restore.
+      description: |
+        Result of publish or restore. `state: "committed"` returns HTTP `200`; `state: "scanning"` returns HTTP `202` and the commit happens later on scan pass. `revision` is present in both.
       properties:
         state:
           type: string
-          enum: [committed, scanning]
+          enum: [scanning, committed]
         revision:
           $ref: "#/components/schemas/Revision"
 
     TestCallV2Request:
       type: object
+      description: |
+        Body for `POST /agent/{id}/branches/{branchId}/test-call`. When both `includeDraft` and `revisionId` are omitted, the branch's committed head is used.
       properties:
         includeDraft:
           type: boolean
-          description: When `true`, the test call uses the open draft config on the branch. Mutually exclusive with `revisionId`.
+          default: false
+          description: When `true`, the test call uses the branch's open draft. Mutually exclusive with `revisionId`.
         revisionId:
           type: string
-          description: "Test call against a specific committed revision on the branch. Mutually exclusive with `includeDraft: true`."
+          pattern: "^[a-f\\d]{24}$"
+          description: "Test against a specific committed revision on the branch. Mutually exclusive with `includeDraft: true`."
         mode:
           type: string
           enum: [webcall, chat, telephony]
           default: webcall
         toPhone:
           type: string
-          description: E.164-formatted number. Required when `mode` is `telephony`; omit for `webcall` and `chat`.
+          description: E.164-formatted number. Required when `mode` is `telephony`. Omit for `webcall` and `chat`.
 
     ConflictErrorResponse:
       type: object
+      description: |
+        Generic conflict body. `error_type` is a stable machine-readable discriminator (for example `branch_name_exists`, `source_has_no_commit`, `source_scanning`, `publish_in_progress`, `no_committed_revision`).
       properties:
         status:
           type: boolean
           example: false
         error_type:
           type: string
-          description: Machine-readable identifier for the conflict (e.g. `branch_name_exists`, `source_has_no_commit`, `source_scanning`, `publish_in_progress`).
         errors:
           type: array
           items:
             type: string
 
+    DraftConflictError:
+      type: object
+      description: |
+        Returned by `PUT /agent/{id}/branches/{branchId}/draft` when `expectedRevision` was sent and another edit changed one of the same leaf fields since. `errors` lists the conflicting leaf field paths. `data.conflict` carries the resolution context: the client's expected revision, the current draft revision, and per-field diffs.
+      required:
+        - status
+        - errors
+      properties:
+        status:
+          type: boolean
+          example: false
+        errors:
+          type: array
+          items:
+            type: string
+        data:
+          type: object
+          properties:
+            conflict:
+              type: object
+              properties:
+                expectedRevision:
+                  type: integer
+                latestRevision:
+                  type: integer
+                diffs:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+
     LockedErrorResponse:
       type: object
+      description: |
+        Config-freeze body. Returned on write endpoints during a maintenance window (`AGENT_CONFIG_FROZEN`). Reads and test-calls pass.
       properties:
         status:
           type: boolean
@@ -12468,6 +12667,8 @@ components:
 
     VersioningV2MigrationRequiredResponse:
       type: object
+      description: |
+        Returned by deprecated v1 versioning writes and list reads when `ENABLE_BRANCH_MODEL` is on. Response header carries `Deprecation: true`. The `error_type` value is a stable discriminator.
       properties:
         status:
           type: boolean
@@ -12479,7 +12680,6 @@ components:
           type: array
           items:
             type: string
-          example: ["This endpoint is deprecated on the v2 branch model. See the migration guide for the v2 equivalent."]
     # ── end v2 branch model schemas ─────────────────────────────────────
 
     WebhookAgent:
