@@ -1,229 +1,170 @@
 ---
 title: "Agent Versioning"
 sidebarTitle: "Versioning"
-subtitle: "Prompt, Tools, Voice, Language, Post call metrics, and more are managed as **versions**. You edit in isolated drafts, publish drafts as new versions, and activate the version you want live."
-description: "Edit agent config safely with drafts, published versions, and rollback."
+subtitle: "Every agent has one or more **branches**. You edit a branch as a **draft**, publish the draft as a **revision**, and make the branch you want to serve traffic **live**."
+description: "Manage agent config with branches, drafts, and immutable revisions."
 slug: /voice-agents/platform/create-agent/agent-settings/versioning
 ---
 
-## Core Concepts
+Users can create editable copies of an agent. Every editable copy is a **branch**. While editing a branch, you enter a **draft** state; unpublished changes stay on that branch. Clicking **Publish** commits those changes as a new **revision** on the branch. Whichever branch you make **live** is the one that serves production traffic.
+
+<Note>
+**Migrating from the v1 API?** The versioning API moved to a branch-and-revision model. **Live campaigns and existing agents are not affected**: the dashboard flow above continues to work as-is, and calls in progress or scheduled keep running against whichever revision is currently live. The migration only applies to code that directly calls `/agent/{id}/drafts/*` or `/agent/{id}/versions/*`. See the [v1 → v2 migration guide](/voice-agents/deprecations/agent-versioning-migration) for the endpoint-by-endpoint mapping.
+</Note>
+
+## Concepts
 
 | Concept | Description |
 |---|---|
-| **Version** | An immutable snapshot of agent config. Only metadata (label, description, pin) can change after publish. |
-| **Active version** | The single version currently serving calls. Every agent has exactly one. |
-| **Draft** | A mutable workspace forked from a version or from another draft. Edits are auto-saved and do not affect live calls. |
-| **Revision** | Each edit inside a draft increments a revision counter, giving you a save history per draft. |
+| **Branch** | An editable copy of the agent. Every agent has a `Main` branch by default. You can create more branches from any branch that has at least one committed revision. |
+| **Draft** | The in-progress edits on a branch. Every branch has at most one open draft. Drafts auto-save as you type and can be discarded. |
+| **Revision** | An immutable snapshot of the agent config, created when you publish a draft. Revisions belong to exactly one branch. The `Version 1`, `Version 2`, ... labels in the UI are revision numbers per branch. |
+| **Live branch** | The single branch designated to serve production calls. Exactly one branch is live per agent at any moment. Making another branch live is a one-click switch. |
+| **Active revision** | The specific revision currently serving traffic. It is always the **head revision of the live branch** and shows the `Active` badge in the Version history panel. It is not set separately: publish a new revision on the live branch and the head moves; make another branch live and the head of that branch becomes the active revision. |
 
-When you open an older or non-active version, the editor is **read-only** — the only way to change it is to create a draft from it.
+## The `Main` branch
 
-<Frame caption="Read-only view. Editing requires a draft.">
-  ![Create a draft to edit](../building-agents/images/agent-versioning/01-create-draft-modal.png)
+Every agent starts with a `Main` branch. `Main` cannot be renamed or deleted. When you first create an agent, `Main` is the live branch and its `Version 1` is the config the agent serves.
+
+<Frame caption="A fresh agent. Main is the only branch and is Active.">
+  ![Branches page with Main only](../building-agents/images/agent-versioning-v2/01-branches-empty.png)
 </Frame>
 
-## Creating a Draft
+## Editing a branch
 
-Drafts can be forked from either a published version or another draft:
+Selecting a branch from the branch dropdown at the top of the editor puts you on that branch. **Any edit to a setting or the prompt on that branch automatically switches it to Draft.** The header shows a `Draft` badge and a "You have unsaved changes" bar appears at the bottom with **Discard** and **Save** actions.
 
-- From the **active version** — click **Create Draft** on a read-only version.
-- From any **older version** — open the Version history panel, then **New draft** next to the version.
-- From an **existing draft** — hover a draft in the Drafts panel and click **New draft** to fork it.
-
-<Frame caption="Fork a new draft from an existing draft.">
-  ![New draft from draft](../building-agents/images/agent-versioning/08-drafts-new-draft-hover.png)
+<Frame caption="Any edit converts the branch to Draft. The unsaved-changes bar surfaces Discard and Save.">
+  ![Auto-converts to draft on edit](../building-agents/images/agent-versioning-v2/12-any-edit-auto-converts-to-draft.png)
 </Frame>
 
-Once the draft is created, the agent header switches from `V1 (Read-only)` to `Draft #N` and every field in the editor becomes editable.
+Every branch has **at most one open draft**. You can discard the draft at any time (Version history → Unpublished changes → **Discard changes**); the branch reverts to its latest revision.
 
-<Frame caption="Draft #2-ce62 is now editable. Edits auto-save with a revision counter.">
-  ![Draft editable](../building-agents/images/agent-versioning/02-editing-draft.png)
+<Frame caption="Version history with an Unpublished changes entry above the committed revisions.">
+  ![Draft state with Unpublished changes entry](../building-agents/images/agent-versioning-v2/07-draft-with-unpublished-changes.png)
 </Frame>
 
-<Tip>
-  Drafts are private scratch space. Multiple drafts can exist in parallel — for example, one experimenting with a new voice and another tuning the prompt.
-</Tip>
+## Publishing a draft
 
-## Browsing Versions and Drafts
+Clicking **Publish** opens the Review changes modal with a side-by-side diff of the published revision vs the current draft. Add an optional **Version label** and click **Run checks and publish**.
 
-The version switcher at the top of the editor has two tabs:
-
-<Tabs>
-  <Tab title="Version history">
-    Every published version, newest first. The currently-active one is tagged **Active**. Older versions show a **Restore** action; the active one shows a **New draft** link.
-    <Frame caption="Version history. V1 is active.">
-      ![Version history](../building-agents/images/agent-versioning/03-version-history.png)
-    </Frame>
-  </Tab>
-  <Tab title="Drafts">
-    All open drafts for this agent, with their source version and a revision counter. Drafts persist until discarded or published.
-    <Frame caption="Two drafts, both forked from V1.">
-      ![Drafts panel](../building-agents/images/agent-versioning/04-drafts-panel.png)
-    </Frame>
-  </Tab>
-</Tabs>
-
-## Comparing Versions
-
-Use **Compare versions** to see exactly what changed between any two snapshots — published versions or drafts.
-
-<Steps>
-  <Step title="Pick a base and a comparison">
-    Both dropdowns list all published versions and all open drafts.
-    <Frame>
-      ![Select versions to compare](../building-agents/images/agent-versioning/05-compare-versions-select.png)
-    </Frame>
-  </Step>
-  <Step title="Review the diff">
-    Sections are shown only if they changed. Red is removed content, green is added. The Workflow Prompt section shows a line-by-line diff:
-    <Frame>
-      ![Prompt diff](../building-agents/images/agent-versioning/06-compare-versions-prompt-diff.png)
-    </Frame>
-  </Step>
-  <Step title="Inspect config sections">
-    LLM model, voice config, and language settings each render as their own grouped diff:
-    <Frame>
-      ![Config diff](../building-agents/images/agent-versioning/07-compare-versions-config-diff.png)
-    </Frame>
-  </Step>
-</Steps>
-
-## Publishing a Draft
-
-When a draft is ready, click **Publish** in the top right. The Review Changes dialog shows the diff against the current active version and asks for a label + description.
-
-<Frame caption="Review diff, label the version, and choose whether to activate on publish.">
-  ![Review Changes](../building-agents/images/agent-versioning/09-review-changes-publish.png)
+<Frame caption="Review changes. The diff shows what the publish will commit.">
+  ![Review changes modal](../building-agents/images/agent-versioning-v2/13-publish-review-diff.png)
 </Frame>
 
-| Field | Required | Description |
-|---|---|---|
-| **Version label** | Yes | Short human-readable name (e.g., "Version 2 with Hindi"). |
-| **Description** | No | Longer note about what changed and why. |
-| **Activate after publishing** | Default on | When enabled, the new version immediately takes over live calls. |
+**Security checks run on every publish.** The button switches to `Running security checks` while the scan is in progress. If the scan fails, the revision is **not** published; fix the flagged content in the draft and click Publish again. Only revisions that pass the scan land on the branch and become eligible for `Make live` or `Restore`.
 
-After publishing, the draft is removed and the new version appears in the Version history. If you chose to activate, it also becomes the new `Active` entry. The previous active version gets a **Restore** action.
-
-<Frame caption="V2 is now active. V1 can still be restored.">
-  ![After publish](../building-agents/images/agent-versioning/10-after-publish-v2-active.png)
+<Frame caption="Security check running as part of the publish flow.">
+  ![Running security checks](../building-agents/images/agent-versioning-v2/14-running-security-checks.png)
 </Frame>
 
-## Restoring an Older Version
-
-Click **Restore** next to an older version to set it active again. The currently-active version is not deleted — you can swap back any time. Restoring never modifies config; it just changes which version serves live calls.
-
-## Managing Versions via API
-
-Every action in the UI is available through the public API.
-
-<Tip>
-  All examples assume `BASE="https://api.smallest.ai/atoms/v1"` and `API_KEY` is set in your environment.
-</Tip>
-
-### Full flow — edit, publish, activate
-
-```python
-import os
-import requests
-
-API_KEY = os.environ["SMALLEST_API_KEY"]
-AGENT_ID = "YOUR_AGENT_ID"
-BASE = "https://api.smallest.ai/atoms/v1"
-HEADERS = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
-
-# 1. Read the active version
-agent = requests.get(f"{BASE}/agent/{AGENT_ID}", headers=HEADERS).json()
-active_version_id = agent["data"]["activeVersionId"]
-
-# 2. Fork a draft from the active version
-draft = requests.post(
-    f"{BASE}/agent/{AGENT_ID}/drafts",
-    headers=HEADERS,
-    json={"sourceVersionId": active_version_id, "draftName": "tune-prompt"},
-).json()
-draft_id = draft["data"]["draftId"]
-
-# 3. Update fields on the draft (any subset is allowed)
-requests.patch(
-    f"{BASE}/agent/{AGENT_ID}/drafts/{draft_id}/config",
-    headers=HEADERS,
-    json={
-        "singlePromptConfig": {
-            "prompt": "You are a helpful assistant..."
-        },
-        "synthesizer": {
-            "voiceConfig": {"model": "waves_lightning_v3_1", "voiceId": "nyah"},
-            "speed": 1.2,
-        },
-    },
-).raise_for_status()
-
-# 4. Publish the draft as a new version
-published = requests.post(
-    f"{BASE}/agent/{AGENT_ID}/drafts/{draft_id}/publish",
-    headers=HEADERS,
-    json={"label": "v2 - friendlier prompt", "description": "Softened tone"},
-).json()
-version_id = published["data"]["_id"]
-
-# 5. Activate the new version (publish does NOT auto-activate, even with `activate: True`)
-# A security check runs immediately after publish; wait ~6 s for it to complete.
-import time
-time.sleep(6)
-requests.patch(
-    f"{BASE}/agent/{AGENT_ID}/versions/{version_id}/activate",
-    headers=HEADERS,
-).raise_for_status()
-print("New active version:", version_id)
-```
-
-### Common operations
-
-| Operation | Method + Path |
-|---|---|
-| List drafts | `GET /agent/{id}/drafts` |
-| Fork a draft | `POST /agent/{id}/drafts` with `sourceVersionId` or `sourceDraftId` |
-| Rename a draft | `PATCH /agent/{id}/drafts/{draftId}` |
-| Discard a draft | `DELETE /agent/{id}/drafts/{draftId}` |
-| Update draft config | `PATCH /agent/{id}/drafts/{draftId}/config` |
-| Diff draft vs version | `GET /agent/{id}/drafts/{draftId}/diff?versionId=...` |
-| Publish a draft | `POST /agent/{id}/drafts/{draftId}/publish` (creates a new version; does **not** activate — call activate explicitly) |
-| List published versions | `GET /agent/{id}/versions` |
-| Get one version | `GET /agent/{id}/versions/{versionId}` |
-| Diff two versions | `GET /agent/{id}/versions/diff?baseId=...&compareId=...` |
-| Activate a version | `PATCH /agent/{id}/versions/{versionId}/activate` (security check runs immediately after publish; wait ~6 s if you just published) |
-| Update version metadata | `PATCH /agent/{id}/versions/{versionId}` (label, description, isPinned) |
-| Archive (delete) an agent | `DELETE /agent/{id}/archive` (note: `/archive` suffix; plain `DELETE /agent/{id}` returns 404) |
-
-See the full schema in the [API Reference](/atoms/api-reference).
-
-### Reading active config
-
-`GET /agent/{id}` returns the agent document with the active version's resolved config merged under `_resolvedConfig`:
-
-```bash
-curl -H "Authorization: Bearer $SMALLEST_API_KEY" \
-  "$BASE/agent/$AGENT_ID" \
-  | jq '.data | {activeVersionId, prompt: ._resolvedConfig.prompt, tools: ._resolvedConfig.tools, analytics: ._resolvedConfig.postCallAnalyticsConfig}'
-```
-
-<Note>
-  `GET /agent/{id}/workflow` returns `{prompt, tools}` for the active version only. The `versionId` query parameter on this endpoint is currently ignored — to inspect a non-active version's config, call `GET /agent/{id}/versions/{versionId}` instead.
-</Note>
+Publishing commits the draft as a new revision on the branch. Revisions are **immutable**: their config cannot be edited after publish. The revision counter (`Version 1`, `Version 2`, ...) is per-branch.
 
 <Warning>
-  `PATCH /workflow/{id}` still works but **bypasses versioning**. It writes directly to the legacy workflow document: the change is not captured as a version, and any field missing from the PATCH payload can be silently wiped. On a versioned agent, always go through `PATCH /agent/{id}/drafts/{draftId}/config` and publish.
+Publishing on the **live** branch pushes to production immediately. The Review modal shows a banner when this is the case.
 </Warning>
 
-## Related
+<Frame caption="Published. The Active badge sits on the branch's newest revision.">
+  ![Publish success](../building-agents/images/agent-versioning-v2/15-published-active-status.png)
+</Frame>
 
-<Card title="Versioning Lifecycle (Developer Guide)" href="/atoms/developer-guide/build/agent-crews/versioning-lifecycle">
-  Same flow in curl + Python with copy-pasteable snippets.
-</Card>
-<CardGroup cols={2}>
-  <Card title="Post-Call Metrics" href="/voice-agents/platform/create-agent/agent-settings/post-call-metrics">
-    Configure metrics through the draft flow.
-  </Card>
-  <Card title="API Reference" href="/atoms/api-reference">
-    Full list of draft and version endpoints.
-  </Card>
-</CardGroup>
+## Version history
+
+The Version history panel (clock icon, top-right of the editor) lists every revision on the current branch, newest first, with the currently-active revision marked **Active**.
+
+<Frame caption="Version history for the current branch. Active is the revision serving traffic.">
+  ![Version history list](../building-agents/images/agent-versioning-v2/11-version-history-list.png)
+</Frame>
+
+Each row has:
+
+- **View changes**: opens the diff against the previous revision.
+- **View edit history**: shows who edited what and when.
+- **Copy version ID**: copies the revision's ID. Use this ID with the API (see [Managing versions via API](#managing-versions-via-api)).
+
+<Frame caption="Copy the revision's ID for API use.">
+  ![Copy version ID](../building-agents/images/agent-versioning-v2/08-copy-version-id.png)
+</Frame>
+
+## Reverting to an older revision
+
+Reverting **does not overwrite the older revision.** It takes that older revision's config as the base and publishes it as a **new revision** at the head of the branch. So if the branch has `Version 1`, `Version 2`, `Version 3` and you revert to `Version 1`, the branch ends up with `Version 1`, `Version 2`, `Version 3`, and a fresh `Version 4` whose content matches `Version 1`. `Version 4` becomes active and the earlier revisions keep their IDs.
+
+Open the Version history panel, click the three-dot menu on the revision you want to revert to, and choose **Revert to this version**.
+
+<Frame caption="Revert to this version option on an older revision.">
+  ![Revert menu on older version](../building-agents/images/agent-versioning-v2/16-revert-menu-on-older-version.png)
+</Frame>
+
+If the branch you're reverting on is **live**, the confirmation modal flags it explicitly. Confirming ships the new revision to production immediately.
+
+<Frame caption="Reverting on the Live branch publishes to production immediately.">
+  ![Revert live-branch confirmation](../building-agents/images/agent-versioning-v2/17-revert-live-branch-confirmation.png)
+</Frame>
+
+After confirming, Version history shows the new head revision (`Version 4` in the example below), annotated with "You reverted to Version 1". Original `Version 1`, `Version 2`, and `Version 3` remain in history at their original IDs.
+
+<Frame caption="Post-revert. Version 4 is Active with the reverted content; earlier revisions retained.">
+  ![Post-revert active](../building-agents/images/agent-versioning-v2/18-post-revert-v4-active.png)
+</Frame>
+
+## Creating additional branches
+
+Click **Create branch** on the Branches page to fork a new branch from any branch that has at least one committed revision. The default source is `Main`.
+
+<Frame caption="Create branch modal. Pick a name and the source branch.">
+  ![Create branch modal](../building-agents/images/agent-versioning-v2/03-create-branch-modal.png)
+</Frame>
+
+<Frame caption="Naming the new branch.">
+  ![Create branch filled](../building-agents/images/agent-versioning-v2/04-create-branch-filled.png)
+</Frame>
+
+Branch names must be unique per agent. `Main` is reserved.
+
+## Making a branch live
+
+Only one branch per agent is live at a time. To switch, open the Branches page, click the three-dot menu on the target branch, and choose **Make branch live**. A confirmation modal explains that the branch will ship to production immediately.
+
+<Frame caption="Making a branch live. Traffic switches on confirm.">
+  ![Make branch live modal](../building-agents/images/agent-versioning-v2/05-make-branch-live.png)
+</Frame>
+
+<Note>
+A branch can be made live only if it has at least one committed revision that passed the security scan. Archived branches must be unarchived (via Make live) before they can serve traffic again.
+</Note>
+
+## Deleting branches
+
+Non-live, non-`Main` branches can be deleted from the three-dot menu. Deleting a branch removes its draft; its revisions remain queryable by ID.
+
+<Frame caption="The active branch can't be deleted. Make another branch live first.">
+  ![Active branch cannot be deleted](../building-agents/images/agent-versioning-v2/06-active-branch-cant-delete.png)
+</Frame>
+
+Two guardrails:
+
+- **`Main` cannot be deleted.** Rename another branch to serve a different role; `Main` always exists.
+- **The live branch cannot be deleted.** Make another branch live first.
+
+## Managing versions via API
+
+The full v2 API is documented under **Agent Versioning: Branches** and **Agent Versioning: Revisions** in the API Reference. Common operations:
+
+| Operation | Endpoint |
+|---|---|
+| List branches | `GET /agent/{id}/branches` |
+| Create a branch | `POST /agent/{id}/branches` |
+| Write to the open draft on a branch | `PUT /agent/{id}/branches/{branchId}/draft` |
+| Publish the draft | `POST /agent/{id}/branches/{branchId}/draft/publish` |
+| Make a branch live | `POST /agent/{id}/branches/{branchId}/live` |
+| List revisions on a branch | `GET /agent/{id}/branches/{branchId}/revisions` |
+| Restore an older revision | `POST /agent/{id}/branches/{branchId}/revisions/{revisionId}/restore` |
+| Diff two revisions or drafts | `GET /agent/{id}/diff?a=...&b=...` |
+| Start a test call | `POST /agent/{id}/branches/{branchId}/test-call` |
+
+For a step-by-step SDK/curl walkthrough, see the [versioning lifecycle guide](/voice-agents/developer-guide/build/agent-crews/versioning-lifecycle).
+
+<Info>
+The v1 endpoints (`/agent/{id}/drafts/*` and `/agent/{id}/versions/*` writes and list reads) are deprecated. Existing integrations should follow the [v1 → v2 migration guide](/voice-agents/deprecations/agent-versioning-migration). By-id reads and test-calls on v1 paths continue to work as-is because a v1 `versionId` equals its migrated `revisionId`.
+</Info>

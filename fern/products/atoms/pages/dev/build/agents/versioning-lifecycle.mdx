@@ -1,15 +1,15 @@
 ---
 title: "Versioning Lifecycle"
 sidebarTitle: "Versioning Lifecycle"
-description: "Create, edit, publish, and activate agent versions from code — the full lifecycle in curl and Python."
+description: "Create, edit, publish, and go live with an agent config through the branch API. Full lifecycle in curl and Python."
 ---
 
-Every Atoms agent's runtime config — prompt, tools, voice, language, post-call metrics — is managed as **versions**. You don't edit the live config directly; you fork a **draft**, change what you need, publish it as a new version, and activate that version. This guide walks the full lifecycle from code.
+Every Atoms agent's runtime config (prompt, tools, voice, language, post-call metrics) is managed as **revisions** on **branches**. You edit a branch as a draft, publish the draft as a new revision, and make the branch you want live. This guide walks the full lifecycle from code.
 
-For the dashboard equivalent and a deeper conceptual overview, see [Agent Versioning](/voice-agents/platform/create-agent/agent-settings/versioning).
+For the dashboard equivalent and a deeper conceptual overview, see [Agent Versioning](/voice-agents/platform/create-agent/agent-settings/versioning). For an endpoint-by-endpoint mapping from the v1 API, see the [v1 to v2 migration guide](/voice-agents/deprecations/agent-versioning-migration).
 
 <Note>
-  All examples assume `BASE="https://api.smallest.ai/atoms/v1"` and `SMALLEST_API_KEY` is set in your environment.
+All examples assume `BASE="https://api.smallest.ai/atoms/v1"` and `SMALLEST_API_KEY` is set in your environment.
 </Note>
 
 ---
@@ -17,17 +17,25 @@ For the dashboard equivalent and a deeper conceptual overview, see [Agent Versio
 ## The flow
 
 ```
-1. Create the agent              POST   /agent
-2. Read its current version      GET    /agent/{agentId}
-3. Fork a draft                  POST   /agent/{agentId}/drafts
-4. Edit the draft                PATCH  /agent/{agentId}/drafts/{draftId}/config
-5. Publish the draft             POST   /agent/{agentId}/drafts/{draftId}/publish
-6. Activate the new version      PATCH  /agent/{agentId}/versions/{versionId}/activate
-7. (Optional) place a call       POST   /conversation/outbound
-8. Verify the active config      GET    /agent/{agentId}
+1. Create the agent               POST   /agent
+2. Find the Main branch           GET    /agent/{agentId}/branches
+3. Write to the branch's draft    PUT    /agent/{agentId}/branches/{branchId}/draft
+4. Publish the draft              POST   /agent/{agentId}/branches/{branchId}/draft/publish
+5. (Optional) test call           POST   /agent/{agentId}/branches/{branchId}/test-call
+6. Make the branch live           POST   /agent/{agentId}/branches/{branchId}/live
+7. Place a real call              POST   /conversation/outbound
 ```
 
-Steps 5 and 6 are separate. **`POST .../publish` does not activate the new version, even if you pass `activate: true` in the body.** Always call activate explicitly.
+A few points worth internalizing before you touch the API:
+
+- Every agent starts with a `Main` branch, and `Main` is live on day one. `Main`'s `Version 1` is the config the agent serves.
+- Edits on any branch stack up as a single draft on that branch. You call `PUT .../draft` as many times as you want; each call merges into the same open draft.
+- **Optimistic concurrency**: pass `expectedRevision: <draftRevision>` on `PUT .../draft` to get a field-level conflict check. If another edit changed the same leaf field since, the server returns `409` with a `DraftConflictError` body listing the conflicting paths. Omit `expectedRevision` for last-write-wins.
+- Publish commits the draft as a revision. Revisions are immutable.
+- **Every publish runs a security scan.** If the draft already passed (a re-publish) or the workflow type is non-scannable, the commit happens synchronously and you get `200` with `state: "committed"`. Otherwise the scan is armed and you get `202` with `state: "scanning"`; commit happens on scan pass. A `FAILED` draft is rejected with `409` (edit and re-publish).
+- Publishing on the live branch pushes to production immediately. Publish on a non-live branch first if you want to stage.
+- **Restore does not touch the draft slot.** It takes an older revision's config and publishes it as a **new** revision at the head of the branch. So a branch with `v1, v2, v3` restored to `v1` ends up with `v1, v2, v3, v4`, where `v4`'s content matches `v1` and `v4` is the head. If the source revision's security check failed or errored, restore is rejected with `403`.
+- **Test-call target**: send `includeDraft: true` to test the open draft, `revisionId` to test a specific committed revision, or omit both to test the branch's committed head.
 
 ---
 
@@ -38,173 +46,196 @@ export BASE=https://api.smallest.ai/atoms/v1
 export AUTH="Authorization: Bearer $SMALLEST_API_KEY"
 export CT="Content-Type: application/json"
 
-# 1. Create the agent. `language` is optional, but if you pass it the
-#    `switching` object is required (otherwise the request rejects with
-#    400 "Invalid Input: Required").
+# 1. Create the agent.
 AGENT_ID=$(curl -s -X POST "$BASE/agent" -H "$AUTH" -H "$CT" \
   -d '{"name": "lifecycle-demo", "language": {"switching": {"isEnabled": false}}}' \
   | jq -r '.data')
 echo "agent: $AGENT_ID"
 
-# 2. Read the auto-populated active version id.
-ACTIVE_VERSION_ID=$(curl -s "$BASE/agent/$AGENT_ID" -H "$AUTH" \
-  | jq -r '.data.activeVersionId')
+# 2. Find the Main branch. Each item in .data.branches is a BranchSummary
+#    wrapper: {branch, isLive, hasOpenDraft, revisionsCount, headRevisionNumber}.
+#    isDefault sits on the inner .branch, along with the branch _id.
+MAIN_BRANCH_ID=$(curl -s "$BASE/agent/$AGENT_ID/branches" -H "$AUTH" \
+  | jq -r '.data.branches[] | select(.branch.isDefault==true) | .branch._id')
+echo "main branch: $MAIN_BRANCH_ID"
 
-# 3. Fork a draft from the active version. The body must include either
-#    `sourceVersionId` or `sourceDraftId` — an empty body returns 400.
-DRAFT_ID=$(curl -s -X POST "$BASE/agent/$AGENT_ID/drafts" -H "$AUTH" -H "$CT" \
-  -d "{\"sourceVersionId\": \"$ACTIVE_VERSION_ID\"}" \
-  | jq -r '.data.draftId')
-
-# 4. Patch the draft's config. Any subset of fields is allowed.
-curl -s -X PATCH "$BASE/agent/$AGENT_ID/drafts/$DRAFT_ID/config" \
+# 3. Write to the branch's draft. This upserts the open draft; if there is no
+#    open draft, one is created. You can call this multiple times to build up
+#    the draft before publishing.
+#
+# The body uses the same camelCase field names you see on GET /agent
+# (globalPrompt, firstMessage, synthesizer, language, etc.). The server maps
+# these into internal config-block sections (workflow_prompt, llm, voice, ...)
+# for you; you don't send those section names directly.
+curl -s -X PUT "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/draft" \
   -H "$AUTH" -H "$CT" \
-  -d '{"firstMessage": "Hello, this is the lifecycle demo agent."}' \
-  > /dev/null
+  -d '{
+        "globalPrompt": "You are a friendly receptionist. Book appointments and answer questions.",
+        "firstMessage": "Hi, how can I help?"
+      }' | jq
 
-# 5. Publish the draft. Returns the new version id.
-VERSION_ID=$(curl -s -X POST "$BASE/agent/$AGENT_ID/drafts/$DRAFT_ID/publish" \
+# 4. Publish the draft. Optional label shows in the UI as the revision name.
+#    The publish response carries only `state` (scanning or committed); it does
+#    not include the new revision ID. Fetch the newest revision on the branch
+#    to get its ID.
+PUBLISH_RESP=$(curl -s -X POST "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/draft/publish" \
   -H "$AUTH" -H "$CT" \
-  -d '{"label": "v2 - greeting added"}' \
-  | jq -r '.data._id')
+  -d '{"label": "Initial config"}')
 
-# 6. Activate. A security check runs after publish; if you activate too
-#    quickly you'll get a "security check pending" error. Sleep 6 s.
-sleep 6
-curl -s -X PATCH "$BASE/agent/$AGENT_ID/versions/$VERSION_ID/activate" \
-  -H "$AUTH" > /dev/null
+STATE=$(echo "$PUBLISH_RESP" | jq -r '.data.state')
+REVISION_ID=$(curl -s "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/revisions?limit=1" \
+  -H "$AUTH" | jq -r '.data.revisions[0]._id')
+echo "publish state: $STATE, revision: $REVISION_ID"
 
-# 7. (Optional) Place an outbound call to verify the new prompt is live.
-CONV_ID=$(curl -s -X POST "$BASE/conversation/outbound" -H "$AUTH" -H "$CT" \
-  -d "{\"agentId\": \"$AGENT_ID\", \"phoneNumber\": \"+1...\", \"fromProductId\": \"...\"}" \
-  | jq -r '.data.conversationId')
+# On the revision doc, the lifecycle field is `status` (published / draft /
+# archived) and the scan lifecycle is on `securityCheck.status` (queued /
+# passed / failed). Poll until the revision transitions to published.
+while true; do
+  REV_STATUS=$(curl -s "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/revisions/$REVISION_ID" \
+    -H "$AUTH" | jq -r '.data.revision.status')
+  [ "$REV_STATUS" = "published" ] && break
+  sleep 2
+done
+echo "revision is committed"
 
-# 8. Verify _resolvedConfig.firstMessage matches what you set in step 4.
-curl -s "$BASE/agent/$AGENT_ID" -H "$AUTH" \
-  | jq '.data._resolvedConfig.firstMessage'
+# 5. Start a test call against the newly-published revision.
+curl -s -X POST "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/test-call" \
+  -H "$AUTH" -H "$CT" \
+  -d "{\"revisionId\": \"$REVISION_ID\", \"mode\": \"webcall\"}" | jq
+
+# 6. Main is already live for a new agent, so no /live call is needed here.
+#    If you had published on a non-live branch, the corresponding call is:
+#    curl -X POST "$BASE/agent/$AGENT_ID/branches/$BRANCH_ID/live" -H "$AUTH"
+
+# 7. Place a real outbound call.
+curl -s -X POST "$BASE/conversation/outbound" -H "$AUTH" -H "$CT" \
+  -d "{\"agentId\": \"$AGENT_ID\", \"toPhone\": \"+15551234567\"}" | jq
 ```
 
 ---
 
-## Python (using the SDK + raw requests)
+## Python walkthrough
 
-The agent CRUD endpoints are exposed through the `SmallestAI` REST client. The draft/version endpoints are not yet first-class in the Python SDK, so they're called directly:
+Uses `requests` and the same envelope as the curl walkthrough.
 
 ```python
 import os, time, requests
-from smallestai import SmallestAI
 
 BASE = "https://api.smallest.ai/atoms/v1"
-KEY = os.environ["SMALLEST_API_KEY"]
-HEADERS = {"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"}
-client = SmallestAI(api_key=KEY)  # only used for create + delete here
+HEADERS = {
+    "Authorization": f"Bearer {os.environ['SMALLEST_API_KEY']}",
+    "Content-Type": "application/json",
+}
 
-# 1. Create the agent (via SDK)
-agent_id = client.atoms.agents.create_agent(
-    name="lifecycle-demo",
-    language={"switching": {"isEnabled": False}},
-).data  # response.data is the agent id (string)
-
-# 2. Read active version id
-agent = requests.get(f"{BASE}/agent/{agent_id}", headers=HEADERS).json()
-active_version_id = agent["data"]["activeVersionId"]
-
-# 3. Fork a draft from the active version
-draft_id = requests.post(
-    f"{BASE}/agent/{agent_id}/drafts",
+# 1. Create the agent.
+agent_id = requests.post(
+    f"{BASE}/agent",
     headers=HEADERS,
-    json={"sourceVersionId": active_version_id},
-).json()["data"]["draftId"]
+    json={"name": "lifecycle-demo", "language": {"switching": {"isEnabled": False}}},
+).json()["data"]
 
-# 4. Patch the draft config
-requests.patch(
-    f"{BASE}/agent/{agent_id}/drafts/{draft_id}/config",
+# 2. Find the Main branch. Each item is a BranchSummary wrapper; isDefault + _id
+#    live on the inner .branch object.
+branches = requests.get(f"{BASE}/agent/{agent_id}/branches", headers=HEADERS).json()["data"]["branches"]
+main_branch = next(b for b in branches if b["branch"]["isDefault"])
+main_branch_id = main_branch["branch"]["_id"]
+
+# 3. Write to the branch's draft. Body uses the same camelCase field names as
+#    GET /agent (globalPrompt, firstMessage, synthesizer, language, ...);
+#    the server routes them to internal config-block sections for you.
+requests.put(
+    f"{BASE}/agent/{agent_id}/branches/{main_branch_id}/draft",
     headers=HEADERS,
-    json={"firstMessage": "Hello, this is the lifecycle demo agent."},
+    json={
+        "globalPrompt": "You are a friendly receptionist. Book appointments and answer questions.",
+        "firstMessage": "Hi, how can I help?",
+    },
 ).raise_for_status()
 
-# 5. Publish — returns the new version
-version_id = requests.post(
-    f"{BASE}/agent/{agent_id}/drafts/{draft_id}/publish",
+# 4. Publish and wait for the security scan.
+#    The publish response carries only `state`; it does not include the new
+#    revision ID. Fetch the newest revision on the branch to get its ID, then
+#    poll it until its `status` becomes "published".
+publish = requests.post(
+    f"{BASE}/agent/{agent_id}/branches/{main_branch_id}/draft/publish",
     headers=HEADERS,
-    json={"label": "v2 - greeting added"},
-).json()["data"]["_id"]
+    json={"label": "Initial config"},
+).json()["data"]
 
-# 6. Activate (after security-check delay)
-time.sleep(6)
-requests.patch(
-    f"{BASE}/agent/{agent_id}/versions/{version_id}/activate",
+revisions = requests.get(
+    f"{BASE}/agent/{agent_id}/branches/{main_branch_id}/revisions",
     headers=HEADERS,
-).raise_for_status()
-print(f"agent {agent_id} now serving version {version_id}")
+    params={"limit": 1},
+).json()["data"]["revisions"]
+revision_id = revisions[0]["_id"]
+
+while True:
+    rev = requests.get(
+        f"{BASE}/agent/{agent_id}/branches/{main_branch_id}/revisions/{revision_id}",
+        headers=HEADERS,
+    ).json()["data"]["revision"]
+    if rev["status"] == "published":
+        break
+    time.sleep(2)
+
+# 5. Start a test call against the revision.
+test = requests.post(
+    f"{BASE}/agent/{agent_id}/branches/{main_branch_id}/test-call",
+    headers=HEADERS,
+    json={"revisionId": revision_id, "mode": "webcall"},
+).json()["data"]
+print(f"test call id: {test['callId']}")
+
+# 6. Place a real outbound call. Main is already live for a new agent.
+call = requests.post(
+    f"{BASE}/conversation/outbound",
+    headers=HEADERS,
+    json={"agentId": agent_id, "toPhone": "+15551234567"},
+).json()["data"]
+print(f"outbound call id: {call}")
 ```
 
 ---
 
-## Common pitfalls
+## Working with additional branches
 
-<AccordionGroup>
-  <Accordion title="Publish does NOT auto-activate, even with activate: true">
-    The publish endpoint accepts `activate` in its body, but the field is not honored — the new version comes back with `isActive: false`. Always call `PATCH /versions/{versionId}/activate` explicitly. Confirmed against the live API on 2026-06-11.
-  </Accordion>
+Fork a branch when you want to stage a big change without touching production. The source branch must have at least one committed revision.
 
-  <Accordion title="Activate immediately after publish returns a security-check error">
-    Each publish triggers a backend security check that takes ~6 seconds. Activating before it completes returns an error. The simplest fix is `sleep 6` between publish and activate; for production, poll `GET /agent/{id}/versions/{versionId}` and wait for `securityCheck.status: "passed"`.
-  </Accordion>
+```bash
+# Fork Main into a staging branch.
+STAGING_ID=$(curl -s -X POST "$BASE/agent/$AGENT_ID/branches" \
+  -H "$AUTH" -H "$CT" \
+  -d "{\"sourceBranchId\": \"$MAIN_BRANCH_ID\", \"name\": \"staging\"}" \
+  | jq -r '.data._id')
 
-  <Accordion title="POST /drafts requires a source — empty body returns 400">
-    The body must include either `sourceVersionId` (fork from a published version) or `sourceDraftId` (fork from another draft). An empty `{}` returns `400 "Either sourceVersionId or sourceDraftId is required"`.
-  </Accordion>
+# Edit and publish on staging. Real traffic keeps hitting Main.
+curl -s -X PUT "$BASE/agent/$AGENT_ID/branches/$STAGING_ID/draft" \
+  -H "$AUTH" -H "$CT" \
+  -d '{"globalPrompt": "New experimental prompt."}' | jq
 
-  <Accordion title="PATCH on the draft config does not echo the patched fields">
-    The response body returns the new `draftRevision` counter and a few rotated block ids, but not the fields you sent in the PATCH. To confirm a value persisted, fetch the draft after with `GET /agent/{id}/drafts/{draftId}`.
-  </Accordion>
+curl -s -X POST "$BASE/agent/$AGENT_ID/branches/$STAGING_ID/draft/publish" \
+  -H "$AUTH" -H "$CT" -d '{"label": "Experimental v1"}' | jq
 
-  <Accordion title="POST /agent with `language` but no `switching` returns 400">
-    If you include the `language` object in the create body, it must contain a `switching` object — even an empty one (`"switching": {"isEnabled": false}`) is enough. Omitting `language` entirely is also fine.
-  </Accordion>
+# Once you are happy, make staging live. Main becomes not-live automatically.
+curl -s -X POST "$BASE/agent/$AGENT_ID/branches/$STAGING_ID/live" -H "$AUTH" | jq
+```
 
-  <Accordion title="DELETE /agent/{id} returns 404 — use /archive">
-    The agent delete endpoint is `DELETE /agent/{id}/archive`, not plain `DELETE /agent/{id}`. Plain DELETE returns 404.
-  </Accordion>
-</AccordionGroup>
+## Reverting
 
----
+Restore republishes an older revision as a new revision at the head of the branch. If the branch is live, traffic switches immediately.
 
-## What about `PATCH /workflow/{workflowId}`?
+```bash
+# Find the revision you want to restore.
+curl -s "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/revisions?limit=20" -H "$AUTH" | jq
 
-A legacy endpoint, `PATCH /workflow/{workflowId}` (the `workflowId` is on the agent document, not the agent id), writes directly to the underlying workflow document. On a versioned agent it bypasses the version lifecycle — the change isn't captured as a version and fields missing from the payload can be silently overwritten. Always go through the drafts → publish → activate flow above.
-
----
-
-## API endpoint reference
-
-| Step | Endpoint |
-|---|---|
-| Create agent | `POST /agent` |
-| Read agent + active version | `GET /agent/{agentId}` |
-| List drafts | `GET /agent/{agentId}/drafts` |
-| Fork a draft | `POST /agent/{agentId}/drafts` — body `{sourceVersionId}` or `{sourceDraftId}` |
-| Rename a draft | `PATCH /agent/{agentId}/drafts/{draftId}` |
-| Discard a draft | `DELETE /agent/{agentId}/drafts/{draftId}` |
-| Patch draft config | `PATCH /agent/{agentId}/drafts/{draftId}/config` |
-| Diff draft vs version | `GET /agent/{agentId}/drafts/{draftId}/diff?versionId=...` |
-| Publish a draft | `POST /agent/{agentId}/drafts/{draftId}/publish` |
-| List versions | `GET /agent/{agentId}/versions` |
-| Get one version | `GET /agent/{agentId}/versions/{versionId}` |
-| Diff two versions | `GET /agent/{agentId}/versions/diff?baseId=...&compareId=...` |
-| Activate a version | `PATCH /agent/{agentId}/versions/{versionId}/activate` |
-| Archive the agent | `DELETE /agent/{agentId}/archive` |
+# Restore it.
+curl -s -X POST \
+  "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/revisions/<REVISION_ID>/restore" \
+  -H "$AUTH" | jq
+```
 
 ---
 
-## Related
+## Migrating from v1
 
-<CardGroup cols={2}>
-  <Card title="Dashboard Walkthrough" icon="browser" href="/voice-agents/platform/create-agent/agent-settings/versioning">
-    Same lifecycle through the visual editor, with screenshots.
-  </Card>
-  <Card title="Outbound Calls" icon="phone" href="/voice-agents/developer-guide/build/calling/outbound-calls">
-    Trigger a call against the activated version.
-  </Card>
-</CardGroup>
+If you have code against `/agent/{id}/drafts/*` or `/agent/{id}/versions/*`, follow the [v1 → v2 migration guide](/voice-agents/deprecations/agent-versioning-migration). The mapping is straightforward: drafts move to `.../branches/{branchId}/draft`, publish moves to `.../branches/{branchId}/draft/publish`, and `activate` is replaced by `.../branches/{branchId}/live`. Existing `versionId` values continue to resolve as `revisionId`.
