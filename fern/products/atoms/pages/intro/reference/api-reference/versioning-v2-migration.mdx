@@ -168,9 +168,13 @@ curl -X POST "$BASE/agent/$AGENT_ID/branches/$BRANCH_ID/test-call" -H "$AUTH" \
   -d '{"revisionId": "'$REVISION_ID'", "mode": "webcall"}'
 ```
 
-## Handling the 409 response
+## Handling the 409 responses
 
-Deprecated endpoints return:
+There are three flavors of `409` you can see on the branch-and-revision API. Discriminate on `error_type` (for deprecation) or on body shape (for concurrency and base-revision errors).
+
+### 1. `versioning_v2_migration_required` (deprecated v1 endpoint)
+
+Returned by any of the deprecated v1 write / list endpoints. Body:
 
 ```json
 {
@@ -182,22 +186,57 @@ Deprecated endpoints return:
 }
 ```
 
-With header `Deprecation: true`.
+Header: `Deprecation: true`. Route to the v2 equivalent from the mapping table above.
 
-Client code should treat this as a `409` and route to the v2 equivalent from the table above. For automated tooling, the `error_type` field is the stable identifier.
+### 2. `DraftConflictError` (concurrent draft edit)
+
+Returned by `PUT /agent/{id}/branches/{branchId}/draft` when the caller passed `expectedRevision` and a concurrent edit changed the same field since. Body has a `data.conflict` object listing per-field diffs and both revision numbers.
+
+Retry the read → merge → write cycle, or drop `expectedRevision` for last-write-wins.
+
+### 3. `base_revision_unavailable` (unknown base for the draft)
+
+Returned by `PUT .../draft` when `expectedRevision` names a revision the branch does not have. Body:
+
+```json
+{
+  "status": false,
+  "errors": ["base_revision_unavailable"]
+}
+```
+
+Fetch the branch's current head revision (`GET /agent/{id}/branches/{branchId}`) and rebase the client's `expectedRevision` before retrying.
+
+### Client sketch
 
 **Python:**
 
 ```python
 import requests
 
+# v1 → v2 migration path (deprecated endpoint case)
 resp = requests.post(f"{BASE}/agent/{agent_id}/drafts", headers=headers, json={...})
 
 if resp.status_code == 409 and resp.json().get("error_type") == "versioning_v2_migration_required":
-    # Route to v2. See the endpoint mapping table above for your specific v1 call.
     branches = requests.get(f"{BASE}/agent/{agent_id}/branches", headers=headers).json()["data"]["branches"]
-    main = next(b for b in branches if b["isDefault"])
-    resp = requests.put(f"{BASE}/agent/{agent_id}/branches/{main['_id']}/draft", headers=headers, json={...})
+    main = next(b for b in branches if b["branch"]["isDefault"])
+    resp = requests.put(
+        f"{BASE}/agent/{agent_id}/branches/{main['branch']['_id']}/draft",
+        headers=headers,
+        json={...},
+    )
+
+# Draft-edit conflict cases on the v2 PUT itself
+if resp.status_code == 409:
+    body = resp.json()
+    errors = body.get("errors") or []
+    if "base_revision_unavailable" in errors:
+        # Client's expectedRevision points at a revision this branch does not have.
+        # Refetch the branch head and rebase.
+        ...
+    elif body.get("data", {}).get("conflict"):
+        # Concurrent edit changed the same fields. Merge and retry.
+        ...
 
 resp.raise_for_status()
 ```
@@ -214,14 +253,17 @@ const resp = await fetch(`${BASE}/agent/${agentId}/drafts`, {
 if (resp.status === 409) {
   const body = await resp.json();
   if (body.error_type === "versioning_v2_migration_required") {
-    // Route to v2. See the endpoint mapping table above.
     const branches = (await fetch(`${BASE}/agent/${agentId}/branches`, { headers }).then(r => r.json())).data.branches;
-    const main = branches.find(b => b.isDefault);
-    await fetch(`${BASE}/agent/${agentId}/branches/${main._id}/draft`, {
+    const main = branches.find(b => b.branch.isDefault);
+    await fetch(`${BASE}/agent/${agentId}/branches/${main.branch._id}/draft`, {
       method: "PUT",
       headers,
       body: JSON.stringify({ /* ... */ }),
     });
+  } else if ((body.errors || []).includes("base_revision_unavailable")) {
+    // Refetch branch head, rebase expectedRevision, retry.
+  } else if (body?.data?.conflict) {
+    // Concurrent edit; merge and retry.
   }
 }
 ```

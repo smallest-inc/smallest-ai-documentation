@@ -12523,14 +12523,78 @@ components:
     UpdateBranchDraftRequest:
       type: object
       description: |
-        Free-form agent config partial. Send the same camelCase field names you see on the `GET /agent/{id}` response body (for example `globalPrompt`, `firstMessage`, `synthesizer`, `language`, `voiceDetectionConfig`, `smartTurnConfig`, `denoisingConfig`, `sttMissDetectorConfig`, `callDispositionConfig`, `redactionConfig`, `pronunciationDicts`, `timezone`, `sessionTimeoutConfig`, and so on). The server routes each field into the correct internal config-block section (`workflow_prompt`, `llm`, `voice`, `language`, `call_handling`, `detection`, `analytics`, `timeouts`, `audio`, `privacy`, `widget`, `playbooks`) for you. Sending an internal section name at the top level ("No recognized config fields in request body") returns `400`. The request must carry at least one recognized field. `expectedRevision` (below) is a reserved control key, not a config field.
+        Agent config partial. Send the same camelCase field names you see on the `GET /agent/{id}` response body. The server routes each field into the correct internal config-block section (`workflow_prompt`, `llm`, `voice`, `language`, `call_handling`, `detection`, `analytics`, `timeouts`, `audio`, `privacy`, `widget`, `playbooks`) for you. Sending an internal section name at the top level returns `400 "No recognized config fields in request body"`. The request must carry at least one recognized config field.
+
+        Every property below is optional. Send only the subset you want to change. For the exact shape of complex nested objects (`synthesizer`, `language`, `preCallAPI`, `smartTurnConfig`, etc.) see the matching field on `CreateAgentRequest` — the accepted shape is the same. `additionalProperties: true` remains on so callers can send new fields the platform adds later without a spec bump, but the typed fields below are the stable public surface for SDK method signatures.
       additionalProperties: true
       properties:
         expectedRevision:
           type: integer
           minimum: 0
           description: |
-            Optimistic-concurrency control. The `draftRevision` the client's edit was based on. When present, the server runs a field-level conflict check and rejects with `409 DraftConflictError` if the same field was changed by another edit since. Omit for last-write-wins semantics (which is also how a client force-overwrites after a `409`).
+            Optimistic-concurrency control. The `draftRevision` the client's edit was based on. When present, the server runs a field-level conflict check and rejects with `409 DraftConflictError` if the same field was changed by another edit since. Omit for last-write-wins semantics (which is also how a client force-overwrites after a `409`). Referencing a non-existent base revision returns `409 { errors: ["base_revision_unavailable"] }`.
+        globalPrompt:
+          type: string
+          description: Top-level system prompt shown to the agent every turn.
+        firstMessage:
+          type: string
+          description: The agent's opening line at call start.
+        slmModel:
+          type: string
+          enum: [electron, electron-kogta, electron-kogta-v2, gpt-4o, gpt-4.1, gpt-5.2, gpt-realtime, gpt-realtime-mini]
+          description: LLM model powering the agent. See `CreateAgentRequest.slmModel` for org-level access notes.
+        backgroundSound:
+          type: string
+          enum: ["", office, cafe, call_center, static]
+          description: Ambient background sound during calls.
+        timezone:
+          type: string
+          description: IANA timezone identifier used for date/time interpretation in prompts and tool calls.
+        globalKnowledgeBaseId:
+          type: string
+          description: Knowledge base attached to the agent for retrieval-augmented responses.
+        muteUserUntilFirstBotResponse:
+          type: boolean
+        allowInterruptions:
+          type: boolean
+        waitForUserToSpeakFirst:
+          type: boolean
+        interruptionBackoffTimer:
+          type: number
+        enableStyleGuide:
+          type: boolean
+        synthesizer:
+          type: object
+          description: TTS (voice) configuration. Same shape as `CreateAgentRequest.synthesizer`.
+        language:
+          type: object
+          description: Language configuration. Same shape as `CreateAgentRequest.language`.
+        defaultVariables:
+          type: object
+          description: Default variables injected into prompts and tool calls.
+        preCallAPI:
+          type: object
+          description: Pre-call API webhook config. Same shape as `CreateAgentRequest.preCallAPI`.
+        smartTurnConfig:
+          type: object
+        voiceDetectionConfig:
+          type: object
+        voiceMailDetectionConfig:
+          type: object
+        denoisingConfig:
+          type: object
+        redactionConfig:
+          type: object
+        pronunciationDicts:
+          type: object
+        llmIdleTimeoutConfig:
+          type: object
+        sessionTimeoutConfig:
+          type: object
+        callDispositionConfig:
+          type: object
+        speechFormatting:
+          type: object
 
     PublishBranchDraftRequest:
       type: object
