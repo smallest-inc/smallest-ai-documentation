@@ -63,7 +63,7 @@ DRAFT=$(curl -s -X POST "$BASE/agent/$AGENT_ID/drafts" \
 
 curl -s -X PATCH "$BASE/agent/$AGENT_ID/drafts/$DRAFT/config" \
   -H "$AUTH" -H "$CT" \
-  -d '{"prompt": "..."}'
+  -d '{"globalPrompt": "..."}'
 
 curl -s -X POST "$BASE/agent/$AGENT_ID/drafts/$DRAFT/publish" \
   -H "$AUTH" -H "$CT" -d '{"label": "..."}'
@@ -72,14 +72,18 @@ curl -s -X POST "$BASE/agent/$AGENT_ID/drafts/$DRAFT/publish" \
 **After (v2):**
 
 ```bash
-# 1. Find the branch you want to publish on.
+# 1. Find the branch you want to publish on. `.data.branches[i].branch` is the
+#    Branch object; `isDefault` / `isLive` / `hasOpenDraft` sit on the outer
+#    BranchSummary wrapper.
 MAIN_BRANCH_ID=$(curl -s "$BASE/agent/$AGENT_ID/branches" -H "$AUTH" \
-  | jq -r '.data.branches[] | select(.isDefault==true) | ._id')
+  | jq -r '.data.branches[] | select(.branch.isDefault==true) | .branch._id')
 
 # 2. Write to the branch's draft. If no draft is open, one is created.
+#    Body uses the same camelCase agent fields as GET /agent (globalPrompt,
+#    firstMessage, synthesizer, language, etc.).
 curl -s -X PUT "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/draft" \
   -H "$AUTH" -H "$CT" \
-  -d '{"prompt": "..."}'
+  -d '{"globalPrompt": "..."}'
 
 # 3. Publish.
 curl -s -X POST "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/draft/publish" \

@@ -12426,6 +12426,10 @@ components:
                 type: array
                 items:
                   type: string
+              editorName:
+                type: string
+                nullable: true
+                description: Display name of the editor who made this draft edit. `null` when the editor's display name is not resolvable.
 
     DiffChange:
       type: object
@@ -12511,7 +12515,7 @@ components:
     UpdateBranchDraftRequest:
       type: object
       description: |
-        Free-form agent config partial. Must carry at least one recognized config field (`workflow_prompt`, `llm`, `voice`, `language`, `call_handling`, `detection`, `analytics`, `timeouts`, `audio`, `privacy`, `widget`, `playbooks`, and their leaf fields). Any other top-level key is treated as a config field, except the reserved `expectedRevision` control below.
+        Free-form agent config partial. Send the same camelCase field names you see on the `GET /agent/{id}` response body (for example `globalPrompt`, `firstMessage`, `synthesizer`, `language`, `voiceDetectionConfig`, `smartTurnConfig`, `denoisingConfig`, `sttMissDetectorConfig`, `callDispositionConfig`, `redactionConfig`, `pronunciationDicts`, `timezone`, `sessionTimeoutConfig`, and so on). The server routes each field into the correct internal config-block section (`workflow_prompt`, `llm`, `voice`, `language`, `call_handling`, `detection`, `analytics`, `timeouts`, `audio`, `privacy`, `widget`, `playbooks`) for you. Sending an internal section name at the top level ("No recognized config fields in request body") returns `400`. The request must carry at least one recognized field. `expectedRevision` (below) is a reserved control key, not a config field.
       additionalProperties: true
       properties:
         expectedRevision:
@@ -12532,13 +12536,15 @@ components:
     PublishResult:
       type: object
       description: |
-        Result of publish or restore. `state: "committed"` returns HTTP `200`; `state: "scanning"` returns HTTP `202` and the commit happens later on scan pass. `revision` is present in both.
+        Result of publish or restore. `state: "committed"` returns HTTP `200`; `state: "scanning"` returns HTTP `202` and the commit happens on scan pass. `revision` is populated once the revision exists on the branch; while a scan is in flight it may be `null`. Poll `GET /agent/{id}/branches/{branchId}/revisions/{revisionId}` (once `revision._id` appears) or `GET .../branches/{branchId}/revisions` to observe the `scanning → published` transition.
       properties:
         state:
           type: string
           enum: [scanning, committed]
         revision:
-          $ref: "#/components/schemas/Revision"
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/Revision"
 
     TestCallV2Request:
       type: object

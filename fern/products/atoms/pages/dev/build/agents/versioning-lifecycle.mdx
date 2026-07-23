@@ -60,11 +60,16 @@ echo "main branch: $MAIN_BRANCH_ID"
 # 3. Write to the branch's draft. This upserts the open draft; if there is no
 #    open draft, one is created. You can call this multiple times to build up
 #    the draft before publishing.
+#
+# The body uses the same camelCase field names you see on GET /agent
+# (globalPrompt, firstMessage, synthesizer, language, etc.). The server maps
+# these into internal config-block sections (workflow_prompt, llm, voice, ...)
+# for you; you don't send those section names directly.
 curl -s -X PUT "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/draft" \
   -H "$AUTH" -H "$CT" \
   -d '{
-        "prompt": "You are a friendly receptionist. Book appointments and answer questions.",
-        "voice": {"provider": "smallest", "id": "rhea"}
+        "globalPrompt": "You are a friendly receptionist. Book appointments and answer questions.",
+        "firstMessage": "Hi, how can I help?"
       }' | jq
 
 # 4. Publish the draft. Optional label shows in the UI as the revision name.
@@ -126,13 +131,15 @@ branches = requests.get(f"{BASE}/agent/{agent_id}/branches", headers=HEADERS).js
 main_branch = next(b for b in branches if b["isDefault"])
 main_branch_id = main_branch["_id"]
 
-# 3. Write to the branch's draft.
+# 3. Write to the branch's draft. Body uses the same camelCase field names as
+#    GET /agent (globalPrompt, firstMessage, synthesizer, language, ...);
+#    the server routes them to internal config-block sections for you.
 requests.put(
     f"{BASE}/agent/{agent_id}/branches/{main_branch_id}/draft",
     headers=HEADERS,
     json={
-        "prompt": "You are a friendly receptionist. Book appointments and answer questions.",
-        "voice": {"provider": "smallest", "id": "rhea"},
+        "globalPrompt": "You are a friendly receptionist. Book appointments and answer questions.",
+        "firstMessage": "Hi, how can I help?",
     },
 ).raise_for_status()
 
@@ -187,7 +194,7 @@ STAGING_ID=$(curl -s -X POST "$BASE/agent/$AGENT_ID/branches" \
 # Edit and publish on staging. Real traffic keeps hitting Main.
 curl -s -X PUT "$BASE/agent/$AGENT_ID/branches/$STAGING_ID/draft" \
   -H "$AUTH" -H "$CT" \
-  -d '{"prompt": "New experimental prompt."}' | jq
+  -d '{"globalPrompt": "New experimental prompt."}' | jq
 
 curl -s -X POST "$BASE/agent/$AGENT_ID/branches/$STAGING_ID/draft/publish" \
   -H "$AUTH" -H "$CT" -d '{"label": "Experimental v1"}' | jq
