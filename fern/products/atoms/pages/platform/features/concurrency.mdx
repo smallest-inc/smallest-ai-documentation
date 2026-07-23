@@ -111,6 +111,11 @@ Once you reserve for more than one agent, the top bar shows each agent's share o
 ## FAQ
 
 <AccordionGroup>
+  <Accordion title="Do I need to reserve concurrency before running a campaign?">
+    **Yes, set the reservation on the campaign's agent before the campaign starts.** Campaigns dial out at a fixed rate; if the org's shared pool is already saturated when the campaign fires, the campaign's outbound calls fail because there are no slots left for them. Reserving guarantees the campaign's agent at least its floor regardless of what other agents are doing.
+
+    Adjusting the reservation while the campaign is already running takes effect on new dial attempts only. It cannot rescue calls that already failed for lack of slots.
+  </Accordion>
   <Accordion title="Can my agent exceed its reserved concurrency?">
     **Yes.** Reserved concurrency is a floor, not a ceiling. The dispatcher tries the agent's reserved slots first; once those are full, it falls back to the org's shared pool. So an agent with `reserved: 5` can run up to `5 + (shared pool size)` concurrent calls, bounded only by the org's total concurrency limit.
 
