@@ -12536,15 +12536,13 @@ components:
     PublishResult:
       type: object
       description: |
-        Result of publish or restore. `state: "committed"` returns HTTP `200`; `state: "scanning"` returns HTTP `202` and the commit happens on scan pass. `revision` is populated once the revision exists on the branch; while a scan is in flight it may be `null`. Poll `GET /agent/{id}/branches/{branchId}/revisions/{revisionId}` (once `revision._id` appears) or `GET .../branches/{branchId}/revisions` to observe the `scanning → published` transition.
+        Result of publish or restore. `state: "committed"` returns HTTP `200`; `state: "scanning"` returns HTTP `202` and the commit happens on scan pass.
+
+        The response body carries only `state`. It does not include the new revision object or its ID. To get the ID of the just-committed revision, list the branch's revisions newest-first (`GET /agent/{id}/branches/{branchId}/revisions?limit=1`) after this call returns. On that revision doc, the field is `status` (not `state`), with values `published`, `draft`, or `archived`; the security-scan lifecycle is reflected on the nested `securityCheck.status`.
       properties:
         state:
           type: string
           enum: [scanning, committed]
-        revision:
-          nullable: true
-          allOf:
-            - $ref: "#/components/schemas/Revision"
 
     TestCallV2Request:
       type: object

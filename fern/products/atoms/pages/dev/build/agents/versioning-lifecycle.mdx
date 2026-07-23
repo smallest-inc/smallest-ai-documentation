@@ -52,9 +52,11 @@ AGENT_ID=$(curl -s -X POST "$BASE/agent" -H "$AUTH" -H "$CT" \
   | jq -r '.data')
 echo "agent: $AGENT_ID"
 
-# 2. Find the Main branch.
+# 2. Find the Main branch. Each item in .data.branches is a BranchSummary
+#    wrapper: {branch, isLive, hasOpenDraft, revisionsCount, headRevisionNumber}.
+#    isDefault sits on the inner .branch, along with the branch _id.
 MAIN_BRANCH_ID=$(curl -s "$BASE/agent/$AGENT_ID/branches" -H "$AUTH" \
-  | jq -r '.data.branches[] | select(.isDefault==true) | ._id')
+  | jq -r '.data.branches[] | select(.branch.isDefault==true) | .branch._id')
 echo "main branch: $MAIN_BRANCH_ID"
 
 # 3. Write to the branch's draft. This upserts the open draft; if there is no
@@ -73,20 +75,26 @@ curl -s -X PUT "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/draft" \
       }' | jq
 
 # 4. Publish the draft. Optional label shows in the UI as the revision name.
+#    The publish response carries only `state` (scanning or committed); it does
+#    not include the new revision ID. Fetch the newest revision on the branch
+#    to get its ID.
 PUBLISH_RESP=$(curl -s -X POST "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/draft/publish" \
   -H "$AUTH" -H "$CT" \
   -d '{"label": "Initial config"}')
 
 STATE=$(echo "$PUBLISH_RESP" | jq -r '.data.state')
-REVISION_ID=$(echo "$PUBLISH_RESP" | jq -r '.data.revision._id')
+REVISION_ID=$(curl -s "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/revisions?limit=1" \
+  -H "$AUTH" | jq -r '.data.revisions[0]._id')
 echo "publish state: $STATE, revision: $REVISION_ID"
 
-# If state is "scanning", the security scan is running. Poll until it is
-# "committed":
-while [ "$STATE" = "scanning" ]; do
+# On the revision doc, the lifecycle field is `status` (published / draft /
+# archived) and the scan lifecycle is on `securityCheck.status` (queued /
+# passed / failed). Poll until the revision transitions to published.
+while true; do
+  REV_STATUS=$(curl -s "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/revisions/$REVISION_ID" \
+    -H "$AUTH" | jq -r '.data.revision.status')
+  [ "$REV_STATUS" = "published" ] && break
   sleep 2
-  STATE=$(curl -s "$BASE/agent/$AGENT_ID/branches/$MAIN_BRANCH_ID/revisions/$REVISION_ID" \
-    -H "$AUTH" | jq -r '.data.revision.state')
 done
 echo "revision is committed"
 
@@ -126,10 +134,11 @@ agent_id = requests.post(
     json={"name": "lifecycle-demo", "language": {"switching": {"isEnabled": False}}},
 ).json()["data"]
 
-# 2. Find the Main branch.
+# 2. Find the Main branch. Each item is a BranchSummary wrapper; isDefault + _id
+#    live on the inner .branch object.
 branches = requests.get(f"{BASE}/agent/{agent_id}/branches", headers=HEADERS).json()["data"]["branches"]
-main_branch = next(b for b in branches if b["isDefault"])
-main_branch_id = main_branch["_id"]
+main_branch = next(b for b in branches if b["branch"]["isDefault"])
+main_branch_id = main_branch["branch"]["_id"]
 
 # 3. Write to the branch's draft. Body uses the same camelCase field names as
 #    GET /agent (globalPrompt, firstMessage, synthesizer, language, ...);
@@ -143,23 +152,31 @@ requests.put(
     },
 ).raise_for_status()
 
-# 4. Publish and wait for security scan.
+# 4. Publish and wait for the security scan.
+#    The publish response carries only `state`; it does not include the new
+#    revision ID. Fetch the newest revision on the branch to get its ID, then
+#    poll it until its `status` becomes "published".
 publish = requests.post(
     f"{BASE}/agent/{agent_id}/branches/{main_branch_id}/draft/publish",
     headers=HEADERS,
     json={"label": "Initial config"},
 ).json()["data"]
 
-revision_id = publish["revision"]["_id"]
-state = publish["state"]
+revisions = requests.get(
+    f"{BASE}/agent/{agent_id}/branches/{main_branch_id}/revisions",
+    headers=HEADERS,
+    params={"limit": 1},
+).json()["data"]["revisions"]
+revision_id = revisions[0]["_id"]
 
-while state == "scanning":
-    time.sleep(2)
+while True:
     rev = requests.get(
         f"{BASE}/agent/{agent_id}/branches/{main_branch_id}/revisions/{revision_id}",
         headers=HEADERS,
     ).json()["data"]["revision"]
-    state = rev["state"]
+    if rev["status"] == "published":
+        break
+    time.sleep(2)
 
 # 5. Start a test call against the revision.
 test = requests.post(
