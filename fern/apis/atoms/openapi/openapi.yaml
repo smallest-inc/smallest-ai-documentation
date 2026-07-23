@@ -6556,8 +6556,13 @@ paths:
 
   /agent/{id}/drafts/{draftId}:
     get:
+      deprecated: true
+      x-fern-availability: deprecated
       summary: Get draft detail
-      description: Returns the latest revision of a draft along with its edit history.
+      description: |
+        **Deprecated.** By-id reads are kept working during the v1 coexistence window (~1 month). A v1 `draftId` remains resolvable. Migrate to `GET /agent/{id}/branches/{branchId}/draft`. Will be removed at the sunset date.
+        
+        Returns the latest revision of a draft along with its edit history.
       tags:
         - Agent Versioning - Drafts
       security:
@@ -6718,8 +6723,13 @@ paths:
 
   /agent/{id}/drafts/{draftId}/diff:
     get:
+      deprecated: true
+      x-fern-availability: deprecated
       summary: Get draft diff
-      description: Compare a draft against its source version or another specified version.
+      description: |
+        **Deprecated.** Kept working during the v1 coexistence window (~1 month). Migrate to `GET /agent/{id}/diff?a=<branchId>:draft&b=<revisionId>`. Will be removed at the sunset date.
+        
+        Compare a draft against its source version or another specified version.
       tags:
         - Agent Versioning - Drafts
       security:
@@ -6829,8 +6839,13 @@ paths:
 
   /agent/{id}/drafts/{draftId}/test-call:
     post:
+      deprecated: true
+      x-fern-availability: deprecated
       summary: Test call with draft config
-      description: Initiate a test call using the draft's resolved configuration.
+      description: |
+        **Deprecated.** Test-calls are exempt from the v1 write-block and remain functional. Migrate to `POST /agent/{id}/branches/{branchId}/test-call` with `includeDraft: true`. Will be removed at the sunset date.
+        
+        Initiate a test call using the draft's resolved configuration.
       tags:
         - Agent Versioning - Drafts
       security:
@@ -7047,8 +7062,13 @@ paths:
 
   /agent/{id}/versions/diff:
     get:
+      deprecated: true
+      x-fern-availability: deprecated
       summary: Diff two versions
-      description: Compare two version or draft revision records side-by-side by their IDs. The implementation tries published versions first and can fall back to the latest draft revision.
+      description: |
+        **Deprecated.** Kept working during the v1 coexistence window (~1 month). Migrate to `GET /agent/{id}/diff?a=<revisionId>&b=<revisionId>`. Will be removed at the sunset date.
+        
+        Compare two version or draft revision records side-by-side by their IDs. The implementation tries published versions first and can fall back to the latest draft revision.
       tags:
         - Agent Versioning - Versions
       security:
@@ -7099,10 +7119,15 @@ paths:
 
   /agent/{id}/versions/compare-metrics:
     get:
+      deprecated: true
+      x-fern-availability: deprecated
       summary: Compare metrics between two versions
       x-fern-sdk-group-name: agent_versioning_versions
       x-fern-sdk-method-name: compare_version_metrics
-      description: Compare analytics/call metrics between two published versions over an optional date range.
+      description: |
+        **Deprecated.** Kept working during the v1 coexistence window (~1 month). No v2 equivalent yet; if you rely on this, flag it before the sunset date.
+        
+        Compare analytics/call metrics between two published versions over an optional date range.
       tags:
         - Agent Versioning - Versions
       security:
@@ -7169,8 +7194,13 @@ paths:
 
   /agent/{id}/versions/{versionId}:
     get:
+      deprecated: true
+      x-fern-availability: deprecated
       summary: Get version detail
       description: |
+        **Deprecated.** By-id reads are kept working during the v1 coexistence window (~1 month). A v1 `versionId` equals its migrated `revisionId`, so this continues to resolve across branches. Migrate to `GET /agent/{id}/branches/{branchId}/revisions/{revisionId}`. Will be removed at the sunset date.
+        
+        |
         Returns the full detail of a specific published version (read-only).
         Published versions are config-immutable — to modify config, create a draft from
         this version and publish it as a new version.
@@ -7328,8 +7358,13 @@ paths:
 
   /agent/{id}/versions/{versionId}/test-call:
     post:
+      deprecated: true
+      x-fern-availability: deprecated
       summary: Test call with version config
       description: |
+        **Deprecated.** Test-calls are exempt from the v1 write-block and remain functional. Migrate to `POST /agent/{id}/branches/{branchId}/test-call` with `revisionId`. Will be removed at the sunset date.
+        
+        |
         Initiate a test call using a specific published version's configuration.
         The response always includes `conversationId` and `callId`. For `webcall`
         and `chat`, it also includes `token`, `roomName`, and `host`. Those fields
