@@ -1,0 +1,15 @@
+---
+title: DNC endpoint restored in the OpenAPI spec
+---
+
+`GET /dnc` is back in the Atoms OpenAPI spec. The endpoint has been serving production traffic uninterrupted; the regression was spec-side only.
+
+**Background**
+
+The endpoint was originally added to the spec in the 5.1.0 completeness pass, and the Python SDK was regenerated at that point — `client.atoms.dnc.list(...)` has been in every shipped SDK from 5.1.0 onwards. A follow-on spec PR shortly after accidentally dropped the `/dnc` path block from `openapi.yaml`, so the API reference page stopped rendering it and any tooling that consumes the spec started missing it.
+
+**What changes**
+
+- The `GET /dnc` block is restored verbatim to the shape the SDK was regenerated against: `agentId`, `search`, `sortField`, `sortOrder`, `page`, `offset` query params, and a paginated `entries` + `pagination` response envelope.
+- The `DNC` tag description is re-added to the tags list.
+- Nothing to do on the client side — existing SDK calls continue to work as they always did.

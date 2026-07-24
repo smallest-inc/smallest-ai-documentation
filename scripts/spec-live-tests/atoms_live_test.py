@@ -10,11 +10,13 @@ Flow per run:
   1. Janitor sweep — archive any leftover `CI-spec-test-*` agents from
      prior runs (cleanup is via DELETE /agent/{id}/archive, not /:id).
   2. Create a dummy agent with a CI-prefixed name.
-  3. Find v1 (auto-published on agent create) and create a draft from it.
-  4. PATCH every documented config field onto the draft with a
-     non-default value, in a single bulk request.
-  5. GET /agent/{id}/drafts/{draftId}/diff and assert each field shows
-     up in the diff with its newValue matching what we sent.
+  3. Find the `Main` branch (auto-created with the agent) and its head
+     revision (auto-published on agent create).
+  4. PUT every documented config field onto the branch's open draft in
+     a single bulk request. The endpoint upserts the draft.
+  5. GET /agent/{id}/diff?a=<branchId>:draft&b=<headRevisionId> and
+     assert each field shows up in the diff with its newValue matching
+     what we sent.
   6. Archive the agent (best-effort cleanup; janitor handles strays).
 
 Exit non-zero if any field rejected or fails round-trip. The PR cannot
@@ -186,41 +188,44 @@ def main() -> int:
         return 1
     print(f"created agent {agent_id} (name={name!r})")
 
-    # 2. Find v1
-    s, body = req("GET", f"/agent/{agent_id}/versions")
+    # 2. Find the Main branch and its head revision.
+    # BranchSummary shape: {branch: {...}, isLive, hasOpenDraft,
+    # revisionsCount, headRevisionNumber, createdByName, updatedByName}
+    # The branch _id, isDefault, and headRevisionId live on inner .branch.
+    s, body = req("GET", f"/agent/{agent_id}/branches")
     if s != 200:
-        print(f"FAIL: GET /versions -> {s}")
+        print(f"FAIL: GET /branches -> {s}")
         return _cleanup_and_exit(agent_id, 1)
-    versions = body.get("data", {}).get("versions", []) if isinstance(body, dict) else []
-    if not versions:
-        print(f"FAIL: no versions on new agent")
+    branches = body.get("data", {}).get("branches", []) if isinstance(body, dict) else []
+    main = next(
+        (b for b in branches if isinstance(b, dict) and b.get("branch", {}).get("isDefault")),
+        None,
+    )
+    if not main:
+        print(f"FAIL: no Main branch on new agent")
         return _cleanup_and_exit(agent_id, 1)
-    src_version = versions[0].get("_id")
-    print(f"v1 _id={src_version}")
-
-    # 3. Create draft
-    s, body = req("POST", f"/agent/{agent_id}/drafts", {"sourceVersionId": src_version})
-    if s not in (200, 201):
-        print(f"FAIL: POST /drafts -> {s} body={json.dumps(body)[:300]}")
+    main_branch_id = main["branch"].get("_id")
+    head_revision_id = main["branch"].get("headRevisionId")
+    if not (main_branch_id and head_revision_id):
+        print(f"FAIL: Main branch missing _id / headRevisionId: {json.dumps(main)[:300]}")
         return _cleanup_and_exit(agent_id, 1)
-    draft = body.get("data") if isinstance(body, dict) else None
-    draft_id = draft.get("draftId") if isinstance(draft, dict) else None
-    if not draft_id:
-        print(f"FAIL: could not extract draftId from {json.dumps(body)[:300]}")
-        return _cleanup_and_exit(agent_id, 1)
-    print(f"created draft {draft_id}")
+    print(f"main branch _id={main_branch_id}, head revision={head_revision_id}")
     print()
 
-    # 4. Bulk PATCH every field
+    # 3. Bulk PUT every field onto the branch's draft (upserts open draft).
     patch_body = {field: value for field, value in CASES}
-    s, body = req("PATCH", f"/agent/{agent_id}/drafts/{draft_id}/config", patch_body)
+    s, body = req("PUT", f"/agent/{agent_id}/branches/{main_branch_id}/draft", patch_body)
     if s != 200:
-        print(f"FAIL: PATCH config -> {s} body={json.dumps(body)[:500]}")
+        print(f"FAIL: PUT draft -> {s} body={json.dumps(body)[:500]}")
         return _cleanup_and_exit(agent_id, 1)
-    print(f"PATCH config -> 200 (sent {len(CASES)} fields)")
+    print(f"PUT draft -> 200 (sent {len(CASES)} fields)")
 
-    # 5. Read diff and verify each field shows up
-    s, body = req("GET", f"/agent/{agent_id}/drafts/{draft_id}/diff")
+    # 4. Read diff (head → draft) and verify each field shows up.
+    # The `/diff` endpoint treats `a` as the base and `b` as the target,
+    # so newValue reflects the `b` side. Put the draft on `b` so the
+    # values we PUT'd show up as `newValue` for scalar assertions.
+    diff_path = f"/agent/{agent_id}/diff?a={head_revision_id}&b={main_branch_id}:draft"
+    s, body = req("GET", diff_path)
     if s != 200:
         print(f"FAIL: GET /diff -> {s}")
         return _cleanup_and_exit(agent_id, 1)
