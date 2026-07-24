@@ -43,9 +43,19 @@ api:
     - namespace: waves
       openapi: ../waves/openapi/tts-openapi.yaml
       overrides: ../waves/openapi/tts-openapi-overrides.yaml
+    # Unified STT — POST /waves/v1/stt/?model=pulse|pulse-pro. Supersedes
+    # pulse-stt-openapi.yaml (POST /waves/v1/pulse/get_text), which had no
+    # model param and could not reach Pulse Pro. The retired spec stays in
+    # the repo for docs / API-ref rendering but no longer feeds SDK gen.
     - namespace: waves
-      openapi: ../waves/openapi/pulse-stt-openapi.yaml
-      overrides: ../waves/openapi/pulse-stt-openapi-overrides.yaml
+      openapi: ../waves/openapi/stt-openapi.yaml
+    - namespace: waves
+      openapi: ../waves/openapi/voice-cloning-openapi.yaml
+      overrides: ../waves/openapi/voice-cloning-openapi-overrides.yaml
+    # Electron LLM — OpenAI-compatible chat completions at
+    # POST /waves/v1/chat/completions with model=electron.
+    - namespace: waves
+      openapi: ../waves/openapi/electron-openapi.yaml
 
     # Waves AsyncAPI specs - WebSocket streaming
     - namespace: waves
@@ -54,9 +64,11 @@ api:
     - namespace: waves
       asyncapi: ../waves/asyncapi/stream-tts-ws.yaml
       overrides: ../waves/asyncapi/stream-tts-ws-overrides.yml
+    # Unified STT WebSocket — WSS /waves/v1/stt/live?model=pulse.
+    # Supersedes pulse-stt-ws.yaml. Legacy WS wiring dropped alongside the
+    # REST swap above.
     - namespace: waves
-      asyncapi: ../waves/asyncapi/pulse-stt-ws.yaml
-      overrides: ../waves/asyncapi/pulse-stt-ws-overrides.yml
+      asyncapi: ../waves/asyncapi/stt-live-ws.yaml
     - namespace: waves
       asyncapi: ../waves/asyncapi/hydra-ws.yaml
       overrides: ../waves/asyncapi/hydra-ws-overrides.yml
