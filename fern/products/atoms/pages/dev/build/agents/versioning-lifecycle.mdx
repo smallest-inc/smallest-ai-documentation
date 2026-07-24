@@ -116,7 +116,57 @@ curl -s -X POST "$BASE/conversation/outbound" -H "$AUTH" -H "$CT" \
 
 ## Python walkthrough
 
-Uses `requests` and the same envelope as the curl walkthrough.
+Two ways to run the same lifecycle from Python: use the `smallestai` SDK (typed methods + a `Versioning` helper that wraps the publish-and-poll dance), or call the REST endpoints directly with `requests`.
+
+<Tabs>
+<Tab title="Python (SDK)">
+
+```bash
+pip install smallestai>=5.2.0
+```
+
+```python
+from smallestai import SmallestAI
+from smallestai.atoms.helpers.versioning import Versioning, DraftConflictError
+
+client = SmallestAI(api_key="YOUR_API_KEY")   # defaults to api.smallest.ai
+v = Versioning(client)
+
+# 1. Create a fully-configured, LIVE agent in one call — no versioning needed to create/run.
+agent_id = client.atoms.agents.create_agent(
+    name="receptionist",
+    global_prompt="You are a friendly receptionist. Book appointments and answer questions.",
+    first_message="Hi, how can I help?",
+).data
+
+# 2. Find the live Main branch (id + isDefault are on the inner .branch).
+branches = v.branches.list(id=agent_id).data.branches
+main_id = next(b for b in branches if b.branch.is_default).branch.id
+
+# 3. Edit config + publish in one call (draft -> publish -> live; the security scan is handled).
+revision = v.edit_and_publish(agent_id, main_id,
+                              global_prompt="You are warm and concise.", label="tone tweak")
+print(revision.id, revision.status)   # -> "published"
+
+# 4. Test, then stage a big change on a fork and promote it.
+v.branches.test_call(id=agent_id, branch_id=main_id, mode="webcall")
+staging = v.branches.create_branch(id=agent_id, source_branch_id=main_id, name="staging").data.id
+v.edit_and_publish(agent_id, staging, global_prompt="New experimental prompt.")
+v.branches.make_live(id=agent_id, branch_id=staging)   # staging live, Main flips to not-live
+
+# Safe concurrent edits (optimistic concurrency):
+try:
+    v.edit_and_publish(agent_id, main_id, expected_revision=based_on_rev, global_prompt="...")
+except DraftConflictError as e:
+    print("conflict — latest is", e.latest_revision)   # rebase, or retry without expected_revision
+```
+
+Source of truth: `examples/agent_versioning_lifecycle.py` in the SDK repo.
+
+</Tab>
+<Tab title="Python (requests)">
+
+Same envelope as the curl walkthrough above; useful when you need to see the raw HTTP shape or when you cannot add the SDK dependency.
 
 ```python
 import os, time, requests
@@ -194,6 +244,9 @@ call = requests.post(
 ).json()["data"]
 print(f"outbound call id: {call}")
 ```
+
+</Tab>
+</Tabs>
 
 ---
 

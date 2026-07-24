@@ -7639,7 +7639,7 @@ paths:
       x-fern-sdk-group-name: agent_versioning_branches
       x-fern-sdk-method-name: update_draft
       description: |
-        Upsert the open draft on this branch. If no draft is open, one is created automatically. The request body is a free-form agent config partial and must contain at least one recognized field (`prompt`, `voice`, `model`, `tools`, `post_call_analytics`, etc.); the server merges it into the existing draft and returns the resulting draft as a revision-shaped snapshot.
+        Upsert the open draft on this branch. If no draft is open, one is created automatically. The request body is an agent config partial in the same camelCase shape as `GET /agent/{id}` (`globalPrompt`, `firstMessage`, `synthesizer`, `language`, `voiceDetectionConfig`, `smartTurnConfig`, ...) and must contain at least one recognized field; the server merges it into the existing draft and returns the resulting draft as a revision-shaped snapshot.
       tags:
         - Agent Versioning - Branches
       security:
@@ -7678,6 +7678,22 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/NotFoundErrorResponse"
+        "409":
+          description: >-
+            Conflict. One of three flavors: v1 endpoint used under branch mode
+            (`error_type: "versioning_v2_migration_required"`); stale
+            `expectedRevision` (`DraftConflictError` with
+            `data.conflict.{expectedRevision, latestRevision, diffs}`); or
+            `base_revision_unavailable` (the `expectedRevision` references a
+            revision this branch does not have). Discriminate on `error_type`
+            or on body shape.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/VersioningV2MigrationRequiredResponse"
+                  - $ref: "#/components/schemas/DraftConflictError"
+                  - $ref: "#/components/schemas/ConflictErrorResponse"
         "423":
           $ref: "#/components/responses/LockedErrorResponse"
         "500":
