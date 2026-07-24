@@ -1,0 +1,472 @@
+---
+title: "Pulse (Realtime)"
+description: The Pulse STT WebSocket API streams audio to the server and returns low-latency transcripts as the audio is processed. Use it for live transcription, voice agents, and any real-time use case that cannot wait for a full file upload. Supports 39 languages, word and sentence timestamps, PII and PCI redaction, speaker diarization, keyword boosting, and ITN.
+asyncapi: "/asyncapi-spec/pulse-stt-ws.json /waves/v1/pulse/get_text"
+---
+
+<Note>
+This is the **Streaming (Real-Time, WebSocket)** endpoint. For pre-recorded audio files, use `POST /waves/v1/stt/` (Transcribe (Pre-recorded)) — the supported language set is identical. See the [Pulse model card](/models/model-cards/speech-to-text/pulse) for the canonical 39-language list.
+</Note>
+
+## Query Parameters
+
+The WebSocket connection accepts the following query parameters:
+
+### Audio Configuration
+
+| Parameter     | Type   | Default    | Description                                                                           |
+| ------------- | ------ | ---------- | ------------------------------------------------------------------------------------- |
+| `encoding`    | string | `linear16` | Audio encoding format. Options: `linear16`, `linear32`, `alaw`, `mulaw`, `opus`, `ogg_opus` |
+| `sample_rate` | string | `16000`    | Audio sample rate in Hz. Options: `8000`, `16000`, `22050`, `24000`, `44100`, `48000` |
+
+### Language and Detection
+
+| Parameter  | Type   | Default    | Description |
+| ---------- | ------ | ---------- | ----------- |
+| `language` | string | (no explicit default) | Language code for transcription. Set explicitly for predictable behavior. Server behavior when omitted is not guaranteed by this spec. **Streaming-supported single-language codes (21):** `en`, `hi`, `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `zh`, `yue`, `ja`, `ko`, `gu`, `mr`, `or`, `bn`, `ta`, `te`, `kn`, `ml`. South Indian codes (`ta`, `te`, `kn`, `ml`) are in **Beta**. Accuracy improvements are ongoing. **Streaming auto-detect aggregators:** `north_indic` (auto-detects across `en`, `hi`, `gu`, `mr`, `bn`, `or`), `multi-asian` (auto-detects across `zh`, `yue`, `ko`, `ja`, `en`; US region only), `multi-south-indic` (auto-detects across `ta`, `te`, `kn`, `ml` and English code-switching; India region only). See the [Pulse model card](/models/model-cards/speech-to-text/pulse) for the full per-mode language matrix. |
+
+<Warning>
+Set `language` explicitly to match the audio. East Asian codes (`zh`, `yue`, `ja`, `ko`) and the `multi-asian` aggregator are served only from `wss://api.us.smallest.ai/...`. South Indian codes (`ta`, `te`, `kn`, `ml`) and `multi-south-indic` are served only from the India region (`wss://api.smallest.ai/...`). Requests to the wrong region are rejected.
+</Warning>
+
+### Feature Flags
+
+| Parameter             | Type   | Default | Description                                                              |
+| --------------------- | ------ | ------- | ------------------------------------------------------------------------ |
+| `word_timestamps`     | string | `true`  | Include word-level timestamps in transcription. Options: `true`, `false` |
+| `sentence_timestamps` | string | `false` | Include sentence-level timestamps (utterances) in transcription. Options: `true`, `false` |
+| `redact_pii`          | string | `false` | Redact personally identifiable information (name, surname, address). Options: `true`, `false` |
+| `redact_pci`          | string | `false` | Redact payment card information (credit card, CVV, zip, account number). Options: `true`, `false` |
+| `format`              | string | `true`  | Enable punctuation and capitalization formatting in transcript responses. When `true`, transcripts include proper casing and punctuation. When `false`, returns raw lowercase text without punctuation. Options: `true`, `false` |
+| `eou_timeout_ms`      | number | `800`   | End-of-utterance timeout in milliseconds. Controls how long the model waits after the user stops speaking before flushing the transcript as final. Range: `100` to `10000` |
+| `diarize`             | string | `false` | Enable speaker diarization to identify and label different speakers in the audio. When enabled, each word in the transcription includes `speaker` (integer ID) and `speaker_confidence` (float 0-1) fields. Options: `true`, `false` |
+| `keywords`            | string | —       | Comma-separated list of words/phrases to boost, each optionally followed by `:INTENSIFIER` (e.g. `I:20,smiling:26`). Intensifier defaults to `1.0` if omitted. Max 100 keywords per session. See [Keyword Boosting](/models/documentation/speech-to-text-pulse/features/keyword-boosting). |
+| `itn_normalize`       | string | `false` | Enable Inverse Text Normalization to convert spoken-form entities (numbers, dates, currencies, phone numbers, etc.) into written form in finalized transcripts. Options: `true`, `false`. See [ITN](/models/documentation/speech-to-text-pulse/features/inverse-text-normalization) |
+| `finalize_on_words`   | string | `true`  | When `false`, disables automatic word-count-based finalization. Use with `itn_normalize` for agentic pipelines where you control finalization via the `finalize` message. Options: `true`, `false` |
+| `max_words`           | integer | —      | Maximum number of words before forced finalization. Useful for keeping ITN chunks short and accurate |
+
+## Connection Flow
+
+### Example Connection URL
+
+```javascript
+const url = new URL("wss://api.smallest.ai/waves/v1/pulse/get_text");
+url.searchParams.append("language", "en");
+url.searchParams.append("encoding", "linear16");
+url.searchParams.append("sample_rate", "16000");
+url.searchParams.append("word_timestamps", "true");
+url.searchParams.append("sentence_timestamps", "true");
+url.searchParams.append("redact_pii", "true");
+url.searchParams.append("redact_pci", "true");
+url.searchParams.append("diarize", "true");
+url.searchParams.append("keywords", "I:20,smiling:26");
+
+const ws = new WebSocket(url.toString(), {
+  headers: {
+    Authorization: `Bearer ${API_KEY}`,
+  },
+});
+```
+
+## Input Messages
+
+### Audio Data (Binary)
+
+Send raw audio bytes as binary WebSocket messages:
+
+```javascript
+const audioChunk = new Uint8Array(4096);
+ws.send(audioChunk);
+```
+
+### Finalize Signal (JSON)
+
+Flush the current audio buffer and force an immediate `is_final=true` transcript for any pending speech. The session remains open. You can continue sending audio after this. Useful in agentic pipelines where you need the transcript at a specific point without ending the session:
+
+```json
+{
+  "type": "finalize"
+}
+```
+
+### Close Stream Signal (JSON)
+
+Signal the end of the audio stream. The server flushes any remaining audio, delivers final transcripts, and responds with `is_last=true` before closing the connection. Always use this when you are done sending audio:
+
+```json
+{
+  "type": "close_stream"
+}
+```
+
+<Warning>
+Do not close the WebSocket immediately after sending `close_stream`. Wait for the `is_last=true` response to ensure all audio has been processed and final transcripts are received.
+</Warning>
+
+## Response Format
+
+The server responds with JSON messages containing transcription results:
+
+```json
+{
+  "session_id": "sess_12345abcde",
+  "transcript": "Hello, how are you?",
+  "is_final": true,
+  "is_last": false,
+  "language": "en"
+}
+```
+
+### Response Fields
+
+| Field             | Type    | Description                                                          |
+| ----------------- | ------- | -------------------------------------------------------------------- |
+| `session_id`      | string  | Unique identifier for the transcription session                      |
+| `transcript`      | string  | Partial or complete transcription text for the current segment       |
+| `is_final`        | boolean | Indicates if this is the final transcription for the current segment |
+| `is_last`         | boolean | Indicates if this is the last transcription in the session. Only set after a `close_stream` signal. |
+| `from_finalize`   | boolean | `true` when this final transcript was triggered by a manual `finalize` message rather than automatic finalization. Only present when `itn_normalize=true` |
+| `language`        | string  | Detected primary language code, returns only when `is_final=true` |
+| `languages`       | array   | List of languages detected in the audio included in responses where `is_final=true` |
+
+### Optional Response Fields (Based on Query Parameters)
+
+| Field             | Type   | When Included            | Description                                                            |
+| ----------------- | ------ | ------------------------ | ---------------------------------------------------------------------- |
+| `words`            | array  | `word_timestamps=true`   | Word-level timestamps with `word`, `start`, `end`, and `confidence` fields. When `diarize=true`, also includes `speaker` and `speaker_confidence` fields |
+| `utterances`       | array  | `sentence_timestamps=true` | Sentence-level timestamps with `text`, `start`, and `end` fields |
+| `redacted_entities`| array  | `redact_pii=true` or `redact_pci=true` | List of redacted entity placeholders (e.g., `[FIRSTNAME_1]`, `[CREDITCARDCVV_1]`) |
+
+### Example Response with All Features
+
+```json
+{
+  "session_id": "sess_12345abcde",
+  "transcript": "[CREDITCARDCVV_1] and expiry [TIME_2].",
+  "is_final": true,
+  "is_last": true,
+  "language": "en",
+  "languages": ["en"],
+  "words": [
+    {
+      "word": "[creditcardcvv_1]",
+      "start": 15.44,
+      "end": 17.36,
+      "confidence": 0.97,
+      "speaker": 0,
+      "speaker_confidence": 0.67
+    },
+    {
+      "word": "and",
+      "start": 18.0,
+      "end": 18.32,
+      "confidence": 0.94,
+      "speaker": 0,
+      "speaker_confidence": 0.76
+    },
+    {
+      "word": "expiry",
+      "start": 18.32,
+      "end": 19.2,
+      "confidence": 1.0,
+      "speaker": 0,
+      "speaker_confidence": 0.91
+    },
+    {
+      "word": "[time_2]",
+      "start": 19.2,
+      "end": 19.92,
+      "confidence": 0.91,
+      "speaker": 0,
+      "speaker_confidence": 0.82
+    }
+  ],
+  "utterances": [
+    {
+      "text": "Hi, my name is Hans Miller.",
+      "start": 0.0,
+      "end": 2.64,
+      "speaker": 0
+    },
+    {
+      "text": "You can reach me at [PHONENUMBER_1], and I paid using my Visa card 4242 42424242 with CVV123 and expiry [TIME_1].",
+      "start": 2.64,
+      "end": 21.04,
+      "speaker": 0
+    }
+  ],
+  "redacted_entities": [
+    "[CREDITCARDCVV_1]",
+    "[TIME_2]"
+  ]
+}
+```
+
+## Code Example
+
+The same WebSocket flow handles two audio sources: a pre-recorded file and a live microphone. Both reuse the identical query params and `close_stream` finalization. Pick the tab that matches the integration.
+
+### Stream a file
+
+Connects to the WebSocket, streams the feature-rich demo WAV below (contact details, card number, date, time, brand name), and prints partial and final transcripts. Set `SMALLEST_API_KEY` and run end-to-end with `pip install websockets requests`.
+
+<audio controls style={{ width: '100%', maxWidth: '500px', marginBottom: '16px' }}>
+  <source src="../audio/pulse-feature-demo.wav" type="audio/wav" />
+  Your browser does not support the audio element.
+</audio>
+
+<CodeGroup>
+```python python
+import asyncio
+import json
+import os
+from urllib.parse import urlencode
+
+import requests
+import websockets
+
+BASE_WS_URL = "wss://api.smallest.ai/waves/v1/pulse/get_text"
+SAMPLE_URL = (
+    "https://github.com/smallest-inc/smallest-ai-documentation/raw/main/"
+    "fern/products/waves/pages/audio/pulse-feature-demo.wav"
+)
+
+params = {
+    "language": "en",          # set explicitly for best accuracy; use "north_indic" for unknown Indian-language audio
+    "encoding": "linear16",
+    "sample_rate": "24000",    # must match the source audio sample rate
+    "redact_pii": "false",     # set "true" to mask names, addresses, phone numbers (requires PII Redaction add-on)
+    "redact_pci": "false",     # set "true" to mask credit-card / CVV / account numbers (requires PII Redaction add-on)
+    "itn_normalize": "true",   # convert spoken dates, times, currency to written form
+    "keywords": "NVIDIA:5",    # boost a brand name the model might otherwise miss
+}
+WS_URL = f"{BASE_WS_URL}?{urlencode(params)}"
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+
+
+async def stream_audio():
+    # Download sample audio (or replace with your own bytes)
+    audio_bytes = requests.get(SAMPLE_URL).content
+
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+
+    async with websockets.connect(WS_URL, additional_headers=headers) as ws:
+        print("Connected to STT WebSocket")
+
+        chunk_size = 4096
+        offset = 0
+
+        print(f"Streaming {len(audio_bytes)} bytes")
+
+        async def send_chunks():
+            nonlocal offset
+            while offset < len(audio_bytes):
+                chunk = audio_bytes[offset:offset + chunk_size]
+                await ws.send(chunk)
+                offset += chunk_size
+                await asyncio.sleep(0.05)  # 50ms delay between chunks
+
+            print("Finished sending audio, sending end signal...")
+            await ws.send(json.dumps({"type": "close_stream"}))
+
+        sender = asyncio.create_task(send_chunks())
+
+        try:
+            full_transcript = ""
+            async for message in ws:
+                try:
+                    data = json.loads(message)
+                    print("Received:", json.dumps(data, indent=2))
+
+                    if not data.get("is_final"):
+                        print(f"Partial: {data.get('transcript')}")
+                    else:
+                        print(f"Final: {data.get('transcript')}")
+                        full_transcript += data.get("transcript", "")
+                        if data.get("is_last"):
+                            print("Transcription complete!")
+                            print("Full Transcript:", full_transcript)
+                            break
+                except json.JSONDecodeError:
+                    print("Received raw:", message)
+        except websockets.ConnectionClosed as e:
+            print(f"Connection closed: {e.code} - {e.reason}")
+
+        await sender
+
+
+if __name__ == "__main__":
+    asyncio.run(stream_audio())
+```
+</CodeGroup>
+
+### Stream from microphone
+
+Same flow as the file example, with one swap: replace the byte-loop with a microphone capture loop that emits 16-bit PCM frames. Stop on `Ctrl+C`, send `close_stream`, and wait for `is_last=true`.
+
+<CodeGroup>
+```python Python (PyAudio)
+import asyncio
+import json
+import os
+from urllib.parse import urlencode
+
+import pyaudio
+import websockets
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+SAMPLE_RATE = 16000
+CHUNK_SIZE = 4096
+
+params = {
+    "language": "en",
+    "encoding": "linear16",
+    "sample_rate": str(SAMPLE_RATE),  # mic capture rate; both must match
+    "redact_pii": "true",
+    "redact_pci": "true",
+    "itn_normalize": "true",
+}
+WS_URL = f"wss://api.smallest.ai/waves/v1/pulse/get_text?{urlencode(params)}"
+
+
+async def stream_mic():
+    audio = pyaudio.PyAudio()
+    stream = audio.open(
+        format=pyaudio.paInt16,
+        channels=1,
+        rate=SAMPLE_RATE,
+        input=True,
+        frames_per_buffer=CHUNK_SIZE,
+    )
+
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+
+    async with websockets.connect(WS_URL, additional_headers=headers) as ws:
+        print("Listening... Ctrl+C to stop.")
+
+        async def send_audio():
+            try:
+                while True:
+                    data = stream.read(CHUNK_SIZE, exception_on_overflow=False)
+                    await ws.send(data)
+                    await asyncio.sleep(0.01)
+            except asyncio.CancelledError:
+                try:
+                    await ws.send(json.dumps({"type": "close_stream"}))
+                except websockets.ConnectionClosed:
+                    pass
+
+        full_transcript = ""
+
+        async def receive_transcripts():
+            nonlocal full_transcript
+            async for message in ws:
+                data = json.loads(message)
+                tag = "Final  " if data.get("is_final") else "Partial"
+                print(f"{tag}: {data.get('transcript', '')}")
+                if data.get("is_final"):
+                    full_transcript += data.get("transcript", "") or ""
+                if data.get("is_last"):
+                    return
+
+        sender = asyncio.create_task(send_audio())
+        try:
+            await receive_transcripts()
+        finally:
+            sender.cancel()
+            stream.stop_stream()
+            stream.close()
+            audio.terminate()
+            print(f"\nFull Transcript: {full_transcript}")
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(stream_mic())
+    except KeyboardInterrupt:
+        pass
+```
+
+```javascript Browser (Web Audio API)
+// Pulse STT — stream the user's microphone over a WebSocket
+// 1. Replace API_KEY with a short-lived token obtained from your backend.
+// 2. Serve this file from HTTPS or localhost (mic access requires a secure context).
+
+const API_KEY = "YOUR_API_KEY_FROM_BACKEND";
+const SAMPLE_RATE = 16000;
+
+const params = new URLSearchParams({
+  language: "en",
+  encoding: "linear16",
+  sample_rate: String(SAMPLE_RATE),
+  redact_pii: "true",
+  redact_pci: "true",
+  itn_normalize: "true",
+});
+
+async function streamMic() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
+  const source = audioContext.createMediaStreamSource(stream);
+  const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+  // Browser WebSockets cannot set custom headers, so backends typically
+  // accept the API key as a query param. See "Authentication" docs.
+  const ws = new WebSocket(
+    `wss://api.smallest.ai/waves/v1/pulse/get_text?${params}&token=${API_KEY}`
+  );
+
+  ws.onopen = () => {
+    console.log("Connected — start speaking");
+    processor.onaudioprocess = (e) => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      const float32 = e.inputBuffer.getChannelData(0);
+      const int16 = new Int16Array(float32.length);
+      for (let i = 0; i < float32.length; i++) {
+        int16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768));
+      }
+      ws.send(int16.buffer);
+    };
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+  };
+
+  let fullTranscript = "";
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    const tag = data.is_final ? "Final  " : "Partial";
+    console.log(`${tag}: ${data.transcript ?? ""}`);
+    if (data.is_final) fullTranscript += data.transcript ?? "";
+    if (data.is_last) {
+      console.log("\nFull Transcript:", fullTranscript);
+      ws.close(1000);
+    }
+  };
+
+  // Stop after 30 seconds of capture (or wire this to a UI button)
+  setTimeout(() => {
+    processor.disconnect();
+    source.disconnect();
+    stream.getTracks().forEach((t) => t.stop());
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "close_stream" }));
+    }
+  }, 30000);
+}
+
+streamMic().catch(console.error);
+```
+</CodeGroup>
+
+<Note>
+Mic example uses `sample_rate=16000` (the natural rate for most laptop mics and Web Audio); the file example uses `24000` to match the demo WAV. The `encoding`, `sample_rate`, and audio-source rate must always agree.
+</Note>
+
+<Note>
+Set `language` explicitly to match the audio (`en`, `hi`, `es`, etc.) for the best accuracy. For unknown audio on streaming, pick `north_indic` (Indian languages) or `multi-asian` (East Asian, US region only). Reconstruct a session-level transcript on the client by concatenating each `is_final=true` `transcript` value, as shown above.
+</Note>
+
+<Tip>
+Browsers cannot set custom headers on WebSocket handshakes, so production browser clients should fetch a short-lived token from a backend and pass it via the `?token=` query parameter rather than embedding `SMALLEST_API_KEY` in the page.
+</Tip>

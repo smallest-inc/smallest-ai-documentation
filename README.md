@@ -64,7 +64,7 @@ This repository contains the source files for the Smallest AI documentation site
 │   ├── products/
 │   │   ├── atoms.yml                     # Voice Agents navigation config
 │   │   ├── atoms/pages/                  # Voice Agents documentation pages (MDX)
-│   │   ├── waves/versions/               # Models content root (v4.0.0 — no version dropdown)
+│   │   ├── waves.yml                     # Models navigation config
 │   │   └── waves/pages/                  # Models documentation pages (MDX)
 │   └── snippets/                         # Shared MDX snippets
 ├── .github/workflows/
@@ -83,12 +83,12 @@ This repository contains the source files for the Smallest AI documentation site
 
 | What you're changing | Where to edit |
 |---|---|
-| Waves docs content (pages, guides) | `fern/products/waves/pages/v4.0.0/*.mdx` |
-| Waves sidebar navigation | `fern/products/waves/versions/v4.0.0.yml` |
+| Waves docs content (pages, guides) | `fern/products/waves/pages/*.mdx` |
+| Waves sidebar navigation | `fern/products/waves.yml` |
 | Waves API spec (REST/HTTP endpoints) | `fern/apis/waves/openapi/*.yaml` |
 | Waves API spec (WebSocket endpoints) | `fern/apis/waves/asyncapi/*.yaml` |
 | Waves API ref page rendering (what shows on docs site) | `fern/apis/waves-v4/overrides/*.yml` |
-| Waves images | `fern/products/waves/pages/v4.0.0/images/` |
+| Waves images | `fern/products/waves/pages/images/` |
 
 ### Voice Agents (Atoms)
 
@@ -111,7 +111,7 @@ This repository contains the source files for the Smallest AI documentation site
 > **Important — three spec layers for waves**:
 > 1. **Base spec** at `fern/apis/waves/{openapi,asyncapi}/*.yaml` — source of truth for structure.
 > 2. **SDK overrides** at `fern/apis/waves/{openapi,asyncapi}/*-overrides.yaml` (siblings of base) — drive SDK method names, examples, and deprecations via `fern/apis/unified/generators.yml`.
-> 3. **v4 docs overrides** at `fern/apis/waves-v4/overrides/*.yaml` — drive what renders on the `docs.smallest.ai/models/api-reference/*` pages via `fern/apis/waves-v4/generators.yml`. The `-v4` directory name is a historical carry-over from when the docs had a `v4.0.0` version dropdown; the version dropdown is gone but the folder name stays for tooling reasons (SDK-gen configs reference it by path).
+> 3. **v4 docs overrides** at `fern/apis/waves-v4/overrides/*.yaml` — drive what renders on the `docs.smallest.ai/models/api-reference/*` pages via `fern/apis/waves-v4/generators.yml`. The `-v4` directory name is a historical carry-over from an earlier version-selector setup; the folder name stays because SDK-gen configs reference it by path.
 >
 > A `description`, `default`, `enum`, or `example` set in the v4 docs override **wins** on docs render. Editing the same field in the base spec alone is invisible. Always update both layers in lockstep, and run `python3 scripts/spec-live-tests/spec_drift_check.py` before pushing — CI runs it on every PR that touches `fern/apis/waves/**` or `fern/apis/waves-v4/overrides/**`.
 >
@@ -186,7 +186,7 @@ git checkout -b docs/your-change-description
 ### 3. Make Your Changes
 
 - **Content changes**: Edit MDX files in the relevant `pages/` directory (see [Which Files to Edit](#which-files-to-edit))
-- **Navigation changes**: Edit the YAML config (`atoms.yml` or `waves/versions/v4.0.0.yml`)
+- **Navigation changes**: Edit the YAML config (`atoms.yml` or `waves.yml`)
 - **API spec changes**: Edit OpenAPI/AsyncAPI files in `fern/apis/`
 - **Style changes**: Edit `fern/docs.yml` or `fern/docs/assets/styles/global-styling.css`
 

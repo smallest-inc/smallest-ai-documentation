@@ -53,7 +53,7 @@ MAX_WORKERS = 16
 # to a frozen older version — its broken links don't hurt live users.
 NAV_CONFIGS = [
     REPO_ROOT / "fern" / "products" / "atoms.yml",
-    REPO_ROOT / "fern" / "products" / "waves" / "versions" / "v4.0.0.yml",
+    REPO_ROOT / "fern" / "products" / "waves.yml",
 ]
 
 # Root-relative internal paths — [text](/path), href="/path", etc.

@@ -31,7 +31,7 @@ NAV_IGNORE_FILE = REPO_ROOT / "scripts" / ".nav-ignore"
 # Nav YAML files to scan. Ordered — the first file defines its own search root.
 NAV_CONFIGS = [
     REPO_ROOT / "fern" / "products" / "atoms.yml",
-    REPO_ROOT / "fern" / "products" / "waves" / "versions" / "v4.0.0.yml",
+    REPO_ROOT / "fern" / "products" / "waves.yml",
 ]
 
 # Directories that contain customer-facing pages. Every .mdx in here must be
