@@ -289,6 +289,14 @@ curl -s -X POST \
 
 ---
 
-## Migrating from v1
+## Migrating from the v1 versioning API
 
-If you have code against `/agent/{id}/drafts/*` or `/agent/{id}/versions/*`, follow the [v1 → v2 migration guide](/voice-agents/deprecations/agent-versioning-migration). The mapping is straightforward: drafts move to `.../branches/{branchId}/draft`, publish moves to `.../branches/{branchId}/draft/publish`, and `activate` is replaced by `.../branches/{branchId}/live`. Existing `versionId` values continue to resolve as `revisionId`.
+If your integration calls `/agent/{id}/drafts/*` or `/agent/{id}/versions/*`, those are the v1 versioning endpoints. Move to the branch-and-revision endpoints:
+
+| v1 endpoint | v2 replacement |
+|---|---|
+| `POST /agent/{id}/drafts` + `PATCH .../config` | `PUT /agent/{id}/branches/{branchId}/draft` |
+| `POST /agent/{id}/drafts/{draftId}/publish` | `POST /agent/{id}/branches/{branchId}/draft/publish` |
+| `PATCH /agent/{id}/versions/{versionId}/activate` | `POST /agent/{id}/branches/{branchId}/live` |
+
+Existing `versionId` values continue to resolve as `revisionId`, so IDs stored by earlier integrations keep working. Full endpoint-by-endpoint mapping and 409-handling patterns live in the [v1 → v2 migration guide](/voice-agents/deprecations/agent-versioning-migration).
