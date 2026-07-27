@@ -5370,7 +5370,21 @@ paths:
         are only on `post-conversation`; `analytics` is only on
         `analytics-completed`.
 
+        **Delivery.** Sent as an HTTP POST with a 30 second timeout. Non-2xx
+        responses and network errors mark the delivery as failed; there are
+        no retries. Verify the `X-Signature` header before trusting the body.
         For the full field-level reference, see the [Webhooks guide](/atoms/atoms-platform/features/webhooks).
+      parameters:
+        - in: header
+          name: X-Signature
+          required: true
+          description: |
+            Hex-encoded HMAC-SHA256 of the raw request body, keyed by the
+            webhook's signing secret. See the [Webhooks guide](/atoms/atoms-platform/features/webhooks#verifying-signatures)
+            for verification samples.
+          schema:
+            type: string
+            example: "b0c3a1e4f2..."
       requestBody:
         description: Event body delivered to your configured webhook URL.
         required: true
@@ -5394,7 +5408,21 @@ paths:
         metadata, recording URL, and all agent variables that were in scope
         during the conversation.
 
+        **Delivery.** Sent as an HTTP POST with a 30 second timeout. Non-2xx
+        responses and network errors mark the delivery as failed; there are
+        no retries. Verify the `X-Signature` header before trusting the body.
         For the full field-level reference, see the [Webhooks guide](/atoms/atoms-platform/features/webhooks).
+      parameters:
+        - in: header
+          name: X-Signature
+          required: true
+          description: |
+            Hex-encoded HMAC-SHA256 of the raw request body, keyed by the
+            webhook's signing secret. See the [Webhooks guide](/atoms/atoms-platform/features/webhooks#verifying-signatures)
+            for verification samples.
+          schema:
+            type: string
+            example: "b0c3a1e4f2..."
       requestBody:
         description: Event body delivered to your configured webhook URL.
         required: true
@@ -5418,7 +5446,21 @@ paths:
         success metrics on the transcript. Arrives some time after
         `post-conversation`.
 
+        **Delivery.** Sent as an HTTP POST with a 30 second timeout. Non-2xx
+        responses and network errors mark the delivery as failed; there are
+        no retries. Verify the `X-Signature` header before trusting the body.
         For the full field-level reference, see the [Webhooks guide](/atoms/atoms-platform/features/webhooks).
+      parameters:
+        - in: header
+          name: X-Signature
+          required: true
+          description: |
+            Hex-encoded HMAC-SHA256 of the raw request body, keyed by the
+            webhook's signing secret. See the [Webhooks guide](/atoms/atoms-platform/features/webhooks#verifying-signatures)
+            for verification samples.
+          schema:
+            type: string
+            example: "b0c3a1e4f2..."
       requestBody:
         description: Event body delivered to your configured webhook URL.
         required: true
@@ -5431,6 +5473,100 @@ paths:
           description: Your endpoint should return a 2XX status to acknowledge receipt.
 
   /webhook/{id}:
+    patch:
+      summary: Update a webhook
+      x-fern-sdk-group-name: webhooks
+      x-fern-sdk-method-name: update
+      description: |
+        Update a webhook's endpoint URL, description, or custom headers. At
+        least one of the three fields must be present in the request body.
+
+        **Event subscriptions cannot be changed here.** To add or remove an
+        agent's subscription to this webhook, use `POST /agent/{agentId}/webhook-subscriptions`
+        and `DELETE /agent/{agentId}/webhook-subscriptions`.
+
+        **Custom `headers` behavior**
+        - Send a non-empty object to replace all custom headers on the webhook.
+        - Send an empty object (`{}`) to clear all custom headers.
+        - Omit the field to leave existing custom headers untouched.
+
+        Custom header limits: at most 10 headers per webhook, values up to
+        1024 characters, header names must match RFC 7230 token syntax. The
+        following names are reserved and rejected: `x-signature`, `host`,
+        `content-length`, `content-type`, `connection`, `transfer-encoding`.
+      tags:
+        - Webhooks
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: The ID of the webhook to update.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                endpoint:
+                  type: string
+                  format: uri
+                  description: New endpoint URL. Must be a valid URL.
+                  example: "https://example.com/webhook"
+                description:
+                  type: string
+                  description: New human-readable label.
+                  example: "Debt Collection Agent's Endpoint"
+                headers:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: |
+                    Map of custom header names to values. Non-empty object replaces
+                    all existing headers; empty object clears them.
+                  example:
+                    x-api-key: "your-gateway-key"
+      responses:
+        "200":
+          description: Webhook updated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: string
+                    description: The ID of the updated webhook.
+                    example: "60d0fe4f5311236168a109ca"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Webhook not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Webhook not found"]
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
     delete:
       summary: Delete a webhook
       x-fern-sdk-group-name: webhooks
@@ -12925,7 +13061,8 @@ components:
           description: A list of subscriptions for the webhook with populated agent details.
         decryptedSecretKey:
           type: string
-          description: The decrypted signing secret for the webhook. This is only returned when fetching a single webhook by ID.
+          description: |
+            The decrypted signing secret for the webhook. Returned by both `GET /webhook` (list) and `GET /webhook?webhookId=<id>` (single). Use as the HMAC-SHA256 key when verifying the `X-Signature` header on incoming webhook deliveries.
         createdAt:
           type: string
           format: date-time
