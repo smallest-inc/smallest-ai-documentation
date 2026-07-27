@@ -1,0 +1,17 @@
+---
+title: "Webhooks docs: signature verification, standard variables, deletion gate"
+
+
+---
+
+The Webhooks guide now documents behaviors previously only discoverable from the wire or from the platform source.
+
+**What's new**
+
+- **Signature verification.** New section names the `X-Signature` header, the HMAC-SHA256 (hex) algorithm, and the raw-body input rule, with runnable Python and Node samples that use constant-time comparison.
+- **Standard variables in `metadata.variables`.** The platform always injects `call_id`, `user_number`, `agent_number`, `conversation_type`, `agent_gender`, `default_language`, `supported_languages`, `current_date`, `current_time`, `current_day`, and `timezone`. Custom keys from the agent's config stack alongside these.
+- **Signing secret via API.** `GET /webhook` and `GET /webhook?webhookId=<id>` return the secret in the `decryptedSecretKey` field, so integrations can fetch it without opening the dashboard.
+- **Deletion behavior.** `DELETE /webhook/{id}` returns 400 while the webhook is still assigned to any agent. Clear assignments via `DELETE /agent/{agentId}/webhook-subscriptions`, then retry the delete.
+- **`PATCH /webhook/{id}` scope.** Only `endpoint`, `description`, and `headers` can be updated in place; event subscriptions must be changed through the webhook-subscriptions endpoints or the agent editor.
+
+The example `post-conversation` body was updated so `variables` now shows the standard platform-set keys alongside a couple of custom ones.

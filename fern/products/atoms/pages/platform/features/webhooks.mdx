@@ -66,7 +66,7 @@ Click any webhook to see its details and subscriptions.
 | **Description** | Your note |
 | **Subscriptions** | Which agents are using this webhook and what events |
 | **Status** | Enabled or disabled |
-| **Signing Secret** | For verifying requests are from Atoms |
+| **Signing Secret** | Per-webhook HMAC key. Use it to verify request authenticity. See [Verifying signatures](#verifying-signatures). |
 
 ---
 
@@ -81,6 +81,101 @@ Once a webhook exists, connect it to your agent.
 </Frame>
 
 Select your webhook from the list, then check which events (`pre-conversation`, `post-conversation`, `analytics-completed`) you want to receive. The agent will now POST to that endpoint for each subscribed event.
+
+---
+
+## Verifying signatures
+
+Every request Atoms sends to your endpoint carries an `X-Signature` header. Verify it before trusting the body.
+
+**Algorithm**
+
+- HMAC-SHA256, hex-encoded.
+- Key: the webhook's signing secret (shown on the webhook detail page, or returned as `decryptedSecretKey` from `GET /webhook` in the API Reference).
+- Message: the raw request body bytes, exactly as delivered. Do not re-serialize.
+
+```
+X-Signature = hex( HMAC_SHA256( signingSecret, raw_request_body ) )
+```
+
+**Python (Flask)**
+
+```python
+import hmac, hashlib
+from flask import Flask, request, abort
+
+SIGNING_SECRET = "..."  # from the dashboard or GET /webhook
+
+app = Flask(__name__)
+
+@app.post("/webhook")
+def receive():
+    provided = request.headers.get("X-Signature", "")
+    expected = hmac.new(
+        SIGNING_SECRET.encode(),
+        request.get_data(),  # raw bytes, not request.json
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(provided, expected):
+        abort(401)
+    # trust request.json now
+    ...
+    return "", 200
+```
+
+**Node (Express)**
+
+```js
+import crypto from "node:crypto";
+import express from "express";
+
+const app = express();
+const SIGNING_SECRET = process.env.WEBHOOK_SECRET;
+
+// Capture raw body so the HMAC matches byte-for-byte.
+app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
+
+app.post("/webhook", (req, res) => {
+  const provided = req.header("X-Signature") ?? "";
+  const expected = crypto
+    .createHmac("sha256", SIGNING_SECRET)
+    .update(req.rawBody)
+    .digest("hex");
+
+  const a = Buffer.from(provided, "hex");
+  const b = Buffer.from(expected, "hex");
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return res.status(401).end();
+  }
+  // trust req.body now
+  res.status(200).end();
+});
+```
+
+<Warning>
+Use a constant-time comparison (`hmac.compare_digest` in Python, `crypto.timingSafeEqual` in Node) to avoid timing side channels.
+</Warning>
+
+---
+
+## Managing webhooks via API
+
+Everything you can do from the dashboard is also available under the **Webhooks** section of the API Reference. Notable behaviors:
+
+- **`GET /webhook`** and **`GET /webhook?webhookId=<id>`** both return the signing secret in the `decryptedSecretKey` field, so you can fetch it programmatically without hitting the dashboard.
+- **`POST /webhook`** returns only the new webhook's ID. Call `GET /webhook?webhookId=<id>` right after to retrieve the signing secret.
+- **`PATCH /webhook/{id}`** can update `endpoint`, `description`, and `headers` only. Event subscriptions cannot be changed with `PATCH`; add or remove them via the `POST /agent/{agentId}/webhook-subscriptions` and `DELETE /agent/{agentId}/webhook-subscriptions` endpoints, or from the agent editor.
+
+### Deleting a webhook
+
+`DELETE /webhook/{id}` fails with **400** if the webhook is still assigned to any agent:
+
+```
+Cannot delete webhook: It is currently assigned to one or more agents.
+Please remove all agent assignments first.
+```
+
+Clean unassign path: call `DELETE /agent/{agentId}/webhook-subscriptions` for each agent that has the webhook attached, then retry the delete. Removing the webhook from the agent's **Webhook** tab in the dashboard does the same thing.
 
 ---
 
@@ -188,10 +283,26 @@ Each element represents one speaking turn.
 
 ### `metadata.variables`
 
-A flat key-value object. Keys and values are entirely determined by the agent configuration; they are **not** fixed by the platform. Common examples include `agent_name`, `customer_name`, `current_date`, `default_language`, plus any domain-specific variables your agent uses (e.g. `due_amount`, `bank_name`, `total_loan_amount`).
+A flat key-value object. The platform always injects a fixed set of standard keys. Any additional keys come from the agent's own configuration (Agent Settings → Variables) or from prompt-declared placeholders.
+
+**Standard variables the platform always sets**
+
+| Key | Description |
+|---|---|
+| `call_id` | Same as `metadata.callId`. |
+| `user_number` | Caller's phone number (E.164). Same as `callData.fromNumber` for inbound. |
+| `agent_number` | Number the agent answered on (E.164). Same as `callData.toNumber` for inbound. |
+| `conversation_type` | `telephonyInbound` or `telephonyOutbound`. |
+| `agent_gender` | From the agent's voice configuration. |
+| `default_language` | The agent's default language code (e.g. `en`, `hi`). |
+| `supported_languages` | Comma-separated list of language codes the agent is configured to accept. |
+| `current_date`, `current_time`, `current_day` | Rendered at call start in the agent's `timezone`. Available as `{{current_date}}` etc. in prompts. |
+| `timezone` | The agent's configured timezone (e.g. `Asia/Kolkata`). |
+
+Custom keys (e.g. `agent_name`, `customer_name`, `due_amount`) sit alongside these.
 
 <Warning>
-The `variables` object is fully dynamic. New keys can appear at any time depending on the agent's prompt configuration. Your code should handle unknown keys gracefully — store them in a generic JSON column rather than mapping each to a fixed column.
+The `variables` object is otherwise fully dynamic. New custom keys can appear at any time depending on the agent's prompt or the payload passed to the outbound call API. Your code should handle unknown keys gracefully. Store them in a generic JSON column rather than mapping each to a fixed column.
 </Warning>
 
 ### Example body
@@ -221,6 +332,17 @@ The `variables` object is fully dynamic. New keys can appear at any time dependi
       { "role": "user", "content": "हाँ बोलिए", "timestamp": "2026-05-08T07:52:07.369Z" }
     ],
     "variables": {
+      "call_id": "CALL-1778226705739-7e4c17",
+      "user_number": "+916296641821",
+      "agent_number": "+918035317096",
+      "conversation_type": "telephonyOutbound",
+      "agent_gender": "female",
+      "default_language": "hi",
+      "supported_languages": "hi,en",
+      "current_date": "2026-05-08",
+      "current_day": "Friday",
+      "current_time": "13:21",
+      "timezone": "Asia/Kolkata",
       "agent_name": "Nisha",
       "customer_name": "Rahul Sharma",
       "due_amount": "29000"
@@ -361,12 +483,8 @@ All three events share the same `callId` — use it as the join key.
 
 ## Tips
 
-<Accordion title="Verify signatures">
-  Use the signing secret to verify requests actually come from Atoms. The example code in the Create modal shows how.
-</Accordion>
-
 <Accordion title="Handle failures gracefully">
-  If your endpoint is down, events may be lost. Log everything and consider retry logic.
+  If your endpoint is down, events may be lost. Log everything and consider retry logic on your side.
 </Accordion>
 
 <Accordion title="One webhook, multiple agents">
