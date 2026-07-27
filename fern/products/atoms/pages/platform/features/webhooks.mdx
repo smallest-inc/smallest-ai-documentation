@@ -481,15 +481,49 @@ All three events share the same `callId` — use it as the join key.
 
 ---
 
-## Tips
+## FAQ
 
-<Accordion title="Handle failures gracefully">
-  If your endpoint is down, events may be lost. Log everything and consider retry logic on your side.
-</Accordion>
+<AccordionGroup>
+  <Accordion title="What's the delivery timeout?">
+    30 seconds per request. If your endpoint hasn't returned a response in that window, Atoms marks the delivery as failed.
+  </Accordion>
 
-<Accordion title="One webhook, multiple agents">
-  You can connect the same webhook to multiple agents. The `metadata.agentId` field tells you which agent sent the event.
-</Accordion>
+  <Accordion title="Does Atoms retry failed deliveries?">
+    No. A non-2xx response or a network-level failure (timeout, DNS, TLS, connection refused) is logged as `FAILED` and the event moves on. Handle retries on your side: acknowledge fast with a 2xx, then process asynchronously; if your endpoint is down, drain from your own persistent queue once you recover.
+  </Accordion>
+
+  <Accordion title="What IPs does Atoms send from?">
+    No fixed egress IP is published. Use the `X-Signature` header for authenticity; don't rely on IP allow-lists.
+  </Accordion>
+
+  <Accordion title="Can one webhook fan out to multiple agents?">
+    Yes. Assign the same webhook to several agents in the agent editor. The `metadata.agentId` field on every event tells you which agent produced it.
+  </Accordion>
+
+  <Accordion title="Is event ordering guaranteed?">
+    Within a single call, the three events fire in this sequence: `pre-conversation` → `post-conversation` → `analytics-completed`. Deliveries themselves are best-effort; treat `metadata.callId` as the join key and reconcile on your side rather than assuming exact arrival order across concurrent calls.
+  </Accordion>
+
+  <Accordion title="How do I test webhooks locally?">
+    Run a receiver on `localhost` and expose it with a tunnel (ngrok, cloudflared, etc.). Register the tunnel URL as the webhook endpoint from the dashboard, then place a test call. Live payloads land on your local process.
+  </Accordion>
+
+  <Accordion title="How do I fetch the signing secret programmatically?">
+    Call `GET /webhook?webhookId=<id>` (or `GET /webhook` to get all). The response includes a `decryptedSecretKey` field with the plaintext HMAC key.
+  </Accordion>
+
+  <Accordion title="Can I change which events a webhook subscribes to?">
+    Not through `PATCH /webhook/{id}` (it only updates `endpoint`, `description`, `headers`). Add or remove event subscriptions via the `POST /agent/{agentId}/webhook-subscriptions` and `DELETE /agent/{agentId}/webhook-subscriptions` endpoints, or from the agent editor.
+  </Accordion>
+
+  <Accordion title="Why do I get 400 when deleting a webhook?">
+    The webhook is still assigned to at least one agent. Remove the assignment (either from the agent's Webhook tab or via `DELETE /agent/{agentId}/webhook-subscriptions`), then retry `DELETE /webhook/{id}`.
+  </Accordion>
+
+  <Accordion title="Are variable keys stable?">
+    The 11 platform-set standard keys (`call_id`, `user_number`, `agent_number`, `conversation_type`, `agent_gender`, `default_language`, `supported_languages`, `current_date`, `current_time`, `current_day`, `timezone`) are stable. Any additional keys come from the agent's own config and can change whenever the prompt or outbound-call payload changes, so store `variables` as JSON on your side.
+  </Accordion>
+</AccordionGroup>
 
 ---
 
