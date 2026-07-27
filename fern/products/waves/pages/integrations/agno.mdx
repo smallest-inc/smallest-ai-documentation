@@ -48,7 +48,7 @@ agent = Agent(
 response = agent.run("Generate a short audio welcoming listeners to the show.")
 ```
 
-Generated audio is returned to the agent run as an audio artifact (`response.audio`), and can optionally be written to disk with `target_directory`.
+Generated audio is returned to the agent run as a list of audio artifacts (`response.audio[0]`), and can optionally be written to disk with `target_directory`.
 
 ### Premium voices with Lightning v3.1 Pro
 
@@ -62,17 +62,21 @@ SmallestTools(voice_id="meher", model="lightning_v3.1_pro")
 
 ## Configuration
 
-| Parameter          | Type    | Default          | Description                                                              |
-| ------------------ | ------- | ---------------- | ------------------------------------------------------------------------ |
-| `voice_id`         | `str`   | `magnus`         | Default voice for synthesis                                              |
-| `api_key`          | `str`   | env var          | Smallest AI API key; falls back to `SMALLEST_API_KEY`                    |
-| `model`            | `str`   | `lightning_v3.1` | TTS model. One of `lightning_v3.1`, `lightning_v3.1_pro`                 |
-| `language`         | `str`   | `en`             | ISO 639-1 language code — see the model cards below for supported codes   |
-| `sample_rate`      | `int`   | `24000`          | Output sample rate in Hz (8000–44100)                                    |
-| `speed`            | `float` | `1.0`            | Speech speed multiplier (0.5–2.0)                                        |
-| `output_format`    | `str`   | `wav`            | Audio output format: `wav`, `mp3`, `pcm`, `ulaw`, `alaw`                 |
-| `target_directory` | `str`   | `None`           | If set, generated audio is also saved to this directory                  |
-| `timeout`          | `int`   | `30`             | HTTP request timeout in seconds                                          |
+| Parameter               | Type    | Default          | Description                                                                     |
+| ------------------------ | ------- | ---------------- | -------------------------------------------------------------------------------- |
+| `voice_id`               | `str`   | `magnus`         | Default voice for synthesis                                                      |
+| `api_key`                | `str`   | env var          | Smallest AI API key; falls back to `SMALLEST_API_KEY`                            |
+| `model`                  | `str`   | `lightning_v3.1` | TTS model. One of `lightning_v3.1`, `lightning_v3.1_pro`. An invalid value raises a `ValueError` listing the valid options. |
+| `language`               | `str`   | `en`             | ISO 639-1 language code — see the model cards below for supported codes          |
+| `sample_rate`            | `int`   | `24000`          | Output sample rate in Hz (8000–44100)                                            |
+| `speed`                  | `float` | `1.0`            | Speech speed multiplier (0.5–2.0)                                                |
+| `output_format`          | `str`   | `wav`            | Audio output format: `wav`, `mp3`, `pcm`, `ulaw`, `alaw`                          |
+| `target_directory`       | `str`   | `None`           | If set, generated audio is also saved to this directory                          |
+| `base_url`               | `str`   | Smallest AI TTS endpoint | Override the TTS endpoint — for self-hosted or region-pinned deployments  |
+| `enable_get_voices`      | `bool`  | `True`           | Register the `get_voices` tool                                                   |
+| `enable_text_to_speech`  | `bool`  | `True`           | Register the `text_to_speech` tool                                               |
+| `all`                    | `bool`  | `False`          | Register all tools, overriding the individual `enable_*` flags                   |
+| `timeout`                | `float` | `30`             | HTTP request timeout in seconds                                                  |
 
 ### Models
 
@@ -83,8 +87,8 @@ SmallestTools(voice_id="meher", model="lightning_v3.1_pro")
 
 ### Tools
 
-- **`text_to_speech(prompt, voice_id=None)`** — synthesizes speech via the unified `/waves/v1/tts` route and attaches the audio to the agent's response. The optional `voice_id` overrides the toolkit default per call.
-- **`get_voices()`** — lists the voice catalog for the configured model. The standard and Pro models have separate catalogs, so the toolkit queries the endpoint matching `model`.
+- **`text_to_speech(prompt, voice_id=None)`** — synthesizes speech via the unified `/waves/v1/tts` route and attaches the audio to the agent's response. The optional `voice_id` overrides the toolkit default per call. Non-audio responses (e.g. a JSON error body returned with an HTTP 200) are detected and surfaced as a tool error instead of being saved as a corrupt audio file.
+- **`get_voices()`** — lists the voice catalog for the configured model. The standard and Pro models have separate catalogs, so the toolkit queries the endpoint matching `model`. The response is normalized to a list of `{id, name, gender, accent, languages}` objects regardless of whether the API returns them under a `voices` key, a `data` key, or as a bare list.
 
 ---
 
