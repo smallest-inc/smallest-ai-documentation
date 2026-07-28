@@ -10749,6 +10749,294 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
+  /payment/v1/credits/balance:
+    get:
+      summary: Get credit balance
+      operationId: getCreditBalance
+      x-fern-sdk-group-name: billing
+      x-fern-sdk-method-name: get_balance
+      description: |
+        Returns the organization's current credit balance in USD plus the
+        current plan identifier. Organization is resolved from the API key,
+        so no `X-Organization-Id` header is required.
+      tags:
+        - Billing
+      security:
+        - BearerAuth: []
+      servers:
+        - url: https://api.smallest.ai
+          description: Production
+      responses:
+        "200":
+          description: Current balance for the caller's organization.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingBalanceResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+
+  /payment/v1/credits/ledger:
+    get:
+      summary: List credit ledger
+      operationId: getCreditLedger
+      x-fern-sdk-group-name: billing
+      x-fern-sdk-method-name: get_ledger
+      description: |
+        Paginated credit-ledger transaction history. Ledger reads are served
+        from ClickHouse; a rare storage-tier outage returns an empty
+        `transactions` array rather than a 5xx.
+
+        **Window rules**
+
+        - `from` defaults to `to - 7 days`, `to` defaults to now.
+        - The span between `from` and `to` cannot exceed **90 days**. A wider
+          span returns 400. Page through longer periods by making multiple
+          calls with shifted `from`/`to`.
+        - `from` cannot be earlier than **2026-03-02T00:00:00Z**. Older
+          historical data is not available via API; contact support for bulk
+          exports.
+        - `from > to` returns 400.
+
+        **Filters**
+
+        - `type` filters to a single transaction type. `PAYMENTS` is a
+          virtual filter that returns both `CREDIT_PURCHASE` and
+          `AUTO_RELOAD` rows.
+        - `scope` filters `USAGE_DEDUCTION` rows by product category.
+      tags:
+        - Billing
+      security:
+        - BearerAuth: []
+      servers:
+        - url: https://api.smallest.ai
+          description: Production
+      parameters:
+        - in: query
+          name: limit
+          description: Page size (1–100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - in: query
+          name: offset
+          description: Offset for pagination.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - in: query
+          name: from
+          description: |
+            Lower bound of the query window (ISO 8601, `Z`-suffixed UTC recommended). Defaults to seven days before `to`. Cannot be earlier than `2026-03-02T00:00:00Z`.
+          schema:
+            type: string
+            format: date-time
+            example: "2026-07-01T00:00:00Z"
+        - in: query
+          name: to
+          description: Upper bound of the query window (ISO 8601, `Z`-suffixed UTC recommended). Defaults to now.
+          schema:
+            type: string
+            format: date-time
+            example: "2026-07-28T00:00:00Z"
+        - in: query
+          name: type
+          description: Filter to a single transaction type. `PAYMENTS` is a virtual filter that returns purchase-related rows (`CREDIT_PURCHASE` + `AUTO_RELOAD`).
+          schema:
+            type: string
+            enum:
+              - SIGNUP_BONUS
+              - CREDIT_PURCHASE
+              - AUTO_RELOAD
+              - USAGE_DEDUCTION
+              - ADMIN_ADJUSTMENT
+              - COUPON_CREDIT
+              - MIGRATION
+              - PAYMENTS
+        - in: query
+          name: scope
+          description: Filter by spend category. Applies only to `USAGE_DEDUCTION` rows.
+          schema:
+            type: string
+            enum:
+              - platform
+              - voice_ai
+              - voice_models
+      responses:
+        "200":
+          description: Paginated ledger with summary + query window echo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingLedgerResponse"
+        "400":
+          description: |
+            Query-window validation failed. Common cases:
+
+            - `from` earlier than `2026-03-02T00:00:00Z`.
+            - Span between `from` and `to` exceeds 90 days.
+            - `from > to`.
+            - Malformed date string in `from` or `to`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: validation_error
+                      message:
+                        type: string
+              examples:
+                spanTooWide:
+                  summary: Range exceeds 90 days
+                  value:
+                    success: false
+                    error:
+                      code: validation_error
+                      message: "Date range cannot exceed 90 days. Please narrow your range or contact support for bulk exports."
+                beforeCutoff:
+                  summary: Range starts before the data-availability cutoff
+                  value:
+                    success: false
+                    error:
+                      code: validation_error
+                      message: "Date range starts before 2026-03-02. Usage data before this date is not available via API. Please contact support for historical exports."
+                malformedDate:
+                  summary: Unparseable date string
+                  value:
+                    success: false
+                    error:
+                      code: validation_error
+                      message: "from: Invalid date; to: Invalid date"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+
+  /payment/v1/credits/usage/breakdown:
+    get:
+      summary: Get usage breakdown
+      operationId: getCreditUsageBreakdown
+      x-fern-sdk-group-name: billing
+      x-fern-sdk-method-name: get_usage_breakdown
+      description: |
+        Total credits spent so far, split across the three product scopes.
+        The window is a cumulative snapshot from **2026-03-02T00:00:00Z**
+        (the platform's usage-tracking start date) up to the current
+        instant. Served from ClickHouse. No query parameters.
+      tags:
+        - Billing
+      security:
+        - BearerAuth: []
+      servers:
+        - url: https://api.smallest.ai
+          description: Production
+      responses:
+        "200":
+          description: Spend split by scope.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingUsageBreakdownResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+
+  /payment/v1/invoices:
+    get:
+      summary: List invoices
+      operationId: listInvoices
+      x-fern-sdk-group-name: billing
+      x-fern-sdk-method-name: list_invoices
+      description: |
+        Returns up to 20 of the most recent Stripe invoices for the caller's
+        organization. Each item is the raw Stripe `Invoice` object; use the
+        canonical Stripe reference at
+        [stripe.com/docs/api/invoices/object](https://stripe.com/docs/api/invoices/object)
+        for field-level semantics.
+
+        Organizations that have never been charged (free-tier only) return
+        an empty array.
+      tags:
+        - Billing
+      security:
+        - BearerAuth: []
+      servers:
+        - url: https://api.smallest.ai
+          description: Production
+      responses:
+        "200":
+          description: Up to 20 recent Stripe invoices for the caller's organization.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingInvoiceListResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+
+  /payment/v1/invoices/{invoiceId}/pdf:
+    get:
+      summary: Get invoice PDF URL
+      operationId: getInvoicePdf
+      x-fern-sdk-group-name: billing
+      x-fern-sdk-method-name: get_invoice_pdf
+      description: |
+        Returns a Stripe-hosted PDF URL for the invoice. The URL is
+        short-lived; fetch fresh when you need to hand it to a user.
+
+        Requesting an invoice that does not belong to the caller's
+        organization returns 404 (not 403), so a foreign invoice ID cannot
+        be confirmed to exist.
+      tags:
+        - Billing
+      security:
+        - BearerAuth: []
+      servers:
+        - url: https://api.smallest.ai
+          description: Production
+      parameters:
+        - in: path
+          name: invoiceId
+          required: true
+          description: Stripe invoice ID (e.g. `in_1THiCSRwh8g1U6dfOcUtTdq9`).
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stripe-hosted PDF URL for the invoice.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingInvoicePdfResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Invoice not found, or does not belong to the caller's organization.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: not_found
+                      message:
+                        type: string
+                        example: "Invoice not found: in_1THiCSRwh8g1U6dfOcUtTdq9"
+
 components:
   securitySchemes:
     BearerAuth:
@@ -13981,6 +14269,174 @@ components:
                 type: boolean
                 example: true
 
+    BillingBalanceResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [creditBalance, planId, isEnterprise]
+          properties:
+            creditBalance:
+              type: number
+              description: Current credit balance in USD. May be negative if the account has spent past its balance and is on a plan that permits overdraw.
+              example: 15
+            planId:
+              type: string
+              description: Identifier for the plan the organization is on.
+              example: plan_standard
+            isEnterprise:
+              type: boolean
+              description: True when the organization is on an enterprise plan (billed offline).
+              example: false
+
+    BillingLedgerEntry:
+      type: object
+      required: [id, transactionType, amount, balanceAfter, createdAt]
+      properties:
+        id:
+          type: string
+          description: Ledger row identifier.
+        transactionType:
+          type: string
+          enum:
+            - SIGNUP_BONUS
+            - CREDIT_PURCHASE
+            - AUTO_RELOAD
+            - USAGE_DEDUCTION
+            - ADMIN_ADJUSTMENT
+            - COUPON_CREDIT
+            - MIGRATION
+        amount:
+          type: number
+          description: Signed credit delta in USD. Positive for additions (`CREDIT_PURCHASE`, `AUTO_RELOAD`, `COUPON_CREDIT`, `SIGNUP_BONUS`), negative for spend (`USAGE_DEDUCTION`).
+        balanceAfter:
+          type: number
+          description: Balance after this row was applied.
+        featureId:
+          type: string
+          nullable: true
+          description: Product feature that triggered the row (e.g. `tts.generate`, `waves.stt`). Only set on `USAGE_DEDUCTION`.
+        referenceId:
+          type: string
+          nullable: true
+          description: External reference tying this row to a purchase, coupon, or admin action.
+        description:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        callId:
+          type: string
+          nullable: true
+          description: Associated call ID, when the row was produced by a call.
+        agentId:
+          type: string
+          nullable: true
+        requestId:
+          type: string
+          nullable: true
+
+    BillingLedgerResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [transactions, total, hasMore, summary, period]
+          properties:
+            transactions:
+              type: array
+              items:
+                $ref: "#/components/schemas/BillingLedgerEntry"
+            total:
+              type: integer
+              description: Total row count matching the filters (across all pages).
+            hasMore:
+              type: boolean
+              description: True when more rows exist beyond `offset + limit`.
+            summary:
+              type: object
+              required: [totalCreditsConsumed, totalCreditsAdded]
+              properties:
+                totalCreditsConsumed:
+                  type: number
+                  description: Sum of `USAGE_DEDUCTION` magnitudes across the window.
+                totalCreditsAdded:
+                  type: number
+                  description: Sum of positive rows (purchases, auto-reloads, coupon credits, signup bonuses) across the window.
+            period:
+              type: object
+              required: [from, to]
+              properties:
+                from:
+                  type: string
+                  format: date-time
+                  description: Echo of the effective lower bound (defaults to seven days before `to` when not supplied).
+                to:
+                  type: string
+                  format: date-time
+                  description: Echo of the effective upper bound (defaults to server-now when not supplied).
+
+    BillingUsageBreakdownResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [platform, voiceAi, voiceModels]
+          properties:
+            platform:
+              type: number
+              description: Credits spent on Atoms platform features (phone rental, telephony minutes, etc.).
+            voiceAi:
+              type: number
+              description: Credits spent on voice-agent runtime (LLM + TTS combined during voice calls).
+            voiceModels:
+              type: number
+              description: Credits spent on standalone Waves model calls (Lightning TTS, Pulse STT, Electron LLM used outside the voice-agent pipeline).
+
+    BillingInvoiceListResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          description: |
+            Up to 20 recent Stripe `Invoice` objects for the caller's organization. Fields follow the canonical Stripe shape. Keys most callers use: `id`, `status`, `amount_paid`, `amount_due`, `currency`, `created`, `hosted_invoice_url`, `invoice_pdf`, `number`.
+          items:
+            type: object
+            additionalProperties: true
+
+    BillingInvoicePdfResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [pdfUrl]
+          properties:
+            pdfUrl:
+              type: string
+              format: uri
+              description: Stripe-hosted URL to the invoice PDF. Short-lived; refetch when you need to hand it to a user.
+
   responses:
     UnauthorizedError:
       description: Access token is missing or invalid
@@ -14129,6 +14585,11 @@ tags:
   - name: Post-Call Analytics
     description: |
       Configure disposition metrics that are automatically extracted from each completed call (call resolved, satisfaction score, call outcome, summary, etc.). Post-call analytics is not a standalone endpoint — it is configured through the versioning system by setting the `postCallAnalyticsConfig` field in the body of `PATCH /agent/{id}/drafts/{draftId}/config`, then publishing and activating the draft. See the [Post-Call Metrics guide](/atoms/atoms-platform/features/post-call-metrics) for the full walkthrough.
+  - name: Billing
+    description: |
+      Read-only access to your organization's credit balance, ledger, usage breakdown, and invoices. Authenticate with your user API key (`Authorization: Bearer <key>`); the organization is resolved from the key itself, no `X-Organization-Id` header is required. Only these read endpoints accept the API key. Purchase, auto-reload, and payment-method routes remain UI-only.
+
+      **Base URL for this section is `https://api.smallest.ai` (not `/atoms/v1`).**
 
 servers:
   - url: https://api.smallest.ai/atoms/v1
