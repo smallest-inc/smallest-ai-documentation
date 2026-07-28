@@ -1,0 +1,18 @@
+---
+title: smallestai SDK — STT moves to the unified /waves/v1/stt endpoints; voice cloning + Electron LLM added
+---
+
+The `smallestai` Python SDK is switching its Waves-side generator input from the legacy `pulse-stt` specs to the unified `stt-*` specs, and picking up two Waves surfaces that were sitting in the repo unwired.
+
+**What changes on the next SDK regen**
+
+- **STT.** `client.waves.transcribe(model="pulse"|"pulse-pro", ...)` on `POST /waves/v1/stt/`. Supersedes the previous `transcribe_pulse` method, which hit `POST /waves/v1/pulse/get_text` and had no `model` parameter, so it could not reach Pulse Pro. Existing production traffic on the legacy endpoint keeps working.
+- **STT streaming.** Live transcription is now surfaced from the unified `WSS /waves/v1/stt/live?model=pulse` spec.
+- **Voice cloning.** `client.waves.voice_cloning.create_voice_clone(...)` and `list_voice_clones(...)` are generated from the voice-cloning spec.
+- **Electron LLM.** `client.electron.complete(...)` on `POST /waves/v1/chat/completions` with `model="electron"`. OpenAI-compatible request/response shape — you can also point any OpenAI SDK at `https://api.smallest.ai/waves/v1` unchanged.
+
+**TTS is unaffected** — it already uses the unified `/waves/v1/tts` and `/waves/v1/tts/live` endpoints.
+
+**Nothing changes at the wire level.** Only which spec files feed SDK generation. The retired specs stay in the repo and continue to feed the `/models` API-ref pages.
+
+**Not included: `delete_voice_clone`.** The platform's `POST /voice-cloning/delete` endpoint exists but currently accepts JWT auth only, not the bearer API key the SDK uses. Spec + SDK method will follow once the platform team exposes it via API key.
