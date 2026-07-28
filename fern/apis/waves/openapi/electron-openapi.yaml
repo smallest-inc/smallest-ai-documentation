@@ -15,6 +15,8 @@ paths:
   /waves/v1/chat/completions:
     post:
       operationId: electronChatCompletions
+      x-fern-sdk-group-name: electron
+      x-fern-sdk-method-name: complete
       summary: Chat Completions (Electron)
       description: |
         Generate a chat completion with Electron. OpenAI-compatible
@@ -292,10 +294,16 @@ components:
           type: array
           maxItems: 64
           description: |
-            Tool / function calling definitions. Standard OpenAI shape.
-            See [Tool Calling](/models/documentation/llm-electron/tool-function-calling).
+            Tool / function calling definitions. Forwarded verbatim to the
+            OpenAI-compatible upstream, so the standard OpenAI shape
+            (`{type: "function", function: {name, description, parameters}}`)
+            is the recommended form and is what the examples below use.
+            The wire schema is permissive (`array<object>`) — any tools payload
+            the upstream accepts will work. See [Tool Calling](/models/documentation/llm-electron/tool-function-calling)
+            for details.
           items:
-            $ref: "#/components/schemas/Tool"
+            type: object
+            additionalProperties: true
         tool_choice:
           oneOf:
             - type: string
@@ -375,31 +383,12 @@ components:
         tool_calls:
           type: array
           items:
-            $ref: "#/components/schemas/ToolCall"
+            $ref: "#/components/schemas/ElectronToolCall"
         tool_call_id:
           type: string
           description: Required when `role` is `"tool"`.
 
-    Tool:
-      type: object
-      required: [type, function]
-      properties:
-        type:
-          type: string
-          enum: [function]
-        function:
-          type: object
-          required: [name]
-          properties:
-            name:
-              type: string
-            description:
-              type: string
-            parameters:
-              type: object
-              description: JSON Schema for the tool's parameters.
-
-    ToolCall:
+    ElectronToolCall:
       type: object
       required: [id, type, function]
       properties:
