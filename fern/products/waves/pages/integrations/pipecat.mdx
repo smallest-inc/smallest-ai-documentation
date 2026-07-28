@@ -74,16 +74,31 @@ stt = SmallestSTTService(
     api_key=os.getenv("SMALLEST_API_KEY"),
     settings=SmallestSTTService.Settings(
         language=Language.EN,
+        word_timestamps=True,
     ),
 )
 ```
 
-| Parameter  | Type       | Default       | Description                         |
-| ---------- | ---------- | ------------- | ----------------------------------- |
-| `api_key`  | `str`      | —             | Your Smallest AI API key (required) |
-| `language` | `Language` | `Language.EN` | Language for transcription          |
+**Constructor parameters:**
 
-The STT service connects to the Pulse real-time WebSocket endpoint (`wss://api.smallest.ai/waves/v1/pulse/get_text`) and streams audio frames from the pipeline, returning transcriptions with 64ms TTFT.
+| Parameter | Type  | Default | Description                          |
+| --------- | ----- | ------- | ------------------------------------ |
+| `api_key` | `str` | —       | Your Smallest AI API key (required)  |
+
+**Settings (`SmallestSTTService.Settings`):**
+
+| Parameter              | Type       | Default       | Description                                                                                                                                                         |
+| ---------------------- | ---------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `language`             | `Language` | `Language.EN` | Language for transcription                                                                                                                                          |
+| `word_timestamps`      | `bool`     | `False`       | Include word-level timestamps                                                                                                                                       |
+| `full_transcript`      | `bool`     | `False`       | Include cumulative transcript                                                                                                                                       |
+| `sentence_timestamps`  | `bool`     | `False`       | Include sentence-level timestamps                                                                                                                                   |
+| `redact_pii`           | `bool`     | `False`       | Redact personally identifiable information                                                                                                                          |
+| `redact_pci`           | `bool`     | `False`       | Redact payment card information                                                                                                                                     |
+| `numerals`             | `str`      | `"auto"`      | Convert spoken numerals to digits                                                                                                                                   |
+| `diarize`              | `bool`     | `False`       | Enable speaker diarization                                                                                                                                          |
+
+The STT service connects to the Waves v4 STT endpoint (`wss://api.smallest.ai/waves/v1/stt/live?model=pulse`) and streams audio frames from the pipeline, returning transcriptions with 64ms TTFT. Pipecat's VAD triggers a `finalize` message on each end-of-utterance to flush the transcript while keeping the WebSocket session open for the next utterance.
 
 ---
 
