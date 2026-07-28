@@ -7,21 +7,28 @@ The Atoms Agent Crews SDK is the Python framework for building voice agents on t
 
 This page walks the whole picture. What each piece is called, how the lifecycle runs from create to live call, the two independent versioning axes, and a working sample you can drop in.
 
-```mermaid
-graph LR
-  Caller["Caller"]
-  STT["Smallest STT<br/>(platform)"]
-  Node["Your crew node<br/>(the LLM turn)"]
-  TTS["Smallest TTS<br/>(platform, active config revision)"]
-  Caller -->|audio| STT
-  STT -->|transcript| Node
-  Node -->|text| TTS
-  TTS -->|audio| Caller
-```
-
 ## What agent-crew is
 
 Agent-crew lets you run the agent's brain (the LLM turn plus your logic) as your own code, in real time over a WebSocket. Smallest handles speech-to-text, text-to-speech, telephony, and turn-taking around it. Your code owns the words. The platform owns everything around them.
+
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#e6f4f2','primaryBorderColor':'#2A9D8F','primaryTextColor':'#083b4d','lineColor':'#2A9D8F','clusterBkg':'#f5faf9','clusterBorder':'#083b4d','fontFamily':'Inter, system-ui, sans-serif'}}}%%
+flowchart LR
+    Caller(["Caller"])
+    subgraph Platform["Smallest platform"]
+        STT["Speech-to-text (Pulse)"]
+        TTS["Text-to-speech (Lightning)"]
+    end
+    subgraph Yours["Your crew code"]
+        Node["Crew node (your LLM turn)"]
+    end
+    Caller -->|audio| STT
+    STT -->|transcript| Node
+    Node -->|text| TTS
+    TTS -->|audio| Caller
+```
+
+_Runtime boundary. Smallest handles STT and TTS. Your crew node handles the LLM turn._
 
 ## Crew, node, and crew code
 
@@ -32,6 +39,20 @@ Agent-crew lets you run the agent's brain (the LLM turn plus your logic) as your
 
   Multiple nodes can run in parallel in one session.
 - **Crew code.** Your Python project (`server.py` + node files + `requirements.txt`) that defines the crew and wires its nodes in the `setup_handler`. It's the deployable artifact. `agent-crew deploy` zips it into a build.
+
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#e6f4f2','primaryBorderColor':'#2A9D8F','primaryTextColor':'#083b4d','lineColor':'#2A9D8F','clusterBkg':'#f5faf9','clusterBorder':'#083b4d','fontFamily':'Inter, system-ui, sans-serif'}}}%%
+flowchart TB
+    Platform["Smallest platform"] -->|connects per call| Session
+    subgraph App["AtomsCrewApp (your deployed crew code, one build)"]
+        subgraph Session["CrewSession (one live call)"]
+            Out["OutputCrewNode (produces speech, the LLM turn)"]
+            Bg["BackgroundCrewNode (observes silently)"]
+        end
+    end
+```
+
+_One agent runs one live crew build. A CrewSession hosts your nodes per call._
 
 **One agent = one platform agent (config, versioned) + one live crew build (your code, one or more nodes).**
 
