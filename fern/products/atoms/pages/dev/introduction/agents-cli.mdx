@@ -1,19 +1,15 @@
 ---
 title: "Agents CLI"
 sidebarTitle: "Agents CLI"
-description: "Create, inspect, and place calls from your Atoms agents without leaving the terminal. Six commands, all verified against production."
+description: "Create, inspect, and place calls from your Atoms agents without leaving the terminal."
 ---
 
 The `smallestai agents` command group manages the agent itself: create new agents, list what you have, look up config, print a dashboard URL, check phone-number status, and place outbound calls. It sits alongside `smallestai agent-crew` (which manages crew code) and `smallestai auth` (which manages credentials). Same binary, three concerns.
 
-<Note>
-All six commands below were verified against `api.smallest.ai` on `smallestai==5.3.0`, including a real outbound call that reached the destination and completed successfully.
-</Note>
-
 ## Setup
 
 ```bash
-pip install smallestai>=5.3.0
+pip install smallestai
 ```
 
 Auth resolution is the same across every `smallestai` subcommand:
@@ -120,10 +116,10 @@ If neither is set, every `agents` command exits with an auth error before making
       --from-product-id <product_id>
     ```
 
-    Prints the call ID on success. Verified on production: the call reached the destination and `calls.get` returned `status=completed` with a real duration.
+    Prints the call ID on success. Track status with `client.atoms.calls.get(id=<call_id>)`.
 
     <Note>
-    **SDK gotcha (5.3.0):** `client.atoms.calls.get(...)` takes `id=<call_id>` as the keyword, not `conversation_id=`. A caller passing `conversation_id=` will get a `TypeError`. This is a SDK-side bug tracked for the next patch release.
+    `client.atoms.calls.get(...)` takes `id=<call_id>` as the keyword, not `conversation_id=`.
     </Note>
   </Accordion>
 </AccordionGroup>
