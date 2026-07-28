@@ -10787,8 +10787,23 @@ paths:
         from ClickHouse; a rare storage-tier outage returns an empty
         `transactions` array rather than a 5xx.
 
-        Optional filters: `from`/`to` (ISO 8601 timestamps, default is the
-        last 7 days), `type` (transaction type), `scope` (spend category).
+        **Window rules**
+
+        - `from` defaults to `to - 7 days`, `to` defaults to now.
+        - The span between `from` and `to` cannot exceed **90 days**. A wider
+          span returns 400. Page through longer periods by making multiple
+          calls with shifted `from`/`to`.
+        - `from` cannot be earlier than **2026-03-02T00:00:00Z**. Older
+          historical data is not available via API; contact support for bulk
+          exports.
+        - `from > to` returns 400.
+
+        **Filters**
+
+        - `type` filters to a single transaction type. `PAYMENTS` is a
+          virtual filter that returns both `CREDIT_PURCHASE` and
+          `AUTO_RELOAD` rows.
+        - `scope` filters `USAGE_DEDUCTION` rows by product category.
       tags:
         - Billing
       security:
@@ -10814,16 +10829,19 @@ paths:
             default: 0
         - in: query
           name: from
-          description: Lower bound of the query window (ISO 8601). Defaults to seven days before `to`.
+          description: |
+            Lower bound of the query window (ISO 8601, `Z`-suffixed UTC recommended). Defaults to seven days before `to`. Cannot be earlier than `2026-03-02T00:00:00Z`.
           schema:
             type: string
             format: date-time
+            example: "2026-07-01T00:00:00Z"
         - in: query
           name: to
-          description: Upper bound of the query window (ISO 8601). Defaults to now.
+          description: Upper bound of the query window (ISO 8601, `Z`-suffixed UTC recommended). Defaults to now.
           schema:
             type: string
             format: date-time
+            example: "2026-07-28T00:00:00Z"
         - in: query
           name: type
           description: Filter to a single transaction type. `PAYMENTS` is a virtual filter that returns purchase-related rows (`CREDIT_PURCHASE` + `AUTO_RELOAD`).
@@ -10855,7 +10873,51 @@ paths:
               schema:
                 $ref: "#/components/schemas/BillingLedgerResponse"
         "400":
-          $ref: "#/components/responses/BadRequestError"
+          description: |
+            Query-window validation failed. Common cases:
+
+            - `from` earlier than `2026-03-02T00:00:00Z`.
+            - Span between `from` and `to` exceeds 90 days.
+            - `from > to`.
+            - Malformed date string in `from` or `to`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: validation_error
+                      message:
+                        type: string
+              examples:
+                spanTooWide:
+                  summary: Range exceeds 90 days
+                  value:
+                    success: false
+                    error:
+                      code: validation_error
+                      message: "Date range cannot exceed 90 days. Please narrow your range or contact support for bulk exports."
+                beforeCutoff:
+                  summary: Range starts before the data-availability cutoff
+                  value:
+                    success: false
+                    error:
+                      code: validation_error
+                      message: "Date range starts before 2026-03-02. Usage data before this date is not available via API. Please contact support for historical exports."
+                malformedDate:
+                  summary: Unparseable date string
+                  value:
+                    success: false
+                    error:
+                      code: validation_error
+                      message: "from: Invalid date; to: Invalid date"
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
 
@@ -10867,8 +10929,9 @@ paths:
       x-fern-sdk-method-name: get_usage_breakdown
       description: |
         Total credits spent so far, split across the three product scopes.
-        The window is anchored to the platform's usage-tracking start date
-        and ends at the current instant. Served from ClickHouse.
+        The window is a cumulative snapshot from **2026-03-02T00:00:00Z**
+        (the platform's usage-tracking start date) up to the current
+        instant. Served from ClickHouse. No query parameters.
       tags:
         - Billing
       security:
