@@ -1,0 +1,64 @@
+---
+title: Python SDK 5.3.0 — unified speech-to-text namespace (breaking), voice cloning, Electron LLM, webhook update
+---
+
+`smallestai==5.3.0` retires the legacy Waves STT methods and moves both file and live transcription under one `client.waves.speech_to_text` namespace. It also adds voice cloning, the Electron LLM completion client, and a webhook-update method. Constructor signature is unchanged: `SmallestAI(api_key="...")` keeps working.
+
+## Update your install
+
+```bash
+pip install --upgrade smallestai
+# pinned: pip install smallestai==5.3.0
+```
+
+## Breaking: unified speech-to-text
+
+The two legacy STT methods are removed and replaced by one namespace. Migration is a rename, no behavior change:
+
+| Before (≤5.2.0) | After (5.3.0) |
+|---|---|
+| `client.waves.transcribe_pulse(...)` | `client.waves.speech_to_text.transcribe(...)` |
+| `client.waves.pulse_stt_streaming(...)` | `client.waves.speech_to_text.stream(...)` |
+| `smallestai.waves.types.transcribe_pulse_*` | removed (use the `transcribe` / `stream` response types) |
+
+Batch `transcribe(...)` takes typed `model` (`pulse` / `pulse-pro`) and `language`. There is no deprecation alias; the old names are gone in 5.3.0.
+
+## Typed streaming helper
+
+The live endpoint reads its session config (`model`, `language`, `sample_rate`, `encoding`, and tuning knobs) from the WebSocket handshake query string. `speech_to_text.stream(...)` accepts these through `request_options["additional_query_parameters"]`. For a typed, discoverable call, use the helper:
+
+```python
+from smallestai import SmallestAI
+from smallestai.waves.helpers import stream_speech_to_text
+
+client = SmallestAI()
+with stream_speech_to_text(client, language="en", sample_rate=16000) as socket:
+    socket.send_audio_chunk_out(pcm_bytes)
+    socket.send_finalize_signal({"type": "finalize"})
+    for event in socket:
+        print(event)
+```
+
+The helper types the full Speech-to-Text param set: audio (`sample_rate`, `encoding`, `format`), transcript formatting (`word_timestamps`, `sentence_timestamps`, `diarize`, `punctuate`, `capitalize`, `itn_normalize`, `numerals`, `full_transcript`, `max_words`), turn-taking (`finalize_on_words`, `eou_timeout_ms`), VAD (`vad`, `vad_events`, `vad_threshold`, `vad_min_speech_ms`), redaction (`redact_pii`, `redact_pci`), and **keyword boosting** (`keywords`). Booleans are sent as `"true"` / `"false"` and list params (`keywords`, `redact_pii`, `redact_pci`) are comma-joined for you; anything not named still passes through `additional_query_parameters`.
+
+## New (additive, no action needed)
+
+| Method | What it does |
+|---|---|
+| `client.waves.create_voice_clone(...)` | Create a cloned voice from reference audio. |
+| `client.waves.list_voice_clones(...)` | List the cloned voices on your account. |
+| `client.waves.electron.complete(...)` | Chat completion against Electron, the voice-optimized SLM. |
+| `client.atoms.webhooks.update(...)` | Update an existing webhook subscription. |
+
+## Migration
+
+The rename is mechanical. A single repo-wide `sed`:
+
+```bash
+find . -name '*.py' -exec sed -i.bak \
+  -e 's/\.transcribe_pulse(/.speech_to_text.transcribe(/g' \
+  -e 's/\.pulse_stt_streaming(/.speech_to_text.stream(/g' \
+  {} \;
+```
+
+If you imported `smallestai.waves.types.transcribe_pulse_*` directly, switch to the `transcribe` / `stream` response types. Full SDK-side write-up: [MIGRATION.md on smallest-python-sdk](https://github.com/smallest-inc/smallest-python-sdk/blob/main/MIGRATION.md).
