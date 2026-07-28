@@ -395,6 +395,64 @@ When deployed code raises, the SDK auto-records the error on the call (in `calll
 
 ---
 
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="What does my crew code own, and where do STT and TTS come from?">
+    Your crew node owns the **LLM turn only**: it receives the transcript as messages and
+    yields text. Speech-to-text (Pulse / Pulse Pro) and text-to-speech (Lightning) are set on
+    the **agent in the dashboard**, not in code, and run platform-side. Turn-taking,
+    interrupts, and telephony are platform-side too. So the pipeline is:
+
+    ```
+    caller audio -> Smallest STT -> your crew node (your LLM) -> text -> Smallest TTS -> caller
+    ```
+
+    You never write STT or TTS code. You pick them in agent settings; your node just generates
+    the words.
+  </Accordion>
+
+  <Accordion title="Can I use my own LLM or runtime instead of an OpenAI model?">
+    Yes, and it is the default, not a special mode. `OpenAIClient` accepts any
+    OpenAI-compatible endpoint via `base_url`. Point it at your runtime:
+
+    ```python
+    self.llm = OpenAIClient(
+        model="your-model",
+        api_key=os.getenv("YOUR_LLM_KEY"),
+        base_url="https://your-runtime.example.com/v1",
+    )
+    ```
+
+    It needs the Chat Completions shape (`/v1/chat/completions`), streaming, and tool-calling
+    if you use tools. Not OpenAI-shaped? Put a thin proxy in front. Nothing else changes: you
+    still get Smallest STT and TTS on the same agent.
+  </Accordion>
+
+  <Accordion title="Can I build a multi-agent crew, or is it one agent per call?">
+    Multi-agent is supported. A `CrewSession` runs multiple nodes in parallel for one call:
+
+    - `OutputCrewNode`: user-facing, produces speech. You can have more than one (for example a
+      router that hands off).
+    - `BackgroundCrewNode`: observes every event silently (no audio), for example live
+      sentiment, compliance checks, or logging. Output nodes can read a background node's state
+      mid-call.
+
+    The [`background_agent`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/background_agent)
+    example shows a support agent plus a sentiment analyzer that triggers auto-escalation.
+    Start single-node ([`getting_started`](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/getting_started)),
+    add nodes as you need them.
+  </Accordion>
+
+  <Accordion title="Can I test a full turn without a phone call?">
+    Yes. Run `python server.py`, then `smallestai agent-crew chat` in a second terminal for a
+    text REPL against your local crew: real session lifecycle, your real LLM, no telephony.
+    Iterate there, then deploy.
+  </Accordion>
+</AccordionGroup>
+
+---
+
 ## More examples
 
 The two crews above are the starting points. The [Smallest AI cookbook](https://github.com/smallest-inc/cookbook/tree/main/voice-agents) ships ~15 ready-to-run voice-agent examples covering tool calling, call control, multi-language support, knowledge-base grounding, real banking / scheduling / IVR flows, observability, and more — each in its own directory with the same `curl`-and-run shape.
