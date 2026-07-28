@@ -1,0 +1,282 @@
+---
+title: "How agent-crew works: lifecycle and versioning"
+sidebarTitle: "How agent-crew works"
+description: "The full agent-crew lifecycle from create to live call, the two independent versioning axes (config vs builds), and a verified end-to-end sample."
+---
+
+Everything below was verified against `atoms-platform` source and live prod (`api.smallest.ai`) on 2026-07-28.
+
+## What agent-crew is
+
+Agent-crew lets you run the agent's **brain** (the LLM turn plus your logic) as your own code, in real time over a WebSocket, while Smallest handles **speech-to-text, text-to-speech, telephony, and turn-taking**. Your code owns the words; the platform owns everything around them.
+
+## Crew, node, and crew code (three terms, one system)
+
+- **Crew.** The framework and the runtime concept: a set of **nodes** collaborating in one real-time WebSocket session. Even a single agent is a crew of one node. In code, `AtomsCrewApp` is the WebSocket **server** that hosts crews, and `CrewSession` is **one live call's** crew instance (the platform connects to it when a call comes in).
+- **Node.** A unit of logic inside a session. Two kinds:
+  - `OutputCrewNode` produces user-facing output. Its `generate_response()` yields **text** that the platform speaks. This is the "agent" most people mean.
+  - `BackgroundCrewNode` observes events silently, no audio (live sentiment, compliance, logging). Output nodes can read its state mid-call.
+
+  Multiple nodes run in parallel in one session.
+- **Crew code.** Your Python **project** (`server.py` + node files + `requirements.txt`) that defines the crew (which nodes, wired in the `setup_handler`). This is the deployable artifact: `agent-crew deploy` zips it into a **build**.
+
+**One agent = one platform agent (config, versioned) + one live crew build (your code, one or more nodes).**
+
+## Two things live on one agent (two independent axes)
+
+| Axis | What it is | Managed by | Versioned as |
+|---|---|---|---|
+| **Config** | prompt, voice, language, STT/TTS, model settings, tools, timeouts | dashboard or the versioning API | branches + revisions |
+| **Crew code** | your Python that produces the LLM response | `agent-crew` CLI | builds |
+
+They are independent. Deploying crew code never creates a config revision; publishing a config revision never changes which crew build is live. Two axes, two rollback controls.
+
+## The crew node owns text only
+
+A crew node produces **text**. `generate_response()` yields text, `speak(text)` emits a text event. It has **no** voice, language, STT, or TTS setting. Those are agent config. At call time the platform voices your node's text using the agent's **active config revision**. So the node always uses the latest activated voice/language; you change them by editing the config, not the node.
+
+## Full lifecycle
+
+<Steps>
+  <Step title="Create the agent (platform)">
+    Dashboard, CLI, or SDK.
+
+    <Warning>
+    **`agent-crew` does not create the agent.** It links your local code to an existing agent. Create the agent first.
+    </Warning>
+
+    ```python
+    from smallestai import SmallestAI
+    agent_id = SmallestAI().atoms.agents.create_agent(name="my-agent").data
+    ```
+
+    Or from the terminal:
+
+    ```bash
+    smallestai agents create "my-agent"
+    ```
+
+    A new agent starts with a `main` branch at revision 1, live.
+  </Step>
+
+  <Step title="Set the config">
+    Voice, language, STT model, TTS voice, first message, prompt. Dashboard, or the versioning API. Each publish is a tracked revision.
+  </Step>
+
+  <Step title="Write the crew code">
+    A project with `server.py` (an `AtomsCrewApp`) and one or more nodes. Must include `requirements.txt` or `pyproject.toml`. See the [working sample](#working-sample) below.
+  </Step>
+
+  <Step title="Link the code to the agent">
+    ```bash
+    smallestai agent-crew init                # interactive picker
+    smallestai agent-crew init --agent-id <id>
+    ```
+
+    Writes `.smallestai/config.toml`.
+  </Step>
+
+  <Step title="Test locally">
+    ```bash
+    python server.py                          # ws://localhost:8080/ws
+    smallestai agent-crew chat                # in another terminal
+    ```
+
+    Uses your shell env for keys.
+  </Step>
+
+  <Step title="Deploy (upload)">
+    ```bash
+    smallestai agent-crew deploy
+    ```
+
+    The CLI zips the directory, base64-encodes it, and sends it to the backend. The backend stores it in S3, an orchestrator builds a container image (`BUILDING`), deploys it (`DEPLOYING`), assigns a `websocketUrl`, and marks the build `SUCCEEDED` (or `BUILD_FAILED` / `DEPLOY_FAILED`).
+
+    <Note>
+    Secrets are **not** injected yet: ship a `.env` next to `server.py`. It rides in the zip and `load_dotenv()` reads it in the cloud.
+    </Note>
+  </Step>
+
+  <Step title="Go live">
+    A `SUCCEEDED` build is **not live by default**. Promote it:
+
+    ```bash
+    smallestai agent-crew builds              # then choose Make Live
+    ```
+
+    One build is live at a time; making a new one live takes the old one down. This refreshes the agent config cache so calls route to your build.
+  </Step>
+
+  <Step title="A call runs">
+    Smallest STT transcribes the caller → your live crew build (the LLM) produces text → Smallest TTS speaks it using the **active config revision's** voice and language → telephony.
+  </Step>
+</Steps>
+
+## Updating either axis
+
+- **Update config** (voice, language, prompt, ...): edit + publish → new revision. The next call uses it. Roll back by restoring an earlier revision.
+- **Update crew code**: edit + `agent-crew deploy` → new build → Make Live. Roll back by making an older build live.
+
+## Versioning: what works on a crew agent
+
+Everything on the config side works normally. Verified live: create → edit + publish → history → diff → restore.
+
+```python
+from smallestai import SmallestAI
+from smallestai.atoms.helpers import Versioning
+
+client = SmallestAI()          # reads SMALLEST_API_KEY
+v = Versioning(client)
+agent_id = "..."
+
+# find the live Main branch
+main = next(b for b in v.branches.list(id=agent_id).data.branches if b.branch.is_default).branch.id
+
+# change the voice + language (a tracked revision), publish, wait for the scan
+rev = v.edit_and_publish(
+    agent_id, main,
+    synthesizer={"voiceConfig": {"model": "waves_lightning_v3_1", "voiceId": "emily"}},
+    language={"default": "en", "supported": ["en"]},
+    label="switch voice to emily",
+)
+print(rev.id, rev.status)       # -> published
+
+# history, diff, restore
+revs = client.atoms.agent_versioning_revisions.list(id=agent_id, branch_id=main).data
+client.atoms.agent_versioning_revisions.diff(id=agent_id, a="<revA>", b="<revB>")
+client.atoms.agent_versioning_revisions.restore(id=agent_id, branch_id=main, revision_id="<older>")
+```
+
+<Warning>
+**Eventual consistency.** After a publish, `get_agent` and the branch head read-back lag ~1-3s. A call started right after publishing may still use the previous revision. Poll or re-fetch.
+</Warning>
+
+## Crew code: what works on the builds axis
+
+- `agent-crew deploy` produces a new build (deploy history).
+- `agent-crew builds` lists builds; you can **Make Live**, **Take Down**, or roll back to an older build.
+- Deploying does not touch config revisions. The two axes roll back independently.
+
+## Working sample
+
+`assistant.py`, the node (bring-your-own-LLM: point `base_url` at your runtime, drop it for OpenAI, or use Smallest's Electron):
+
+```python
+import os
+from smallestai.atoms.crew.nodes import OutputCrewNode
+from smallestai.atoms.crew.clients.openai import OpenAIClient
+
+
+class Assistant(OutputCrewNode):
+    def __init__(self):
+        super().__init__(name="assistant")
+        self.llm = OpenAIClient(
+            model="gpt-4o-mini",
+            api_key=os.getenv("OPENAI_API_KEY"),
+            # base_url="https://your-runtime.example.com/v1",  # bring your own LLM
+        )
+        self.context.messages.append(
+            {"role": "system", "content": "You are a friendly, concise voice assistant."}
+        )
+
+    async def generate_response(self):
+        response = await self.llm.chat(messages=self.context.messages, stream=True)
+        full = ""
+        async for chunk in response:
+            if chunk.content:
+                full += chunk.content
+                yield chunk.content
+        self.context.messages.append({"role": "assistant", "content": full})
+```
+
+`server.py`, the WebSocket app, greets on join:
+
+```python
+from smallestai.atoms.crew import AtomsCrewApp
+from smallestai.atoms.crew.events import SDKSystemUserJoinedEvent
+from assistant import Assistant
+
+
+async def setup_session(session):
+    agent = Assistant()
+    session.add_node(agent)
+    await session.start()
+
+    @session.on_event("on_event_received")
+    async def on_event(event):
+        if isinstance(event, SDKSystemUserJoinedEvent):
+            await agent.speak("Hi! How can I help you today?")
+
+    await session.wait_until_complete()
+
+
+AtomsCrewApp(setup_handler=setup_session).run()
+```
+
+`requirements.txt`:
+
+```
+smallestai>=5.3.0
+```
+
+Run and test:
+
+```bash
+export SMALLEST_API_KEY=sk_...
+export OPENAI_API_KEY=sk-...              # or your runtime's key
+pip install -r requirements.txt
+python server.py                          # ws://localhost:8080/ws
+# second terminal:
+smallestai agent-crew chat
+```
+
+Verified: real client connects, multi-turn conversation, streamed responses through the custom LLM, context held across turns.
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Does agent-crew create the agent?">
+    No. Create the agent on the platform first (dashboard or `smallestai agents create` / `client.atoms.agents.create_agent`), then `agent-crew init` links your code to it.
+  </Accordion>
+
+  <Accordion title="Where do voice, language, and STT/TTS come from?">
+    The agent config (versioned), not the crew code. The node emits text; the platform voices it with the active revision.
+  </Accordion>
+
+  <Accordion title="If I deploy new crew code, does my config, prompt, or voice change?">
+    No. Crew code and config are independent axes.
+  </Accordion>
+
+  <Accordion title="Can I version and roll back a crew agent?">
+    Yes on both axes.
+    - **Config:** branches and revisions. Restore an earlier revision.
+    - **Crew code:** builds. Make Live an older build.
+
+    Roll them back separately.
+  </Accordion>
+
+  <Accordion title="How do I change the voice?">
+    Edit the agent config (dashboard or `edit_and_publish` on the `synthesizer` field), then publish. It becomes a tracked revision and applies on the next call.
+  </Accordion>
+
+  <Accordion title="Can I run multiple agents or nodes per call?">
+    Yes: multiple `OutputCrewNode`s and `BackgroundCrewNode`s in one `CrewSession`.
+  </Accordion>
+</AccordionGroup>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Crew CLI" href="/atoms/developer-guide/get-started/quickstart">
+    Install the CLI and deploy your first crew.
+  </Card>
+  <Card title="Agents CLI" href="/atoms/developer-guide/get-started/agents-cli">
+    Create, inspect, and place calls from the terminal.
+  </Card>
+  <Card title="Versioning Lifecycle" href="/atoms/developer-guide/build/agents/versioning-lifecycle">
+    Publish, restore, and diff revisions programmatically.
+  </Card>
+  <Card title="Agent Crew Core Concepts" href="/atoms/developer-guide/get-started/agent-crew-core-concepts">
+    Nodes, events, graphs, sessions.
+  </Card>
+</CardGroup>
