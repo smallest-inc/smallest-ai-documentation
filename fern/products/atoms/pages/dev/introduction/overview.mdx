@@ -7,13 +7,23 @@ The Atoms Agent Crews SDK is the Python framework for building voice agents on t
 
 This page walks the whole picture. What each piece is called, how the lifecycle runs from create to live call, the two independent versioning axes, and a working sample you can drop in.
 
+```mermaid
+graph LR
+  Caller["Caller"]
+  STT["Smallest STT<br/>(platform)"]
+  Node["Your crew node<br/>(the LLM turn)"]
+  TTS["Smallest TTS<br/>(platform, active config revision)"]
+  Caller -->|audio| STT
+  STT -->|transcript| Node
+  Node -->|text| TTS
+  TTS -->|audio| Caller
+```
+
 ## What agent-crew is
 
 Agent-crew lets you run the agent's brain (the LLM turn plus your logic) as your own code, in real time over a WebSocket. Smallest handles speech-to-text, text-to-speech, telephony, and turn-taking around it. Your code owns the words. The platform owns everything around them.
 
 ## Crew, node, and crew code
-
-Three terms, one system.
 
 - **Crew.** The framework that runs a set of nodes collaborating in one real-time WebSocket session. Even a single agent is a crew of one node. In code, `AtomsCrewApp` is the WebSocket server that hosts crews. `CrewSession` is the crew instance for one live call, which the platform connects to when a call comes in.
 - **Node.** A unit of logic inside a session. There are two kinds.
@@ -25,9 +35,7 @@ Three terms, one system.
 
 **One agent = one platform agent (config, versioned) + one live crew build (your code, one or more nodes).**
 
-## Two things live on one agent
-
-Two independent axes.
+## The two versioning axes
 
 | Axis | What it is | Managed by | Versioned as |
 |---|---|---|---|
@@ -36,7 +44,7 @@ Two independent axes.
 
 They're independent. Deploying crew code never creates a config revision. Publishing a config revision never changes which crew build is live. Two axes, two rollback controls.
 
-## The crew node owns text only
+## What the crew node owns
 
 A crew node produces text. `generate_response()` yields text, and `speak(text)` emits a text event. It has no voice, language, STT, or TTS setting. Those live on the agent config. At call time the platform voices your node's text using the agent's active config revision, so the node always uses the latest activated voice and language. You change them by editing the config, not the node.
 
@@ -117,12 +125,12 @@ A crew node produces text. `generate_response()` yields text, and `speak(text)` 
   </Step>
 </Steps>
 
-## Updating either axis
+## Updating config or crew code
 
 - **Update config** (voice, language, prompt, and so on). Edit and publish. This creates a new revision. The next call uses it. Roll back by restoring an earlier revision.
 - **Update crew code**. Edit and `agent-crew deploy`. This creates a new build. Make it live. Roll back by making an older build live.
 
-## Versioning the config side
+## Config versioning
 
 Everything on the config side works normally. Create, edit, publish, view history, diff, restore.
 
@@ -156,7 +164,7 @@ client.atoms.agent_versioning_revisions.restore(id=agent_id, branch_id=main, rev
 **Eventual consistency.** After a publish, `get_agent` and the branch head read-back lag ~1-3s. A call started right after publishing may still use the previous revision. Poll or re-fetch.
 </Warning>
 
-## Versioning the crew code side
+## Crew-code versioning
 
 - `agent-crew deploy` produces a new build (deploy history).
 - `agent-crew builds` lists builds. You can **Make Live**, **Take Down**, or roll back to an older build.
