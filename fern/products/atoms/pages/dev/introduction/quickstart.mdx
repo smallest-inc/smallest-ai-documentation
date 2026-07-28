@@ -453,6 +453,49 @@ When deployed code raises, the SDK auto-records the error on the call (in `calll
     text REPL against your local crew: real session lifecycle, your real LLM, no telephony.
     Iterate there, then deploy.
   </Accordion>
+
+  <Accordion title="How do I set environment variables in production?">
+    Platform-level env injection isn't available yet. The working path is to keep a `.env`
+    file at your project root and load it at startup:
+
+    ```python
+    # server.py (or wherever your entry point is)
+    from dotenv import load_dotenv
+    load_dotenv()
+    ```
+
+    The `.env` ships in the deploy bundle and is loaded in the pod, so `os.getenv(...)`
+    finds your variables in the cloud the same way it does locally. The cookbook examples
+    all follow this pattern.
+
+    The env-var warning printed by `smallestai agent-crew deploy` is a reminder to
+    populate `.env` before uploading. It doesn't block the deploy.
+  </Accordion>
+
+  <Accordion title="What project layout does the cloud build expect?">
+    Flat directory. Entry file (`server.py`) and `requirements.txt` at the root, with
+    node files alongside:
+
+    ```
+    my-crew/
+    ├── server.py
+    ├── assistant.py
+    ├── requirements.txt
+    └── .env
+    ```
+
+    A `src/` layout will **not** work. The cloud build copies your `pyproject.toml` and
+    runs `pip install .` before it copies the rest of your source, so with a `src/` layout
+    the package isn't on disk yet. The install fails and the build stops (visible as a
+    deploy stuck in `QUEUED`).
+
+    Two ways to avoid this:
+
+    - **Flat layout** (recommended). Keep `server.py` + node files at the root, as above.
+    - **Add a `requirements.txt`** if you want to keep a `pyproject.toml` for local tooling
+      or editable installs. When both are present the builder uses `requirements.txt` and
+      skips `pip install .` entirely.
+  </Accordion>
 </AccordionGroup>
 
 ---

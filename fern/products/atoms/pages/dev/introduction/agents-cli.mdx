@@ -1,0 +1,162 @@
+---
+title: "Agents CLI"
+sidebarTitle: "Agents CLI"
+description: "Create, inspect, and place calls from your Atoms agents without leaving the terminal."
+---
+
+The `smallestai agents` command group manages the agent itself. Create new agents, list what you have, look up config, print a dashboard URL, check phone-number status, and place outbound calls. It sits alongside `smallestai agent-crew` (which manages crew code) and `smallestai auth` (which manages credentials). One binary, three concerns.
+
+## Setup
+
+```bash
+pip install smallestai
+```
+
+Auth resolution is the same across every `smallestai` subcommand.
+
+1. **`SMALLEST_API_KEY`** environment variable. Takes precedence.
+2. **`~/.smallestai/credentials.json`**. Written by `smallestai auth login`.
+
+If neither is set, every `agents` command exits with an auth error before making a request.
+
+**Base URL.** Set `SMALLEST_BASE_URL` to point at a non-production environment (`https://api.dev.smallest.ai`, self-hosted, etc.). Defaults to `https://api.smallest.ai`.
+
+## Commands
+
+<AccordionGroup>
+  <Accordion title="agents create: create a new agent">
+    ```
+    Usage: smallestai agents create [OPTIONS] {name}
+    ```
+
+    Creates an agent with the given name. Everything else is optional and can be set later from the dashboard, `edit_and_publish`, or the versioning API.
+
+    **Arguments**
+
+    | Argument | Type | Description |
+    |---|---|---|
+    | `name` | string, required | Human label for the agent. |
+
+    **Options**
+
+    | Option | Type | Description |
+    |---|---|---|
+    | `--first-message` | string | The greeting the agent speaks when a call connects. |
+    | `--prompt` | string | Global system prompt. |
+    | `--description` | string | Internal description shown in the dashboard. |
+    | `--allow-inbound` | flag | Enable inbound calls on this agent. |
+
+    **Example**
+
+    ```bash
+    smallestai agents create "support-bot" \
+      --prompt "You are a friendly support agent. Keep answers under 20 words." \
+      --first-message "Hi! How can I help you today?" \
+      --allow-inbound
+    ```
+
+    Prints the created agent's ID.
+  </Accordion>
+
+  <Accordion title="agents list: list agents in your organization">
+    ```
+    Usage: smallestai agents list [OPTIONS]
+    ```
+
+    No arguments. Returns every agent the API key can see, most-recently-created first. Useful for grabbing an ID to feed the other commands.
+  </Accordion>
+
+  <Accordion title="agents get: inspect one agent's config">
+    ```
+    Usage: smallestai agents get [OPTIONS] {agent_id}
+    ```
+
+    Prints the full agent config. Includes prompt, voice, language, model, tools, timeouts, and every other field. What you see is the **active revision** on the live branch, which is the exact config used on the next call. See [Agent Versioning](/voice-agents/platform/create-agent/agent-settings/versioning) for the branch and revision model.
+  </Accordion>
+
+  <Accordion title="agents dashboard: open the agent in the console">
+    ```
+    Usage: smallestai agents dashboard {agent_id}
+    ```
+
+    Prints the dashboard URL for the agent. Pipe to `open` (macOS) or `xdg-open` (Linux) to jump straight there.
+
+    ```bash
+    smallestai agents dashboard <agent_id> | xargs open
+    ```
+  </Accordion>
+
+  <Accordion title="agents phone-status: check phone-number attachment">
+    ```
+    Usage: smallestai agents phone-status {agent_id}
+    ```
+
+    Shows whether the agent has a phone number assigned. Run before `agents call`. If `phone-status` says no number is attached, the outbound call fails with a missing-caller-ID error. Rent or attach a number from **Deploy → Phone Numbers** first.
+  </Accordion>
+
+  <Accordion title="agents call: place an outbound call">
+    ```
+    Usage: smallestai agents call [OPTIONS] {agent_id}
+    ```
+
+    Dials `--to` from the agent, using either the agent's assigned number or the one you pass via `--from-product-id`. The command exits as soon as the call is queued; check status with `client.atoms.calls.get(id=call_id)` (see gotcha below).
+
+    **Options**
+
+    | Option | Required | Description |
+    |---|---|---|
+    | `--to` | yes | Destination phone number in E.164 format (e.g. `+14155550100`). |
+    | `--from-product-id` | no | Product ID of the acquired number to dial from. Omit to use the agent's assigned number. |
+
+    **Example**
+
+    ```bash
+    smallestai agents call <agent_id> \
+      --to +14155550100 \
+      --from-product-id <product_id>
+    ```
+
+    Prints the call ID on success. Track status with `client.atoms.calls.get(id=<call_id>)`.
+
+    <Note>
+    `client.atoms.calls.get(...)` takes `id=<call_id>` as the keyword, not `conversation_id=`.
+    </Note>
+  </Accordion>
+</AccordionGroup>
+
+## End-to-end example
+
+Create an agent, check its phone attachment, place a call.
+
+```bash
+# 1. Create
+AGENT_ID=$(smallestai agents create "quick-test" \
+  --prompt "You are a curt assistant. Confirm you heard the caller in one sentence." \
+  --first-message "Hi, are you there?" | tail -n1)
+
+# 2. Attach a phone number (dashboard step, one-time)
+smallestai agents dashboard "$AGENT_ID" | xargs open
+
+# 3. Sanity-check the phone attachment
+smallestai agents phone-status "$AGENT_ID"
+
+# 4. Place the call
+smallestai agents call "$AGENT_ID" --to "+14155550100"
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Crew CLI" href="/voice-agents/developer-guide/get-started/quickstart">
+    Deploy your own crew code alongside the platform agent.
+  </Card>
+  <Card title="Build your agent" href="/voice-agents/platform/create-agent/build-your-agent">
+    The ordered guide to configuring an agent from the dashboard.
+  </Card>
+  <Card title="Agent Versioning" href="/voice-agents/platform/create-agent/agent-settings/versioning">
+    Branches, drafts, and revisions for the agent config.
+  </Card>
+  <Card title="Versioning lifecycle (SDK)" href="/voice-agents/developer-guide/build/agents/versioning-lifecycle">
+    Publish, restore, and diff revisions programmatically.
+  </Card>
+</CardGroup>
