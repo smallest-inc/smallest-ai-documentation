@@ -1,0 +1,205 @@
+---
+title: "Build your agent"
+sidebarTitle: "Build your agent"
+subtitle: "A tiered walkthrough of every field on an agent, ordered by what to fill in first."
+description: "The ordered guide to configuring a Smallest AI voice agent: required first, then recommended, then advanced. Ends with publish and activate."
+slug: /voice-agents/platform/create-agent/build-your-agent
+---
+
+The [Quick start](/voice-agents/platform/get-started/quick-start) gets you to a working agent in five minutes. This page is what to reach for after that: the full list of fields on an agent, grouped by how much they matter, in the order you should fill them in.
+
+Three tiers plus a publish step. Skim the tier headings and stop wherever the payoff drops off for your use case.
+
+- **[Required](#required):** the five fields an agent needs to hold a real conversation.
+- **[Recommended](#recommended):** the common capabilities to enable next. Greet on pickup, take a phone number, ground in a knowledge base.
+- **[Advanced](#advanced):** audio quality, turn-taking, timeouts, voicemail. Reach for these when you're tuning a live agent.
+- **[Publish and activate](#publish-and-activate):** the two-step gate that promotes your changes to live traffic.
+
+<Note>
+Everything below is written for the dashboard flow, which is the fastest path. Every field maps to a JSON attribute on the underlying agent config, so the same guide works if you're driving through the API. See the [Agents API reference](/atoms/api-reference/agents) and the [Versioning lifecycle](/atoms/developer-guide/build/agents/versioning-lifecycle) for the exact endpoints and field names.
+</Note>
+
+## Required
+
+The five things that separate a blank agent from one that can hold a real conversation.
+
+<Steps>
+  <Step title="Name">
+    Set the agent's internal name from the top-left of the editor. This is the label you'll see in the dashboard, logs, and analytics; callers never hear it.
+
+    <Tip>Give the agent a name tied to the use case, not the voice you picked. A caller-facing name is set separately if you need one.</Tip>
+  </Step>
+
+  <Step title="Prompt">
+    The prompt is the single largest driver of agent quality. Open the prompt editor in the right panel and write instructions covering four things:
+
+    - **Role & objective.** Who is this agent, what is its goal.
+    - **Conversational flow.** The sequence of steps or questions the agent walks through.
+    - **Dos, don'ts, fallbacks.** How to behave on off-topic questions, silence, or angry callers.
+    - **End conditions.** When the call should wrap up.
+
+    Templates in the create modal ship with a working prompt for common use cases; start there and edit, rather than writing from scratch.
+
+    <Card title="Prompt structure and best practices" href="/voice-agents/platform/create-agent/prompt">
+      Deep-dive on writing prompts that actually work, with examples.
+    </Card>
+  </Step>
+
+  <Step title="Voice">
+    Pick a voice from the library (left panel, **Voice** setting). Preview it before you save; every voice has its own energy and a bad match burns caller trust fast.
+
+    A few things to check when previewing:
+
+    - The voice supports every language in your **Supported languages** list (below). If it doesn't, calls in the missing language fall back or fail.
+    - The voice can carry the emotional register of your use case. A collections agent needs a different voice than a wellness one.
+  </Step>
+
+  <Step title="Language">
+    Set the **Default language** the agent starts speaking in, and the full **Supported languages** list of everything it's allowed to switch to mid-call. The default should be the one you expect for most calls; supported adds the fallbacks.
+
+    <Warning>
+    A language you don't list here will not be handled, even if the caller speaks it. Add every language you actually expect to encounter.
+    </Warning>
+
+    Default and supported are the same field on the API (`language.default`, `language.supported`) and both accept ISO codes like `en`, `hi`, `es`.
+  </Step>
+
+  <Step title="Model">
+    Pick the LLM (**Model** field, left panel). This is the brain behind the prompt.
+
+    - **Electron** (default). Smallest AI's in-house model. Lowest latency for voice, competitive quality on prompt following. Good default; switch away only if you have a specific reason.
+    - **GPT-4o, GPT-5.2, GPT-Realtime**, and others. External models. Pick these when you need a specific frontier-model capability.
+
+    <Card title="Electron model card" href="/models/model-cards/llm/electron">
+      Latency, pricing, context window, and passthrough behavior for the default model.
+    </Card>
+  </Step>
+</Steps>
+
+At this point the agent can be **tested**: click **Test Agent** in the top-right, pick web/telephony/chat, and try a real turn. Fix anything obviously broken in the prompt before moving on to the next tier.
+
+---
+
+## Recommended
+
+Every agent that goes live in production has these three. They're not strictly required but the caller experience is materially worse without them.
+
+<AccordionGroup>
+  <Accordion title="First message">
+    The exact words the agent speaks the moment the call connects, before the caller has said anything. Without this, the agent waits for the caller to speak first, which feels broken on outbound and awkward on inbound.
+
+    Keep it short. Two sentences maximum. Introduce the agent, state the reason for the call, invite a response.
+
+    On the API, this is `firstMessage` on the draft config. Max 500 characters.
+  </Accordion>
+
+  <Accordion title="Phone number">
+    Attach a phone number so callers can reach the agent (inbound) or so the agent has a caller ID when it dials out (outbound). Buy a number from **Deploy → Phone Numbers** and assign it under the agent's **Phone number** setting.
+
+    Skipping this only makes sense for web-call-only agents (embedded widget, browser SDK). Everyone else needs a number.
+
+    <Card title="Phone Numbers" href="/voice-agents/platform/deploy/phone-numbers">
+      Buy, port, or bring your own number, and manage compliance.
+    </Card>
+  </Accordion>
+
+  <Accordion title="Knowledge base">
+    A knowledge base grounds the agent in your actual policies, product catalog, or FAQ. Without one, the agent will confabulate specifics ("our return policy is 30 days") that may or may not match reality.
+
+    Ingest source material (PDFs, URLs, plain text) once under **Knowledge Base**, then attach it to the agent as `globalKnowledgeBaseId`. Every retrieval query the agent runs at call-time is scoped to what you ingested.
+
+    <Card title="Knowledge Base" href="/voice-agents/platform/create-agent/knowledge-base">
+      How ingestion works, chunking, and grounding behavior at call-time.
+    </Card>
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Advanced
+
+Tuning knobs. Every default here works for the majority of agents; only touch these when you have a specific problem to fix, and only change one at a time so you can measure the effect.
+
+<AccordionGroup>
+  <Accordion title="Voice detection (VAD)">
+    Controls when the platform decides the caller has started or stopped speaking. Tighter thresholds pick up soft speech but also pick up background noise; looser thresholds miss soft speech but ignore noise.
+
+    Fields on the API: `voiceDetectionConfig.confidence`, `.minVolume`, `.triggerTimeInSecs`, `.releaseTimeInSecs`. Change one at a time and A/B on real calls.
+  </Accordion>
+
+  <Accordion title="Denoising">
+    Server-side noise suppression on the caller audio before it hits the ASR. On by default when the model supports it. Turn off (`denoisingConfig.isEnabled: false`) only if you're seeing over-suppression artifacts on your specific caller distribution.
+  </Accordion>
+
+  <Accordion title="Voicemail detection">
+    Detects when an outbound call is answered by voicemail and lets you decide what to do: hang up, leave a specific message, or fall through. `voiceMailDetectionConfig.enabled` toggles it; `.endText` is what to leave on the machine before hanging up.
+
+    Essential for outbound at scale. Without it, every voicemail eats the full prompt.
+  </Accordion>
+
+  <Accordion title="Idle and session timeouts">
+    - `llmIdleTimeoutConfig.chatTimeoutTimeInSecs`. How long to wait for the LLM to reply before treating it as stuck.
+    - `sessionTimeoutConfig.timeoutTimeInSecs`. Hard cap on the whole call (default 1800s / 30 min).
+
+    Raise the session cap for use cases with expected long conversations (support triage, longform surveys). Lower it as a safety net for outbound campaigns where anything past N minutes indicates a stuck call.
+  </Accordion>
+
+  <Accordion title="Turn-taking and interruptions">
+    - `smartTurnConfig`. Enables end-of-utterance detection tuned for conversational back-and-forth rather than fixed silence timers.
+    - `allowInterruptions`. Whether the caller can talk over the agent to cut it off.
+    - `interruptionBackoffTimer`. How long after being interrupted the agent waits before speaking again.
+    - `muteUserUntilFirstBotResponse`. Mutes the caller until the first-message finishes. Useful for outbound to prevent caller "hello?" from stepping on the agent's opener.
+    - `waitForUserToSpeakFirst`. Inverts the flow: the agent waits for the caller to talk. Only sensible for inbound where the caller is expected to state their intent.
+  </Accordion>
+
+  <Accordion title="Pronunciation dictionary">
+    `pronunciationDicts` is an array of `{word, pronunciation}` pairs. Use it when the agent mispronounces a domain-specific word (product name, drug name, proper noun) consistently. Cheaper than switching voices.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Publish and activate
+
+Every change you make in the editor lives on a **draft**. It doesn't touch live traffic until you publish it as a revision *and* mark that revision live.
+
+<Steps>
+  <Step title="Publish the draft">
+    Click **Publish** in the editor. This snapshots your current draft as an immutable revision on the current branch. Give it a short label so you can identify it later ("prompt v2", "voice A/B").
+
+    Nothing has changed for live callers yet; publishing only creates the snapshot.
+  </Step>
+
+  <Step title="Make the revision live">
+    From the versioning panel, mark the new revision as live. This is the moment your changes reach real callers.
+
+    Every organization has exactly one live revision at a time per agent. Rolling back is another publish-and-activate cycle with an older revision as the source.
+
+    <Card title="Versioning lifecycle" href="/atoms/developer-guide/build/agents/versioning-lifecycle">
+      Full details on branches, drafts, revisions, and rollback.
+    </Card>
+  </Step>
+</Steps>
+
+<Warning>
+**Publishing without activating leaves the change invisible to callers.** If you edit an agent and callers say "nothing changed," the most common cause is a published-but-not-activated revision. Check the live-revision indicator in the versioning panel.
+</Warning>
+
+---
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Test your agent" href="/voice-agents/platform/get-started/quick-start#test-your-agent">
+    Web call, telephony, and chat test paths.
+  </Card>
+  <Card title="Deploy to a phone number" href="/voice-agents/platform/deploy/phone-numbers">
+    Attach the number and take live calls.
+  </Card>
+  <Card title="Post-call metrics" href="/voice-agents/platform/create-agent/agent-settings/post-call-metrics">
+    Configure what to extract from every completed call.
+  </Card>
+  <Card title="Webhooks" href="/voice-agents/platform/create-agent/developer/webhooks">
+    Receive lifecycle events on your own server.
+  </Card>
+</CardGroup>
