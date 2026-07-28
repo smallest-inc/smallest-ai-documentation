@@ -51,13 +51,14 @@ paths:
           -d '{"url": "https://your-bucket.s3.amazonaws.com/call.wav"}'
         ```
 
-        **Python** (`pip install smallestai>=4.4.0`)
+        **Python** (`pip install smallestai>=5.3.0`)
         ```python
         from smallestai import SmallestAI
 
         client = SmallestAI(api_key="YOUR_API_KEY")
         with open("./call.wav", "rb") as f:
-            result = client.waves.transcribe_pulse(
+            result = client.waves.speech_to_text.transcribe(
+                model="pulse",
                 request=f.read(),
                 language="en",
                 word_timestamps=True,
@@ -66,6 +67,10 @@ paths:
         print(result.status)         # "success"
         print(result.transcription)  # the transcript string
         ```
+
+        <Note>
+        On `smallestai<5.3.0`, this method was `client.waves.transcribe_pulse(request=..., language=...)` and had no `model` parameter. See the [5.3.0 migration notes](/atoms/changelog) for the full rename table.
+        </Note>
 
         **JavaScript / TypeScript** (using `fetch`)
         ```typescript
