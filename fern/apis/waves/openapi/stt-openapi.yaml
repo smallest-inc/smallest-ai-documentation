@@ -308,52 +308,46 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/SttErrorResponse'
               example:
-                status: error
-                message: Invalid model query parameter.
-                errors:
-                - expected: "'pulse' | 'pulse-pro'"
-                  received: undefined
-                  code: invalid_type
-                  path: [model]
-                  message: 'Missing required query param: model. Supported values: pulse | pulse-pro.'
+                error: 'Missing required query param: model. Supported values: pulse | pulse-pro.'
+                request_id: 87dd36c1-4267-472d-96ee-4113e0a770a6
         '401':
           description: API key missing or invalid.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/SttErrorResponse'
         '403':
           description: Plan does not include access to the requested model.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/SttErrorResponse'
         '413':
           description: Payload exceeds 250 MB.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/SttErrorResponse'
               example:
-                status: error
-                message: File size exceeds maximum limit of 250MB.
+                error: File size exceeds maximum limit of 250MB.
+                request_id: 87dd36c1-4267-472d-96ee-4113e0a770a6
         '429':
           description: RPM cap exceeded (Standard plan default 25/min per model).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/SttErrorResponse'
               example:
-                status: error
-                message: Rate limit exceeded. Please retry after a short backoff.
+                error: Rate limit exceeded. Please retry after a short backoff.
+                request_id: 87dd36c1-4267-472d-96ee-4113e0a770a6
         '503':
           description: Worker temporarily unavailable.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/SttErrorResponse'
 components:
   securitySchemes:
     BearerAuth:
@@ -417,12 +411,13 @@ components:
       properties:
         status:     { type: string, example: processing }
         request_id: { type: string, example: f3a1c2e0-09c3-43e2-8d8e-cb1f3b1b8f7d }
-    ErrorResponse:
+    SttErrorResponse:
       type: object
+      required: [error]
       properties:
-        status:  { type: string, example: error }
-        message: { type: string }
-        errors:
+        error:      { type: string, description: Error message. }
+        request_id: { type: string, description: Correlation ID for support / logs, when the server includes one. }
+        details:
           type: array
+          description: Additional error details (validation errors).
           items: { type: object }
-      required: [status, message]

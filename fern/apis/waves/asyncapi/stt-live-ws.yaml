@@ -333,7 +333,8 @@ channels:
       transcriptionEvent:
         $ref: '#/components/messages/TranscriptionEvent'
       errorEvent:
-        $ref: '#/components/messages/ErrorEvent'
+        name: TranscriptionErrorEvent
+        $ref: '#/components/messages/TranscriptionErrorEvent'
 operations:
   sendAudio:
     action: send
@@ -459,7 +460,9 @@ components:
           is_final: true
           is_last: false
           session_id: 4b5ae9cb-1234-5678-9abc-def012345678
-    ErrorEvent:
+    TranscriptionErrorEvent:
+      x-fern-type-name: TranscriptionErrorEvent
+      name: TranscriptionErrorEvent
       contentType: application/json
       summary: |
         Error emitted as JSON before a forced close. Common closure scenarios:
@@ -468,8 +471,13 @@ components:
         - `HTTP 401` before upgrade: missing or invalid API key.
         - WebSocket close `1008`: concurrency limit reached (org has too many open WS sessions).
       payload:
+        x-fern-type-name: TranscriptionErrorEvent
+        title: TranscriptionErrorEvent
         type: object
         properties:
-          type:    { type: string, enum: [error] }
+          type:
+            type: string
+            enum: [error]
+            x-fern-type-name: TranscriptionErrorEventType
           status:  { type: string, example: error }
           message: { type: string }
