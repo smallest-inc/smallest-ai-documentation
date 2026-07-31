@@ -1,6 +1,35 @@
 ---
 title: "Outbound Setup"
-description: "Configuring outbound calls"
+description: "Configure an agent to place outbound calls."
 ---
 
 # Outbound Setup
+
+Outbound means your agent places the call. You pass the rented number's **product id** as the caller ID (`from_product_id`) and the number to dial.
+
+## Prerequisites
+
+A rented number and its **product id** (see [Buying Numbers](./buying-numbers)).
+
+## Place a call
+
+```python
+from smallestai import SmallestAI
+
+client = SmallestAI(api_key="<your-api-key>")
+
+response = client.atoms.calls.start_outbound_call(
+    agent_id="<agent-id>",
+    phone_number="+1XXXXXXXXXX",        # the number to dial
+    from_product_id="<product-id>",      # your rented number's product id
+)
+print(response.data.conversation_id)
+```
+
+You can also personalize each call with `variables` and pin a specific agent version with `version_id`. See [Outbound Calls](../outbound-calls) for the full parameter set.
+
+<Note>
+  The same agent (and, for agent-crew, the same node code and custom LLM) handles both
+  outbound and inbound. To also receive calls on this number, see
+  [Inbound Configuration](./inbound-configuration).
+</Note>

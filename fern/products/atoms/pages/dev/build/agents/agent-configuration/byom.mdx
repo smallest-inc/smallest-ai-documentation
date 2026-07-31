@@ -6,6 +6,17 @@ description: "Run Atoms agents with your own models."
 
 For privacy, cost control, or specialized models, you can run LLMs locally or on your own servers. The `OpenAIClient` works with any endpoint that implements the OpenAI chat completions API.
 
+<Warning>
+  A `localhost` base URL (like the Ollama, vLLM, and LM Studio examples below) only
+  works when you run the crew **locally** (`python server.py` + `smallestai agent-crew chat`).
+  A **deployed** crew runs in the cloud and cannot reach `localhost` on your machine.
+  For a deployed agent, point `base_url` at a host the cloud can reach: a public
+  inference endpoint, or your local server exposed through a tunnel. For Ollama over a
+  tunnel, rewrite the Host header or Ollama returns `403`:
+  `ngrok http 11434 --host-header=localhost:11434`, then set
+  `base_url="https://<id>.ngrok-free.app/v1"`.
+</Warning>
+
 ## Complete Example
 
 Here's a full agent using a local Ollama model:
@@ -28,10 +39,10 @@ class LocalAgent(OutputCrewNode):
             api_key="ollama"  # Not required for Ollama
         )
         
-        self.context.add_message(
-            "system",
-            "You are a helpful assistant running on local hardware."
-        )
+        self.context.add_message({
+            "role": "system",
+            "content": "You are a helpful assistant running on local hardware.",
+        })
 
     async def generate_response(self):
         response = await self.llm.chat(

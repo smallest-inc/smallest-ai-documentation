@@ -1,6 +1,54 @@
 ---
 title: "Inbound Configuration"
-description: "Configuring inbound calls"
+description: "Configure an agent to answer inbound calls."
 ---
 
 # Inbound Configuration
+
+Inbound means a caller dials your rented number and your agent answers. Setup is entirely configuration: attach a number to the agent and enable inbound. No agent code changes are needed, and this works the same for standard agents and [agent-crew](../../../introduction/quickstart) agents with a custom LLM.
+
+## Prerequisites
+
+A rented number and its **product id** (see [Buying Numbers](./buying-numbers)).
+
+## 1. Attach the number and enable inbound
+
+```python
+from smallestai import SmallestAI
+
+client = SmallestAI(api_key="<your-api-key>")
+
+client.atoms.agents.update_agent(
+    id="<agent-id>",
+    telephony_product_id=["<product-id>"],   # the rented number's product id
+    allow_inbound_call=True,
+)
+```
+
+## 2. Verify the number points at your agent
+
+```python
+for n in client.atoms.phone_numbers.list().data:
+    print(n)   # the number's agent_id should now be your agent id
+```
+
+## 3. Call it
+
+Dial the number from any phone. The agent answers, greets (if your setup speaks on `SDKSystemUserJoinedEvent`), and handles the conversation.
+
+<Note>
+  Inbound and outbound run the exact same pipeline. For an agent-crew agent, the same
+  `server.py` / node code serves both directions, and your custom LLM runs the turn
+  either way. There is nothing inbound-specific to add in code.
+</Note>
+
+## Moving a number between agents
+
+A number is attached to one agent at a time. To move it, detach from the old agent and attach to the new one:
+
+```python
+# detach from the current agent
+client.atoms.agents.update_agent(id="<old-agent-id>", telephony_product_id=[], allow_inbound_call=False)
+# attach to the new agent
+client.atoms.agents.update_agent(id="<new-agent-id>", telephony_product_id=["<product-id>"], allow_inbound_call=True)
+```

@@ -1,6 +1,49 @@
 ---
 title: "Buying Numbers"
-description: "Purchasing phone numbers"
+description: "Search for and buy phone numbers."
 ---
 
 # Buying Numbers
+
+To place outbound calls or receive inbound calls, you need a rented phone number. Search available numbers, rent one, and it becomes available to attach to any agent.
+
+## 1. Search available numbers
+
+```python
+from smallestai import SmallestAI
+
+client = SmallestAI(api_key="<your-api-key>")
+
+available = client.atoms.phone_numbers.search_rentable(
+    country_code="US",      # ISO country code
+    provider="twilio",       # "twilio" or "plivo"
+    # area_code="415",       # optional
+)
+print(available.data)
+```
+
+## 2. Rent a number
+
+```python
+client.atoms.phone_numbers.rent(
+    phone_number="+1XXXXXXXXXX",
+    provider="twilio",
+)
+```
+
+## 3. Find its product id
+
+The **product id** is what you attach to an agent (for inbound) or pass as `from_product_id` (for outbound). List your rented numbers to get it:
+
+```python
+for n in client.atoms.phone_numbers.list().data:
+    print(n)   # each has an id (the product id), a phone_number, and the current agent_id
+```
+
+Next: [attach it for inbound](./inbound-configuration) or [use it for outbound](./outbound-setup).
+
+## Releasing a number
+
+```python
+client.atoms.phone_numbers.release(product_id="<product-id>")
+```
