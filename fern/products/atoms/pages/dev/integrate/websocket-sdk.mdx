@@ -123,11 +123,11 @@ Subscribe with `agent.on(eventName, handler)`.
 
 | Event | Payload | Fires when |
 |---|---|---|
-| `session_started` | `{ session_id: string, call_id: string }` | The server accepts the connection and creates a session. Use `call_id` to look up the call log or subscribe to [live transcripts via SSE](/voice-agents/developer-guide/operate/analytics/sse-for-live-transcripts). |
-| `session_ended` | `{ reason: string }` | The session has ended. `reason` is either a string sent by the server (`client_requested`, `websocket_closed`, or an error tag) or, when the WebSocket closes without a server-side `session.closed` frame, the numeric close code as a string (`"1005"`, `"1006"`, `"1000"`, etc.). |
+| `session_started` | `{ session_id: string, call_id: string, sample_rate: number, channels: number }` | The server accepts the connection and creates a session. Use `call_id` to look up the call log or subscribe to [live transcripts via SSE](/voice-agents/developer-guide/operate/analytics/sse-for-live-transcripts). `sample_rate` and `channels` reflect the negotiated audio format. |
+| `session_ended` | `{ reason: string }` | The session has ended. `reason` is a string sent by the server: `client_requested`, `websocket_closed`, or `setup_failed`. When the WebSocket closes without a server-side `session.closed` frame reaching the client, you may instead see the numeric close code as a string (e.g. `"1006"`). Fatal setup failures (agent not found, credits exhausted, etc.) all close with the same code, `4000`, regardless of whether the failure is retryable, so don't branch reconnect logic on the close code itself. The `error` event fired immediately before the close carries the actual failure reason in its `code` field; branch on that instead. |
 | `agent_start_talking` | None | The server begins streaming agent TTS for a turn. Useful for "agent speaking" UI state. |
 | `agent_stop_talking` | None | The server has finished the current turn. |
-| `error` | `{ code: string, message: string }` | A non-fatal session error occurred. Fatal errors also trigger `session_ended`. |
+| `error` | `{ code: string, message: string }` | A non-fatal session error occurred. Fatal errors also trigger `session_ended`. `code` is open-ended, not a fixed set of values, confirmed ones include `invalid_json`, `invalid_event`, `no_session`, `internal_error`, `too_many_updates`, `worker_not_ready`, and HTTP-status-as-string (e.g. `"404"`). |
 | `transcript` | `{ role: "user" \| "assistant", text: string }` | The final transcript for a completed turn — user speech after STT, or the agent's spoken text. |
 | `transcript_delta` | `{ role: "user" \| "assistant", text: string }` | Streaming, **cumulative** transcript for the in-progress turn. Replace the current bubble's text on each event; the matching `transcript` settles it. Assistant deltas are paced to the audio the user is hearing, so they double as live captions. |
 

@@ -99,8 +99,16 @@ For anything not covered by a system tool, connect your own API or app logic. Cl
   |---|---|
   | **Name / Description** | The model reads the description to decide when to call it |
   | **Parameters** | Same shape as an API tool's LLM Parameters, typed arguments your app receives |
-  | **Wait for response** | If on, the conversation pauses until your app returns a result. Reveals a timeout slider (1-60s, default 1s) |
+  | **Wait for response** | On (awaited, the default): the conversation pauses until your app returns a result, use this when the result affects what the agent says next. Off (fire and forget): the agent dispatches the call and keeps talking immediately, no result expected, good for side effects like logging or updating a screen. Turning it on reveals a timeout slider (1-60s, default 15s) |
   | **Filler Phrases** | One per line, spoken while the tool runs so the pause isn't silent |
+
+  <Note>
+    A tool's result is capped at 64 KB. Larger results are rejected and the agent is told it couldn't complete the action, return a summary rather than a large blob.
+  </Note>
+
+  <Tip>
+    Tools configured here show up on every websocket session for this agent. Your app can also declare additional tools at runtime by sending `session.update` over the websocket, this replaces only the runtime-declared set and never touches the tools configured here. See the [Realtime Agent WebSocket API](/voice-agents/api-reference/realtime-agent/realtime-agent) for the full wire protocol (`function_call`, `function_call.result`, error codes).
+  </Tip>
 </Accordion>
 
 ## Related

@@ -190,6 +190,64 @@ channels:
         `&variables=${encodeURIComponent(JSON.stringify(variables))}`
       );
       ```
+
+      ## Client tools
+
+      Client tools are functions your app executes over this same channel,
+      as opposed to API tools (run server-side by the platform) or built-in
+      system tools. They only run on this WebSocket endpoint; on telephony
+      and WebRTC webcall they're never offered to the model.
+
+      A tool can be made available two ways: configured on the agent in the
+      dashboard, or declared at runtime with `session.update` (see the
+      `SessionUpdate` message below). The two sets are additive; a runtime
+      `session.update` replaces only the previously runtime-declared tools
+      and never touches the dashboard-configured ones.
+
+      The round trip:
+
+      1. The model decides to call a declared tool and produces arguments.
+      2. The server sends `function_call` with a `call_id`, the tool
+         `name`, and `arguments`.
+      3. Your app does the work and sends back `function_call.result` with
+         the same `call_id` and an `output` string (typically JSON, capped
+         at 64 KB).
+      4. The server injects the output into the conversation and the agent
+         continues.
+
+      A tool declared with `expectsResponse: false` is fire and forget: the
+      server dispatches the `function_call` and the agent keeps talking
+      immediately, no `function_call.result` is expected. An awaited tool
+      (`expectsResponse: true`, the default) that doesn't get a result
+      within `timeout_ms` (1000 to 60000, default 15000) makes the agent
+      recover verbally instead of hanging.
+
+      ```jsonc
+      // 1. Declare a client tool after the session opens
+      { "type": "session.update",
+        "tools": [ { "type": "function", "name": "lookup_order",
+            "description": "Look up an order in our system by id.",
+            "parameters": { "type": "object",
+              "properties": { "order_id": { "type": "string" } },
+              "required": ["order_id"] },
+            "timeout_ms": 8000 } ] }
+
+      // 2. Server acknowledges
+      { "type": "session.updated", "tools": ["lookup_order"] }
+
+      // 3. Later, the model calls it
+      { "type": "function_call", "call_id": "abc123",
+        "name": "lookup_order", "arguments": { "order_id": "ORD-7841" } }
+
+      // 4. Your app answers
+      { "type": "function_call.result", "call_id": "abc123",
+        "output": "{\"status\":\"out for delivery\",\"eta\":\"tomorrow\"}" }
+      ```
+
+      Dashboard configuration for client tools (name, description,
+      parameters, awaited vs fire and forget, timeout) lives in the agent
+      editor's Tools tab; see the Client Tool section of the Tools overview
+      guide.
     messages:
       inputAudioAppend:
         $ref: "#/components/messages/inputAudioAppend"
@@ -201,10 +259,16 @@ channels:
         $ref: "#/components/messages/sessionUpdate"
       sessionClose:
         $ref: "#/components/messages/sessionClose"
+      functionCallResult:
+        $ref: "#/components/messages/functionCallResult"
       sessionCreated:
         $ref: "#/components/messages/sessionCreated"
       sessionClosed:
         $ref: "#/components/messages/sessionClosed"
+      sessionUpdated:
+        $ref: "#/components/messages/sessionUpdated"
+      functionCall:
+        $ref: "#/components/messages/functionCall"
       outputAudioDelta:
         $ref: "#/components/messages/outputAudioDelta"
       transcript:
@@ -246,7 +310,7 @@ operations:
     action: send
     channel:
       $ref: "#/channels/agentSession"
-    summary: Reserved for session-config updates (no-op currently)
+    summary: Declare or replace the runtime client tool set
     messages:
       - $ref: "#/channels/agentSession/messages/sessionUpdate"
   sendSessionClose:
@@ -256,6 +320,13 @@ operations:
     summary: End the session cleanly
     messages:
       - $ref: "#/channels/agentSession/messages/sessionClose"
+  sendFunctionCallResult:
+    action: send
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: Answer a client tool call with its result
+    messages:
+      - $ref: "#/channels/agentSession/messages/functionCallResult"
   receiveSessionCreated:
     action: receive
     channel:
@@ -270,6 +341,20 @@ operations:
     summary: Session ended (client-requested, server-initiated, or websocket close)
     messages:
       - $ref: "#/channels/agentSession/messages/sessionClosed"
+  receiveSessionUpdated:
+    action: receive
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: Acknowledges a session.update, listing the accepted client tools
+    messages:
+      - $ref: "#/channels/agentSession/messages/sessionUpdated"
+  receiveFunctionCall:
+    action: receive
+    channel:
+      $ref: "#/channels/agentSession"
+    summary: The agent is calling a client tool, do the work and reply with function_call.result
+    messages:
+      - $ref: "#/channels/agentSession/messages/functionCall"
   receiveOutputAudioDelta:
     action: receive
     channel:
@@ -407,17 +492,104 @@ components:
 
     sessionUpdate:
       name: SessionUpdate
-      title: Session config update (reserved)
-      summary: Reserved for future session-config changes — currently a no-op.
+      title: Declare runtime client tools
+      summary: Client declares (or replaces) the client tools available for this session.
+      description: |
+        Declares the set of **client tools**, functions executed by this
+        client rather than the server, that the agent can call for the rest
+        of the session. Sending `session.update` again **wholesale
+        replaces** the previously declared runtime set; it never affects
+        client tools configured on the agent in the dashboard, those are
+        always offered alongside whatever is declared here.
+
+        Client tools, dashboard-configured or runtime-declared, are only
+        ever offered on this WebSocket channel; they are never offered on
+        non-WebSocket channels (telephony, WebRTC webcall).
+
+        The server responds with `session.updated` on success, or an `error`
+        (`tool_name_conflict`, `client_tools_managed_by_config`, or
+        `invalid_tools`, see the Error message) if the declaration is
+        rejected. In that case the previously declared set, if any, stays
+        intact.
       contentType: application/json
       payload:
         type: object
         required:
           - type
+          - tools
         properties:
           type:
             type: string
             const: session.update
+          tools:
+            type: array
+            description: |
+              The complete runtime client tool set for this session, this
+              array replaces any tools declared by a prior `session.update`,
+              it is not additive.
+            items:
+              type: object
+              required:
+                - type
+                - name
+                - description
+                - parameters
+              properties:
+                type:
+                  type: string
+                  const: function
+                name:
+                  type: string
+                  description: |
+                    Must not collide with the name of another declared tool,
+                    nor with an **enabled** dashboard system or configured
+                    tool. Colliding with a **disabled** system tool is fine,
+                    since a disabled tool is never built into the agent's
+                    toolset and so can't shadow this one.
+                description:
+                  type: string
+                  description: What the model reads to decide when to call this tool.
+                parameters:
+                  type: object
+                  description: JSON Schema for the tool's arguments.
+                timeout_ms:
+                  type: integer
+                  minimum: 1000
+                  maximum: 60000
+                  default: 15000
+                  description: |
+                    How long the server waits for `function_call.result`
+                    before giving up and returning a `tool_timeout` to the
+                    agent. Only meaningful when `expectsResponse` is `true`.
+                    Clamped to the 1000 to 60000 range.
+                expectsResponse:
+                  type: boolean
+                  default: true
+                  description: |
+                    `true` (default, "awaited"): the agent waits for
+                    `function_call.result` before continuing, use when the
+                    result affects what the agent says next.
+                    `false` ("fire and forget"): the call is dispatched and
+                    the agent keeps talking immediately, no result is
+                    expected and `timeout_ms` does not apply. Use for side
+                    effects the agent doesn't need the outcome of, for
+                    example logging or updating the screen.
+        examples:
+          - summary: Declare a single awaited tool
+            value:
+              type: session.update
+              tools:
+                - type: function
+                  name: lookup_order
+                  description: Look up an order in our system by id.
+                  parameters:
+                    type: object
+                    properties:
+                      order_id:
+                        type: string
+                    required:
+                      - order_id
+                  timeout_ms: 8000
 
     sessionClose:
       name: SessionClose
@@ -437,6 +609,48 @@ components:
           type:
             type: string
             const: session.close
+
+    functionCallResult:
+      name: FunctionCallResult
+      title: Client tool result
+      summary: Client answers a function_call with the tool's output.
+      description: |
+        Sent in response to a `function_call` for an **awaited** tool
+        (`expectsResponse: true`). Match `call_id` to the `function_call`
+        being answered.
+
+        - `output` is capped at **64 KB**. A larger value is rejected with
+          `result_too_large` and the agent is told it could not complete the
+          action, return a summary rather than a large blob.
+        - A `call_id` that is unknown or has already timed out is ignored,
+          with an `unknown_call_id` error sent back to the client.
+        - Not expected for a fire and forget tool call
+          (`expectsResponse: false`); the client should simply not send one.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+          - call_id
+          - output
+        properties:
+          type:
+            type: string
+            const: function_call.result
+          call_id:
+            type: string
+            description: The `call_id` from the `function_call` this result answers.
+          output:
+            type: string
+            maxLength: 65536
+            description: |
+              Opaque result string, typically JSON. Capped at 64 KB (65536
+              bytes).
+        examples:
+          - value:
+              type: function_call.result
+              call_id: "abc123"
+              output: "{\"status\":\"out for delivery\",\"eta\":\"tomorrow\"}"
 
     sessionCreated:
       name: SessionCreated
@@ -505,6 +719,69 @@ components:
           - value:
               type: session.closed
               reason: "client_requested"
+
+    sessionUpdated:
+      name: SessionUpdated
+      title: Client tools accepted
+      summary: Acknowledges a session.update, listing the accepted client tools.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+          - tools
+        properties:
+          type:
+            type: string
+            const: session.updated
+          tools:
+            type: array
+            description: Names of the client tools now declared for this session.
+            items:
+              type: string
+        examples:
+          - value:
+              type: session.updated
+              tools:
+                - lookup_order
+
+    functionCall:
+      name: FunctionCall
+      title: Client tool call
+      summary: The agent wants your app to run a client tool.
+      description: |
+        The model decided to call a client tool and produced the arguments.
+        Do the work in your app and reply with a matching
+        `function_call.result`, unless the tool was declared with
+        `expectsResponse: false`, in which case no reply is expected.
+      contentType: application/json
+      payload:
+        type: object
+        required:
+          - type
+          - call_id
+          - name
+          - arguments
+        properties:
+          type:
+            type: string
+            const: function_call
+          call_id:
+            type: string
+            description: Echo this back in the matching `function_call.result`.
+          name:
+            type: string
+            description: Name of the declared client tool being called.
+          arguments:
+            type: object
+            description: Argument values the model produced, matching the tool's `parameters` schema.
+        examples:
+          - value:
+              type: function_call
+              call_id: "abc123"
+              name: lookup_order
+              arguments:
+                order_id: "ORD-7841"
 
     outputAudioDelta:
       name: OutputAudioDelta
@@ -624,7 +901,7 @@ components:
         Useful for UI cues (e.g., showing a "speaking" indicator) and for
         suppressing the user's mic echo cancellation while the agent speaks.
         Fires once per agent turn, before the first `output_audio.delta` of
-        that turn.
+        that turn. Carries no fields beyond `type`.
       contentType: application/json
       payload:
         type: object
@@ -633,22 +910,17 @@ components:
         properties:
           type:
             type: string
-            const: agent_start_talking
-          timestamp:
-            type: string
-            format: date-time
-            description: >
-              ISO 8601 server-side timestamp of when the agent turn started,
-              included with the event.
+            const: agent.start_talking
         examples:
           - value:
-              type: agent_start_talking
-              timestamp: "2026-07-02T10:30:45.123456"
+              type: agent.start_talking
 
     agentStopTalking:
       name: AgentStopTalking
       title: Agent stopped talking
       summary: Signals the client that the agent has finished its current turn.
+      description: |
+        Carries no fields beyond `type`.
       contentType: application/json
       payload:
         type: object
@@ -657,17 +929,10 @@ components:
         properties:
           type:
             type: string
-            const: agent_stop_talking
-          timestamp:
-            type: string
-            format: date-time
-            description: >
-              ISO 8601 server-side timestamp of when the agent turn ended,
-              included with the event.
+            const: agent.stop_talking
         examples:
           - value:
-              type: agent_stop_talking
-              timestamp: "2026-07-02T10:30:47.654321"
+              type: agent.stop_talking
 
     interruption:
       name: Interruption
@@ -680,8 +945,15 @@ components:
         this, clients should stop playing any buffered `output_audio.delta`
         chunks from the interrupted turn.
 
-        Typically followed by a new `agent_start_talking` once the agent
+        Typically followed by a new `agent.start_talking` once the agent
         produces its next response.
+
+        **Not represented in the gateway's own server-side event types** —
+        this message is relayed verbatim from the STT/LLM/TTS worker without
+        gateway-side validation, so it exists on the wire (confirmed by
+        end-to-end device testing) but isn't part of the gateway's typed
+        contract. Treat this shape as provisional until the worker team
+        confirms it explicitly.
       contentType: application/json
       payload:
         type: object
@@ -713,11 +985,29 @@ components:
           code:
             type: string
             description: |
-              Machine-readable error code. Values emitted by the gateway:
-              `invalid_event` (a client message failed validation),
-              `no_session` (message received before the session was ready),
-              `internal_error`, or the HTTP status code of a setup failure as a
-              string (e.g. `401`, `400`, `503`).
+              Machine-readable error code. This is an **open-ended string,
+              not a closed enum**, new values can appear without notice.
+              Confirmed values emitted by the gateway: `invalid_json` (the
+              raw message wasn't valid JSON), `invalid_event` (a client
+              message failed schema validation), `no_session` (message
+              received before the session was ready), `internal_error`,
+              `too_many_updates`, `worker_not_ready`, or the HTTP status
+              code of a setup failure as a string (e.g. `400`, `404`,
+              `503`).
+
+              Client-tool codes, also confirmed: `tool_name_conflict` (a
+              `session.update` tool name collides with another declared
+              tool, or with an enabled dashboard system/configured tool,
+              the existing tools stay intact), `client_tools_managed_by_config`
+              (the name belongs to a dashboard-configured tool, rename it
+              or remove it from the dashboard config), `invalid_tools`
+              (two tools in the same `session.update` share a name, the
+              whole update is rejected), `tool_timeout` (an awaited client
+              tool's `function_call.result` didn't arrive within
+              `timeout_ms`, the agent recovers verbally), `unknown_call_id`
+              (a `function_call.result` referenced a `call_id` that's
+              unknown or already timed out), and `result_too_large` (the
+              `function_call.result` `output` exceeded 64 KB).
           message:
             type: string
             description: Human-readable error message.

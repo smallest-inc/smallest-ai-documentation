@@ -266,7 +266,10 @@ private func handleServerEvent(text: String) {
            let audio = Data(base64Encoded: b64) {
             playPCM16(audio)
         }
-    case "agent_start_talking", "agent_stop_talking":
+    case "transcript":
+        // json["role"] is "user" or "assistant", json["text"] is the final text
+        break
+    case "agent.start_talking", "agent.stop_talking":
         // update UI state
         break
     case "interruption":
@@ -282,6 +285,10 @@ private func handleServerEvent(text: String) {
     }
 }
 ```
+
+Server → client message types confirmed on this gateway: `session.created` (`session_id`, `call_id`, `sample_rate`, `channels`), `output_audio.delta`, `transcript` (`role`, `text`), `agent.start_talking`, `agent.stop_talking`, `session.closed` (`reason`: `client_requested`, `websocket_closed`, or `setup_failed`), and `error` (`code`, `message`). `interruption` also arrives on the wire (confirmed by device testing), but it isn't part of the gateway's own typed contract, it's relayed verbatim from the STT/LLM/TTS worker, so treat its shape as provisional.
+
+Client → server, you can also send `input_text.send` (`{"type": "input_text.send", "text": "..."}`, works alongside voice input, no documented length cap) and `session.close` (`{"type": "session.close"}`) for a clean shutdown that the server reports as `session.closed.reason == "client_requested"` rather than `"websocket_closed"`.
 
 ## Threading model
 
@@ -360,27 +367,46 @@ Apple's review expects this to be used for VoIP-style apps. Combine with PushKit
 
 ### Reconnect on transient failure
 
-`URLSessionWebSocketTask` closes with a `URLError` code. Retry only on network-transient codes (`.notConnectedToInternet`, `.timedOut`, `.networkConnectionLost`), never on auth errors (4401, 4403) or a clean client close.
+Don't decide retry vs. give-up from the WebSocket close code alone. Every fatal setup failure (agent not found, bad workflow, credits exhausted, a dependency timing out) closes with the same code, `4000`, whether or not it's actually retryable. Auth failures (bad token, unknown `agent_id`) never reach this callback at all, they're rejected as a plain HTTP `401`/`403` before the WebSocket upgrade completes, so `URLSessionWebSocketTask` never opens and you won't see a close code for them.
+
+The signal that distinguishes a retryable `4000` from a permanent one is the `error` message the server sends immediately before closing, capture its `code` and branch on that:
 
 ```swift
+private var lastErrorCode: String?
+
+private func handleServerEvent(text: String) {
+    // ...existing decode...
+    if type == "error" {
+        lastErrorCode = json["code"] as? String
+    }
+    // ...existing switch...
+}
+
 private func onWebSocketClosed(code: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+    defer { lastErrorCode = nil }
     switch code {
     case .normalClosure, .goingAway:
         return
     default:
-        // exponential backoff 500 ms → 30 s
-        retry()
+        let retryable = lastErrorCode == nil               // network drop, no error frame
+            || lastErrorCode == "internal_error"
+            || lastErrorCode == "worker_not_ready"
+            || lastErrorCode == "503"
+        if retryable {
+            retry() // exponential backoff 500 ms → 30 s
+        }
+        // else: e.g. "404" (agent not found), don't retry, surface to the user
     }
 }
 ```
 
 ### Mic mute while agent speaks
 
-To reduce echo when headset AEC underperforms, stop the mic tap on `agent_start_talking` and reinstall it on `agent_stop_talking`. The user's speech during that window goes undetected, which is usually preferable to the agent hearing itself.
+To reduce echo when headset AEC underperforms, stop the mic tap on `agent.start_talking` and reinstall it on `agent.stop_talking`. The user's speech during that window goes undetected, which is usually preferable to the agent hearing itself.
 
 ### Error event from server
 
-The `error` event from the server carries actionable codes. Surface auth failures (`401`, `403`) to the user immediately and stop retrying.
+The `error` event's `code` is an open-ended string, not a fixed enum, confirmed values include `invalid_json`, `invalid_event`, `no_session`, `internal_error`, `too_many_updates`, `worker_not_ready`, and HTTP-status-as-string (e.g. `"404"`, `"503"`). Auth failures don't appear here, see the reconnect section above for why.
 
 ## Next steps
 

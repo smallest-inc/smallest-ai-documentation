@@ -197,23 +197,26 @@ void _handleServerEvent(dynamic raw) {
   final ev = jsonDecode(raw as String) as Map<String, dynamic>;
   switch (ev['type']) {
     case 'session.created':
-      // update UI
+      // update UI; ev['sample_rate'] and ev['channels'] confirm the negotiated audio format
       break;
     case 'output_audio.delta':
       final bytes = base64Decode(ev['audio'] as String);
       final byteData = bytes.buffer.asByteData(bytes.offsetInBytes, bytes.lengthInBytes);
       FlutterPcmSound.feed(PcmArrayInt16(bytes: byteData));
       break;
-    case 'agent_start_talking':
+    case 'transcript':
+      // ev['role'] is "user" or "assistant", ev['text'] is the final text
+      break;
+    case 'agent.start_talking':
       // UI: show "speaking" indicator
       break;
-    case 'agent_stop_talking':
+    case 'agent.stop_talking':
       // UI: hide "speaking" indicator
       break;
     case 'interruption':
       // No public flush API in flutter_pcm_sound. The residual buffer
       // (~100 ms at 24 kHz) will play out. Stop feeding and wait for
-      // the next agent_start_talking.
+      // the next agent.start_talking.
       break;
     case 'session.closed':
       _stop();
@@ -226,6 +229,21 @@ void _handleServerEvent(dynamic raw) {
 ```
 
 `FlutterPcmSound.feed` queues the chunk for playback. Internally the plugin manages a ring buffer on the platform side and drains it at the hardware sample rate, so you can push chunks as fast as they arrive.
+
+Confirmed server → client types on this gateway: `session.created`, `output_audio.delta`, `transcript`, `agent.start_talking`, `agent.stop_talking`, `session.closed` (`reason`: `client_requested`, `websocket_closed`, or `setup_failed`), and `error`. `interruption` also arrives on the wire (confirmed by device testing), but it's relayed verbatim from the STT/LLM/TTS worker rather than part of the gateway's own typed contract, so treat its shape as provisional.
+
+Client → server, you can also send `input_text.send` (`{"type": "input_text.send", "text": "..."}`, works alongside voice input, no documented length cap) and `session.close` (`{"type": "session.close"}`) for a clean shutdown reported as `session.closed.reason == "client_requested"` instead of `"websocket_closed"`:
+
+```dart
+void _sendText(String text) {
+  _channel?.sink.add(jsonEncode({'type': 'input_text.send', 'text': text}));
+}
+
+Future<void> _endSessionCleanly() async {
+  _channel?.sink.add(jsonEncode({'type': 'session.close'}));
+  // server replies with session.closed (reason: client_requested), then closes
+}
+```
 
 ## Platform differences
 
@@ -291,13 +309,29 @@ Call `_installInterruptionHandler` once during app startup.
 
 ### Reconnect on transient failure
 
-The `onError`/`onDone` callbacks on the WebSocket stream fire when the connection drops. Retry with exponential backoff up to 30 s for transient network errors. Do not retry on close codes 1000, 4401, 4403.
+The `onError`/`onDone` callbacks on the WebSocket stream fire when the connection drops or the server closes it. Don't decide retry vs. give-up from the close code alone: every fatal setup failure (agent not found, credits exhausted, a dependency timing out) closes with the same code, `4000`, whether or not it's actually retryable. Auth failures (bad token, unknown `agent_id`) never reach these callbacks at all, they're rejected as a plain HTTP `401`/`403` before the WebSocket upgrade completes, so `WebSocketChannel.connect` throws before you ever get a channel.
+
+For a `4000` close, the only reliable retry signal is the `code` on the `error` message the server sends immediately before it:
 
 ```dart
+String? _lastErrorCode;
 int _retryMs = 500;
 
+void _handleServerEventForRetry(Map<String, dynamic> ev) {
+  if (ev['type'] == 'error') _lastErrorCode = ev['code'] as String?;
+}
+
 void _onWebSocketClosed(int? code) {
-  if (code == 1000 || code == 4401 || code == 4403) return;
+  final lastError = _lastErrorCode;
+  _lastErrorCode = null;
+  if (code == 1000) return; // clean close
+
+  final retryable = lastError == null ||
+      lastError == 'internal_error' ||
+      lastError == 'worker_not_ready' ||
+      lastError == '503';
+  if (!retryable) return; // e.g. "404" (agent not found): don't retry
+
   Future.delayed(Duration(milliseconds: _retryMs), _start);
   _retryMs = (_retryMs * 2).clamp(500, 30000);
 }
@@ -305,7 +339,7 @@ void _onWebSocketClosed(int? code) {
 
 ### Mic mute while agent speaks
 
-If your target devices have weaker echo cancellation, cancel the mic subscription on `agent_start_talking` and restart it on `agent_stop_talking`. The user's speech during the agent turn goes undetected; it is the safer trade-off than audible feedback.
+If your target devices have weaker echo cancellation, cancel the mic subscription on `agent.start_talking` and restart it on `agent.stop_talking`. The user's speech during the agent turn goes undetected; it is the safer trade-off than audible feedback.
 
 ### App lifecycle
 
