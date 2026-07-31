@@ -20,9 +20,9 @@ Every completed call includes `postCallAnalytics`:
 ## Accessing Post-Call Data
 
 ```python
-from smallestai.atoms.call import Call
+from smallestai.atoms.helpers import CallAnalytics
 
-call = Call()
+call = CallAnalytics()  # reads SMALLEST_API_KEY from the environment
 
 # Get call details
 details = call.get_call("CALL-1768842587790-69eb58")
@@ -60,9 +60,9 @@ The user expressed interest and provided their name.
 Use `set_post_call_config()` to define what data to extract:
 
 ```python
-from smallestai.atoms.call import Call
+from smallestai.atoms.helpers import CallAnalytics
 
-call = Call()
+call = CallAnalytics()
 
 call.set_post_call_config(
     agent_id="696e655577e1d88ff54b4fbf",
@@ -126,20 +126,18 @@ for metric in config["data"].get("dispositionMetrics", []):
 
 ```python
 import time
-from smallestai.atoms import AtomsClient
-from smallestai.atoms.call import Call
-from smallestai.atoms.audience import Audience
-from smallestai.atoms.campaign import Campaign
+from smallestai import SmallestAI
+from smallestai.atoms.helpers import Audience, Campaign, CallAnalytics
 
-client = AtomsClient()
-call = Call()
+client = SmallestAI()
+call = CallAnalytics()
 audience = Audience()
 campaign = Campaign()
 
 # 1. Create agent
-agent = client.new_agent(
+agent = client.atoms.agents.create_agent(
     name=f"Sales Agent {int(time.time())}",
-    prompt="You are a sales agent. Ask if interested and get their name.",
+    global_prompt="You are a sales agent. Ask if interested and get their name.",
     description="Testing disposition metrics"
 )
 agent_id = agent.data
@@ -164,8 +162,8 @@ call.set_post_call_config(
 )
 
 # 3. Create audience and campaign
-phones = client.get_phone_numbers()
-phone_id = phones["data"][0]["_id"]
+phones = client.atoms.phone_numbers.list()
+phone_id = phones.data[0].id
 
 aud = audience.create(
     name=f"Test Audience {int(time.time())}",
@@ -216,7 +214,7 @@ if analytics:
 # 8. Cleanup
 campaign.delete(campaign_id)
 audience.delete(audience_id)
-client.delete_agent(id=agent_id)
+client.atoms.agents.archive_agent(agent_id)
 ```
 
 ---

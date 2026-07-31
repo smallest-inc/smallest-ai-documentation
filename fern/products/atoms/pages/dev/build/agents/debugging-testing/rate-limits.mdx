@@ -34,16 +34,19 @@ Visit [app.smallest.ai/usage](https://app.smallest.ai/usage) to see:
 ### Via SDK
 
 ```python
-from smallestai.atoms import AtomsClient
+from smallestai import SmallestAI
 
-client = AtomsClient()
+client = SmallestAI()
 
-# Get organization details (includes usage info)
-org = client.get_organization()
+# Get plan and remaining credit
+balance = client.atoms.billing.get_balance()
 
-print(f"Plan: {org.data.plan}")
-print(f"Minutes used: {org.data.minutes_used}")
-print(f"Minutes limit: {org.data.minutes_limit}")
+print(f"Plan: {balance.data.plan_id}")
+print(f"Credit balance: {balance.data.credit_balance}")
+
+# Usage breakdown by product
+usage = client.atoms.billing.get_usage_breakdown()
+print(f"Voice AI usage: {usage.data.voice_ai}")
 ```
 
 ## Rate Limit Errors
@@ -64,18 +67,21 @@ When you exceed limits, the API returns a `429 Too Many Requests` error.
 ### Handling in Code
 
 ```python
-from smallestai.atoms.exceptions import ApiException
+from smallestai.core.api_error import ApiError
 import asyncio
 
-async def make_call_with_retry(client, request, max_retries=3):
+async def make_call_with_retry(client, agent_id, phone_number, max_retries=3):
     """Make API call with exponential backoff on rate limit."""
     
     for attempt in range(max_retries):
         try:
-            return client.start_outbound_call(request)
+            return client.atoms.calls.start_outbound_call(
+                agent_id=agent_id,
+                phone_number=phone_number
+            )
             
-        except ApiException as e:
-            if e.status == 429:
+        except ApiError as e:
+            if e.status_code == 429:
                 wait_time = 2 ** attempt
                 print(f"Rate limited. Waiting {wait_time}s...")
                 await asyncio.sleep(wait_time)
@@ -92,11 +98,11 @@ The platform limits simultaneous active calls. Before starting a new call, check
 ```python
 def check_capacity(client, required_slots: int = 1) -> bool:
     """Check if we have capacity for new calls."""
-    org = client.get_organization()
+    concurrency = client.atoms.concurrency.get_concurrency()
     
     # Get current stats from your tracking
     active_calls = get_active_call_count()  # Your implementation
-    max_concurrent = org.data.concurrent_call_limit
+    max_concurrent = concurrency.data.org_limit
     
     available = max_concurrent - active_calls
     
@@ -112,18 +118,16 @@ def check_capacity(client, required_slots: int = 1) -> bool:
 Track your monthly usage to avoid service interruption:
 
 ```python
-def check_minutes_remaining(client) -> tuple[int, int]:
-    """Check remaining minutes in billing period."""
-    org = client.get_organization()
+def check_credit_remaining(client) -> float:
+    """Check remaining credit in billing period."""
+    balance = client.atoms.billing.get_balance()
     
-    used = org.data.minutes_used
-    limit = org.data.minutes_limit
-    remaining = limit - used
+    remaining = balance.data.credit_balance
     
     if remaining < 100:
-        print(f"⚠️ Low minutes: {remaining} remaining")
+        print(f"Low balance: {remaining} remaining")
     
-    return remaining, limit
+    return remaining
 ```
 
 ## Campaign Pacing
@@ -139,8 +143,6 @@ async def paced_campaign(client, phone_numbers: list, agent_id: str):
     Run campaign with automatic pacing.
     Respects concurrent call and rate limits.
     """
-    from smallestai.atoms.models import ConversationOutboundPostRequest
-    
     max_concurrent = 5  # Based on your plan
     calls_per_minute = 10  # Conservative rate
     
@@ -155,13 +157,8 @@ async def paced_campaign(client, phone_numbers: list, agent_id: str):
             active_calls = {c for c in active_calls if not c.done()}
         
         # Make call
-        request = ConversationOutboundPostRequest(
-            agent_id=agent_id,
-            phone_number=phone
-        )
-        
         call_task = asyncio.create_task(
-            make_call_async(client, request)
+            make_call_async(client, agent_id, phone)
         )
         active_calls.add(call_task)
         
@@ -180,25 +177,23 @@ async def paced_campaign(client, phone_numbers: list, agent_id: str):
 Set up alerts before hitting limits:
 
 ```python
-def check_usage_alerts(client):
+def check_usage_alerts(client, warning_threshold=100, critical_threshold=25):
     """Check usage and return any alerts."""
     alerts = []
-    org = client.get_organization()
+    balance = client.atoms.billing.get_balance()
     
-    # Minutes alert
-    minutes_used = org.data.minutes_used
-    minutes_limit = org.data.minutes_limit
-    minutes_pct = (minutes_used / minutes_limit) * 100
+    # Credit alert
+    remaining = balance.data.credit_balance
     
-    if minutes_pct > 90:
+    if remaining < critical_threshold:
         alerts.append({
             "type": "CRITICAL",
-            "message": f"Minutes at {minutes_pct:.0f}% ({minutes_used}/{minutes_limit})"
+            "message": f"Credit balance low: {remaining} remaining"
         })
-    elif minutes_pct > 75:
+    elif remaining < warning_threshold:
         alerts.append({
             "type": "WARNING",
-            "message": f"Minutes at {minutes_pct:.0f}%"
+            "message": f"Credit balance: {remaining} remaining"
         })
     
     return alerts

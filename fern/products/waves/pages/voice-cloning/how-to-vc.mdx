@@ -9,9 +9,8 @@ Create an instant voice clone by uploading a short audio sample (5-15 seconds) v
 
 You can access the source code for the Python SDK on our [GitHub repository](https://github.com/smallest-inc/smallest-python-sdk).
 
-{/* TODO: Restore SDK as the primary example once smallestai Python SDK ships its fix. */}
 <Note>
-The `smallestai` Python SDK is being updated. If the SDK example below doesn't work, use the [Instant Voice Clone (REST API)](/models/documentation/voice-cloning/instant-clone-api) page — same operation, no SDK required. Streaming synthesis via `WavesStreamingTTS` is unaffected.
+Prefer plain HTTP? The [Instant Voice Clone (REST API)](/models/documentation/voice-cloning/instant-clone-api) page covers the same operation without the SDK.
 </Note>
 
 ## Requirements
@@ -40,11 +39,15 @@ The Smallest AI SDK allows you to clone your voice by uploading an audio file. T
 
 <CodeGroup>
 ```python python
-from smallestai.waves import WavesClient
+from smallestai import SmallestAI
 
 def main():
-    client = WavesClient(api_key="YOUR_API_KEY")
-    res = client.add_voice(display_name="My Voice", file_path="my_voice.wav")
+    client = SmallestAI()  # reads SMALLEST_API_KEY from the environment
+    with open("my_voice.wav", "rb") as f:
+        res = client.waves.create_voice_clone(
+            display_name="My Voice",
+            file=("my_voice.wav", f, "audio/wav"),
+        )
     print(res)
 
 if __name__ == "__main__":
@@ -56,11 +59,15 @@ if __name__ == "__main__":
 <CodeGroup>
 ```python python
 import asyncio
-from smallestai.waves import AsyncWavesClient
+from smallestai import AsyncSmallestAI
 
 async def main():
-    client = AsyncWavesClient(api_key="YOUR_API_KEY")
-    res = await client.add_voice(display_name="My Voice", file_path="my_voice.wav")
+    client = AsyncSmallestAI()  # reads SMALLEST_API_KEY from the environment
+    with open("my_voice.wav", "rb") as f:
+        res = await client.waves.create_voice_clone(
+            display_name="My Voice",
+            file=("my_voice.wav", f, "audio/wav"),
+        )
     print(res)
 
 if __name__ == "__main__":
@@ -70,21 +77,23 @@ if __name__ == "__main__":
 
 ## Parameters
 
-- `api_key`: Your API key (can be set via SMALLEST_API_KEY environment variable).
+- `api_key`: Your API key. Set the `SMALLEST_API_KEY` environment variable, or pass it explicitly with `SmallestAI(api_key="YOUR_API_KEY")`.
 - `display_name`: Name of the voice to be created.
-- `file_path`: Path to the audio file to be cloned.
+- `file`: The audio file to clone from, opened in binary mode.
+- Optional: `description`, `accent`, `tags`, `language`, and `model`.
+- Pass the file as a `(filename, file_object, content_type)` tuple so the upload carries the right file type.
 
-These parameters are part of the add_voice function. They can be set when calling the function as shown above.
+These parameters are part of the `create_voice_clone` function. They can be set when calling the function as shown above.
 
 ## Get All Cloned Voices
 
 Once you have cloned your voices, you can retrieve a list of all cloned voices associated with your account using the following code:
 <CodeGroup>
 ```python python
-from smallestai.waves import WavesClient
+from smallestai import SmallestAI
 
-client = WavesClient(api_key="YOUR_API_KEY")
-print(f"Available Voices: {client.get_cloned_voices()}")
+client = SmallestAI()  # reads SMALLEST_API_KEY from the environment
+print(f"Available Voices: {client.waves.list_voice_clones()}")
 ```
 </CodeGroup>
 

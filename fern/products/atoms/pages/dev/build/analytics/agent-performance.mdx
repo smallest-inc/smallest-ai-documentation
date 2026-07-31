@@ -8,63 +8,53 @@ Track how fast your agents respond and identify performance bottlenecks.
 
 ## Latency Metrics
 
-Each conversation log includes three latency measurements:
+Each call includes `turn_latency_metrics` — how long the agent takes to respond after the user stops speaking, measured per turn:
 
-| Metric | Description | What It Measures |
-|--------|-------------|------------------|
-| `average_transcriber_latency` | ASR latency | Time to convert speech to text |
-| `average_agent_latency` | LLM latency | Time for AI to generate response |
-| `average_synthesizer_latency` | TTS latency | Time to convert text to speech |
+| Metric | Description |
+|--------|-------------|
+| `avg_latency` | Average response latency across all turns (ms) |
+| `median_latency` | Median response latency (ms) |
+| `min_latency` / `max_latency` | Fastest and slowest turns (ms) |
+| `turns` | Number of turns measured |
+| `latencies` | Per-turn latency values (ms) |
 
 ## Getting Latency Data
 
 ```python
-from smallestai.atoms import AtomsClient
+from smallestai import SmallestAI
 
-client = AtomsClient()
+client = SmallestAI()  # reads SMALLEST_API_KEY from the environment
 
-logs = client.get_conversation_logs(id="conversation-123")
-data = logs.data
+call = client.atoms.calls.get("CALL-1768842587790-69eb58")
+metrics = call.data.turn_latency_metrics
 
-print(f"ASR Latency: {data.average_transcriber_latency}ms")
-print(f"LLM Latency: {data.average_agent_latency}ms")
-print(f"TTS Latency: {data.average_synthesizer_latency}ms")
-
-# Total round-trip latency
-total = (
-    (data.average_transcriber_latency or 0) +
-    (data.average_agent_latency or 0) +
-    (data.average_synthesizer_latency or 0)
-)
-print(f"Total latency: {total}ms")
+print(f"Average latency: {metrics.avg_latency}ms")
+print(f"Median latency: {metrics.median_latency}ms")
+print(f"Slowest turn: {metrics.max_latency}ms")
+print(f"Turns measured: {metrics.turns}")
 ```
 
 ## Performance Benchmarks
 
-| Component | Good | Acceptable | Needs Work |
-|-----------|------|------------|------------|
-| ASR | < 200ms | 200-500ms | > 500ms |
-| LLM | < 500ms | 500-1000ms | > 1000ms |
-| TTS | < 200ms | 200-500ms | > 500ms |
-| **Total** | < 900ms | 900-2000ms | > 2000ms |
+| Metric | Good | Acceptable | Needs Work |
+|--------|------|------------|------------|
+| Average turn latency | < 900ms | 900-2000ms | > 2000ms |
+| Slowest turn | < 2000ms | 2000-4000ms | > 4000ms |
 
 ## Analyzing Performance
 
 ```python
 def check_performance(call_id):
-    logs = client.get_conversation_logs(id=call_id)
-    data = logs.data
+    call = client.atoms.calls.get(call_id)
+    metrics = call.data.turn_latency_metrics
     
     issues = []
     
-    if data.average_transcriber_latency and data.average_transcriber_latency > 500:
-        issues.append("High ASR latency")
+    if metrics and metrics.avg_latency and metrics.avg_latency > 2000:
+        issues.append("High average latency - consider shorter prompts")
     
-    if data.average_agent_latency and data.average_agent_latency > 1000:
-        issues.append("High LLM latency - consider shorter prompts")
-    
-    if data.average_synthesizer_latency and data.average_synthesizer_latency > 500:
-        issues.append("High TTS latency")
+    if metrics and metrics.max_latency and metrics.max_latency > 4000:
+        issues.append("Slow outlier turns - check tool execution time")
     
     if issues:
         print(f"Performance issues: {', '.join(issues)}")
@@ -78,7 +68,7 @@ def check_performance(call_id):
 
 <AccordionGroup>
   <Accordion title="Reduce LLM latency">
-    The LLM is usually the slowest component. To speed it up, keep system prompts concise, use streaming responses (enabled by default), and consider faster models like gpt-4o-mini.
+    The LLM is usually the slowest component. To speed it up, keep system prompts concise, use streaming responses (enabled by default), and consider a faster model.
   </Accordion>
   
   <Accordion title="Optimize tools">
@@ -95,7 +85,7 @@ def check_performance(call_id):
 Get info about which agent handled the call:
 
 ```python
-agent = logs.data.agent
+agent = call.data.agent
 
 if agent:
     print(f"Agent ID: {agent.id}")
@@ -112,14 +102,15 @@ def quality_report(call_ids):
     slow_calls = 0
     
     for call_id in call_ids:
-        logs = client.get_conversation_logs(id=call_id)
-        data = logs.data
+        call = client.atoms.calls.get(call_id)
+        data = call.data
         
-        total_latency = (data.average_agent_latency or 0)
+        metrics = data.turn_latency_metrics
+        avg_latency = (metrics.avg_latency if metrics else 0) or 0
         
-        if data.status == "completed" and total_latency < 1000:
+        if data.status == "completed" and avg_latency < 1000:
             fast_and_completed += 1
-        elif total_latency >= 1000:
+        elif avg_latency >= 1000:
             slow_calls += 1
     
     print(f"Quality calls: {fast_and_completed}/{len(call_ids)}")

@@ -11,12 +11,12 @@ This guide walks through the complete knowledge base workflow—from creation to
 Every KB starts with a name and optional description. Use the `create` method:
 
 ```python
-from smallestai.atoms.kb import KB
-from smallestai.atoms import AtomsClient
+from smallestai.atoms.helpers import KB
+from smallestai import SmallestAI
 
 # Initialize separate managers
 kb = KB()
-client = AtomsClient()
+client = SmallestAI()
 
 # Create KB
 response = kb.create(
@@ -78,14 +78,14 @@ for item in all_kbs["data"]:
 
 ## Linking a KB to an Agent
 
-The connection happens at agent creation time. Pass `kb_id` to the `new_agent` helper:
+The connection happens at agent creation time. Pass the KB ID as `global_knowledge_base_id` to `create_agent`:
 
 ```python
-agent = client.new_agent(
+agent = client.atoms.agents.create_agent(
     name="Support Agent",
-    prompt="You are a helpful support agent. Use your knowledge base to answer product questions accurately.",
+    global_prompt="You are a helpful support agent. Use your knowledge base to answer product questions accurately.",
     description="Agent with product KB",
-    kb_id=kb_id
+    global_knowledge_base_id=kb_id
 )
 
 agent_id = agent.data
@@ -100,9 +100,9 @@ The agent now has access to all content in that knowledge base during conversati
 `get_agent()` returns the agent with its `globalKnowledgeBaseId` field:
 
 ```python
-agent_details = client.get_agent(id=agent_id)
+agent_details = client.atoms.agents.get_agent(id=agent_id)
 
-linked_kb = agent_details["data"]["globalKnowledgeBaseId"]
+linked_kb = agent_details.data.global_knowledge_base_id
 print(f"Agent is linked to KB: {linked_kb}")
 ```
 
@@ -128,11 +128,11 @@ The response includes the linked KB ID:
 A knowledge base cannot be deleted while it's connected to an agent. Delete or archive the agent first.
 </Warning>
 
-Use `delete_agent()` to archive the agent, then `delete()` to remove the KB:
+Use `archive_agent()` to archive the agent, then `delete()` to remove the KB:
 
 ```python
-# First, remove the agent
-client.delete_agent(id=agent_id)
+# First, archive the agent
+client.atoms.agents.archive_agent(id=agent_id)
 
 # Then delete the KB
 kb.delete(kb_id)

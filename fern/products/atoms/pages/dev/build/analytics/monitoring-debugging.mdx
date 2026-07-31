@@ -13,10 +13,10 @@ Monitor your agents in production and debug issues effectively using conversatio
 Build a simple monitoring dashboard that tracks active agents:
 
 ```python
-from smallestai.atoms import AtomsClient
+from smallestai import SmallestAI
 from datetime import datetime, timedelta
 
-client = AtomsClient()
+client = SmallestAI()  # reads SMALLEST_API_KEY from the environment
 
 def monitor_agent_health(agent_id: str, recent_call_ids: list):
     """
@@ -34,7 +34,7 @@ def monitor_agent_health(agent_id: str, recent_call_ids: list):
     
     for call_id in recent_call_ids:
         try:
-            logs = client.get_conversation_logs(id=call_id)
+            logs = client.atoms.calls.get(call_id)
             data = logs.data
             
             if data.status == "completed":
@@ -43,7 +43,8 @@ def monitor_agent_health(agent_id: str, recent_call_ids: list):
                 metrics["failed"] += 1
                 
             metrics["avg_duration"] += data.duration or 0
-            metrics["avg_latency"] += data.average_agent_latency or 0
+            latency = data.turn_latency_metrics
+            metrics["avg_latency"] += (latency.avg_latency if latency else 0) or 0
             
         except Exception as e:
             issues.append(f"Failed to get logs for {call_id}: {e}")
@@ -84,8 +85,8 @@ Set up alerts based on key metrics:
 ```python
 def debug_call(call_id: str):
     """Comprehensive call debugging."""
-    logs = client.get_conversation_logs(id=call_id)
-    data = logs.data
+    call = client.atoms.calls.get(call_id)
+    data = call.data
     
     print("=== CALL DEBUG REPORT ===")
     print(f"Call ID: {data.call_id}")
@@ -99,8 +100,9 @@ def debug_call(call_id: str):
     if data.status != "completed":
         print(f"⚠️  Call did not complete. Status: {data.status}")
     
-    if data.average_agent_latency and data.average_agent_latency > 1500:
-        print(f"⚠️  High LLM latency: {data.average_agent_latency}ms")
+    metrics = data.turn_latency_metrics
+    if metrics and metrics.avg_latency and metrics.avg_latency > 2000:
+        print(f"⚠️  High response latency: {metrics.avg_latency}ms")
     
     if not data.transcript or len(data.transcript) == 0:
         print("⚠️  No transcript - possible ASR failure")
@@ -108,7 +110,7 @@ def debug_call(call_id: str):
     # Show transcript
     print("\n=== TRANSCRIPT ===")
     for i, line in enumerate(data.transcript or []):
-        print(f"  [{i}] {line}")
+        print(f"  [{i}] [{line.role}] {line.content}")
 ```
 
 ### Step 2: Analyze Transcript
@@ -118,20 +120,21 @@ Look for patterns in failed conversations:
 ```python
 def analyze_transcript(call_id: str):
     """Find issues in conversation flow."""
-    logs = client.get_conversation_logs(id=call_id)
-    transcript = logs.data.transcript or []
+    call = client.atoms.calls.get(call_id)
+    transcript = call.data.transcript or []
+    lines = [line.content or "" for line in transcript]
     
     issues = []
     
     # Check for repeated messages (loop detection)
-    if len(transcript) > 2:
-        for i in range(len(transcript) - 2):
-            if transcript[i] == transcript[i + 2]:
+    if len(lines) > 2:
+        for i in range(len(lines) - 2):
+            if lines[i] == lines[i + 2]:
                 issues.append(f"Possible loop at line {i}")
     
     # Check for error messages in transcript
     error_keywords = ["sorry", "error", "cannot", "unable", "don't understand"]
-    for i, line in enumerate(transcript):
+    for i, line in enumerate(lines):
         for keyword in error_keywords:
             if keyword in line.lower():
                 issues.append(f"Possible issue at line {i}: '{line[:50]}...'")
@@ -143,33 +146,29 @@ def analyze_transcript(call_id: str):
 
 ```python
 def latency_breakdown(call_id: str):
-    """Identify slowest component."""
-    logs = client.get_conversation_logs(id=call_id)
-    data = logs.data
+    """Identify the slowest turns."""
+    call = client.atoms.calls.get(call_id)
+    metrics = call.data.turn_latency_metrics
     
-    components = {
-        "ASR (Transcriber)": data.average_transcriber_latency,
-        "LLM (Agent)": data.average_agent_latency,
-        "TTS (Synthesizer)": data.average_synthesizer_latency
-    }
+    if not metrics or not metrics.latencies:
+        print("No latency data available")
+        return
     
     print("=== LATENCY BREAKDOWN ===")
-    for name, latency in components.items():
-        if latency:
-            bar = "█" * int(latency / 50)  # Scale for display
-            status = "⚠️" if latency > 500 else "✓"
-            print(f"{status} {name}: {latency:.0f}ms {bar}")
+    for i, latency in enumerate(metrics.latencies):
+        bar = "█" * int(latency / 200)  # Scale for display
+        status = "⚠️" if latency > 2000 else "✓"
+        print(f"{status} Turn {i + 1}: {latency:.0f}ms {bar}")
     
     # Find bottleneck
-    slowest = max(components.items(), key=lambda x: x[1] or 0)
-    print(f"\n🎯 Bottleneck: {slowest[0]} ({slowest[1]:.0f}ms)")
+    print(f"\n🎯 Slowest turn: {metrics.max_latency:.0f}ms (avg {metrics.avg_latency:.0f}ms)")
 ```
 
 ## Common Issues & Solutions
 
 <AccordionGroup>
-  <Accordion title="High LLM Latency">
-    **Symptoms:** `average_agent_latency` > 1000ms
+  <Accordion title="High Response Latency">
+    **Symptoms:** `turn_latency_metrics.avg_latency` > 2000ms
     
     **Causes:**
     - Long system prompts
@@ -179,7 +178,7 @@ def latency_breakdown(call_id: str):
     **Solutions:**
     - Shorten prompts
     - Use streaming (default)
-    - Consider `gpt-4o-mini` for faster responses
+    - Consider a faster model
     - Cache repeated tool results
   </Accordion>
   
@@ -267,9 +266,10 @@ def daily_analysis():
     
     for call_id in today_calls:
         try:
-            logs = client.get_conversation_logs(id=call_id)
-            total_duration += logs.data.duration or 0
-            if (logs.data.average_agent_latency or 0) > 1000:
+            call = client.atoms.calls.get(call_id)
+            total_duration += call.data.duration or 0
+            metrics = call.data.turn_latency_metrics
+            if metrics and (metrics.avg_latency or 0) > 2000:
                 high_latency_count += 1
         except:
             pass
@@ -288,8 +288,8 @@ def get_recording(call_id: str, save_path: str = None):
     """Download call recording for review."""
     import requests
     
-    logs = client.get_conversation_logs(id=call_id)
-    recording_url = logs.data.recording_url
+    call = client.atoms.calls.get(call_id)
+    recording_url = call.data.recording_url
     
     if not recording_url:
         print("No recording available")
