@@ -82,13 +82,19 @@ stt = smallestai.STT(language="en", diarize=True)
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `api_key` | `str` | `$SMALLEST_API_KEY` | Your Smallest AI API key |
-| `model` | `str` | `"pulse"` | STT model — currently only `"pulse"` is available |
-| `language` | `str` | `"en"` | Language code (e.g. `"en"`, `"hi"`, `"fr"`). LiveKit uses Pulse's streaming surface. Use `"north_indic"` (Indian-language auto-detect) or `"multi-asian"` (East Asian auto-detect, US region only) when the language is unknown. See the [Pulse model card](/models/model-cards/speech-to-text/pulse) for the full streaming code list |
+| `model` | `str` | `"pulse"` | STT model. `"pulse"` — streaming + batch, 38 languages. `"pulse-pro"` — higher-accuracy English-only, batch (pre-recorded) only; raises `ValueError` if used with streaming |
+| `language` | `str` | `"en"` | Language code (e.g. `"en"`, `"hi"`, `"fr"`). LiveKit uses Pulse's streaming surface. Use `"north_indic"` (Indian-language auto-detect), `"multi-asian"` (East Asian auto-detect, US region only), or `"multi-south-indic"` (South Indian auto-detect, India region only, Beta) when the language is unknown. See the [Pulse model card](/models/model-cards/speech-to-text/pulse) for the full streaming code list |
 | `sample_rate` | `int` | `16000` | Audio sample rate in Hz. Supported: `8000`, `16000`, `22050`, `24000`, `44100`, `48000` |
 | `encoding` | `str` | `"linear16"` | PCM encoding: `"linear16"`, `"linear32"`, `"alaw"`, `"mulaw"`, `"opus"`, `"ogg_opus"` |
 | `word_timestamps` | `bool` | `True` | Include per-word `start`/`end` timestamps and confidence scores |
 | `diarize` | `bool` | `False` | Enable speaker diarization — each word includes a speaker ID |
-| `eou_timeout_ms` | `int` | `0` | Milliseconds of silence before the server emits a final transcript. `0` disables server-side end-of-utterance detection (recommended — lets LiveKit's built-in turn detection control timing) |
+| `eou_timeout_ms` | `int` | `100` | Silence (ms) before the server finalizes an utterance. Range `100`–`10000`ms; defaults to `100`ms so server-side EOU adds minimal latency on top of LiveKit's own end-of-turn detection. Acts as a ceiling when `endpointing` is enabled; the sole finalization trigger when disabled |
+| `endpointing` | `bool` | `True` | Finalize on trailing silence instead of waiting on `eou_timeout_ms` alone |
+| `keywords` | `list[tuple[str, float]]` | `[]` | Boost recognition via `(keyword, intensifier)` pairs, e.g. `[("NVIDIA", 2.0)]`. Intensifier ~1.0 (mild) to ~5.0 (strong); avoid values above 5 (hallucination risk). Streaming only, up to 10,000 keywords per session |
+| `format` | `bool` | `True` | Apply punctuation and capitalization to streaming transcripts |
+| `sentence_timestamps` | `bool` | `False` | Include sentence-level timing in streaming transcripts as an `"utterances"` list in `SpeechData.metadata["utterances"]`. Streaming only |
+| `redact_pii` | `bool` | `False` | Mask PII (names, addresses, phone numbers) with placeholder tokens; matches are also listed in `SpeechData.metadata["redacted_entities"]`. Reliable only for `"en"`/`"hi"`. Streaming only |
+| `redact_pci` | `bool` | `False` | Mask payment card info (card numbers, CVVs, ZIP codes, account numbers) with placeholder tokens; matches are also listed in `SpeechData.metadata["redacted_entities"]`. Reliable only for `"en"`/`"hi"`. Streaming only |
 
 The STT service connects to `wss://api.smallest.ai/waves/v1/stt/live?model=pulse` for streaming and `https://api.smallest.ai/waves/v1/stt/?model=pulse` for batch. Interim and final transcripts are both supported. `START_OF_SPEECH` is inferred from the first non-empty transcript.
 
@@ -120,6 +126,7 @@ smallest_tts = smallestai.TTS(
 | `output_format` | `str` | `"pcm"` | Output encoding for HTTP synthesis: `"pcm"`, `"mp3"`, `"wav"`, `"ulaw"`, `"alaw"`. WebSocket streaming always returns PCM. |
 | `ws_url` | `str` | `wss://api.smallest.ai/waves/v1/tts/live` | WebSocket endpoint for low-latency streaming synthesis |
 | `word_timestamps` | `bool` | `False` | Opt in to per-word timed transcript entries aligned to audio playback. Supported on base-queue English + Hindi voices (`meher`, `devansh`, `kartik`, `maithili`, `liam`, `avery`); other voices silently emit no word events. |
+| `max_buffer_flush_ms` | `int` | `0` | Server-side buffer bound (ms) for continuous WebSocket streaming: once this many milliseconds of streamed text have buffered, the server force-flushes partial audio without waiting for an explicit flush. `0` disables time-based flushing (audio is produced on the segment's end-of-input flush). Raise it (e.g. 200–400) to trade a little latency for fewer, larger audio chunks. Streaming only. |
 
 ---
 
