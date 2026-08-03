@@ -38,22 +38,22 @@ print(client.atoms.user.get_user_details())
 ```
 
 <Warning>
-  **Outbound calls live at `client.atoms.calls.start_outbound_call(...)`** — not on the `smallestai.atoms.Call` helper (which is analytics-only despite the name). The outbound API returns `status=True` even when the agent has no phone number attached; the call simply never connects. To poll terminal state and pull the transcript, use `client.atoms.logs.get_conversation_log_by_id(id=conversation_id)` — the `calls` namespace itself doesn't have a get/list method, only the `start_outbound_call` trigger.
+  **Outbound calls live at `client.atoms.calls.start_outbound_call(...)`** — not on the `smallestai.atoms.helpers.CallAnalytics` helper (which is analytics-only). The outbound API returns `status=True` even when the agent has no phone number attached; the call simply never connects. To poll terminal state and pull the transcript, use `client.atoms.calls.get(id=call_id)`.
 </Warning>
 
 An async variant is exported as `AsyncSmallestAI` with the same surface. See the [SDK reference](https://github.com/fern-demo/smallest-ai-python-sdk/blob/HEAD/reference.md) for the full API.
 
 | Namespace | What it covers |
 |-----------|----------------|
-| `client.atoms.agents` | Create, list, get, update, delete agents; duplicate; manage workflows |
+| `client.atoms.agents` | Create, list, get, update, archive agents; duplicate; manage workflows |
 | `client.atoms.agent_templates` | Spawn agents from prebuilt templates |
-| `client.atoms.calls` | Trigger outbound calls (`start_outbound_call` only; see `logs` below for call retrieval) |
+| `client.atoms.calls` | Trigger outbound calls; get, list, and search call records |
 | `client.atoms.knowledge_base` | Create, list, query KBs |
 | `client.atoms.campaigns` | Bulk outbound campaigns |
 | `client.atoms.audience` | Manage audience lists for campaigns |
 | `client.atoms.phone_numbers` | Attach Twilio / Telnyx / Vonage numbers |
 | `client.atoms.live_transcripts` | Subscribe to in-flight transcripts via SSE |
-| `client.atoms.logs` | Retrieve conversation logs and analytics |
+| `client.atoms.analytics` | Call analytics, dashboards, and usage timeseries |
 | `client.atoms.webhooks` | Manage webhook subscriptions |
 | `client.atoms.user`, `client.atoms.organization` | Account-level info |
 
@@ -74,7 +74,7 @@ For the voice-agent code itself (the part that runs on every call), use `smalles
 
 | Import | Purpose |
 |--------|---------|
-| `smallestai.atoms.crew.nodes` | `Node`, `OutputCrewNode`, `BackgroundCrewNode` base classes |
+| `smallestai.atoms.crew.nodes` | `CrewNode`, `OutputCrewNode`, `BackgroundCrewNode` base classes |
 | `smallestai.atoms.crew.events` | Event types (`SDKEvent`, etc.) |
 | `smallestai.atoms.crew.tools` | `@function_tool` decorator, registry |
 | `smallestai.atoms.crew.clients` | LLM clients (OpenAI-compatible — works with Electron, OpenAI, or any OAI-compatible endpoint) |
@@ -83,12 +83,12 @@ For the voice-agent code itself (the part that runs on every call), use `smalles
 
 ### Helper classes — for use inside or outside a crew
 
-Top-level convenience wrappers re-exported as `smallestai.atoms.Call`, `KB`, `Campaign`, `Audience`. Each reads `SMALLEST_API_KEY` from env by default:
+Convenience wrappers in `smallestai.atoms.helpers`: `CallAnalytics`, `KB`, `Campaign`, `Audience`. Each reads `SMALLEST_API_KEY` from env by default:
 
 ```python
-from smallestai.atoms import Call, KB
+from smallestai.atoms.helpers import CallAnalytics, KB
 
-call = Call()           # picks up SMALLEST_API_KEY
+calls = CallAnalytics() # picks up SMALLEST_API_KEY
 kb = KB()               # picks up SMALLEST_API_KEY
 ```
 
@@ -105,7 +105,7 @@ export SMALLEST_API_KEY=sk_...
 | Surface | How it picks up the key |
 |---------|-------------------------|
 | `SmallestAI()` | Reads `SMALLEST_API_KEY` from env automatically. Pass explicitly with `SmallestAI(api_key="sk_...")` if needed. |
-| `smallestai.atoms.Call/KB/Campaign/Audience` | Reads `SMALLEST_API_KEY` from env automatically |
+| `smallestai.atoms.helpers.CallAnalytics/KB/Campaign/Audience` | Reads `SMALLEST_API_KEY` from env automatically |
 | `smallestai` CLI (`auth login`) | Interactive prompt; or pipe: `echo $SMALLEST_API_KEY \| smallestai auth login` |
 
 ---

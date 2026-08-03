@@ -146,9 +146,28 @@ asyncio.run(main())
 
 </CodeGroup>
 
-<Note>
-The `smallestai` Python SDK's `WavesClient` and `AsyncWavesClient` synthesis methods are being updated. Use the `requests` / `aiohttp` examples above until the next SDK release. (Streaming synthesis via `WavesStreamingTTS` works — see [Streaming TTS](/models/documentation/text-to-speech-lightning/streaming).)
-</Note>
+## Python SDK
+
+The `smallestai` Python SDK wraps the same endpoint. `client.waves.synthesize_tts` returns audio byte chunks; join them to get the full file. `AsyncSmallestAI` provides the same methods for async code.
+
+```python
+from smallestai import SmallestAI
+
+client = SmallestAI()  # reads SMALLEST_API_KEY from the environment
+
+audio = b"".join(client.waves.synthesize_tts(
+    text="Hello, this is a test of synchronous speech synthesis.",
+    voice_id="meher",
+    model="lightning_v3.1_pro",
+    sample_rate=24000,
+    output_format="wav",
+))
+
+with open("sync_output.wav", "wb") as f:
+    f.write(audio)
+```
+
+For streaming synthesis via WebSocket or SSE, see [Streaming TTS](/models/documentation/text-to-speech-lightning/streaming).
 
 ## Parameters
 

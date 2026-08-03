@@ -10,28 +10,28 @@ This guide walks through the complete campaign lifecycle—from setup to cleanup
 
 Before creating a campaign, you need:
 
-- **Agent ID** — Create one with `new_agent()` or use an existing agent
-- **Audience ID** — Create one with `create_audience()` ([see Audiences](/voice-agents/developer-guide/build/campaigns/managing-audiences))
-- **Phone Number ID** — Retrieve available numbers with `get_phone_numbers()`
+- **Agent ID** — Create one with `client.atoms.agents.create_agent()` or use an existing agent
+- **Audience ID** — Create one with the `Audience` helper ([see Audiences](/voice-agents/developer-guide/build/campaigns/managing-audiences))
+- **Phone Number ID** — Retrieve available numbers with `client.atoms.phone_numbers.list()`
 
 ---
 
 ## Getting Your Phone Number
 
-`get_phone_numbers()` returns all outbound phone numbers available for campaigns:
+`client.atoms.phone_numbers.list()` returns all outbound phone numbers available for campaigns:
 
 ```python
-from smallestai.atoms import AtomsClient
-from smallestai.atoms.campaign import Campaign
+from smallestai import SmallestAI
+from smallestai.atoms.helpers import Campaign
 
-client = AtomsClient()
+client = SmallestAI()  # reads SMALLEST_API_KEY from the environment
 campaign = Campaign()
 
-phones = client.get_phone_numbers()
-phone_id = phones["data"][0]["_id"]
+phones = client.atoms.phone_numbers.list()
+phone_id = phones.data[0].id
 ```
 
-Each phone includes provider details:
+Each phone includes provider details. The SDK returns typed objects, so `_id` in the raw response is `phones.data[0].id` and `attributes.phoneNumber` is `phones.data[0].attributes.phone_number`:
 
 ```json
 {
@@ -208,7 +208,7 @@ Running campaigns should be paused before deletion. Use `pause(id)` first if nee
 
 | Method | Description |
 |--------|-------------|
-| `get_phone_numbers()` | List available outbound numbers (via generic client) |
+| `client.atoms.phone_numbers.list()` | List available outbound numbers (via unified client) |
 | `create(...)` | Create a campaign |
 | `start(id)` | Begin dialing |
 | `get(id)` | Get status and metrics |

@@ -21,20 +21,17 @@ First, we need to create a Knowledge Base and upload our source documents.
 
 ```python setup_kb.py
 import os
-from smallestai.atoms import AtomsClient
-from smallestai.atoms.models import KnowledgebasePostRequest
+from smallestai import SmallestAI
 
 # Initialize client
-client = AtomsClient()
+client = SmallestAI()
 
 def setup_knowledge_base(pdf_path: str):
     # 1. Create the KB
     print("Creating Knowledge Base...")
-    kb = client.create_knowledge_base(
-        knowledgebase_post_request=KnowledgebasePostRequest(
-            name="Product Support KB",
-            description="Manuals and Policy Documents"
-        )
+    kb = client.atoms.knowledge_base.create(
+        name="Product Support KB",
+        description="Manuals and Policy Documents"
     )
     # The SDK returns a response object where .data contains the ID string
     kb_id = kb.data
@@ -43,7 +40,7 @@ def setup_knowledge_base(pdf_path: str):
     # 2. Upload Document
     print(f"Uploading {pdf_path}...")
     with open(pdf_path, "rb") as f:
-        client.upload_media_to_knowledge_base(
+        client.atoms.knowledge_base.upload_a_pdf_file_to_a_knowledge_base(
             id=kb_id,
             media=(os.path.basename(pdf_path), f.read())
         )
@@ -61,56 +58,46 @@ if __name__ == "__main__":
 Now, create the agent that connects to this Knowledge Base.
 
 ```python agent.py
-import asyncio
 import os
-from smallestai.atoms.crew import OutputCrewNode, CrewSession
-from smallestai.atoms.crew.models import LLMConfig
+from smallestai.atoms.crew.nodes import OutputCrewNode
 from smallestai.atoms.crew.clients.openai import OpenAIClient
+from smallestai.atoms.crew.server import AtomsCrewApp
+from smallestai.atoms.crew.session import CrewSession
+
+SYSTEM_PROMPT = """
+You are a helpful support agent.
+Answer questions based ONLY on the provided context.
+If you don't know the answer, say "I'm sorry, I don't see that in the manual."
+"""
 
 class SupportAgent(OutputCrewNode):
     def __init__(self, kb_id: str):
-        super().__init__(
-            name="support_agent",
-            llm_config=LLMConfig(
-                model="gpt-4o",
-                system_prompt="""
-                You are a helpful support agent.
-                Answer questions based ONLY on the provided context.
-                If you don't know the answer, say "I'm sorry, I don't see that in the manual."
-                """
-            )
-        )
+        super().__init__(name="support_agent")
         self.kb_id = kb_id
+        self.llm = OpenAIClient(model="gpt-4o")
 
-    async def generate_response(self, user_message: str):
+    async def generate_response(self):
         # 1. Retrieve Context automatically (Platform handles this)
-        # However, for local testing simulations, we can verify retrieval mechanisms.
-        
         # In a real deployed session, the KB context is injected automatically.
         # Below is standard response generation.
-        async for chunk in super().generate_response(user_message):
-            yield chunk
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        async for chunk in self.llm.chat(messages, stream=True):
+            if chunk.content:
+                yield chunk.content
 
-async def main():
-    session = CrewSession()
-    
+async def setup_session(session: CrewSession):
     # Initialize agent with the KB ID we created
-    kb_id = os.getenv("KB_ID") 
+    kb_id = os.getenv("KB_ID")
     agent = SupportAgent(kb_id=kb_id)
-    
+
     session.add_node(agent)
-    await session.start()
-    
-    # Simulate a user query
-    print("User: How do I reset the device?")
-    
-    # NOTE: Local KB retrieval simulation requires the 'rag_client' or deployed context.
+
+    # NOTE: Local KB retrieval simulation requires the deployed context.
     # This example assumes deployment or full E2E environment.
-    
-    await session.wait_until_complete()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    app = AtomsCrewApp(setup_handler=setup_session)
+    app.run(port=8080)
 ```
 
 ## 3. Verification & Testing
@@ -119,14 +106,14 @@ To test this thoroughly, verify the ingestion status before running the agent.
 
 ```python verify_kb.py
 import time
-from smallestai.atoms import AtomsClient
+from smallestai import SmallestAI
 
-client = AtomsClient()
+client = SmallestAI()
 
 def wait_for_ready(kb_id: str):
     print("Checking KB status...")
     while True:
-        items = client.get_knowledge_base_items(id=kb_id)
+        items = client.atoms.knowledge_base.get_all_knowledge_base_items(id=kb_id)
         # Check if all items are 'completed'
         pending = [i for i in items.data if i.processing_status != 'completed']
         
@@ -143,5 +130,5 @@ def wait_for_ready(kb_id: str):
 
 ## Known Limitations
 
-- **File Types:** Only `.pdf` files are supported. `upload_text_to_knowledge_base` is currently unavailable (returns 404).
-- **Deletion:** Deleting individual items (`delete_knowledge_base_item`) may be inconsistent; prefer deleting and recreating the KB for major updates.
+- **File Types:** Only `.pdf` files are supported for direct upload. Text can be added via the `smallestai.atoms.helpers.KB.add_text` helper, but may require backend deployment.
+- **Deletion:** Deleting individual items (`delete_a_knowledge_base_item`) may be inconsistent; prefer deleting and recreating the KB for major updates.

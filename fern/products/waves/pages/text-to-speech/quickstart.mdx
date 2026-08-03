@@ -103,6 +103,26 @@ with open("output.wav", "wb") as f:
 print(f"Saved output.wav ({len(response.content):,} bytes)")
 ```
 
+```python Python SDK
+# Requires: pip install smallestai
+from smallestai import SmallestAI
+
+client = SmallestAI()  # reads SMALLEST_API_KEY from the environment
+
+audio_chunks = client.waves.synthesize_tts(
+    text="Modern problems require modern solutions.",
+    voice_id="meher",
+    model="lightning_v3.1_pro",
+    sample_rate=24000,
+    speed=1.0,
+    output_format="wav",
+)
+
+with open("output.wav", "wb") as f:
+    f.write(b"".join(audio_chunks))
+print("Saved output.wav")
+```
+
 ```javascript JavaScript
 const fs = require("fs");
 
@@ -137,7 +157,7 @@ console.log(`Saved output.wav (${buffer.length} bytes)`);
 </CodeGroup>
 
 <Note>
-The `smallestai` Python SDK's synchronous `WavesClient.synthesize()` is being updated. Use the `requests` example above until the next SDK release.
+The `smallestai` Python SDK example uses `client.waves.synthesize_tts`, which returns audio byte chunks you can join and save. `synthesize_sse_tts` streams the same request over SSE.
 </Note>
 
 <Tip>

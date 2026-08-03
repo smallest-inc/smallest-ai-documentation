@@ -11,11 +11,11 @@ Create tailored analytics reports by combining SDK data with your business logic
 ### Daily Summary Report
 
 ```python
-from smallestai.atoms import AtomsClient
+from smallestai import SmallestAI
 from datetime import datetime
 import json
 
-client = AtomsClient()
+client = SmallestAI()  # reads SMALLEST_API_KEY from the environment
 
 def daily_summary_report(call_ids: list) -> dict:
     """
@@ -45,7 +45,7 @@ def daily_summary_report(call_ids: list) -> dict:
     
     for call_id in call_ids:
         try:
-            logs = client.get_conversation_logs(id=call_id)
+            logs = client.atoms.calls.get(call_id)
             data = logs.data
             
             # Count by status
@@ -58,8 +58,8 @@ def daily_summary_report(call_ids: list) -> dict:
             report["total_duration_minutes"] += (data.duration or 0) / 60
             
             # Latency
-            if data.average_agent_latency:
-                latencies.append(data.average_agent_latency)
+            if data.turn_latency_metrics and data.turn_latency_metrics.avg_latency:
+                latencies.append(data.turn_latency_metrics.avg_latency)
             
             # Call type
             if data.type == "telephony_inbound":
@@ -138,13 +138,13 @@ def agent_comparison_report(agent_call_map: dict) -> dict:
         
         for call_id in call_ids:
             try:
-                logs = client.get_conversation_logs(id=call_id)
+                logs = client.atoms.calls.get(call_id)
                 data = logs.data
                 
                 if data.duration:
                     durations.append(data.duration)
-                if data.average_agent_latency:
-                    latencies.append(data.average_agent_latency)
+                if data.turn_latency_metrics and data.turn_latency_metrics.avg_latency:
+                    latencies.append(data.turn_latency_metrics.avg_latency)
                 if data.status == "completed":
                     completed += 1
             except:
@@ -188,13 +188,13 @@ def transcript_analysis(call_ids: list) -> dict:
     
     for call_id in call_ids:
         try:
-            logs = client.get_conversation_logs(id=call_id)
+            logs = client.atoms.calls.get(call_id)
             transcript = logs.data.transcript or []
             
             all_exchanges += len(transcript)
             
             for line in transcript:
-                line_lower = line.lower()
+                line_lower = (line.content or "").lower()
                 
                 # Check sentiment
                 has_positive = any(word in line_lower for word in positive_words)
@@ -233,26 +233,27 @@ def export_to_csv(call_ids: list, filename: str):
         # Header
         writer.writerow([
             "call_id", "status", "type", "duration_seconds",
-            "from", "to", "agent_latency_ms", "asr_latency_ms", 
-            "tts_latency_ms", "transcript_length"
+            "from", "to", "avg_latency_ms", "median_latency_ms", 
+            "max_latency_ms", "transcript_length"
         ])
         
         # Data rows
         for call_id in call_ids:
             try:
-                logs = client.get_conversation_logs(id=call_id)
+                logs = client.atoms.calls.get(call_id)
                 data = logs.data
+                metrics = data.turn_latency_metrics
                 
                 writer.writerow([
                     data.call_id,
                     data.status,
                     data.type,
                     data.duration,
-                    data.var_from,
+                    data.from_,
                     data.to,
-                    data.average_agent_latency,
-                    data.average_transcriber_latency,
-                    data.average_synthesizer_latency,
+                    metrics.avg_latency if metrics else None,
+                    metrics.median_latency if metrics else None,
+                    metrics.max_latency if metrics else None,
                     len(data.transcript or [])
                 ])
             except:
@@ -271,8 +272,8 @@ def export_to_json(call_ids: list, filename: str):
     
     for call_id in call_ids:
         try:
-            logs = client.get_conversation_logs(id=call_id)
-            calls.append(logs.data.to_dict())
+            logs = client.atoms.calls.get(call_id)
+            calls.append(logs.data.dict())
         except:
             pass
     
@@ -294,8 +295,9 @@ import requests
 def send_to_dashboard(call_id: str, webhook_url: str):
     """Send call metrics to external dashboard."""
     
-    logs = client.get_conversation_logs(id=call_id)
+    logs = client.atoms.calls.get(call_id)
     data = logs.data
+    metrics = data.turn_latency_metrics
     
     payload = {
         "call_id": data.call_id,
@@ -303,9 +305,9 @@ def send_to_dashboard(call_id: str, webhook_url: str):
         "duration": data.duration,
         "status": data.status,
         "latency": {
-            "agent": data.average_agent_latency,
-            "asr": data.average_transcriber_latency,
-            "tts": data.average_synthesizer_latency
+            "avg": metrics.avg_latency if metrics else None,
+            "median": metrics.median_latency if metrics else None,
+            "max": metrics.max_latency if metrics else None
         }
     }
     
@@ -323,13 +325,14 @@ def prometheus_metrics(call_ids: list) -> str:
     
     for call_id in call_ids:
         try:
-            logs = client.get_conversation_logs(id=call_id)
+            logs = client.atoms.calls.get(call_id)
             data = logs.data
+            metrics = data.turn_latency_metrics
             
             if data.duration:
                 lines.append(f'call_duration_seconds{{call_id="{call_id}"}} {data.duration}')
-            if data.average_agent_latency:
-                lines.append(f'agent_latency_ms{{call_id="{call_id}"}} {data.average_agent_latency}')
+            if metrics and metrics.avg_latency:
+                lines.append(f'agent_latency_ms{{call_id="{call_id}"}} {metrics.avg_latency}')
         except:
             pass
     
