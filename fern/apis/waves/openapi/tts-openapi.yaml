@@ -252,9 +252,9 @@ paths:
         ## How it works
 
         1. POST your text + voice settings — same payload as `/waves/v1/tts`, plus optional `model`.
-        2. The response is `Content-Type: text/event-stream`. Each chunk frame is `event: audio\n` followed by `data: {"audio": "<base64-pcm>"}\n\n`.
+        2. The response is `Content-Type: text/event-stream`. Each chunk frame is `event: audio\n` followed by `data: {"audio": "<base64-pcm>", "done": false, "status": "206"}\n\n`.
         3. Decode each chunk's `audio` field with base64 and feed the PCM bytes to your audio pipeline (browser `MediaSource`, ffmpeg pipe, raw PCM player, etc.).
-        4. A final `data: {"done": true}\n\n` frame marks end of stream.
+        4. A final `data: {"status": "200", "done": true}\n\n` frame marks end of stream. Detect the terminator with `done == true`; every chunk frame also carries `done: false`, so `"done" in msg` matches every frame.
 
         ## Examples
 
@@ -309,12 +309,12 @@ paths:
               schema:
                 type: string
                 description: |
-                  SSE stream of `event: audio` frames carrying base64-encoded PCM chunks, terminated by a `data: {"done": true}` frame.
+                  SSE stream of `event: audio` frames carrying base64-encoded PCM chunks, terminated by a completion frame with `done: true`. Chunk frames also carry `done: false` and `status: "206"`; the terminator carries `status: "200"`. `done` is on every frame, so detect the terminator by comparing `done == true`, not by presence.
               example: |
                 event: audio
-                data: {"audio": "<base64-encoded PCM chunk>"}
+                data: {"audio": "<base64-encoded PCM chunk>", "done": false, "status": "206"}
 
-                data: {"done": true}
+                data: {"status": "200", "done": true}
         '400':
           description: Bad request.
           content:

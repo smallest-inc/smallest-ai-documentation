@@ -392,9 +392,13 @@ Route selection is via the `model` body field on the unified endpoints. Pass `"m
 
 | Metric | Typical | Notes |
 |---|---|---|
-| Time-to-first-byte (TTFB) | 200 ms | At 40 concurrent requests (see [benchmark methodology](#performance--benchmarks)). |
+| Time-to-first-byte (TTFB) | 200 ms | At 40 concurrent requests, measured in-region (see [benchmark methodology](#performance--benchmarks)). |
 | Real-time factor (RTF) | 3.3× | Synthesis runs ~3× faster than playback speed. |
 | Max chunk size | 250 characters | Optimal throughput at ~140 characters per request. |
+
+<Note>
+**Where 200 ms comes from.** TTFB is measured from a client in the same AWS region as the inference pool. Servers run in India (`ap-south-1`) and USA (`us-west-2`), with automatic geo-routing based on client location. Client-to-server round-trip time adds on top: a naive test from a laptop far from either region typically reports 500-800 ms because RTT dominates synthesis time. For a production-realistic number, measure from your production network position (the same VPC or region as your telephony provider, not your dev machine).
+</Note>
 
 Rate limits, concurrency caps, and pricing tiers are documented on the [Concurrency & Limits](/models/api-reference/concurrency-and-limits) page. For enterprise pricing, contact [sales@smallest.ai](mailto:sales@smallest.ai).
 
