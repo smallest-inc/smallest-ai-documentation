@@ -313,16 +313,27 @@
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
-    // Also track search result clicks
-    document.addEventListener("click", function (e) {
-      var resultLink = e.target.closest('[data-search-result], .search-result a, [role="option"] a');
-      if (resultLink) {
-        track("docs_search_result_clicked", {
-          result_title: resultLink.textContent.trim(),
-          result_url: resultLink.href || "",
-        });
-      }
-    });
+    // Also track search result clicks.
+    // Fern search rebuilt on `cmdk`: results are now `A[role="option"][href]`
+    // with `[data-cmdk-item]` attrs, no more `.search-result a`. cmdk uses
+    // pointerdown to trigger selection, and its click handler stops
+    // propagation before it reaches the document, so this listener has
+    // to run in capture phase to see the event at all.
+    document.addEventListener(
+      "click",
+      function (e) {
+        var resultLink = e.target.closest(
+          '[data-cmdk-item][href], a[role="option"][href], [data-search-result], .search-result a'
+        );
+        if (resultLink) {
+          track("docs_search_result_clicked", {
+            result_title: (resultLink.textContent || "").trim(),
+            result_url: resultLink.getAttribute("href") || resultLink.href || "",
+          });
+        }
+      },
+      true
+    );
   }
 
   // 4. Navigation clicks
@@ -435,59 +446,82 @@
   }
 
   // 8. Feedback — covers Fern's "Was this helpful?" Yes/No widget at the
-  // bottom of every page (no specific class on the buttons; identified by
-  // text + an ancestor whose text mentions "helpful") AND the page-level
-  // ".fern-feedback-button" (the "Report incorrect code" pencil icon
-  // inside code blocks).
+  // bottom of every page AND the page-level ".fern-feedback-button" (the
+  // "Report incorrect code" pencil icon inside code blocks).
+  //
+  // Fern rebuilt the Yes/No widget on Radix dialog triggers: the button
+  // has aria-haspopup="dialog" and Radix's own handler stops propagation
+  // before the click reaches document (bubble). Listener has to run in
+  // capture phase or Pattern C never fires. This also gives us a stable
+  // fern-layout-footer-toolbar anchor if the surrounding "helpful"
+  // wording ever gets shortened again.
   function setupFeedbackTracking() {
-    document.addEventListener("click", function (e) {
-      // Pattern A: Fern's "Report incorrect code" button (negative signal
-      // about a specific code block, distinct from page-level helpful)
-      var reportBtn = e.target.closest("button.fern-feedback-button");
-      if (reportBtn) {
-        track("docs_feedback_submitted", {
-          rating: "negative",
-          source: "report_code",
-        });
-        return;
-      }
+    document.addEventListener(
+      "click",
+      function (e) {
+        // Pattern A: Fern's "Report incorrect code" button (negative signal
+        // about a specific code block, distinct from page-level helpful)
+        var reportBtn = e.target.closest("button.fern-feedback-button");
+        if (reportBtn) {
+          track("docs_feedback_submitted", {
+            rating: "negative",
+            source: "report_code",
+          });
+          return;
+        }
 
-      // Pattern B: legacy / data-attr-based widgets
-      var legacy = e.target.closest(
-        '[data-feedback], .feedback-button, .thumbs-up, .thumbs-down, [aria-label*="helpful"]'
-      );
-      if (legacy) {
-        var isPositive =
-          legacy.classList.contains("thumbs-up") ||
-          legacy.getAttribute("data-feedback") === "positive" ||
-          (legacy.getAttribute("aria-label") || "").includes("yes");
-        track("docs_feedback_submitted", {
-          rating: isPositive ? "positive" : "negative",
-          source: "widget",
-        });
-        return;
-      }
+        // Pattern B: legacy / data-attr-based widgets
+        var legacy = e.target.closest(
+          '[data-feedback], .feedback-button, .thumbs-up, .thumbs-down, [aria-label*="helpful"]'
+        );
+        if (legacy) {
+          var isPositive =
+            legacy.classList.contains("thumbs-up") ||
+            legacy.getAttribute("data-feedback") === "positive" ||
+            (legacy.getAttribute("aria-label") || "").includes("yes");
+          track("docs_feedback_submitted", {
+            rating: isPositive ? "positive" : "negative",
+            source: "widget",
+          });
+          return;
+        }
 
-      // Pattern C: Fern's page-level Yes/No buttons under "Was this helpful?"
-      var btn = e.target.closest("button");
-      if (!btn) return;
-      var btnText = (btn.textContent || "").trim().toLowerCase();
-      if (btnText !== "yes" && btnText !== "no") return;
-      // confirm by checking for a "helpful" / "useful" prompt within ~3
-      // ancestors (avoids false positives on unrelated Yes/No buttons)
-      var node = btn;
-      for (var i = 0; i < 4 && node; i++) {
-        var around = (node.textContent || "").toLowerCase();
-        if (around.includes("helpful") || around.includes("useful") || around.includes("did this")) {
+        // Pattern C: Fern's page-level Yes/No buttons under "Was this helpful?"
+        var btn = e.target.closest("button");
+        if (!btn) return;
+        var btnText = (btn.textContent || "").trim().toLowerCase();
+        if (btnText !== "yes" && btnText !== "no") return;
+        // Anchor: `.fern-layout-footer-toolbar` is the stable container
+        // Fern renders this widget into. Fall back to a "helpful/useful"
+        // ancestor-text sniff (older Fern builds put the prompt beside
+        // the buttons rather than as an ancestor toolbar).
+        var inFooterToolbar = btn.closest(".fern-layout-footer-toolbar");
+        if (inFooterToolbar) {
           track("docs_feedback_submitted", {
             rating: btnText === "yes" ? "positive" : "negative",
             source: "yes_no",
           });
           return;
         }
-        node = node.parentElement;
-      }
-    });
+        var node = btn;
+        for (var i = 0; i < 6 && node; i++) {
+          var around = (node.textContent || "").toLowerCase();
+          if (
+            around.includes("helpful") ||
+            around.includes("useful") ||
+            around.includes("did this")
+          ) {
+            track("docs_feedback_submitted", {
+              rating: btnText === "yes" ? "positive" : "negative",
+              source: "yes_no",
+            });
+            return;
+          }
+          node = node.parentElement;
+        }
+      },
+      true
+    );
   }
 
   // 9. Scroll depth
