@@ -8,11 +8,9 @@ Most people don't read docs page by page anymore. They paste a prompt into their
 
 ## Entry points for AI agents
 
-- **Machine-readable docs:** [`/llms.txt`](https://docs.smallest.ai/llms.txt) (index) and [`/llms-full.txt`](https://docs.smallest.ai/llms-full.txt). Append `.md` to any docs URL to get clean markdown.
+- **Machine-readable docs:** [`/llms.txt`](https://docs.smallest.ai/llms.txt) is the curated site index. Append `.md` to any docs URL for clean markdown of that page.
 - **MCP server (take actions in plain English):** `claude mcp add smallest -- npx -y @developer-smallestai/smallest-mcp-server`. Works in Claude Code, Codex, Cursor. Full reference: [MCP](/voice-agents/mcp/getting-started/quick-start).
 - **Context7:** add `use context7` to a prompt to pull current, version-specific snippets into your agent.
-
-## Build with a prompt (copy-paste)
 
 ## Before you start, give your agent tools
 
@@ -49,10 +47,10 @@ You drive the user from an idea to a LIVE, callable voice agent. Prefer the
 writing SDK calls, consult the live docs (llms.txt at https://docs.smallest.ai/llms.txt
 or the `smallest` docs MCP) so signatures are current.
 
-## 0. Setup — pick your path
+## 0. Setup: pick your path
 - **MCP path (zero code, fastest):** if the Smallest MCP is available
   (`claude mcp add smallest -- npx -y @developer-smallestai/smallest-mcp-server`),
-  do every step below by asking in plain English — the MCP has the create/call/
+  do every step below by asking in plain English. The MCP has the create/call/
   configure tools. See the Prompt Cookbook (docs.smallest.ai, dev > MCP).
 - **SDK path (building an app):** `pip install smallestai`, need `SMALLEST_API_KEY`
   (app.smallest.ai/dashboard/api-keys), `client = SmallestAI(api_key=...)`.
@@ -60,8 +58,8 @@ Use the MCP if present; otherwise the SDK. Steps are the same either way.
 
 ## 1. Discovery (ask, one question at a time, do not dump)
 Collect: use-case + business context; objective/success criteria; target caller;
-personality + tone; language(s); voice preference; and telephony — none / outbound
-/ inbound / both. If they bring their own LLM or need custom per-turn logic, it's a
+personality + tone; language(s); voice preference; and telephony (none, outbound,
+inbound, or both). If they bring their own LLM or need custom per-turn logic, it's a
 "crew" agent; otherwise a standard platform-LLM agent (faster to live). Ask only
 what you need; infer sensible defaults and confirm.
 
@@ -94,7 +92,7 @@ Scaffold a flat crew project (server.py + assistant.py + requirements.txt), poin
 
 ## 4. Telephony (only if they want phone calls)
 ```python
-# rent (once) — or reuse an existing number
+# rent (once), or reuse an existing number
 avail = client.atoms.phone_numbers.search_rentable(country_code="US", provider="twilio").data
 client.atoms.phone_numbers.rent(phone_number=avail[0].phone_number, provider="twilio")
 product_id = next(n.id for n in client.atoms.phone_numbers.list().data
@@ -103,15 +101,15 @@ product_id = next(n.id for n in client.atoms.phone_numbers.list().data
 client.atoms.agents.update_agent(id=agent_id, telephony_product_id=[product_id], allow_inbound_call=True)
 ```
 
-## 5. Go live + prove it — and TELL THEM THE NUMBER
+## 5. Go live + prove it, and TELL THEM THE NUMBER
 - **Inbound:** print the rented number explicitly: "Your agent is live. Dial
   **<+E164 number>** to talk to it." (get it from `phone_numbers.list()`).
-- **Outbound:** place a test call — `client.atoms.calls.start_outbound_call(agent_id=agent_id, phone_number="<their E164>", from_product_id=product_id)` — then poll `client.atoms.calls.get(id=<conversation_id>)` for status + transcript and report it.
+- **Outbound:** place a test call. `client.atoms.calls.start_outbound_call(agent_id=agent_id, phone_number="<their E164>", from_product_id=product_id)`, then poll `client.atoms.calls.get(id=<conversation_id>)` for status + transcript and report it.
 - **Both:** give the number to dial AND offer a test outbound call.
 Confirm the greeting plays and the agent stays on-goal.
 
 ## 6. Follow-up (push, once it's live)
-The agent is live — now upsell capabilities, one at a time, matched to their use-case:
+The agent is live. Now upsell capabilities, one at a time, matched to their use-case:
 - **Reach:** outbound **campaigns** (bulk calls), inbound routing.
 - **Smarts:** **knowledge base**, **Playbooks** (multi-agent SOPs), pre-call API,
   custom tools / **CRM + calendar integrations** (HubSpot, Salesforce, Pipedrive,
@@ -171,7 +169,7 @@ The `smallest` extra ships both TTS (Lightning) and STT (Pulse). Follow the
 maintained guide + runnable example rather than hardcoding: **docs.smallest.ai/models/integrations/pipecat**.
 
 ## Other orchestrators / tools
-Smallest ships maintained integration guides for more than pipecat/livekit —
+Smallest ships maintained integration guides for more than pipecat/livekit:
 plivo, vonage, vercel-ai-sdk, n8n, and others. If the user names one, route them to
 **docs.smallest.ai/models/integrations/<name>** instead of improvising.
 
