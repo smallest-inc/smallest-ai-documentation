@@ -1,0 +1,69 @@
+---
+title: "Rapida"
+description: "Build voice agents on Rapida using Smallest AI TTS and STT."
+icon: "microphone"
+---
+
+This guide walks you through configuring [Smallest AI](https://smallest.ai) as the TTS and STT provider in [Rapida](https://rapida.ai), an open-source voice AI orchestration platform you can self-host or run managed. Rapida lets you pick a provider independently per capability — use Smallest AI for both TTS and STT, or mix it with other providers.
+
+## Prerequisites
+
+- A [Rapida](https://rapida.ai) instance — self-hosted (see the [voice-ai repository](https://github.com/rapidaai/voice-ai)) or managed
+- A Smallest AI API key — get one from the [Smallest AI dashboard](https://waves.smallest.ai)
+
+---
+
+## Setup
+
+<Steps>
+  <Step title="Open Providers and Models">
+    In the Rapida dashboard, navigate to **Providers and Models**.
+  </Step>
+  <Step title="Add a Smallest AI credential">
+    Add a new provider credential, select **Smallest AI**, and paste your API key.
+  </Step>
+  <Step title="Configure TTS">
+    On your assistant's deployment, set the text-to-speech provider to **Smallest AI** and choose a **Model**:
+
+    - `lightning_v3.1` — standard pool, voice cloning supported, 12 languages (voices: `magnus`, `devansh`, `kartik`, `maithili`, `liam`, `avery`, and more)
+    - `lightning_v3.1_pro` — premium pool with curated American, British, and Indian voices (English + Hindi) (voices: `meher`, `kaitlyn`, `blake`, `sophie`, `sam`, `aviraj`, and more)
+
+    The **Voice** dropdown is scoped to whichever model you picked — Pro voices aren't offered under `lightning_v3.1` and vice versa, so a mismatched pairing isn't selectable from the UI in the first place. Set the **Language**, and optionally a **Speed** (0.5–2.0).
+  </Step>
+  <Step title="Configure STT">
+    Set the speech-to-text provider to **Smallest AI**. The **Model** is `pulse` — Rapida's integration streams over Pulse's realtime WebSocket, so `pulse-pro` (pre-recorded/HTTP-only) isn't offered here. Set the **Language**, or leave it unset for auto-detect.
+
+    Optional feature toggles are also available — word/sentence timestamps, speaker diarization, PII/PCI redaction, inverse text normalization, and punctuation formatting. See the Configuration Reference below.
+  </Step>
+</Steps>
+
+---
+
+## Configuration Reference
+
+Rapida stores provider options as `listen.*` (STT) / `speak.*` (TTS) keys.
+
+| Key | Provider | Default | Description |
+| --- | --- | --- | --- |
+| `listen.model` | STT | `pulse` | Streaming model — only `pulse` is wired to the realtime endpoint |
+| `listen.language` | STT | auto-detect | ISO language code (e.g. `en`, `hi`) |
+| `listen.word_timestamps` | STT | off | Per-word start/end/confidence timing |
+| `listen.sentence_timestamps` | STT | off | Sentence-level utterance segments |
+| `listen.diarize` | STT | off | Speaker labels on words/utterances |
+| `listen.redact_pii` | STT | off | Redacts names, addresses, phone numbers as `[ENTITYTYPE_N]` placeholders |
+| `listen.redact_pci` | STT | off | Redacts card numbers, CVVs, ZIP codes, account numbers |
+| `listen.numerals` | STT | provider default (`auto`) | Inverse text normalization mode |
+| `listen.smart_format` | STT | provider default (`true`) | Punctuation/capitalization in the transcript (Smallest's `format` param) |
+| `speak.model` | TTS | `lightning_v3.1` | `lightning_v3.1` or `lightning_v3.1_pro` |
+| `speak.voice.id` | TTS | `magnus` | Catalog voice or cloned voice (`voice_*`), scoped to the selected model in the dashboard dropdown |
+| `speak.language` | TTS | `en` | Language code — see the [Lightning voices & languages guide](/models/documentation/text-to-speech-lightning/voices-languages) |
+| `speak.speed` | TTS | `1.0` | Speech speed multiplier (0.5–2.0) |
+
+All seven `listen.*` feature flags are opt-in — Rapida only sends them to Smallest when explicitly set, so behavior is unchanged if you don't touch them.
+
+## Notes
+
+- Rapida routes TTS requests to `wss://api.smallest.ai/waves/v1/tts/live` and STT requests to `wss://api.smallest.ai/waves/v1/pulse/get_text`, identifying itself with an `X-Source: rapida` header on both.
+- Interruptions are handled by Rapida's pipeline: on barge-in, the TTS connection is closed and reopened for the next turn — no custom logic needed on the Smallest AI side.
+- If a `speak.voice.id`/`speak.model` pairing the API doesn't support is sent (e.g. a Pro-only voice with `lightning_v3.1`), Rapida surfaces it as an error on that turn rather than hanging — the dashboard's model-scoped voice dropdown is the main safeguard, this is the fallback for free-typed voice IDs.
+- For issues with the Smallest AI integration in Rapida, open an issue in the [Rapida repository](https://github.com/rapidaai/voice-ai) or contact us on [Discord](https://discord.gg/9WtSXv26WE).
