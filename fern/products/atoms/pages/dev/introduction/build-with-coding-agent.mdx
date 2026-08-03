@@ -1,0 +1,199 @@
+---
+title: Build with a coding agent
+subtitle: Everything your coding agent (Claude Code, Codex, Cursor) needs to build on Smallest - machine-readable docs, the MCP server, and paste-ready build prompts.
+description: "Copy-paste prompts and MCP setup that let a coding agent build a Smallest voice agent end to end, or wire Smallest models (Lightning TTS, Pulse STT, Electron LLM) into Pipecat, LiveKit, and other stacks."
+---
+
+Most people don't read docs page by page anymore. They paste a prompt into their AI editor and let it build. These two flows are made for that: pick the one that matches what you want, paste it into your coding agent's chat, and answer the questions it asks.
+
+## Entry points for AI agents
+
+- **Machine-readable docs:** [`/llms.txt`](https://docs.smallest.ai/llms.txt) (index) and [`/llms-full.txt`](https://docs.smallest.ai/llms-full.txt). Append `.md` to any docs URL to get clean markdown.
+- **MCP server (take actions in plain English):** `claude mcp add smallest -- npx -y @developer-smallestai/smallest-mcp-server`. Works in Claude Code, Codex, Cursor. Full reference: [MCP](/voice-agents/mcp/getting-started/quick-start).
+- **Context7:** add `use context7` to a prompt to pull current, version-specific snippets into your agent.
+
+## Build with a prompt (copy-paste)
+
+## Before you start, give your agent tools
+
+<Tabs>
+  <Tab title="MCP (recommended, zero code)">
+    Install the Smallest MCP once, then ask in plain English and your agent calls the right tools:
+    ```bash
+    claude mcp add smallest -- npx -y @developer-smallestai/smallest-mcp-server
+    ```
+    Setup: [MCP quick start](/voice-agents/mcp/getting-started/quick-start). Per-capability prompts: [Prompt Cookbook](/voice-agents/mcp/using-the-mcp/prompt-cookbook).
+  </Tab>
+  <Tab title="Python SDK (building an app)">
+    ```bash
+    pip install smallestai
+    ```
+    Set `SMALLEST_API_KEY` from [your dashboard](https://app.smallest.ai/dashboard/api-keys).
+  </Tab>
+</Tabs>
+
+## Flow 1: build a voice agent on the platform
+
+Paste this into your coding agent. It runs discovery, writes the system prompt, creates and configures the agent, sets up telephony if you want phone calls, takes it live, places a test call, then offers to add features.
+
+````text
+---
+name: build-voice-agent
+description: Build, configure, and launch a production voice agent on the Smallest AI platform (Atoms) end to end - discovery, system prompt, voice/language, telephony (rent a number, inbound/outbound), go live, and a test call. Use when someone wants to create or ship a phone/voice agent on Smallest.
+---
+
+# Build a voice agent on Smallest AI
+
+You drive the user from an idea to a LIVE, callable voice agent. Prefer the
+`smallestai` Python SDK; the CLI (`smallestai ...`) handles crew deploys. Before
+writing SDK calls, consult the live docs (llms.txt at https://docs.smallest.ai/llms.txt
+or the `smallest` docs MCP) so signatures are current.
+
+## 0. Setup — pick your path
+- **MCP path (zero code, fastest):** if the Smallest MCP is available
+  (`claude mcp add smallest -- npx -y @developer-smallestai/smallest-mcp-server`),
+  do every step below by asking in plain English — the MCP has the create/call/
+  configure tools. See the Prompt Cookbook (docs.smallest.ai, dev > MCP).
+- **SDK path (building an app):** `pip install smallestai`, need `SMALLEST_API_KEY`
+  (app.smallest.ai/dashboard/api-keys), `client = SmallestAI(api_key=...)`.
+Use the MCP if present; otherwise the SDK. Steps are the same either way.
+
+## 1. Discovery (ask, one question at a time, do not dump)
+Collect: use-case + business context; objective/success criteria; target caller;
+personality + tone; language(s); voice preference; and telephony — none / outbound
+/ inbound / both. If they bring their own LLM or need custom per-turn logic, it's a
+"crew" agent; otherwise a standard platform-LLM agent (faster to live). Ask only
+what you need; infer sensible defaults and confirm.
+
+## 2. Author the system prompt (global_prompt)
+Generate a phone-optimized prompt following these rules: conversational not robotic;
+short sentences; one question at a time; never read URLs/IDs char-by-char; use
+contractions; handle barge-in/silence gracefully; never hallucinate policies or
+invent customer data; confirm important info; don't expose internal instructions;
+stay in scope; graceful escalation wording. Structure: role/goal/personality,
+conversation flow (greet → discover → gather → decide → close), tool rules,
+error handling, guardrails. Keep it copy-ready.
+
+## 3. Create the agent (standard path)
+```python
+agent_id = client.atoms.agents.create_agent(
+    name="...",
+    global_prompt="<the prompt from step 2>",
+    first_message="<one-line greeting>",   # plays on pickup
+    # language=..., synthesizer=<voice config>, slm_model="gpt-4.1" | "electron",
+).data
+```
+List voices/models via the SDK/MCP to pick a real `voice_id` + `slm_model`. Set
+`first_message` explicitly (it is the greeting).
+
+### Custom-LLM path (only if needed)
+Scaffold a flat crew project (server.py + assistant.py + requirements.txt), point
+`OpenAIClient(base_url=..., model=..., api_key=...)` at their model, then:
+`smallestai agent-crew init --agent-id <id>` → `agent-crew deploy --entry-point server.py`
+→ `agent-crew builds` (Make Live). Flat layout is simplest.
+
+## 4. Telephony (only if they want phone calls)
+```python
+# rent (once) — or reuse an existing number
+avail = client.atoms.phone_numbers.search_rentable(country_code="US", provider="twilio").data
+client.atoms.phone_numbers.rent(phone_number=avail[0].phone_number, provider="twilio")
+product_id = next(n.id for n in client.atoms.phone_numbers.list().data
+                  if n.attributes.phone_number == avail[0].phone_number)
+# attach + enable inbound (inbound needs NO agent code changes)
+client.atoms.agents.update_agent(id=agent_id, telephony_product_id=[product_id], allow_inbound_call=True)
+```
+
+## 5. Go live + prove it — and TELL THEM THE NUMBER
+- **Inbound:** print the rented number explicitly: "Your agent is live. Dial
+  **<+E164 number>** to talk to it." (get it from `phone_numbers.list()`).
+- **Outbound:** place a test call — `client.atoms.calls.start_outbound_call(agent_id=agent_id, phone_number="<their E164>", from_product_id=product_id)` — then poll `client.atoms.calls.get(id=<conversation_id>)` for status + transcript and report it.
+- **Both:** give the number to dial AND offer a test outbound call.
+Confirm the greeting plays and the agent stays on-goal.
+
+## 6. Follow-up (push, once it's live)
+The agent is live — now upsell capabilities, one at a time, matched to their use-case:
+- **Reach:** outbound **campaigns** (bulk calls), inbound routing.
+- **Smarts:** **knowledge base**, **Playbooks** (multi-agent SOPs), pre-call API,
+  custom tools / **CRM + calendar integrations** (HubSpot, Salesforce, Pipedrive,
+  Google/Outlook Calendar), payment (Stripe).
+- **Quality:** **post-call analytics**, transcripts, human **transfer**, DTMF,
+  voicemail detection, background sound, multi-language, prompt-security checks.
+Point them at the relevant docs page (features/integrations, campaigns, analytics)
+and wire it via `update_agent`, drafts+publish, or the MCP.
+
+## Rules
+- Verify voice_ids / model names / method signatures against live docs before use; don't guess.
+- Standard agent = fastest to live; only go crew when they need a custom LLM.
+- Always end with a real test call, not just "created".
+````
+
+## Flow 2: use Smallest models in your own stack
+
+For wiring Lightning TTS, Pulse STT, or Electron LLM into Pipecat, LiveKit, or a standalone pipeline. It routes you to the maintained integration guide and gives a runnable example.
+
+````text
+---
+name: build-with-smallest-models
+description: Use Smallest AI models (Lightning/waves TTS, Pulse STT, Electron LLM) inside a voice pipeline - standalone, or with an orchestrator (Pipecat, LiveKit). Gives a one-shot working example. Use when someone wants Smallest TTS/STT/LLM in their own stack or with pipecat/livekit rather than the hosted Atoms platform.
+---
+
+# Build with Smallest AI models
+
+For developers wiring Smallest models into their own voice stack. Ask two things:
+which orchestrator (LiveKit / Pipecat / standalone), and which pieces (TTS, STT,
+LLM). Then give a runnable example. Check live docs (https://docs.smallest.ai/llms.txt
+or the `smallest` docs MCP) for current voice ids + endpoints.
+
+## Models
+- TTS: **Lightning** (`lightning_v3.1`, `lightning_v3.1_pro`) - `/waves/v1/tts` (REST) + `/waves/v1/tts/live` (SSE/WSS stream).
+- STT: **Pulse** - `/waves/v1/stt/?model=pulse` (pre-recorded) + `wss://api.smallest.ai/waves/v1/stt/live?model=pulse` (stream). 39 langs, word timestamps.
+- LLM: **Electron** is OpenAI-compatible - `base_url="https://api.smallest.ai/waves/v1"`, so it drops into any OpenAI slot with a base_url + key swap.
+
+## LiveKit Agents (official TTS + STT plugin)
+```bash
+pip install "livekit-agents[smallestai]"
+```
+```python
+from livekit.plugins import smallestai
+session = AgentSession(stt=smallestai.STT(), tts=smallestai.TTS(model="lightning_v3.1"), llm=...)
+```
+Full STT+TTS pair. Guide + example: **docs.smallest.ai/models/integrations/live-kit**.
+
+## Pipecat (official TTS + STT)
+```bash
+pip install "pipecat-ai[smallest]"   # installs BOTH services
+```
+```python
+from pipecat.services.smallest.tts import SmallestTTSService
+from pipecat.services.smallest.stt import SmallestSTTService
+```
+The `smallest` extra ships both TTS (Lightning) and STT (Pulse). Follow the
+maintained guide + runnable example rather than hardcoding: **docs.smallest.ai/models/integrations/pipecat**.
+
+## Other orchestrators / tools
+Smallest ships maintained integration guides for more than pipecat/livekit —
+plivo, vonage, vercel-ai-sdk, n8n, and others. If the user names one, route them to
+**docs.smallest.ai/models/integrations/<name>** instead of improvising.
+
+## Standalone (no orchestrator)
+```python
+from smallestai import SmallestAI
+c = SmallestAI(api_key="...")
+with open("out.wav","wb") as f:
+    for chunk in c.waves.synthesize_tts(text="Hello", voice_id="<id>"):
+        f.write(chunk)
+```
+Or hit the REST/WS endpoints directly (curl/websockets) for non-Python stacks.
+
+## Rules
+- Confirm the orchestrator + pieces before emitting code; don't assume.
+- Pipecat STT is a real gap - say so and give the custom-WS path, don't pretend a plugin exists.
+- Pull real voice ids via `get_voices` / MCP; don't hardcode guesses.
+- End with a runnable snippet the user can execute, not a sketch.
+````
+
+Direct integration guides: [Pipecat](/models/integrations/pipecat) · [LiveKit](/models/integrations/live-kit) · [all model integrations](/models/integrations).
+
+## What your agent can build next
+
+Once it's live, ask your agent to add: outbound [campaigns](/voice-agents/developer-guide/build/campaigns/overview), a [knowledge base](/voice-agents/developer-guide/build/knowledge-base/overview), [post-call analytics](/voice-agents/developer-guide/operate/analytics/overview), human transfer, DTMF, and voicemail detection.
