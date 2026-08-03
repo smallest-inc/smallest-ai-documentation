@@ -199,13 +199,14 @@ export default function App() {
   function handleServerEvent(raw: string) {
     const ev = JSON.parse(raw);
     switch (ev.type) {
-      case 'session.created':      setStatus('connected'); break;
-      case 'output_audio.delta':   playPcm16(Buffer.from(ev.audio, 'base64')); break;
-      case 'agent_start_talking':  /* UI: show "speaking" */ break;
-      case 'agent_stop_talking':   /* UI: hide "speaking"  */ break;
-      case 'interruption':         flushPlayback(); break;
-      case 'session.closed':       setStatus('idle'); break;
-      case 'error':                console.error(`[${ev.code}] ${ev.message}`); break;
+      case 'session.created':       setStatus('connected'); break;
+      case 'output_audio.delta':    playPcm16(Buffer.from(ev.audio, 'base64')); break;
+      case 'transcript':            /* UI: render final transcript for ev.role */ break;
+      case 'agent.start_talking':   /* UI: show "speaking" */ break;
+      case 'agent.stop_talking':    /* UI: hide "speaking"  */ break;
+      case 'interruption':          flushPlayback(); break;
+      case 'session.closed':        setStatus('idle'); break;
+      case 'error':                 console.error(`[${ev.code}] ${ev.message}`); break;
     }
   }
 
@@ -255,17 +256,22 @@ const styles = StyleSheet.create({
 
 ### Server events (full list)
 
-The quickstart's switch handles everything, but here are the six event types with their meanings for reference:
+The quickstart's switch handles the common ones, but here are all the confirmed event types with their meanings for reference:
 
 | Event | What to do |
 |---|---|
-| `session.created` | Connection accepted; you can start streaming mic audio. Contains `session_id` and `call_id`. |
+| `session.created` | Connection accepted; you can start streaming mic audio. Contains `session_id`, `call_id`, `sample_rate`, and `channels`. |
 | `output_audio.delta` | Decode base64, schedule on the `AudioContext`. |
-| `agent_start_talking` | The agent's TTS turn is starting. Show a speaking indicator; optionally mute the mic to cut self-feedback. |
-| `agent_stop_talking` | The agent's TTS turn is done. Unmute if you muted. |
-| `session.closed` | Session ended. `reason` tells you why (`client_requested`, `websocket_closed`, or a server tag). |
-| `interruption` | User barged in during the agent turn. Drop the playback queue and wait for a new `agent_start_talking`. |
-| `error` | Server-side error during the session. Non-fatal errors keep the socket open. |
+| `transcript` | Final transcript for a completed turn. `{ role: "user" \| "assistant", text: string }`. |
+| `agent.start_talking` | The agent's TTS turn is starting. Show a speaking indicator; optionally mute the mic to cut self-feedback. |
+| `agent.stop_talking` | The agent's TTS turn is done. Unmute if you muted. |
+| `session.closed` | Session ended. `reason` is `client_requested`, `websocket_closed`, or `setup_failed`. |
+| `interruption` | User barged in during the agent turn. Drop the playback queue and wait for a new `agent.start_talking`. Not part of the gateway's own typed contract, it's relayed verbatim from the STT/LLM/TTS worker, so treat the exact shape as provisional. |
+| `error` | Server-side error during the session. `code` is open-ended (`invalid_json`, `invalid_event`, `no_session`, `internal_error`, `too_many_updates`, `worker_not_ready`, or an HTTP-status string). Non-fatal errors keep the socket open. |
+
+<Note>
+  Client → server, the gateway also accepts `input_text.send` (send a typed message any time, not just in a text-only mode) and `session.close` (ask for a clean shutdown). See [Sending text](#sending-text) and [Ending the session](#ending-the-session) below.
+</Note>
 
 ## Full session handling
 
@@ -275,12 +281,31 @@ A single conversational turn has this sequence on the wire:
 
 1. Client keeps streaming `input_audio_buffer.append` from the mic.
 2. Server detects end of user utterance, runs STT → LLM → TTS.
-3. Server sends `agent_start_talking`.
+3. Server sends `agent.start_talking`.
 4. Server sends a stream of `output_audio.delta` chunks.
-5. Server sends `agent_stop_talking`.
+5. Server sends `agent.stop_talking`.
 6. Back to step 1.
 
-The client does not send `input_audio_buffer.commit` in normal conversational flow. The server's VAD handles turn boundaries. You only send `commit` if you implement explicit push-to-talk and want to force an immediate response.
+The client does not need to send `input_audio_buffer.commit` in normal conversational flow, it's currently a reserved no-op on the server (accepted but ignored) and never forces a turn boundary. The server's VAD handles turn boundaries entirely; there's no manual-commit capability to opt into today.
+
+### Sending text
+
+Send a typed message at any point in the session, whether or not the user is also speaking, with `input_text.send`:
+
+```typescript
+ws.send(JSON.stringify({ type: 'input_text.send', text: 'What are your hours?' }));
+```
+
+The only validation is a non-empty string; there's no documented length cap. The reply comes back the same way spoken input does, an `agent.start_talking` / `output_audio.delta` stream, followed by a `transcript` for the assistant turn.
+
+### Ending the session
+
+Closing the socket directly (`ws.close(1000, 'client end')`, as in the quickstart) works, but the server only sees it as `reason: "websocket_closed"`. For a session end that's distinguishable in your logs as client-initiated, send `session.close` first and let the server close in response:
+
+```typescript
+ws.send(JSON.stringify({ type: 'session.close' }));
+// server replies with session.closed { reason: "client_requested" }, then closes the socket
+```
 
 ### Backpressure on playback
 
@@ -288,7 +313,7 @@ The server emits `output_audio.delta` faster than realtime when the LLM finishes
 
 ### Interruptions
 
-When the server emits `interruption`, the user has spoken while the agent was talking. The agent's remaining TTS output for that turn is invalid; drop it. Call `playback.flush()` or your ring buffer's equivalent. A new `agent_start_talking` will follow shortly.
+When the server emits `interruption`, the user has spoken while the agent was talking. The agent's remaining TTS output for that turn is invalid; drop it. Call `playback.flush()` or your ring buffer's equivalent. A new `agent.start_talking` will follow shortly.
 
 ## Platform gotchas
 
@@ -334,7 +359,7 @@ useEffect(() => {
 
 On iOS, `AudioManager.setAudioSessionOptions({ iosCategory: 'playAndRecord', iosMode: 'voiceChat', ... })` turns on the system AEC + NS pipeline. On Android, `react-native-audio-api` selects the `VOICE_COMMUNICATION` input source internally, which enables the platform's AEC + NS.
 
-Without AEC, the agent hears its own audio through the mic and the server's VAD fires continuous `interruption` events. This is the expected behavior on the iOS simulator (speaker loops back into the Mac mic). On a real device with earphones or an HFP Bluetooth headset the feedback loop is broken. If your target devices have weaker AEC (older Androids, tablets with distant mics), stop the recorder on `agent_start_talking` and start it again on `agent_stop_talking`. The user's speech during the agent's turn goes undetected, which is the safer trade-off than audible feedback.
+Without AEC, the agent hears its own audio through the mic and the server's VAD fires continuous `interruption` events. This is the expected behavior on the iOS simulator (speaker loops back into the Mac mic). On a real device with earphones or an HFP Bluetooth headset the feedback loop is broken. If your target devices have weaker AEC (older Androids, tablets with distant mics), stop the recorder on `agent.start_talking` and start it again on `agent.stop_talking`. The user's speech during the agent's turn goes undetected, which is the safer trade-off than audible feedback.
 
 ### Bluetooth audio routing
 
@@ -344,13 +369,30 @@ If the user connects a Bluetooth headset mid-call, the audio session reroutes au
 
 ### Reconnect on transient network loss
 
-`ws.onclose` with a non-1000 code is a network drop. Reconnect with exponential backoff up to 30 s. Do not retry on 1000 (clean close) or 4401 / 4403 (auth failure):
+Don't branch reconnect logic on the WebSocket close code alone. Every fatal setup failure, whether transient (a dependency returning `503`) or permanent (agent not found, `404`), closes with the same code: `4000`. The close code can't tell you which one happened.
+
+The signal that actually distinguishes them is the `error` event the server sends immediately before closing, whose `code` field is the underlying HTTP status as a string (or `internal_error`, `invalid_event`, etc. for protocol-level failures). Capture it and decide there:
 
 ```typescript
 let reconnectMs = 500;
+let lastErrorCode: string | null = null;
+
+ws.onmessage = (e) => {
+  const ev = JSON.parse(e.data as string);
+  if (ev.type === 'error') lastErrorCode = ev.code;
+  handleServerEvent(e.data as string);
+};
 
 ws.onclose = (e) => {
-  if (e.code === 1000 || e.code === 4401 || e.code === 4403) return;
+  if (e.code === 1000) { lastErrorCode = null; return; } // clean close, don't retry
+
+  const retryable = lastErrorCode === null            // network drop, no error frame at all
+    || lastErrorCode === 'internal_error'
+    || lastErrorCode === 'worker_not_ready'
+    || lastErrorCode === '503';
+  lastErrorCode = null;
+  if (!retryable) return; // e.g. "404" (agent not found), "400" (bad request): don't retry
+
   setTimeout(start, Math.min(reconnectMs *= 2, 30000));
 };
 ```
@@ -365,13 +407,13 @@ Realtime audio + open WebSocket consumes roughly 3–5 % battery per minute on m
 
 ### Error events
 
-Subscribe to the server's `error` event and surface non-transient errors to the user:
+Subscribe to the server's `error` event and surface non-transient errors to the user. Auth failures (invalid or expired token, unknown `agent_id`) are rejected as a plain HTTP `401`/`403` before the WebSocket upgrade completes, so they never show up here as an `error` message, they surface as `ws.onerror` firing with no prior `session.created`. Codes you can actually see in a mid-session `error` event include `invalid_event`, `no_session`, `internal_error`, `worker_not_ready`, and HTTP-status-as-string values like `404` (agent not found) or `503` (dependency unavailable):
 
 ```typescript
 case "error":
   console.error(`[${ev.code}] ${ev.message}`);
-  if (ev.code === "401" || ev.code === "403") {
-    // auth failure: user-visible, show "please sign in again"
+  if (ev.code === "404") {
+    // agent not found: not retryable, surface to the user
   }
   break;
 ```

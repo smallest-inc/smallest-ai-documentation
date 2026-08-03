@@ -133,8 +133,8 @@ Subscribe with `agent.on(eventName, handler)`.
 
 | Event | When | Use |
 |---|---|---|
-| `session_started` | Call ready | Enable UI, store `call_id` |
-| `session_ended` | Call ended | Disable UI; `reason` is a server string or a numeric close code |
+| `session_started` | Call ready | Enable UI, store `call_id` (payload also includes `sample_rate` and `channels`) |
+| `session_ended` | Call ended | Disable UI; `reason` is `client_requested`, `websocket_closed`, `setup_failed`, or a numeric close code. Fatal setup failures all close with the same code (`4000`) whether or not they're retryable, so check the `error` event fired just before the close for the real reason instead of branching on the close code |
 | `transcript_delta` | Streaming text (cumulative) for the current turn | Live bubble — **replace** the text on each event |
 | `transcript` | Final text for a completed turn | Settle the bubble |
 | `agent_start_talking` | Agent TTS audio begins | Speaking indicator |
