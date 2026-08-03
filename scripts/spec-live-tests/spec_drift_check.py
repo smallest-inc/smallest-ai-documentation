@@ -161,10 +161,6 @@ KEY_PARITY_ALLOWLIST = {
     # Spec + override files are kept alive only until the SDK strips them.
     # See changelog: pulse-stt-pro-launch / lightning-v2-and-large-retired
     "fern/apis/waves/asyncapi/lightning-v2-ws-overrides.yml",
-    # Legacy `/waves/v1/streaming-tts/stream` superseded by unified
-    # `/waves/v1/tts/live`. Old SDK methods (synthesize_streaming) kept
-    # alive until the next SDK major release.
-    "fern/apis/waves/asyncapi/stream-tts-ws-overrides.yml",
 }
 
 

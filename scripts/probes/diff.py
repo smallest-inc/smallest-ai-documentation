@@ -106,7 +106,6 @@ DOCS_TO_AUDIT_BY_SERVICE: dict[str, list[str]] = {
     "tts": [
         "`fern/apis/waves/openapi/tts-openapi.yaml`",
         "`fern/apis/waves/asyncapi/tts-ws.yaml`",
-        "`fern/apis/waves/asyncapi/stream-tts-ws.yaml`",
         "`fern/products/waves/pages/text-to-speech/`",
         "New changelog entry under `fern/products/waves/pages/changelog-entries/`",
     ],
