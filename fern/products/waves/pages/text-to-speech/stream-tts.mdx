@@ -303,30 +303,47 @@ Use **WebSocket** when sending multiple TTS requests over time (conversations, v
 
 ## Response Format
 
-The two transports emit different JSON shapes. These are the **canonical shapes**; match your parser to the transport you're using.
+The two transports emit different JSON shapes. Match your parser to the transport you're using.
 
 **WebSocket** (nested envelope):
 ```json
 // audio chunk
-{ "status": "chunk", "data": { "audio": "base64_encoded_pcm_data" } }
+{
+  "session_id": "ws_...",
+  "request_id": "task_...",
+  "status": "chunk",
+  "data": { "audio": "base64_encoded_pcm_data" }
+}
 
-// stream complete
-{ "status": "complete", "message": "All chunks sent", "done": true }
+// stream complete (terminal frame; the server closes the WebSocket after this)
+{
+  "session_id": "ws_...",
+  "request_id": "task_...",
+  "status": "complete"
+}
 ```
-Access audio at `data["data"]["audio"]`; terminator is `data["status"] == "complete"`.
+- Read audio at `msg["data"]["audio"]`.
+- Detect completion with `msg["status"] == "complete"`. **There is no `done` field on WebSocket frames.**
+- `session_id` and `request_id` are informational metadata; safe to ignore for playback.
 
 **SSE** (flat, one JSON object per `data:` line):
 ```json
 // audio chunk
-{ "audio": "base64_encoded_pcm_data" }
+{ "audio": "base64_encoded_pcm_data", "done": false, "status": "206" }
 
 // stream complete
-{ "done": true }
+{ "status": "200", "done": true }
 ```
-Access audio at `data["audio"]`; terminator is `data["done"] == true`. SSE frames are prefixed with `event: audio\n` followed by `data: {...}\n\n`.
+- Read audio at `msg["audio"]`.
+- Detect completion with `msg["done"] == true`. **`done` is present on every frame** (`false` on chunks, `true` on the terminator), so `"done" in msg` matches every frame. Compare the value.
+- SSE frames are prefixed with `event: audio\n` followed by `data: {...}\n\n`.
+- `status` mirrors HTTP-style codes (`206` for partial content, `200` on completion); informational.
 
 <Note>
-**Porting a WebSocket client to SSE?** The two shapes are not interchangeable. WebSocket wraps every chunk in `{status, data.audio}`; SSE returns `{audio}` at the top level. A parser written for the WebSocket envelope will silently drop every SSE frame because `msg["data"]` is undefined. Same for the terminator: WebSocket signals completion with `status:"complete"`; SSE signals it with a bare `{"done": true}`.
+**Porting a WebSocket client to SSE?** The two shapes are not interchangeable.
+
+- WebSocket wraps every chunk in `{status, data.audio}`; SSE returns `{audio}` at the top level. A parser written for the WebSocket envelope will silently drop every SSE frame because `msg["data"]` is undefined.
+- WebSocket signals completion with `status:"complete"` and never emits a `done` field. SSE signals it with `done:true` and also carries `done:false` on every chunk.
 </Note>
 
 ## Latency

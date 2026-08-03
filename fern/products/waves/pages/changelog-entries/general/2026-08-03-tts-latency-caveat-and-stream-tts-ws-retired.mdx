@@ -8,9 +8,11 @@ Two related updates to the TTS docs.
 
 **Legacy `/waves/v1/streaming-tts/stream` artifacts retired.** The `lightning-tts-ws.mdx` API-reference page and the `stream-tts-ws.yaml` AsyncAPI + overrides are removed. Both predated the unified `/waves/v1/tts/live` split and documented the SSE transport with the WebSocket envelope shape, which was contradictory. The unified endpoint has been the documented and supported path for a while; these files were dormant. Generator wiring, spec-drift allow-list, and nav-ignore lists updated accordingly.
 
-**Canonical TTS response shapes** (already documented, now with a porting callout on `stream-tts.mdx`):
+**Canonical TTS response shapes** on `/waves/v1/tts/live`, now documented on `stream-tts.mdx` with the exact wire fields (session/request IDs on WS, `status` + `done` on SSE) plus a porting callout so a WebSocket parser doesn't silently drop SSE frames.
 
-- WebSocket `/waves/v1/tts/live`: `{"status":"chunk","data":{"audio":"..."}}`, terminator `{"status":"complete","done":true}`.
-- SSE `/waves/v1/tts/live`: `{"audio":"..."}`, terminator `{"done":true}`.
+- WebSocket chunks: `{"session_id","request_id","status":"chunk","data":{"audio":"..."}}`.
+- WebSocket terminator: `{"session_id","request_id","status":"complete"}`. **No `message`, no `done`.** Detect completion with `status == "complete"`.
+- SSE chunks: `{"audio":"...","done":false,"status":"206"}`.
+- SSE terminator: `{"status":"200","done":true}`. **`done` is on every frame** (`false` on chunks, `true` on terminator). Check `done == true`, not `"done" in msg`.
 
-The two shapes are not interchangeable; a parser written for the WebSocket envelope will silently drop every SSE frame because `msg["data"]` is undefined.
+The two shapes are not interchangeable. A parser written for the WebSocket envelope will silently drop every SSE frame because `msg["data"]` is undefined.
