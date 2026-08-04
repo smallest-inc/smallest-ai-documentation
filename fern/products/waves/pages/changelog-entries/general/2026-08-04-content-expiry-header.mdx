@@ -4,7 +4,7 @@ title: "New `x-expire-content` header: opt a request into content deletion (ente
 
 **Enterprise plans only.** Send `x-expire-content: true` on a Text to Speech or Speech to Text request and that request's free-text content is deleted after 7 days, while the usage record is kept — billing, credits, and usage graphs are unaffected.
 
-Documented as a header parameter on `POST /waves/v1/tts`, `POST /waves/v1/tts/live`, and `POST /waves/v1/stt/`.
+Documented as a header parameter on the HTTP routes — `POST /waves/v1/tts`, `POST /waves/v1/tts/live`, `POST /waves/v1/stt/` — and on the WebSocket routes `wss://.../waves/v1/tts/live` and `wss://.../waves/v1/stt/live`, where it is sent on the upgrade request.
 
 **Nothing changes unless you send the header.** Without it, content is retained indefinitely exactly as before. The header **deletes** content — it does not mean "retain my data", and opting in is the destructive direction, so it is never applied implicitly.
 
@@ -20,7 +20,7 @@ What is deleted per product:
 - `not-entitled` — plan does not include this; content retained.
 - `unavailable` — entitlement could not be verified; content retained, safe to retry.
 
-The header is absent when you did not request expiry. WebSocket sessions have no response headers; use an HTTP endpoint to confirm entitlement.
+The header is absent when you did not request expiry. WebSocket sessions have no response headers, so the opt-in works on the upgrade but the outcome cannot be read back — use an HTTP endpoint to confirm your entitlement.
 
 Two behaviours to plan for:
 
