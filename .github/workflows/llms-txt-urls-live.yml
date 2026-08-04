@@ -1,0 +1,75 @@
+name: llms.txt URLs live
+
+# Catches when a URL published in fern/llms.txt 404s on live docs. This can
+# happen even after llms.txt drift check is green if Fern's slug derivation
+# quietly changes, a redirect got dropped, or CDN caches are stale.
+#
+# Runs on a schedule and on manual dispatch against main. NOT PR-triggered,
+# because a PR may legitimately add pages that do not yet exist on live and
+# that would be a false positive.
+#
+# On failure: opens (or updates) a tracking issue so the next docs push has
+# to look at it before another llms.txt regen.
+
+on:
+  schedule:
+    # 03:15 UTC every day. Under GitHub free minutes and quiet enough that a
+    # human sees the failure via the issue before the next scheduled run.
+    - cron: '15 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  verify-urls:
+    name: Every URL in fern/llms.txt returns 200
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify URLs
+        id: verify
+        run: |
+          set -o pipefail
+          python3 scripts/verify_llms_urls.py --file fern/llms.txt --concurrency 16 --timeout 15 | tee verify.log
+        continue-on-error: true
+
+      - name: Open or update tracking issue on failure
+        if: steps.verify.outcome != 'success'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('verify.log', 'utf8').slice(-6000);
+            const title = 'llms.txt URLs live: 404s detected';
+            const marker = '<!-- llms-txt-urls-live-tracker -->';
+            const { data: existing } = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${context.repo.owner}/${context.repo.repo} is:issue is:open in:body "${marker}"`,
+            });
+            const bodyOut = `${marker}\n\nScheduled URL check found 404s on live docs. Fix by updating the affected page paths (or adding redirects), regenerating \`fern/llms.txt\`, and pushing to main.\n\nLast run:\n\n\`\`\`\n${body}\n\`\`\``;
+            if (existing.items.length > 0) {
+              const iss = existing.items[0];
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: iss.number,
+                body: `New failure at ${new Date().toISOString()}\n\n\`\`\`\n${body}\n\`\`\``,
+              });
+              return;
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              title, body: bodyOut,
+              labels: ['docs', 'llms.txt'],
+            });
+
+      - name: Fail the workflow if the verifier failed
+        if: steps.verify.outcome != 'success'
+        run: exit 1
