@@ -1,0 +1,13 @@
+---
+title: "TTS: opt-in math_notation flag for reading operators as words"
+---
+
+Lightning v3.1 and v3.1_pro accept a new `math_notation` request field on every transport (`POST /waves/v1/tts`, `POST /waves/v1/tts/live`, and the `wss://.../waves/v1/tts/live` WebSocket).
+
+Off by default. Set `math_notation: true` to have the normalizer read digit-flanked math operators as spoken words: `6 x 7` becomes "6 times 7", `2 ^ 10` becomes "2 to the power of 10", `6 ÷ 2` becomes "6 divided by 2". The operator word follows `number_pronunciation_language` (Hindi and Marathi localized; every other language falls back to English).
+
+Ambiguous glyphs (`-`, `–`, `−`, `/`) fire only when space-padded, so `5-3` still reads as a range and `1/2` still reads as a fraction. Protected patterns like ISO dates, slash dates, version strings, phone numbers, and Hindi year ranges produce identical audio whether the flag is on or off.
+
+Full lexicon, matching rules, known limitations (product dimensions, `24x7` idiom, vehicle-reg codes), and EU-language localizations on the new [Math notation](/models/documentation/text-to-speech-lightning/math-notation) page.
+
+Hindi and Devanagari proper-noun pronunciations also improved as part of the same normalization update. No client-side change is required for that piece.
