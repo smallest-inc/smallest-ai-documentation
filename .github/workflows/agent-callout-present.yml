@@ -1,0 +1,51 @@
+name: Coding-agent callout present
+
+# Fails a PR that adds or edits an eligible page MDX without the
+# <CodingAgentCallout /> sentinel. The whole point of the callout is
+# blanket coverage. If a new page or an edited page silently drops it,
+# the "site-wide" property degrades.
+#
+# Author fix is a single command:
+#   python3 scripts/inject_agent_callout.py
+#
+# See scripts/inject_agent_callout.py for the exclusion rules
+# (changelog-entries, api-reference, openapi, and the build-with-a-
+# coding-agent page itself).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'fern/products/**/*.mdx'
+      - 'fern/components/CodingAgentCallout.tsx'
+      - 'scripts/inject_agent_callout.py'
+      - '.github/workflows/agent-callout-present.yml'
+
+jobs:
+  callout-present:
+    name: Every page MDX carries <CodingAgentCallout />
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Collect MDX files touched by this PR
+        id: touched
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          git diff --name-only --diff-filter=AM "$BASE" "$HEAD" -- 'fern/products/**/*.mdx' > touched.txt || true
+          echo "Touched MDX files:"
+          cat touched.txt || true
+          echo "count=$(wc -l < touched.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Check touched files
+        if: steps.touched.outputs.count != '0'
+        run: |
+          xargs -a touched.txt python3 scripts/inject_agent_callout.py --check --paths

@@ -3,6 +3,9 @@ title: 'Voice Activity (VAD) events'
 description: 'Acoustic `speech_started` / `speech_ended` events emitted on the Pulse STT WebSocket alongside `transcription` messages when `vad_events=true` is set on the connection.'
 ---
 
+
+import { CodingAgentCallout } from "@/components/CodingAgentCallout";
+
 <Badge color="purple">Real-Time</Badge>
 
 When `vad_events=true` is set on the WebSocket connection, the Pulse STT server emits two additional JSON message types: `speech_started` and `speech_ended`. They are interleaved with the `transcription` stream on the same socket. Event boundaries are derived from the audio signal and are independent of transcript finalization.
@@ -126,3 +129,7 @@ async for raw in ws:
 - **`speech_ended` requires trailing silence.** The event fires after a silence gap following a voiced region. If the connection closes while the audio still contains voiced energy, no `speech_ended` is emitted for the final voiced region. To force emission at the end of a finite audio file, append a short pad (about 1 second) of zero-valued PCM before sending `close_stream`.
 - **`timestamp`** is measured in seconds from the first audio frame received on the connection.
 - **Sample rate.** The `sample_rate` query parameter must equal the rate of the PCM frames sent on the connection. Mismatch causes timing drift on both transcripts and VAD timestamps.
+
+<CodingAgentCallout />
+
+{/* coding-agent-callout-injected */}
