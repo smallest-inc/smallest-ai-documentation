@@ -858,7 +858,28 @@
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
-  // 20. Page dwell time — fires on page unload AND SPA navigation away.
+  // 20. Coding-agent callout — clicks on the per-page "Building with an AI
+  // coding agent?" pointer (component: fern/components/CodingAgentCallout.tsx).
+  // Each of the three links carries data-callout-link=(llms-txt|mcp|build-page)
+  // so we can see which entry point converts. Capture phase for parity with
+  // the search-result + feedback listeners; standard anchors bubble fine but
+  // capture makes the pattern uniform across surfaces.
+  function setupCodingAgentCalloutTracking() {
+    document.addEventListener(
+      "click",
+      function (e) {
+        var link = e.target.closest("[data-callout-link]");
+        if (!link) return;
+        track("docs_coding_agent_callout_clicked", {
+          link: link.getAttribute("data-callout-link") || "unknown",
+          href: link.getAttribute("href") || "",
+        });
+      },
+      true
+    );
+  }
+
+  // 21. Page dwell time — fires on page unload AND SPA navigation away.
   // Captures seconds spent on the page. Complements scroll_depth: a user
   // can scroll to 100% in 3s (skim) or 90s (deep read); dwell separates.
   function setupDwellTimeTracking() {
@@ -951,6 +972,7 @@
       setupExternalLinkTracking();
       setupAPIEndpointViewTracking();
       setupSearchNoResultsTracking();
+      setupCodingAgentCalloutTracking();
       setupDwellTimeTracking();
     }, 500);
   }
