@@ -110,6 +110,26 @@ paths:
       security:
       - BearerAuth: []
       parameters:
+      - name: x-expire-content
+        in: header
+        required: false
+        schema:
+          type: string
+          enum:
+          - "true"
+        example: "true"
+        description: |
+          **Enterprise plans only.** Opt this request into automatic deletion of its
+          free-text content after 7 days. The usage record is kept, so billing,
+          credits, and usage graphs are unaffected.
+
+          This header **deletes** content — it does not mean "retain my data".
+          Omit it (the default) and content is retained indefinitely.
+
+          Requests from other plans are ignored rather than rejected: the request
+          succeeds and content is retained. Check the `x-content-expiry` response
+          header — `applied`, `not-entitled`, or `unavailable` — to confirm which
+          happened.
       - name: model
         in: query
         required: true
