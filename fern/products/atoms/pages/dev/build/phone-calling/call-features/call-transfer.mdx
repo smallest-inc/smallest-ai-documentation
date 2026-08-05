@@ -23,11 +23,28 @@ Both bridge the call to the number you give, optionally with hold music while it
 
 ## Cold vs warm
 
-- **Cold transfer** (`cold_transfer`) — a **direct connect**. The destination is dialed and the caller is bridged straight through, with **no debrief**. There is **no hold music, whisper, or three-way** step (it connects directly). Use for "send them to the front desk".
-- **Warm transfer** (`warm_transfer`) — the agent **debriefs the destination** before bridging. This handover window is where the extra options apply: **on-hold music**, a **whisper message** to the destination only, and a **three-way message** to both parties.
+The transfer method decides whether the caller lands directly on the destination or waits while the agent briefs the destination first.
+
+### Cold transfer (`cold_transfer`)
+
+Direct connect. The destination is dialed and the caller is bridged straight through with no debrief. No hold music, no whisper, no three-way message.
+
+Use for "send them to the front desk", or any handoff where the destination does not need context before speaking.
+
+### Warm transfer (`warm_transfer`)
+
+The agent calls the destination privately first (the "please hold" announcement plays to the caller, then the whisper plays to the destination alone). Once the destination is briefed, the agent bridges the caller in.
+
+Warm transfer is the only method that supports the extra audio slots:
+
+- `on_hold_music` sets the audio the caller hears during the private briefing.
+- The whisper message tells the destination who is calling and why, before they hear the caller.
+- The three-way message plays to both parties at bridge time.
+
+Use for anything where the destination needs a short handoff ("Caller reports issue X, prefers a callback tomorrow").
 
 <Note>
-Hold music applies to **warm** transfer, not cold. Cold is a direct connect with no window for audio, so `on_hold_music` has no effect on it. If a transfer connects but sounds blank, it is almost always a cold transfer with `on_hold_music` set — switch to `warm_transfer`.
+Hold music applies to **warm** transfer, not cold. Cold is a direct connect with no window for audio, so `on_hold_music` has no effect on it. If a transfer connects but sounds blank, it is almost always a cold transfer with `on_hold_music` set. Switch to `warm_transfer`.
 </Note>
 
 `on_hold_music` values: `ringtone`, `relaxing_sound`, `uplifting_beats`, `none`.

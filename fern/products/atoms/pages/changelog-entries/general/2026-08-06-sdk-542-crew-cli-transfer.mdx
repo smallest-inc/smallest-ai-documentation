@@ -1,0 +1,11 @@
+---
+title: "SDK 5.4.2: CLI expansion, custom-LLM gotcha for crew, warm/cold transfer clarified"
+---
+
+Three docs updates matching the `smallestai 5.4.2` release.
+
+**Custom-LLM crew gotcha.** The BYOM page now warns against pointing a crew's `OpenAIClient` at Anthropic's OpenAI-compatible endpoint (`https://api.anthropic.com/v1/`). That URL truncates streaming replies and drops tool-call turns, which surfaces as the agent going silent mid-conversation. For Claude on a crew, use a gateway that stabilizes the stream (LiteLLM, OpenRouter, Portkey), or the platform model. Anthropic's native SDK is fine; only the OpenAI-compat URL has this problem.
+
+**CLI reference expanded.** `client-libraries/overview.mdx` now lists all seven `smallestai` command groups: `auth`, `agents`, `agent-crew`, `calls`, and the three added in 5.4.2: `waves` (TTS, STT, voices, clones), `campaigns` (list, create, pause, resume, delete), `phone-numbers` (list, search, rent, release, import-sip). Billable and destructive subcommands prompt for confirmation unless `--yes` is passed.
+
+**Call Transfer guide: warm vs cold explicit.** The cold-vs-warm section on `dev/build/phone-calling/call-features/call-transfer.mdx` now has separate subsections for each method, spells out that warm is a private briefing (with the "please hold" announcement on the caller side and the whisper on the destination side), and lists the three audio slots warm supports (`on_hold_music`, whisper, three-way). Cold stays a direct connect with no audio window.
