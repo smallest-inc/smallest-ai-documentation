@@ -214,7 +214,13 @@ paths:
         schema:
           type: boolean
           default: false
-        description: Whether to include word and utterance level timestamps in the response
+        description: |
+          Off by default. Set `word_timestamps=true` to populate both the
+          `words[]` and `utterances[]` arrays in the response. Without the
+          flag, the API still returns a full `transcription` string but
+          `words[]` and `utterances[]` are empty. See
+          [Word Timestamps](/models/documentation/speech-to-text-pulse/features/word-timestamps)
+          for the per-word field shape.
       - name: diarize
         in: query
         required: false
@@ -323,7 +329,11 @@ paths:
                     example: 1.7
                   words:
                     type: array
-                    description: Word-level timestamps in seconds.
+                    description: |
+                      Per-word timestamps in seconds. **Empty unless the
+                      request sets `word_timestamps=true`.** Each entry
+                      carries `word`, `start`, `end`, `confidence` (0.0–1.0),
+                      and `speaker` when `diarize=true` is also set.
                     items:
                       type: object
                       properties:
@@ -335,14 +345,18 @@ paths:
                           example: 0.5
                         speaker:
                           type: string
-                          description: Speaker if diarization is enabled
+                          description: Speaker label when `diarize=true` is set on the request. Omitted otherwise.
                           example: speaker_0
                         word:
                           type: string
                           example: Hello
                   utterances:
                     type: array
-                    description: List of utterances with start and end times
+                    description: |
+                      Sentence-level segments with start and end times.
+                      **Empty unless the request sets
+                      `word_timestamps=true`** (the same flag turns on
+                      both `words[]` and `utterances[]`).
                     items:
                       type: object
                       properties:
@@ -407,6 +421,9 @@ paths:
                         description: Size of the audio file in bytes
                         example: 1000000
               example:
+                # Response shown with word_timestamps=true and diarize=true.
+                # Default requests (both flags off) return an empty words[]
+                # and empty utterances[] alongside the same transcription.
                 status: success
                 transcription: Hello world.
                 words:
