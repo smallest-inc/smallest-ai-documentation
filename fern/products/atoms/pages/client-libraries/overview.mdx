@@ -14,6 +14,62 @@ Welcome to the Smallest AI Client Libraries documentation. Our client libraries 
 - [Python](https://github.com/smallest-inc/smallest-python-sdk)
 - [Node](https://github.com/smallest-inc/smallest-node-sdk)
 
+### Python SDK: typed errors and Waves helpers
+
+New in `smallestai>=5.5.0`.
+
+**Typed errors.** Plan or entitlement-gated requests (HTTP 400 with "…upgrade to a higher plan…") raise `PlanNotEntitledError`, a subclass of `BadRequestError`. Importable from `smallestai` or `smallestai.errors`. Error messages carry an actionable hint: `401` points at `SMALLEST_API_KEY`, plan-gated `400` points at upgrading, org-gated `403` points at the account team.
+
+```python
+from smallestai import SmallestAI
+from smallestai.errors import PlanNotEntitledError
+
+client = SmallestAI()
+try:
+    client.atoms.campaigns.create(
+        name="Q3 outreach",
+        audience_id="AUDIENCE_ID",
+        agent_id="AGENT_ID",
+    )
+except PlanNotEntitledError as e:
+    # Route the caller to an upgrade flow.
+    log.warning("Plan gate: %s", e)
+```
+
+**Waves helpers.** `smallestai.waves.helpers` ships the common one-shot shapes:
+
+```python
+from smallestai.waves.helpers import (
+    synthesize_bytes,        # -> bytes
+    synthesize_to_file,      # writes to a path
+    synthesize_with_expiry,  # returns (bytes, x_content_expiry_header)
+)
+
+audio, expires_at = synthesize_with_expiry(
+    text="Hello.",
+    voice_id="avery",
+    expire_content=True,   # Enterprise-only x-expire-content header
+)
+```
+
+`expire_content=True` sends the Enterprise-only `x-expire-content` request header on the underlying TTS call. `synthesize_with_expiry` also reads back the `x-content-expiry` response header so callers can log or surface the outcome.
+
+## Command-line interface
+
+`pip install smallestai` also installs the `smallestai` CLI. As of `smallestai>=5.5.0` it covers seven command groups. Every subcommand honors the same auth resolution: `SMALLEST_API_KEY` first, then `~/.smallestai/credentials.json` written by `smallestai auth login`.
+
+| Group | What it manages |
+|---|---|
+| `smallestai auth` | Credentials (login, logout, whoami). |
+| `smallestai agents` | Create, list, update, and place calls with agents. See [Agents CLI](/voice-agents/developer-guide/get-started/agents-cli) for the full reference. |
+| `smallestai agent-crew` | Crew project scaffold, deploy, and chat against a running crew. |
+| `smallestai calls` | Start outbound calls and inspect call records. |
+| `smallestai waves` | TTS synthesis, STT transcription, voice catalog lookup, voice cloning. |
+| `smallestai campaigns` | List, create, pause, resume, delete outbound campaigns. |
+| `smallestai phone-numbers` | List, search, rent, release, and import SIP numbers. |
+
+Billable or destructive subcommands (`create`, `rent`, `release`, `delete`) prompt for confirmation. Pass `--yes` to skip the prompt in CI or scripts.
+
 ## Client-Side SDK
 
 ### Atoms Multimodal SDK

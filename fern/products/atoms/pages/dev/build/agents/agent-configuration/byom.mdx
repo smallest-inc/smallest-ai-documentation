@@ -18,6 +18,22 @@ For privacy, cost control, or specialized models, you can run LLMs locally or on
   tunnel, rewrite the Host header or Ollama returns `403`:
   `ngrok http 11434 --host-header=localhost:11434`, then set
   `base_url="https://<id>.ngrok-free.app/v1"`.
+
+  **Tunnels are for development only.** If the local process behind the tunnel
+  goes down (Ollama exit, laptop sleep), the tunnel returns `ERR_NGROK_8012`
+  and the agent surfaces it as a fatal `agent_error` and hangs up mid-call.
+  Move to a hosted OpenAI-compatible endpoint before shipping.
+</Warning>
+
+<Warning>
+  **Do not point `base_url` at Anthropic's OpenAI-compatible endpoint
+  (`https://api.anthropic.com/v1/`) for a crew agent.** It truncates
+  streaming replies and drops tool-call turns, which surfaces as the
+  agent going silent mid-conversation. If you want Claude for a crew,
+  route it through a gateway that stabilizes the stream (LiteLLM,
+  OpenRouter, Portkey), use a real OpenAI-backed model, or use the
+  platform model. Anthropic's native SDK is unaffected. Only their
+  OpenAI-compat URL has this issue.
 </Warning>
 
 ## Complete Example
@@ -163,6 +179,21 @@ llm = OpenAIClient(
 )
 ```
 
+## Deterministic tool calls with `tool_choice`
+
+Crew `OpenAIClient.chat()` forwards extra kwargs to the underlying request, so any OpenAI-compatible `tool_choice` value works. Passing `tool_choice="required"` on a specific turn forces the model to emit a tool call rather than a free-text answer. Useful when the model has already said "let me transfer you" out loud but does not actually invoke the transfer tool.
+
+```python
+response = await self.llm.chat(
+    messages=self.context.messages,
+    tools=self.tools,
+    stream=True,
+    tool_choice="required",   # this turn must produce a tool call
+)
+```
+
+Set `tool_choice="required"` only for the specific transfer or handoff turn, not on every turn. Forcing tools on normal conversational turns will cause the model to invent tool calls when the user is just chatting.
+
 ## Troubleshooting
 
 | Issue | Cause | Fix |
@@ -170,7 +201,8 @@ llm = OpenAIClient(
 | Connection refused | Server not running | Start Ollama/vLLM |
 | Model not found | Wrong name | Check `ollama list` or server logs |
 | No streaming | Server config | Ensure streaming is enabled |
-| Tool calls ignored | Model limitation | Use a larger model or cloud fallback |
+| Tool calls ignored | Model limitation | Use a larger model, add `tool_choice="required"` for the decisive turn, or use a cloud fallback |
+| Agent hangs up mid-call with `agent_error` | Tunnel returned `ERR_NGROK_8012` because the local model process died | Restart the local process, or move to a hosted OpenAI-compatible endpoint before shipping |
 
 ## Tips
 

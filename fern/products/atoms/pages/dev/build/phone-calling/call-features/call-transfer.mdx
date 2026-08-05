@@ -23,11 +23,28 @@ Both bridge the call to the number you give, optionally with hold music while it
 
 ## Cold vs warm
 
-- **Cold transfer** (`cold_transfer`) — a **direct connect**. The destination is dialed and the caller is bridged straight through, with **no debrief**. There is **no hold music, whisper, or three-way** step (it connects directly). Use for "send them to the front desk".
-- **Warm transfer** (`warm_transfer`) — the agent **debriefs the destination** before bridging. This handover window is where the extra options apply: **on-hold music**, a **whisper message** to the destination only, and a **three-way message** to both parties.
+The transfer method decides whether the caller lands directly on the destination or waits while the agent briefs the destination first.
+
+### Cold transfer (`cold_transfer`)
+
+Direct connect. The destination is dialed and the caller is bridged straight through with no debrief. No hold music, no whisper, no three-way message.
+
+Use for "send them to the front desk", or any handoff where the destination does not need context before speaking.
+
+### Warm transfer (`warm_transfer`)
+
+The agent calls the destination privately first (the "please hold" announcement plays to the caller, then the whisper plays to the destination alone). Once the destination is briefed, the agent bridges the caller in.
+
+Warm transfer is the only method that supports the extra audio slots:
+
+- `on_hold_music` sets the audio the caller hears during the private briefing.
+- The whisper message tells the destination who is calling and why, before they hear the caller.
+- The three-way message plays to both parties at bridge time.
+
+Use for anything where the destination needs a short handoff ("Caller reports issue X, prefers a callback tomorrow").
 
 <Note>
-Hold music applies to **warm** transfer, not cold. Cold is a direct connect with no window for audio, so `on_hold_music` has no effect on it. If a transfer connects but sounds blank, it is almost always a cold transfer with `on_hold_music` set — switch to `warm_transfer`.
+Hold music applies to **warm** transfer, not cold. Cold is a direct connect with no window for audio, so `on_hold_music` has no effect on it. If a transfer connects but sounds blank, it is almost always a cold transfer with `on_hold_music` set. Switch to `warm_transfer`.
 </Note>
 
 `on_hold_music` values: `ringtone`, `relaxing_sound`, `uplifting_beats`, `none`.
@@ -114,10 +131,29 @@ The `transfer_call` tool is not on the live config. For single-prompt agents, se
 <Accordion title="Transfer leg is no_answer / timeout, duration 0">
 The transfer fired but the destination did not answer (or the caller hung up first). Use a number a human or agent will pick up.
 </Accordion>
+<Accordion title="Transfer fires but the far end rejects in ~2 seconds">
+The destination number is not answering (voicemail auto-reject, busy, or blocked). A common self-inflicted variant: transferring to your own line while you are the caller on the same device. Test with the destination on a separate phone.
+</Accordion>
 <Accordion title="Bridge connects but is silent">
 You are using a **cold** transfer (direct connect, no music). For hold music during the handover, use a **warm** transfer and set `on_hold_music`.
+</Accordion>
+<Accordion title="Agent says 'let me transfer you' but never actually transfers">
+LLM determinism. The model announced the intent but did not emit the `transfer_call` tool call. Two fixes:
+
+1. Tighten the prompt so the transfer step is unambiguous, e.g. "If the caller asks for a human, an agent, or a specialist, call the `transfer_call` tool immediately. Do not describe the transfer, just call the tool."
+2. For crew agents, force the tool on the decisive turn by passing `tool_choice="required"` through `chat()`. See the [`tool_choice` note on the BYOM page](/voice-agents/developer-guide/build/agents/agent-configuration/byom) for the exact shape.
+
+Do not set `tool_choice="required"` on every turn or the model will invent tool calls during normal conversation.
 </Accordion>
 <Accordion title="A crew agent greets once, then never responds or transfers">
 Upgrade to `smallestai>=5.4.0`. Earlier versions could leave the crew context empty on a turn, so the LLM had nothing to answer and stayed silent.
 </Accordion>
 </AccordionGroup>
+
+<Note>
+Crew transfer + inbound needs no dashboard config. The transfer event is emitted from the crew's node code and inbound routing is a `PATCH /agent/{id}` field. Everything is code and API.
+</Note>
+
+## Runnable sample
+
+The [`voice-agents/call_transfer` cookbook sample](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/call_transfer) covers cold, warm, inbound, and agent-to-agent shapes in one project, and ships an `AGENTS.md` so a coding agent can consume it without extra prompting.
