@@ -1,0 +1,17 @@
+---
+title: "SDK 5.5.0: typed errors, waves helpers, CLI expansion, crew custom-LLM gotcha, warm/cold transfer clarified"
+---
+
+Docs updates for the `smallestai 5.5.0` release, plus the sibling platform fix for crew transfer audio.
+
+**Typed errors with actionable hints.** Plan or entitlement-gated requests (HTTP 400 with "…upgrade to a higher plan…") now raise `PlanNotEntitledError` (subclass of `BadRequestError`), importable from `smallestai` or the new `smallestai.errors` module. Error messages carry an actionable hint: `401` points at `SMALLEST_API_KEY`, plan-gated `400` points at upgrading, org-gated `403` points at the account team.
+
+**Waves helpers.** `smallestai.waves.helpers` ships `synthesize_to_file`, `synthesize_bytes`, and `synthesize_with_expiry` for the common one-shot TTS shapes. Setting `expire_content=True` on the helpers sends the Enterprise-only `x-expire-content` header; `synthesize_with_expiry` also reads back the `x-content-expiry` outcome so callers can log or surface it.
+
+**CLI reference expanded.** `client-libraries/overview.mdx` now lists all seven `smallestai` command groups: `auth`, `agents`, `agent-crew`, `calls`, and the three added in 5.4.2 (`waves`, `campaigns`, `phone-numbers`). Billable and destructive subcommands prompt for confirmation unless `--yes` is passed.
+
+**Custom-LLM crew gotcha.** The BYOM page now warns against pointing a crew's `OpenAIClient` at Anthropic's OpenAI-compatible endpoint (`https://api.anthropic.com/v1/`). That URL truncates streaming replies and drops tool-call turns, which surfaces as the agent going silent mid-conversation. For Claude on a crew, use a gateway that stabilizes the stream (LiteLLM, OpenRouter, Portkey), or the platform model. The page also gets a `ngrok` note (ERR_NGROK_8012 when the local process is down surfaces as a fatal `agent_error` and hangs up) and a `tool_choice` note (crew `chat()` forwards extra kwargs, so `tool_choice="required"` works for deterministic transfer decisions).
+
+**Call Transfer guide.** The cold-vs-warm section on `dev/build/phone-calling/call-features/call-transfer.mdx` now has separate subsections for each method, spells out that warm is a private briefing (with the "please hold" announcement on the caller side and the whisper on the destination side), and lists the three audio slots warm supports (`on_hold_music`, whisper, three-way). Cold stays a direct connect with no audio window. Also adds a fuller Troubleshooting section for the failure modes surfaced during customer debug (transfer fires but rejects in ~2s, "let me transfer you" without the tool call firing, numbers overwritten by PII redaction, no dashboard config required for crew + inbound).
+
+**Cookbook cross-link.** The `voice-agents/call_transfer` [sample](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/call_transfer) covers cold, warm, inbound, and agent-to-agent shapes and now ships an `AGENTS.md` so a coding agent can consume it directly.
