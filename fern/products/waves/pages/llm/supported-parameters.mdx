@@ -9,7 +9,7 @@ import { CodingAgentCallout } from "@/components/CodingAgentCallout";
 
 Electron implements the OpenAI Chat Completions wire format. Most request fields pass through to the model verbatim. This page is the authoritative list of which fields are supported, which are explicitly rejected, and which carry Electron-specific semantics.
 
-## Passthrough — works as OpenAI documents
+## Passthrough - works as OpenAI documents
 
 | Field | Notes |
 |---|---|
@@ -30,7 +30,7 @@ Electron implements the OpenAI Chat Completions wire format. Most request fields
 | `top_logprobs` | `0`–`20`. Requires `logprobs: true`. |
 | `presence_penalty` | `-2.0` to `2.0`. |
 | `frequency_penalty` | `-2.0` to `2.0`. |
-| `user` | Arbitrary opaque end-user identifier — useful for your own logs; not interpreted by Electron. |
+| `user` | Arbitrary opaque end-user identifier - useful for your own logs; not interpreted by Electron. |
 
 Unrecognized fields are accepted by the schema and forwarded to the model. They may be ignored if the model doesn't recognize them.
 
@@ -55,7 +55,7 @@ These return `HTTP 400` with `invalid_request_error`:
 
 Exceeding any of these returns `HTTP 400`. The `error.message` will name the offending field.
 
-## Response object — Electron extensions
+## Response object - Electron extensions
 
 Beyond the standard OpenAI response shape, Electron returns these additional fields:
 
@@ -64,7 +64,7 @@ Beyond the standard OpenAI response shape, Electron returns these additional fie
 | `usage.prompt_tokens_details.cached_tokens` | Subset of `prompt_tokens` served from prefix cache. Billed at the discounted rate. See [Prefix Caching](/models/documentation/llm-electron/prefix-caching). |
 | HTTP header `X-Request-Id` | Unique request identifier. Echo this in support tickets so we can find the trace. |
 
-For tool calls, Electron's assistant message also typically includes a short filler phrase in `content` alongside `tool_calls` — see [Tool Calling: the filler-phrase pattern](/models/documentation/llm-electron/tool-function-calling#response-shape-the-filler-phrase-pattern).
+For tool calls, Electron's assistant message also typically includes a short filler phrase in `content` alongside `tool_calls` - see [Tool Calling: the filler-phrase pattern](/models/documentation/llm-electron/tool-function-calling#response-shape-the-filler-phrase-pattern).
 
 ## Differences from OpenAI
 
@@ -73,12 +73,12 @@ For tool calls, Electron's assistant message also typically includes a short fil
 | Endpoint path | `/v1/chat/completions` | `/waves/v1/chat/completions` |
 | `model` value | `"gpt-4o"`, `"gpt-4-turbo"`, etc. | `"electron"` |
 | Auth header | `Authorization: Bearer sk-…` | `Authorization: Bearer sk_…` (Smallest API key) |
-| Multi-completion `n` | Supported (up to 128) | Rejected — `n=1` only |
+| Multi-completion `n` | Supported (up to 128) | Rejected - `n=1` only |
 | `prompt_logprobs` | Supported on some models | Rejected |
 | `content` when tool calls present | `null` | Often a natural-language filler (see [Tool Calling](/models/documentation/llm-electron/tool-function-calling)) |
 | Pricing | Per model, varies | Single Electron rate; contact your Smallest AI account manager |
 
-Everything else — request shape, response shape, streaming format, error envelope — matches OpenAI's. See [Migrate from OpenAI](/models/documentation/llm-electron/migrate-from-openai) for the side-by-side code diff.
+Everything else - request shape, response shape, streaming format, error envelope - matches OpenAI's. See [Migrate from OpenAI](/models/documentation/llm-electron/migrate-from-openai) for the side-by-side code diff.
 
 <CodingAgentCallout />
 

@@ -13,10 +13,10 @@ This cookbook wires together all three Smallest AI products to build a working v
 Mic audio  →  Pulse (STT)  →  Electron (LLM + tools)  →  Lightning (TTS)  →  Speaker
 ```
 
-The same pattern underlies most production voice agents — customer support, sales calls, voice-driven UIs. Each piece is independently optimizable; this guide shows the minimum viable wiring.
+The same pattern underlies most production voice agents - customer support, sales calls, voice-driven UIs. Each piece is independently optimizable; this guide shows the minimum viable wiring.
 
 <Tip>
-If you want a full voice-agent platform with built-in telephony, campaigns, knowledge base, and call analytics, see [**Atoms**](/voice-agents/platform/get-started/quick-start) — it's built on top of this exact stack. Use this cookbook when you want to build the pipeline yourself.
+If you want a full voice-agent platform with built-in telephony, campaigns, knowledge base, and call analytics, see [**Atoms**](/voice-agents/platform/get-started/quick-start) - it's built on top of this exact stack. Use this cookbook when you want to build the pipeline yourself.
 </Tip>
 
 ## Architecture
@@ -38,13 +38,13 @@ If you want a full voice-agent platform with built-in telephony, campaigns, know
 1. **Capture audio** from the user (mic, telephony, WebRTC, etc.).
 2. **Send to Pulse WebSocket** in real-time. Receive partial transcripts as the user speaks, and a final transcript when they pause (end-of-utterance).
 3. **Send the final transcript to Electron** as a `user` message in your ongoing conversation. Stream the response.
-4. **As Electron streams content**, feed it to Lightning for TTS immediately — don't wait for the full response.
+4. **As Electron streams content**, feed it to Lightning for TTS immediately - don't wait for the full response.
 5. **If Electron returns `tool_calls`**: the filler in `content` is spoken via Lightning **while you run the tool in parallel**. When the tool returns, append the tool result and continue the conversation.
 6. **Play Lightning's audio** back to the user (speaker, telephony, WebRTC).
 
 ## Minimal implementation (Python)
 
-This is a sketch — production code needs proper async coordination, jitter handling, and error recovery, but the wiring shape is real.
+This is a sketch - production code needs proper async coordination, jitter handling, and error recovery, but the wiring shape is real.
 
 ```python
 import asyncio
@@ -196,25 +196,25 @@ When the user asks *"What's my account balance?"*, this is what happens in milli
 |---|---|
 | 0 ms | User finishes speaking; Pulse emits final transcript |
 | ~5 ms | Transcript sent to Electron |
-| ~250 ms | Electron emits first `delta.content` — *"Let me check your account…"* |
+| ~250 ms | Electron emits first `delta.content` - *"Let me check your account…"* |
 | ~250 ms | Lightning starts TTSing the filler **immediately** |
-| ~280 ms | Electron emits `delta.tool_calls` — `get_account_info(...)` |
+| ~280 ms | Electron emits `delta.tool_calls` - `get_account_info(...)` |
 | ~280 ms | You start the tool call **in parallel** with TTS |
 | ~600 ms | User hears *"Let me check your account…"* through their speaker |
 | ~800 ms | Tool returns the balance |
-| ~850 ms | Electron emits final response — *"Your balance is ₹12,450."* |
+| ~850 ms | Electron emits final response - *"Your balance is ₹12,450."* |
 | ~900 ms | Lightning TTSes the final response |
 | ~1200 ms | User hears the answer |
 
-Without the filler-phrase pattern, the user would hear silence from 0 ms to ~1100 ms. With it, they hear natural speech start at ~600 ms — feels conversational instead of robotic.
+Without the filler-phrase pattern, the user would hear silence from 0 ms to ~1100 ms. With it, they hear natural speech start at ~600 ms - feels conversational instead of robotic.
 
 ## Production checklist
 
 - [ ] **Stream everything.** Pulse WebSocket for STT, Electron `stream: true` for LLM, Lightning streaming for TTS. Any non-streaming hop adds hundreds of milliseconds.
 - [ ] **`stream_options.include_usage: true`** on Electron so you bill accurately on disconnects.
-- [ ] **Run tool calls in parallel with TTS** — never serialize the filler-then-tool path.
+- [ ] **Run tool calls in parallel with TTS** - never serialize the filler-then-tool path.
 - [ ] **Capture `X-Request-Id`** from every Electron response for support traceability.
-- [ ] **Match Pulse `language`, Electron prompts, and Lightning voice language.** A Hindi caller should be transcribed in Hindi, prompted in Hindi, and synthesized with a Hindi voice. Don't translate in the middle of the pipeline — Electron and Lightning both handle Indic natively.
+- [ ] **Match Pulse `language`, Electron prompts, and Lightning voice language.** A Hindi caller should be transcribed in Hindi, prompted in Hindi, and synthesized with a Hindi voice. Don't translate in the middle of the pipeline - Electron and Lightning both handle Indic natively.
 - [ ] **Cap conversation history** so prompts don't grow unbounded. Truncate older turns once you exceed your token budget; prefix caching keeps recent turns cheap.
 - [ ] **Set a per-utterance timeout** (~10 s on the full STT→LLM→TTS round). Voice users won't wait longer; better to fall back to *"Sorry, can you repeat?"* than to hang silently.
 
@@ -230,7 +230,7 @@ Without the filler-phrase pattern, the user would hear silence from 0 ms to ~110
   <Card title="Electron Tool Calling" icon="screwdriver-wrench" href="/models/documentation/llm-electron/tool-function-calling">
     Filler-phrase pattern in depth.
   </Card>
-  <Card title="Atoms — managed voice agents" icon="phone" href="/voice-agents/platform/get-started/quick-start">
+  <Card title="Atoms - managed voice agents" icon="phone" href="/voice-agents/platform/get-started/quick-start">
     Skip the wiring and use the platform.
   </Card>
 </CardGroup>

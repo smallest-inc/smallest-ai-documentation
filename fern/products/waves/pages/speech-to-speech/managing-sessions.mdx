@@ -1,6 +1,6 @@
 ---
 title: "Managing sessions"
-description: "Hydra session lifecycle — session.configure, voices, persona, generate_initial_response, mid-session updates, and conversation items."
+description: "Hydra session lifecycle - session.configure, voices, persona, generate_initial_response, mid-session updates, and conversation items."
 icon: "diagram-project"
 ---
 
@@ -27,7 +27,7 @@ sequenceDiagram
     Note right of C: Either side closes the WebSocket → session ends
 ```
 
-The handshake is **one-shot**. After `session.created`, the server waits for exactly one `session.configure` before accepting audio. Subsequent `session.configure` frames are ignored — use `session.update` for mid-session changes.
+The handshake is **one-shot**. After `session.created`, the server waits for exactly one `session.configure` before accepting audio. Subsequent `session.configure` frames are ignored - use `session.update` for mid-session changes.
 
 ## `session.configure`
 
@@ -48,12 +48,12 @@ Send this once, immediately after `session.created`. Every field is optional.
 | Field | Type | Notes |
 |---|---|---|
 | `instructions` | string | System prompt. See [Prompting voice agents](/models/documentation/speech-to-speech-hydra/prompting-voice-agents). |
-| `voice` | string | One of `wren`, `sloane`, `marlowe`, `reed`, `knox`, `tate`. Unknown values silently fall back to the default — **validate client-side**. |
+| `voice` | string | One of `wren`, `sloane`, `marlowe`, `reed`, `knox`, `tate`. Unknown values silently fall back to the default - **validate client-side**. |
 | `tools` | array | Function-calling tool schemas. See [Tool calling](/models/documentation/speech-to-speech-hydra/tool-calling). |
 | `generate_initial_response` | boolean | `true` makes the model speak first, before any user audio. Honoured only at handshake. |
 
 <Warning>
-`session.configure` silently accepts unknown fields — a typo like `instuctions` is ignored, not rejected, and the default persona ships instead. Validate keys client-side. `session.update` is stricter and returns an `invalid_frame` error on unknown fields.
+`session.configure` silently accepts unknown fields - a typo like `instuctions` is ignored, not rejected, and the default persona ships instead. Validate keys client-side. `session.update` is stricter and returns an `invalid_frame` error on unknown fields.
 </Warning>
 
 ## `session.configured` (server echo)
@@ -107,7 +107,7 @@ Immediately after `session.configured`, the standard `response.created` → audi
 
 ## Conversation items
 
-Most events carry a `ConversationItem`. The shape is intentionally flat — every field is optional, presence is dictated by `type`.
+Most events carry a `ConversationItem`. The shape is intentionally flat - every field is optional, presence is dictated by `type`.
 
 ```json
 {
@@ -125,7 +125,7 @@ Most events carry a `ConversationItem`. The shape is intentionally flat — ever
 }
 ```
 
-Discarded user turns — speech that VAD started but the turn detector later rejected — arrive as `conversation.item.done` with `status: "incomplete"`. Silence and sub-VAD noise produce no events at all.
+Discarded user turns - speech that VAD started but the turn detector later rejected - arrive as `conversation.item.done` with `status: "incomplete"`. Silence and sub-VAD noise produce no events at all.
 
 ## `response.done`
 
@@ -147,16 +147,16 @@ Every response ends with `response.done`:
 | `status` | Meaning |
 |---|---|
 | `completed` | Turn finished normally |
-| `cancelled` • `reason: "interrupted"` | The user barged in — handled automatically |
+| `cancelled` • `reason: "interrupted"` | The user barged in - handled automatically |
 | `cancelled` • `reason: "client_cancelled"` | The client sent `response.cancel` |
 | `incomplete` | Stop condition (`max_output_tokens`, `content_filter`) |
-| `failed` | Internal error — see `status_details.error` |
+| `failed` | Internal error - see `status_details.error` |
 
 ## Next
 
-- [Audio I/O](/models/documentation/speech-to-speech-hydra/audio-i-o) — what to put in `input_audio_buffer.append` and how to play `response.output_audio.delta`
-- [Turn detection & barge-in](/models/documentation/speech-to-speech-hydra/turn-detection-barge-in) — how speech events fire and how to handle interruption on the client
-- [Tool calling](/models/documentation/speech-to-speech-hydra/tool-calling) — declare and execute functions during a session
+- [Audio I/O](/models/documentation/speech-to-speech-hydra/audio-i-o) - what to put in `input_audio_buffer.append` and how to play `response.output_audio.delta`
+- [Turn detection & barge-in](/models/documentation/speech-to-speech-hydra/turn-detection-barge-in) - how speech events fire and how to handle interruption on the client
+- [Tool calling](/models/documentation/speech-to-speech-hydra/tool-calling) - declare and execute functions during a session
 
 <CodingAgentCallout />
 

@@ -7,7 +7,7 @@ icon: "screwdriver-wrench"
 
 import { CodingAgentCallout } from "@/components/CodingAgentCallout";
 
-Hydra is a voice model — it doesn't execute tools. The client declares tool schemas in `session.configure`, Hydra decides when to call them and streams the arguments JSON, and the client executes the tool locally and posts the result back.
+Hydra is a voice model - it doesn't execute tools. The client declares tool schemas in `session.configure`, Hydra decides when to call them and streams the arguments JSON, and the client executes the tool locally and posts the result back.
 
 ## Event flow
 
@@ -62,7 +62,7 @@ sequenceDiagram
 }
 ```
 
-You can also add or replace `tools` mid-session via `session.update` — see [Managing sessions](/models/documentation/speech-to-speech-hydra/managing-sessions#mid-session-updates).
+You can also add or replace `tools` mid-session via `session.update` - see [Managing sessions](/models/documentation/speech-to-speech-hydra/managing-sessions#mid-session-updates).
 
 ## Execute the tool and post the result
 
@@ -94,7 +94,7 @@ After posting the tool output, you need to send a single `response.create` to te
 
 If the model calls one tool, the obvious code works: post the output, send `response.create`, done.
 
-If the model calls **multiple tools in one turn**, the obvious code is wrong. The server emits one `response.function_call_arguments.done` per call, and if you send `response.create` after each one, the model starts narrating before all results are in — you get a half-formed answer.
+If the model calls **multiple tools in one turn**, the obvious code is wrong. The server emits one `response.function_call_arguments.done` per call, and if you send `response.create` after each one, the model starts narrating before all results are in - you get a half-formed answer.
 
 **Solution: debounce `response.create`.** Only fire one, ~200 ms after the last tool output.
 
@@ -115,7 +115,7 @@ def schedule_response_create():
     pending_create = asyncio.create_task(_send_response_create())
 ```
 
-For single-tool turns the debounce adds 200 ms — well below the model's own time-to-first-audio, so users won't notice.
+For single-tool turns the debounce adds 200 ms - well below the model's own time-to-first-audio, so users won't notice.
 
 ## Streaming arguments
 
@@ -129,7 +129,7 @@ if evt["type"] == "response.function_call_arguments.delta":
     args_buf[evt["call_id"]] += evt.get("delta", "")
 ```
 
-The `done` event gives you the full string under `arguments` either way — so most clients just wait for `done` and parse once.
+The `done` event gives you the full string under `arguments` either way - so most clients just wait for `done` and parse once.
 
 ## Tool response timeout
 
@@ -142,19 +142,19 @@ If you declare tools but don't post `function_call_output` + `response.create` w
 Common causes: a long-running tool with no async dispatch, network call to your own backend that hangs, or forgetting to send `response.create` after the output.
 
 <Tip>
-**Long-running tools.** Tools that take more than a few seconds should return a synchronous "working on it" output immediately and emit real results as a follow-up message via a fresh `conversation.item.create`. This keeps Hydra responsive — the assistant acknowledges the request out loud while the actual work happens, instead of waiting silently and risking a `tool_response_timeout`.
+**Long-running tools.** Tools that take more than a few seconds should return a synchronous "working on it" output immediately and emit real results as a follow-up message via a fresh `conversation.item.create`. This keeps Hydra responsive - the assistant acknowledges the request out loud while the actual work happens, instead of waiting silently and risking a `tool_response_timeout`.
 </Tip>
 
 ## Common gotchas
 
-- **One `response.create` per turn, not per tool.** Multi-tool turns require debounce. The model decides when to call multiple tools — your client decides when to request narration.
+- **One `response.create` per turn, not per tool.** Multi-tool turns require debounce. The model decides when to call multiple tools - your client decides when to request narration.
 - **Tools execute on your side, not Hydra's.** Hydra streams arguments; you run the code. Same model as the OpenAI Realtime API.
 - **Unknown tool names are accepted in the schema, then never called.** If the model isn't calling your tool, double-check that the `name` in `session.configure` matches the user prompt's intent.
 
 ## Next
 
-- [Prompting voice agents](/models/documentation/speech-to-speech-hydra/prompting-voice-agents) — phrasing `instructions` so the model reliably calls tools
-- [Errors & reconnection](/models/documentation/speech-to-speech-hydra/errors-reconnection) — `tool_response_timeout` and other failure modes
+- [Prompting voice agents](/models/documentation/speech-to-speech-hydra/prompting-voice-agents) - phrasing `instructions` so the model reliably calls tools
+- [Errors & reconnection](/models/documentation/speech-to-speech-hydra/errors-reconnection) - `tool_response_timeout` and other failure modes
 
 <CodingAgentCallout />
 

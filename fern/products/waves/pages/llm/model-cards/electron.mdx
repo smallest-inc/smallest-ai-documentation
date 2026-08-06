@@ -1,6 +1,6 @@
 ---
 title: "Electron"
-description: "Model card for Electron — Smallest AI's in-house language model. OpenAI-compatible chat completions, 70 languages with first-class Indic support, voice-agent-optimized tool calling, prefix caching."
+description: "Model card for Electron - Smallest AI's in-house language model. OpenAI-compatible chat completions, 70 languages with first-class Indic support, voice-agent-optimized tool calling, prefix caching."
 icon: "wand-magic-sparkles"
 ---
 
@@ -35,7 +35,7 @@ Electron is Smallest AI's in-house language model, optimized for voice agents an
 | | |
 |---|---|
 | **Developed by** | Smallest AI |
-| **Model type** | Causal language model — chat completions |
+| **Model type** | Causal language model - chat completions |
 | **API surface** | OpenAI-compatible (`POST /waves/v1/chat/completions`) |
 | **Model ID (request body)** | `"electron"` |
 | **Context window** | 32,768 tokens (combined input + output) |
@@ -70,7 +70,7 @@ Electron is Smallest AI's in-house language model, optimized for voice agents an
 
 ## How to use it
 
-See the [Electron quickstart](/models/documentation/llm-electron/quickstart) for a working end-to-end example, including authentication, request shape, and streaming response handling. Electron is OpenAI-wire-compatible — swap `base_url` to `https://api.smallest.ai/waves/v1` on the official OpenAI SDK, pass your `SMALLEST_API_KEY` as `api_key`, and set `"model": "electron"` on the request body.
+See the [Electron quickstart](/models/documentation/llm-electron/quickstart) for a working end-to-end example, including authentication, request shape, and streaming response handling. Electron is OpenAI-wire-compatible - swap `base_url` to `https://api.smallest.ai/waves/v1` on the official OpenAI SDK, pass your `SMALLEST_API_KEY` as `api_key`, and set `"model": "electron"` on the request body.
 
 ---
 
@@ -83,7 +83,7 @@ See the [Electron quickstart](/models/documentation/llm-electron/quickstart) for
 | **Quality tier** | Competitive with leading voice-agent LLMs on internal evaluations |
 
 <Note>
-Electron is trained for voice-agent workloads — instruction following on system prompts, conversational style, and holding long multi-turn dialogues without drift. We benchmark it internally against frontier alternatives on these tasks. General-purpose academic benchmarks like MMLU and IFEval target a different objective and are not the right yardstick for a model whose job is to drive a phone call.
+Electron is trained for voice-agent workloads - instruction following on system prompts, conversational style, and holding long multi-turn dialogues without drift. We benchmark it internally against frontier alternatives on these tasks. General-purpose academic benchmarks like MMLU and IFEval target a different objective and are not the right yardstick for a model whose job is to drive a phone call.
 </Note>
 
 ---
@@ -93,7 +93,7 @@ Electron is trained for voice-agent workloads — instruction following on syste
 Electron is multilingual with strong out-of-the-box quality across **70 languages**, with particularly strong performance on Indic languages including lower-resource ones.
 
 <Note>
-Electron auto-detects the input language — there is no `language` parameter on the Chat Completions API. The ISO 639-1 codes below are for reference only (e.g., when tagging conversations downstream or routing across services); they are not passed to the model.
+Electron auto-detects the input language - there is no `language` parameter on the Chat Completions API. The ISO 639-1 codes below are for reference only (e.g., when tagging conversations downstream or routing across services); they are not passed to the model.
 </Note>
 
 | Region | Count | Languages |
@@ -253,7 +253,7 @@ Electron auto-detects the input language — there is no `language` parameter on
 |---|---|---|
 | `https://api.smallest.ai/waves/v1/chat/completions` | POST | Chat completions (sync + SSE streaming) |
 
-See [Electron — Chat Completions](/models/api-reference/llm-chat-completions/electron-chat-completions) for the full request/response schema, supported parameters, and error codes. The [Chat Completions guide](/models/documentation/llm-electron/chat-completions) covers the OpenAI-compatible wire format end-to-end, and [Supported Parameters](/models/documentation/llm-electron/supported-parameters) lists the passthrough table.
+See [Electron - Chat Completions](/models/api-reference/llm-chat-completions/electron-chat-completions) for the full request/response schema, supported parameters, and error codes. The [Chat Completions guide](/models/documentation/llm-electron/chat-completions) covers the OpenAI-compatible wire format end-to-end, and [Supported Parameters](/models/documentation/llm-electron/supported-parameters) lists the passthrough table.
 
 ---
 
@@ -269,15 +269,15 @@ See [Electron — Chat Completions](/models/api-reference/llm-chat-completions/e
 | Standard | 10 | 3 |
 | Enterprise | 200 | 20 |
 
-Both limits enforce strictly — over either cap returns `HTTP 429`. See [Concurrency & Limits](/models/api-reference/concurrency-and-limits) for full rate-limit semantics.
+Both limits enforce strictly - over either cap returns `HTTP 429`. See [Concurrency & Limits](/models/api-reference/concurrency-and-limits) for full rate-limit semantics.
 
-Pricing: Contact your Smallest AI account manager. Prefix-cache discounts apply automatically — see [Prefix Caching](/models/documentation/llm-electron/prefix-caching). Every response reports `usage.prompt_tokens_details.cached_tokens` so you can audit cache hit rates.
+Pricing: Contact your Smallest AI account manager. Prefix-cache discounts apply automatically - see [Prefix Caching](/models/documentation/llm-electron/prefix-caching). Every response reports `usage.prompt_tokens_details.cached_tokens` so you can audit cache hit rates.
 
 ---
 
 ## Best Practices
 
-- **Reuse HTTPS connections.** Cold connections cost a TLS handshake on every request — voice-agent workloads should pool a single keep-alive connection per worker.
+- **Reuse HTTPS connections.** Cold connections cost a TLS handshake on every request - voice-agent workloads should pool a single keep-alive connection per worker.
 - **Stream when you can.** Set `"stream": true` and start your TTS engine on the first `delta.content` chunk to mask end-to-end latency. See [Streaming](/models/documentation/llm-electron/streaming).
 - **Put repeated context at the prompt prefix.** System prompts, RAG context, and conversation history live in the cached prefix automatically. See [Prefix Caching](/models/documentation/llm-electron/prefix-caching).
 - **For voice agents, prompt for a filler phrase before tool calls.** Electron emits the filler in `content` alongside `tool_calls`, so your TTS can speak it while the tool runs. See [Tool Calling](/models/documentation/llm-electron/tool-function-calling).
@@ -294,7 +294,7 @@ Pricing: Contact your Smallest AI account manager. Prefix-cache discounts apply 
 | **Wire format** | OpenAI Chat Completions (v1) |
 | **Modalities** | Text in / text out only (no vision, no audio) |
 | **Auth** | `Authorization: Bearer $SMALLEST_API_KEY` |
-| **Error envelope** | `{"error": {"message", "type", "details", "request_id"}}` — `details: [{code, message, path}]` on validation failures |
+| **Error envelope** | `{"error": {"message", "type", "details", "request_id"}}` - `details: [{code, message, path}]` on validation failures |
 
 ### Feature support
 
@@ -340,7 +340,7 @@ Pricing: Contact your Smallest AI account manager. Prefix-cache discounts apply 
 
 ## Safety & Compliance
 
-Electron is intended for voice-agent and conversational workloads. Customers building user-facing applications should layer their own content moderation, prompt-injection defenses, and PII handling appropriate to their domain. Electron does not currently apply content moderation server-side — outputs reflect the model's training and the prompts you provide.
+Electron is intended for voice-agent and conversational workloads. Customers building user-facing applications should layer their own content moderation, prompt-injection defenses, and PII handling appropriate to their domain. Electron does not currently apply content moderation server-side - outputs reflect the model's training and the prompts you provide.
 
 For voice-agent applications handling regulated content (financial, healthcare), use the standard pattern: keep PII out of prompts where practical, apply post-processing redaction on outputs, and use Smallest AI's [Pulse PII redaction features](/models/documentation/speech-to-text-pulse/features/redaction) on the transcription side.
 
