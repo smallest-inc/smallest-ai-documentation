@@ -303,6 +303,9 @@ paths:
                   - $ref: '#/components/schemas/TranscriptionResponse'
                   - $ref: '#/components/schemas/AsyncAccepted'
               example:
+                # Response shown with word_timestamps=true.
+                # Default requests (flag off) return an empty words[] and
+                # empty utterances[] alongside the same transcription.
                 status: success
                 transcription: 'Hi, how are you doing? Could you help me reschedule my appointment?'
                 words:
@@ -391,10 +394,11 @@ components:
         transcription: { type: string, example: "Hi, how are you doing?" }
         words:
           type: array
+          description: "Per-word timestamps. **Empty unless the request sets `word_timestamps=true`.** Each entry carries `word`, `start`, `end`, `confidence` (0.0–1.0), and `speaker` when `diarize=true` is also set."
           items: { $ref: '#/components/schemas/Word' }
         utterances:
           type: array
-          description: "Sentence-level segments with optional speaker labels. Returned by `?model=pulse` only; Pulse Pro responses omit this field."
+          description: "Sentence-level segments with optional speaker labels. Returned by `?model=pulse` only; Pulse Pro responses omit this field. **Empty unless the request sets `word_timestamps=true`** (the same flag turns on both `words[]` and `utterances[]`)."
           items: { $ref: '#/components/schemas/Utterance' }
         language:      { type: string, example: en }
         metadata:
