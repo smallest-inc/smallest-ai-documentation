@@ -302,22 +302,60 @@ paths:
                 anyOf:
                   - $ref: '#/components/schemas/TranscriptionResponse'
                   - $ref: '#/components/schemas/AsyncAccepted'
-              example:
-                # Response shown with word_timestamps=true.
-                # Default requests (flag off) return an empty words[] and
-                # empty utterances[] alongside the same transcription.
-                status: success
-                transcription: 'Hi, how are you doing? Could you help me reschedule my appointment?'
-                words:
-                - { word: Hi, start: 0.32, end: 0.40, confidence: 0.96 }
-                - { word: how, start: 0.48, end: 0.56, confidence: 0.93 }
-                language: en
-                metadata:
-                  duration: 5.6
-                  processing_time_ms: 240.51
-                  rtfx: 23.3
-                  num_chunks: 1
-                request_id: 87dd36c1-4267-472d-96ee-4113e0a770a6
+              examples:
+                pulse-default:
+                  summary: "Pulse: default request (no `word_timestamps`, no `diarize`)"
+                  description: |
+                    Real response from `POST /waves/v1/stt/?model=pulse&language=en` with no
+                    extra flags. `words[]` and `utterances[]` are empty because
+                    `word_timestamps=true` was not set. Pulse responses do NOT include
+                    `language` or `request_id` at the top level.
+                  value:
+                    status: success
+                    transcription: "Hello, how are you doing today? This is a word timestamp test."
+                    words: []
+                    utterances: []
+                    metadata:
+                      duration: 5.28
+                      fileSize: 465740
+                pulse-full:
+                  summary: "Pulse with word_timestamps + diarize"
+                  description: |
+                    Pulse populates `words[]` and `utterances[]`. With `diarize=true`,
+                    each word carries `speaker` (integer, zero-indexed) and
+                    `speaker_confidence`; each utterance carries `speaker`.
+                  value:
+                    status: success
+                    transcription: "Hello, how are you doing today? This is a word timestamp test."
+                    words:
+                    - { start: 0.16, end: 1.12, speaker: 0, speaker_confidence: 1, word: "Hello,", confidence: 0.9975 }
+                    - { start: 1.12, end: 1.36, speaker: 0, speaker_confidence: 1, word: "how", confidence: 0.6402 }
+                    utterances:
+                    - { start: 0.16, end: 2.88, speaker: 0, text: "Hello, how are you doing today?" }
+                    metadata:
+                      duration: 5.28
+                      fileSize: 465740
+                pulse-pro:
+                  summary: "Pulse Pro with word_timestamps"
+                  description: |
+                    Pulse Pro does not diarize, so `words[]` entries omit `speaker` and
+                    `speaker_confidence`, and the response omits `utterances[]` entirely.
+                    Pro responses do include `language`, `request_id`, `totalBytes`, and a
+                    richer `metadata` (`processing_time_ms`, `rtfx`, `num_chunks`).
+                  value:
+                    status: success
+                    transcription: "Hello. How are you doing today? This is a word timestamp test."
+                    words:
+                    - { word: "Hello.", start: 0.24, end: 1.2, confidence: 0.9626 }
+                    - { word: "How", start: 1.2, end: 1.28, confidence: 0.9929 }
+                    language: en
+                    metadata:
+                      duration: 5.28
+                      processing_time_ms: 172.11
+                      rtfx: 30.7
+                      num_chunks: 1
+                    totalBytes: 465740
+                    request_id: 36e977cf-d027-4fe2-b9ae-733d4f26c239
         '400':
           description: Missing or invalid `model` query parameter, invalid params, or unsupported feature combination (e.g. `?model=pulse-pro` on the WS endpoint, audio-by-URL with `?model=pulse-pro`).
           content:
@@ -378,14 +416,15 @@ components:
         start:   { type: number,  example: 0.32 }
         end:     { type: number,  example: 0.40 }
         confidence: { type: number, example: 0.96, description: "Per-word confidence score, from 0.0 to 1.0." }
-        speaker: { type: string,  description: "Present when `diarize=true`.", example: speaker_0 }
+        speaker: { type: integer, description: "Zero-indexed speaker label. Present on Pulse when `diarize=true`. Pulse Pro does not diarize, so this field is absent on Pro responses.", example: 0 }
+        speaker_confidence: { type: number, description: "Speaker-attribution confidence for this word, from 0.0 to 1.0. Present on Pulse alongside `speaker`.", example: 1 }
     Utterance:
       type: object
       properties:
-        text:    { type: string,  example: Hello world. }
-        start:   { type: number,  example: 0.0 }
-        end:     { type: number,  example: 0.9 }
-        speaker: { type: string,  example: speaker_0 }
+        text:    { type: string,  example: "Hello, how are you doing today?" }
+        start:   { type: number,  example: 0.16 }
+        end:     { type: number,  example: 2.88 }
+        speaker: { type: integer, description: "Zero-indexed speaker label. Present when `diarize=true` was set on the request.", example: 0 }
     TranscriptionResponse:
       type: object
       required: [status, transcription]
@@ -394,23 +433,24 @@ components:
         transcription: { type: string, example: "Hi, how are you doing?" }
         words:
           type: array
-          description: "Per-word timestamps. **Empty unless the request sets `word_timestamps=true`.** Each entry carries `word`, `start`, `end`, `confidence` (0.0–1.0), and `speaker` when `diarize=true` is also set."
+          description: "Per-word timestamps. **Empty unless the request sets `word_timestamps=true`.** Each entry carries `word`, `start`, `end`, and `confidence` (0.0–1.0). Pulse responses with `diarize=true` also include `speaker` and `speaker_confidence`."
           items: { $ref: '#/components/schemas/Word' }
         utterances:
           type: array
-          description: "Sentence-level segments with optional speaker labels. Returned by `?model=pulse` only; Pulse Pro responses omit this field. **Empty unless the request sets `word_timestamps=true`** (the same flag turns on both `words[]` and `utterances[]`)."
+          description: "Sentence-level segments. Returned by `?model=pulse` only; Pulse Pro responses omit this field entirely. **Empty on Pulse unless the request sets `word_timestamps=true`** (the same flag turns on both `words[]` and `utterances[]`)."
           items: { $ref: '#/components/schemas/Utterance' }
-        language:      { type: string, example: en }
+        language:      { type: string, description: "Language of the transcription. Present on Pulse Pro responses; Pulse responses omit this field.", example: en }
         metadata:
           type: object
+          description: "Response metadata. Pulse responses carry `duration` and `fileSize`. Pulse Pro responses carry `duration`, `processing_time_ms`, `rtfx`, and `num_chunks`."
           properties:
-            duration:           { type: number, description: "Audio duration in seconds.", example: 5.6 }
-            processing_time_ms: { type: number, description: "Pulse Pro only.", example: 240.51 }
-            rtfx:               { type: number, description: "Real-time factor for this request (Pulse Pro only).", example: 23.3 }
-            num_chunks:         { type: number, description: "Number of internal chunks the audio was split into (Pulse Pro only).", example: 1 }
-            filename:           { type: string, description: "Pulse responses include this when sent via URL.", example: audio.wav }
-            fileSize:           { type: number, description: "Bytes received (Pulse responses).", example: 268844 }
-        request_id:    { type: string, example: 87dd36c1-4267-472d-96ee-4113e0a770a6 }
+            duration:           { type: number, description: "Audio duration in seconds. Present on both Pulse and Pulse Pro.", example: 5.28 }
+            processing_time_ms: { type: number, description: "Server-side processing time in milliseconds. Pulse Pro only.", example: 172.11 }
+            rtfx:               { type: number, description: "Real-time factor for this request. Pulse Pro only.", example: 30.7 }
+            num_chunks:         { type: number, description: "Number of internal chunks the audio was split into. Pulse Pro only.", example: 1 }
+            fileSize:           { type: number, description: "Bytes received. Pulse only.", example: 465740 }
+        request_id:    { type: string, description: "Server-assigned request identifier. Present on Pulse Pro responses; Pulse responses omit this field.", example: 36e977cf-d027-4fe2-b9ae-733d4f26c239 }
+        totalBytes:    { type: number, description: "Bytes received. Pulse Pro only.", example: 465740 }
         gender:
           type: string
           description: "Detected speaker gender label. Present when `gender_detection=true` was set on the request."
