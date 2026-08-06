@@ -1,0 +1,105 @@
+---
+title: "Math notation"
+sidebarTitle: "Math Notation"
+description: "Opt-in Lightning TTS flag that reads digit-flanked math operators (x, ×, ÷, spaced -, ^, =) as spoken words instead of leaving them for the number reader. Off by default because dimensions, 24x7, and vehicle-reg codes look like math on paper."
+icon: "calculator"
+---
+
+
+import { CodingAgentCallout } from "@/components/CodingAgentCallout";
+
+Pass `math_notation: true` on a Lightning TTS request to have the normalizer read digit-flanked math operators as spoken words. Off by default because in real traffic `NxN` is more often a product dimension (`18x24 Inch`), the `24x7` idiom, or a vehicle-registration code than an actual multiplication.
+
+## Endpoint support
+
+Available on Lightning v3.1 and v3.1_pro across every transport:
+
+| Surface | `math_notation` |
+|---|---|
+| `POST /waves/v1/tts` (sync HTTP) | Supported |
+| `POST /waves/v1/tts/live` (HTTP SSE) | Supported |
+| `wss://api.smallest.ai/waves/v1/tts/live` (WebSocket) | Supported |
+
+## Operator lexicon
+
+The operator word follows `number_pronunciation_language`, not the synthesis `language`. So `language=en` with `number_pronunciation_language=hi` reads `6 x 7` as "छः गुणा सात". Localized only for Hindi and Marathi. Every other language falls back to the English words.
+
+| Glyphs | en (default / fallback) | hi | mr |
+|---|---|---|---|
+| `×` `x` `X` `*` | times | गुणा | गुणिले |
+| `÷` and spaced `/` | divided by | बटा | भागिले |
+| `+` | plus | प्लस | अधिक |
+| spaced `-` `–` `−` | minus | माइनस | वजा |
+| `=` | equals | बराबर | बरोबर |
+| `^` `**` | to the power of | की घात | ची घात |
+
+## Matching rules
+
+**Unambiguous glyphs** fire whether glued or spaced.
+
+- `×` `x` `X` `*` `^` `**` `=` `+`
+- Wrong-glyph `x`/`X` counts as unambiguous when a digit sits on both sides.
+- `5x3` and `5 x 3` both become "5 times 3".
+- `2^10` becomes "2 to the power of 10".
+
+**Ambiguous glyphs** fire only when space-padded.
+
+- `-` `–` `−` and `/`.
+- `5 - 3` becomes "5 minus 3".
+- `5-3` stays untouched so range and date readers still work (`2-3`, `2026-07-24`, `020-4825-9631`).
+- `6 / 2` becomes "6 divided by 2".
+- `1/2` stays a fraction.
+
+**Operand handling.** Unicode digits (including Indic digits) count as operands. The right operand may carry a currency prefix (`2 x ₹99` reads correctly). An operator never bridges a line break. The pass runs after the date, phone, and version handlers, so those readings still take precedence.
+
+## Example
+
+```bash
+curl -X POST "https://api.smallest.ai/waves/v1/tts?model=lightning_v3.1" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "The answer is 6 x 7 and the ratio is 3 - 1.",
+    "voice_id": "avery",
+    "language": "en",
+    "math_notation": true,
+    "output_format": "mp3"
+  }' \
+  --output out.mp3
+```
+
+With `math_notation: false` (default), the client hears "six ecks seven" and "three one". With `math_notation: true`, the client hears "six times seven" and "three minus one".
+
+## Protected patterns (ON == OFF)
+
+The following patterns produce identical audio whether the flag is on or off:
+
+- ISO dates: `2026-07-24`
+- Slash dates: `12/04/2026`
+- Ranges and scores: `2-3`, `2-1`
+- Version strings: `1.2.3`
+- Fractions: `1/2`
+- Phone numbers: `020-4825-9631`
+- Hindi year ranges and dates
+
+## Known limitations
+
+Read the flag as opt-in for a reason. Enable it only if your text is genuinely math-heavy and does not carry the patterns below.
+
+- **`24x7` idiom.** Free-text `24x7` reads as "twenty four times seven", not the "24 by 7" idiom. Channel names carrying `24x7` are handled separately via the phrase dictionary and are unaffected.
+- **Product dimensions.** `18x24 Inch` reads as "eighteen times twenty four Inch". There is no unit-context guard.
+- **Vehicle registration and codes.** `GJ 27 X 2850` reads as multiplication.
+- **Glued `-` and `/` never convert (by design).** `5-3` stays a range and `1/2` stays a fraction.
+
+## European languages
+
+The `normalize_eu` block localizes `×`, `÷`, and `=` per language: `it` reads `×` as "per", `es` as "por", `fr` as "fois". The remaining wrong-glyph and extra cases (`x`, `*`, `^`, `**`, `+`, `-`) read in English via the fallback.
+
+## Related
+
+- [`number_pronunciation_language`](/models/api-reference/api-reference/text-to-speech/tts) sets the language for spoken numeric content, including math operator words.
+- [Pronunciation Dictionaries](/models/documentation/text-to-speech-lightning/pronunciation-dictionaries) let you override specific tokens directly.
+
+<CodingAgentCallout />
+
+{/* coding-agent-callout-injected */}
