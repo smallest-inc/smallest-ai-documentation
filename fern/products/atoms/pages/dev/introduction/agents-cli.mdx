@@ -147,6 +147,26 @@ smallestai agents phone-status "$AGENT_ID"
 smallestai agents call "$AGENT_ID" --to "+14155550100"
 ```
 
+## Diagnose a crew agent
+
+`smallestai agent-crew doctor` inspects an agent's live config and flags the mistakes that
+most often stop a crew agent from working:
+
+```bash
+smallestai agent-crew doctor                 # the agent linked in this project
+smallestai agent-crew doctor --agent-id <id> # or a specific agent
+```
+
+It checks for:
+
+- No live crew build (deploy hasn't been made live, so your code isn't serving).
+- A workflow type that isn't `single_prompt` (a crew attaches to single-prompt agents).
+- PII redaction turned on (it rewrites the transcript, including emails and numbers).
+- `transfer_call` enabled in the dashboard Tools panel (ignored for a crew agent, and a
+  common source of confusion).
+
+It then prints the crew-vs-platform ownership tables below.
+
 ## Config ownership: crew vs platform
 
 A crew build takes over **only the LLM turn**. Everything else about the call stays on
