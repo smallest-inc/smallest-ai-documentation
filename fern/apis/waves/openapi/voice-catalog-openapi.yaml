@@ -1,0 +1,83 @@
+openapi: 3.0.1
+info:
+  title: Voice Catalog
+  description: 'Browse the full catalog of available voices with previews and metadata.'
+  version: 1.0.0
+servers:
+- url: https://api.smallest.ai
+  description: Waves API server
+  x-fern-server-name: waves
+paths:
+  /waves/v1/voice/get-all-models:
+    get:
+      tags:
+      - Voices
+      summary: Get all voices
+      operationId: getAllVoiceModels
+      description: |
+        List every available voice with its display name, description, a preview audio URL,
+        and metadata tags (age, supported languages). Use a voice's `voiceId` with the
+        unified `/waves/v1/tts` route. This is the browse/catalog endpoint; to list only the
+        voices for a specific model, use `GET /waves/v1/{model}/get_voices`.
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Voices retrieved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  voices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CatalogVoice'
+              example:
+                voices:
+                - _id: 6a0b3c06e6e0b1a48dee8151
+                  voiceId: mishka
+                  displayName: Mishka
+                  description: A youthful Indian female voice with an inviting tone and smooth, expressive delivery.
+                  audioPreview: https://d4a5s42qh2351.cloudfront.net/waves-audio-previews/mishka.wav
+                  tags:
+                    age: young
+                    emotions: []
+                    language: [english, hindi, marathi, gujarati, punjabi, bengali, odia, tamil, telugu]
+        '401':
+          description: Missing or invalid API key.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    CatalogVoice:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: Internal voice document id.
+        voiceId:
+          type: string
+          description: The id to pass as `voice_id` in a TTS request.
+        displayName:
+          type: string
+        description:
+          type: string
+        audioPreview:
+          type: string
+          description: URL to a short preview clip of the voice.
+        tags:
+          type: object
+          properties:
+            age:
+              type: string
+            emotions:
+              type: array
+              items:
+                type: string
+            language:
+              type: array
+              items:
+                type: string
