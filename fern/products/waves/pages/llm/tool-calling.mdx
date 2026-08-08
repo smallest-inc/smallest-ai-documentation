@@ -12,7 +12,7 @@ Electron implements the standard OpenAI function-calling API. Define tools in th
 What makes Electron's tool calling distinctive: **with a voice-agent-style system prompt, the model speaks a short filler phrase before invoking a tool** (e.g. *"Let me check that for you…"*), so a downstream TTS layer can mask tool-call latency by speaking the filler while the tool runs.
 
 <Tip>
-The filler is **prompt-driven**, not magic. With no system prompt, Electron returns the standard OpenAI shape (`content: null` when `tool_calls` is present). To get the filler reliably, give the model a system prompt that asks for it — see the [voice-agent example](#voice-agent-pattern-the-reason-this-exists) below.
+The filler is **prompt-driven**, not magic. With no system prompt, Electron returns the standard OpenAI shape (`content: null` when `tool_calls` is present). To get the filler reliably, give the model a system prompt that asks for it - see the [voice-agent example](#voice-agent-pattern-the-reason-this-exists) below.
 </Tip>
 
 ## Basic usage
@@ -113,22 +113,22 @@ When Electron decides to call a tool, the assistant message returns **both** a c
 }
 ```
 
-In strict OpenAI shape, `content` is `null` when `tool_calls` is set. With a voice-agent-style system prompt, Electron instead emits a short natural-language sentence — designed so a downstream voice agent can speak it while the tool resolves in the background.
+In strict OpenAI shape, `content` is `null` when `tool_calls` is set. With a voice-agent-style system prompt, Electron instead emits a short natural-language sentence - designed so a downstream voice agent can speak it while the tool resolves in the background.
 
 <Note>
-The filler-phrase pattern is **prompt-driven**: when your system prompt asks for it, Electron emits the filler reliably. Without that hint, you'll get the standard `content: null` shape. Always handle `content` defensively — either a string or `null`.
+The filler-phrase pattern is **prompt-driven**: when your system prompt asks for it, Electron emits the filler reliably. Without that hint, you'll get the standard `content: null` shape. Always handle `content` defensively - either a string or `null`.
 </Note>
 
 `finish_reason` will be `"tool_calls"` on this turn.
 
 ## Voice-agent pattern (the reason this exists)
 
-For voice agents, tool calls add visible latency — the user hears silence while you call a database, hit a webhook, etc. The standard mitigation is to play a "thinking" sound or filler phrase yourself. Electron handles this for you naturally.
+For voice agents, tool calls add visible latency - the user hears silence while you call a database, hit a webhook, etc. The standard mitigation is to play a "thinking" sound or filler phrase yourself. Electron handles this for you naturally.
 
 **Recommended pipeline:**
 
 1. Stream the chat completion.
-2. As soon as `delta.content` tokens arrive, **send them to your TTS engine in parallel** — don't wait for the tool call to complete.
+2. As soon as `delta.content` tokens arrive, **send them to your TTS engine in parallel** - don't wait for the tool call to complete.
 3. When you receive `delta.tool_calls`, kick off the actual tool execution **in parallel** with TTS.
 4. Once the tool returns, append the `tool` role message and continue the conversation.
 
@@ -188,8 +188,8 @@ Each filler is short and natural ("Let me also check…", "One moment…"). Hand
 
 When `stream: true` and tools are involved, Electron streams in this order:
 
-1. **Filler content first** — `delta.content` chunks arrive as the filler is generated.
-2. **Tool calls next** — `delta.tool_calls` chunks follow, building up the function name and arguments incrementally.
+1. **Filler content first** - `delta.content` chunks arrive as the filler is generated.
+2. **Tool calls next** - `delta.tool_calls` chunks follow, building up the function name and arguments incrementally.
 
 For chained calls, the pattern repeats: filler → tool_call → (your tool runs) → next filler → next tool_call → … → final response.
 
@@ -211,14 +211,14 @@ Concatenate the `arguments` deltas to reconstruct the final argument JSON.
 |---|---|
 | Max tools per request | 64 |
 | Tool name length | Standard OpenAI naming rules apply |
-| Parallel tool calls in one turn | Supported — multiple entries in `tool_calls` |
+| Parallel tool calls in one turn | Supported - multiple entries in `tool_calls` |
 
 ## Tips
 
 - **Keep tool descriptions tight.** They're billed as input tokens on every turn. Aim for one sentence of intent + a clear list of parameters.
 - **Use `tool_choice: "required"`** if you want to force the model to call exactly one tool.
 - **Use `tool_choice: {"type":"function","function":{"name":"…"}}`** to force a specific tool.
-- **Don't pass empty `tools: []`** — omit the field entirely if no tools are available this turn.
+- **Don't pass empty `tools: []`** - omit the field entirely if no tools are available this turn.
 
 <CodingAgentCallout />
 

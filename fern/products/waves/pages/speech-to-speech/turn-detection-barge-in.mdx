@@ -7,7 +7,7 @@ icon: "wave-pulse"
 
 import { CodingAgentCallout } from "@/components/CodingAgentCallout";
 
-Hydra does turn detection server-side. The client streams audio continuously — even while the model is speaking — and the server emits events as it detects the start and end of each user turn.
+Hydra does turn detection server-side. The client streams audio continuously - even while the model is speaking - and the server emits events as it detects the start and end of each user turn.
 
 There's nothing you need to *do* for turn detection to work. The events below are how you observe it.
 
@@ -29,7 +29,7 @@ server: response.done                          (status=completed)
 
 | Event | Meaning |
 |---|---|
-| `input_audio_buffer.speech_started` | VAD fired — the user started talking. `audio_start_ms` is the offset from session start. |
+| `input_audio_buffer.speech_started` | VAD fired - the user started talking. `audio_start_ms` is the offset from session start. |
 | `input_audio_buffer.speech_stopped` | The user finished. The audio between the two events becomes a user message item. |
 | `response.created` | The model is generating a reply. Use this as your client-side "the assistant is about to talk" hook. |
 | `response.done` | The turn is over. Inspect `status` (`completed`, `cancelled`, `incomplete`, `failed`). |
@@ -41,7 +41,7 @@ You don't send anything between user turns. Hydra decides when a turn ends.
 Because the channel is full-duplex, the user can speak while the model is speaking. When that happens:
 
 1. The server emits `input_audio_buffer.speech_started` for the new user turn.
-2. The in-flight response is cancelled — `response.done` arrives with:
+2. The in-flight response is cancelled - `response.done` arrives with:
 
    ```json
    {
@@ -78,9 +78,9 @@ ws.onmessage = (ev) => {
 };
 ```
 
-If you've kept references to `AudioBufferSourceNode`s, also call `stop()` on each one — `playCursor` only controls *future* schedules, it doesn't cancel buffers already started.
+If you've kept references to `AudioBufferSourceNode`s, also call `stop()` on each one - `playCursor` only controls *future* schedules, it doesn't cancel buffers already started.
 
-In Python with `sounddevice`, drain your playback queue on `response.created` — shown here as the relevant branch of the event handler:
+In Python with `sounddevice`, drain your playback queue on `response.created` - shown here as the relevant branch of the event handler:
 
 ```python
 async for raw in ws:
@@ -96,7 +96,7 @@ async for raw in ws:
 
 ## Programmatic cancellation
 
-To cancel an in-flight response without the user speaking — e.g. you got new info from your backend and want the model to stop — send `response.cancel`:
+To cancel an in-flight response without the user speaking - e.g. you got new info from your backend and want the model to stop - send `response.cancel`:
 
 ```json
 { "type": "response.cancel" }
@@ -106,14 +106,14 @@ The server replies with `response.done` carrying `status: "cancelled"` and `stat
 
 ## Common gotchas
 
-- **Audio keeps playing after barge-in** — you didn't reset `playCursor` (browser) or didn't drain your playback queue (Python).
-- **`speech_started` fires from background noise** — Hydra's VAD is conservative but not perfect. Discarded turns arrive as `conversation.item.done` with `status: "incomplete"` and should be ignored.
-- **Sending `input_audio_buffer.append` only when the user is talking** — don't. Stream continuously. Hydra needs the silence to detect turn boundaries.
+- **Audio keeps playing after barge-in** - you didn't reset `playCursor` (browser) or didn't drain your playback queue (Python).
+- **`speech_started` fires from background noise** - Hydra's VAD is conservative but not perfect. Discarded turns arrive as `conversation.item.done` with `status: "incomplete"` and should be ignored.
+- **Sending `input_audio_buffer.append` only when the user is talking** - don't. Stream continuously. Hydra needs the silence to detect turn boundaries.
 
 ## Next
 
-- [Tool calling](/models/documentation/speech-to-speech-hydra/tool-calling) — what happens between `speech_stopped` and audio output when the model decides to call a function
-- [Prompting voice agents](/models/documentation/speech-to-speech-hydra/prompting-voice-agents) — how to write `instructions` so the model handles turn-taking gracefully
+- [Tool calling](/models/documentation/speech-to-speech-hydra/tool-calling) - what happens between `speech_stopped` and audio output when the model decides to call a function
+- [Prompting voice agents](/models/documentation/speech-to-speech-hydra/prompting-voice-agents) - how to write `instructions` so the model handles turn-taking gracefully
 
 <CodingAgentCallout />
 

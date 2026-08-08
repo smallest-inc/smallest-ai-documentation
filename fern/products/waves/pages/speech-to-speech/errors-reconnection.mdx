@@ -1,6 +1,6 @@
 ---
 title: "Errors & reconnection"
-description: "Hydra error frame structure, code reference, and reconnection strategy. Errors are diagnostic — the session stays usable unless a close follows."
+description: "Hydra error frame structure, code reference, and reconnection strategy. Errors are diagnostic - the session stays usable unless a close follows."
 icon: "triangle-exclamation"
 ---
 
@@ -25,7 +25,7 @@ Errors arrive as JSON events with `type: "error"`. The connection stays usable u
 }
 ```
 
-`error.event_id` (when present) is the `event_id` of the client frame that triggered the error — correlate it with what you sent.
+`error.event_id` (when present) is the `event_id` of the client frame that triggered the error - correlate it with what you sent.
 
 ## Two fields to switch on: `error.type` and `error.code`
 
@@ -43,8 +43,8 @@ if evt["type"] == "error":
 
 | `error.code` | When it fires | Recovery |
 |---|---|---|
-| `invalid_frame` | A frame failed schema validation on a strict path — `session.update` with an unknown field, malformed JSON, or wrong frame `type`. | Fix the frame and resend. Session continues. |
-| `invalid_request_error` | Generic request validation failure — missing `type`, wrong type for a known field, unsupported audio format. | Fix the frame and resend. Session continues. |
+| `invalid_frame` | A frame failed schema validation on a strict path - `session.update` with an unknown field, malformed JSON, or wrong frame `type`. | Fix the frame and resend. Session continues. |
+| `invalid_request_error` | Generic request validation failure - missing `type`, wrong type for a known field, unsupported audio format. | Fix the frame and resend. Session continues. |
 | `invalid_audio` | The `input_audio_buffer.append.audio` payload was not valid base64, or not PCM16. | Stop sending audio, fix encoding, resume. Session continues. |
 | `tool_response_timeout` | You declared tools, the model called one, and you didn't post `function_call_output` + `response.create` within the timeout window. | The turn is abandoned. Next user turn proceeds normally. Investigate why your tool didn't return in time. |
 | `server_full` | The server is at capacity. **Always followed by close code `1013`.** | Back off with jitter, retry. Surface a queue message to the user. |
@@ -54,15 +54,15 @@ if evt["type"] == "error":
 
 | Failure mode | What you actually see | Why |
 |---|---|---|
-| Invalid `api_key` | HTTP 401 at WebSocket handshake — connection never opens | Auth is enforced before the WebSocket upgrade completes. There's no socket to send an `error` over. |
+| Invalid `api_key` | HTTP 401 at WebSocket handshake - connection never opens | Auth is enforced before the WebSocket upgrade completes. There's no socket to send an `error` over. |
 | Idle timeout | Close code `1000` with no preceding `error` | Normal close. Reconnect if the user is still active. |
-| Network drop | Close code (various) or transport error | Treat like any WebSocket disconnect — reconnect logic on the client. |
+| Network drop | Close code (various) or transport error | Treat like any WebSocket disconnect - reconnect logic on the client. |
 
 See [WebSocket connection](/models/documentation/speech-to-speech-hydra/web-socket-connection#close-codes) for the full close-code reference.
 
 ## Reconnection strategy
 
-Hydra sessions are stateful — when you reconnect, you get a new `session_id` and a fresh `session.configure` requirement. There's no resume token.
+Hydra sessions are stateful - when you reconnect, you get a new `session_id` and a fresh `session.configure` requirement. There's no resume token.
 
 A simple, correct strategy:
 
@@ -92,7 +92,7 @@ async def run_with_reconnect():
 Two principles:
 
 - **Cap the backoff.** Don't let a server-full event escalate to an unbounded retry storm.
-- **Don't retry HTTP 401.** It's a credential error — looping won't fix it. Bubble it up.
+- **Don't retry HTTP 401.** It's a credential error - looping won't fix it. Bubble it up.
 
 ## Diagnosing in production
 
@@ -118,8 +118,8 @@ When an error references your `event_id`, you know exactly which frame caused it
 
 ## Next
 
-- [WebSocket connection](/models/documentation/speech-to-speech-hydra/web-socket-connection) — close codes and idle timeout
-- [Tool calling](/models/documentation/speech-to-speech-hydra/tool-calling) — `tool_response_timeout` deep dive
+- [WebSocket connection](/models/documentation/speech-to-speech-hydra/web-socket-connection) - close codes and idle timeout
+- [Tool calling](/models/documentation/speech-to-speech-hydra/tool-calling) - `tool_response_timeout` deep dive
 
 <CodingAgentCallout />
 

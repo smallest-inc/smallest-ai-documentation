@@ -1,6 +1,6 @@
 ---
 title: 'Measuring Pulse Latency'
-description: 'Measure Pulse streaming + pre-recorded latency using the same metrics the voice-agent industry uses — Time-to-First-Partial, End-of-Turn (EOT), and RTFx — with attribution to the four components of the pipeline.'
+description: 'Measure Pulse streaming + pre-recorded latency using the same metrics the voice-agent industry uses - Time-to-First-Partial, End-of-Turn (EOT), and RTFx - with attribution to the four components of the pipeline.'
 icon: 'gauge-high'
 ---
 
@@ -9,22 +9,22 @@ import { CodingAgentCallout } from "@/components/CodingAgentCallout";
 
 Pulse streams transcripts back while you're still sending audio. The two numbers that matter for most workloads are:
 
-1. **End-of-turn (EOT) latency** — time between a speaker stopping and the final transcript arriving. The metric voice agents are judged on. Also called Time-to-Final-Segment (TTFS) or Time-to-Complete-Transcript (TTCT) in the broader voice-agent industry.
-2. **Time to first partial (TTFT)** — startup health: how long after audio starts does the first interim transcript appear?
+1. **End-of-turn (EOT) latency** - time between a speaker stopping and the final transcript arriving. The metric voice agents are judged on. Also called Time-to-Final-Segment (TTFS) or Time-to-Complete-Transcript (TTCT) in the broader voice-agent industry.
+2. **Time to first partial (TTFT)** - startup health: how long after audio starts does the first interim transcript appear?
 
 Plus **RTFx** for pre-recorded HTTP transcription.
 
-Track p50 and p95 for whichever metric matches your workload — averages hide tail behaviour, and the tail is what users notice.
+Track p50 and p95 for whichever metric matches your workload - averages hide tail behaviour, and the tail is what users notice.
 
 This page defines each metric, attributes total latency to the four components of the streaming pipeline, and lists the common measurement pitfalls. For copy-pasteable measurement scripts (WER + latency at p50/p90/p95) see the [cookbook reference scripts](#reference-scripts-and-cross-references) at the end of the page.
 
 ## What "streaming latency" actually means
 
-For streaming STT, **latency is per-utterance, not per-chunk**. The number that matters is the time between an event the user can name — they finished speaking, they started speaking, the first word appeared — and the transcript arriving for that event. We document two industry-standard metrics on this page plus a pre-recorded one:
+For streaming STT, **latency is per-utterance, not per-chunk**. The number that matters is the time between an event the user can name - they finished speaking, they started speaking, the first word appeared - and the transcript arriving for that event. We document two industry-standard metrics on this page plus a pre-recorded one:
 
-- **Time to first partial** — startup health: how long after audio starts does the first interim transcript appear?
-- **End-of-turn (EOT) latency** — also called Time-to-Final-Segment (TTFS) or Time-to-Complete-Transcript (TTCT): time between a speaker stopping and the final transcript arriving. The metric voice agents are judged on.
-- **RTFx** — for pre-recorded HTTP transcription.
+- **Time to first partial** - startup health: how long after audio starts does the first interim transcript appear?
+- **End-of-turn (EOT) latency** - also called Time-to-Final-Segment (TTFS) or Time-to-Complete-Transcript (TTCT): time between a speaker stopping and the final transcript arriving. The metric voice agents are judged on.
+- **RTFx** - for pre-recorded HTTP transcription.
 
 Each metric below has a definition + a measurement recipe.
 
@@ -38,11 +38,11 @@ There are three useful streaming metrics and one pre-recorded metric. Pick the o
 
 | Metric | Answers | Use case |
 |---|---|---|
-| End-of-turn (EOT) latency | How long after a speaker stops talking does the final transcript arrive? | Voice agents — drives perceived responsiveness |
+| End-of-turn (EOT) latency | How long after a speaker stops talking does the final transcript arrive? | Voice agents - drives perceived responsiveness |
 | Time to first partial | How long after audio starts does the first interim transcript arrive? | Session-startup health, first-paint UX, captioning latency proxy |
 | RTFx (pre-recorded) | What fraction of real-time did Pulse process this file at? | Batch transcription, cross-vendor accuracy benchmarks |
 
-EOT is sometimes called "end of utterance" — same metric, different vocabulary. Voice-agent builders typically search for EOT, so we lead with that name on this page.
+EOT is sometimes called "end of utterance" - same metric, different vocabulary. Voice-agent builders typically search for EOT, so we lead with that name on this page.
 
 ## Latency components
 
@@ -59,7 +59,7 @@ curl -sSf -w "tls=%{time_appconnect}s upgrade=%{time_starttransfer}s\n" \
   -so /dev/null https://api.smallest.ai
 ```
 
-Typical: **20–80 ms** depending on geographic distance to `api.smallest.ai` (Mumbai) or `api.us.smallest.ai` (Oregon). First request after a long idle window may also re-warm a server worker — exclude it from averages.
+Typical: **20–80 ms** depending on geographic distance to `api.smallest.ai` (Mumbai) or `api.us.smallest.ai` (Oregon). First request after a long idle window may also re-warm a server worker - exclude it from averages.
 
 ### Network transit
 
@@ -70,7 +70,7 @@ network_rtt ≈ (t_first_response - t_chunk_sent)
 network_one_way ≈ network_rtt / 2
 ```
 
-Typical: **5–30 ms one-way** within the same region, **80–200 ms** cross-region. If your client is in `us-east-1` and you're connecting to `api.smallest.ai` (Mumbai), you're paying network — pin the region.
+Typical: **5–30 ms one-way** within the same region, **80–200 ms** cross-region. If your client is in `us-east-1` and you're connecting to `api.smallest.ai` (Mumbai), you're paying network - pin the region.
 
 ### Server transcription
 
@@ -94,7 +94,7 @@ Chunk size affects two components at once. Chunks below **10 ms** flood the serv
 
 ## Pulse vs Pulse Pro for latency-sensitive workloads
 
-Smallest STT ships two models. Only one of them does streaming — pick by the question you're answering.
+Smallest STT ships two models. Only one of them does streaming - pick by the question you're answering.
 
 | Workload | Use | Why |
 |---|---|---|
@@ -102,22 +102,22 @@ Smallest STT ships two models. Only one of them does streaming — pick by the q
 | Live captioning UI | **Pulse** | Streaming endpoint with interim transcripts; word-level timing via `word_timestamps=true` for per-word emission tracking. |
 | Multilingual transcription (streaming or batch) | **Pulse** | 21 streaming + 26 pre-recorded languages with regional aggregators. |
 | Offline / pre-recorded English where accuracy is the goal | **Pulse Pro** (`?model=pulse-pro`) | Tied #2 on the public Open ASR Leaderboard at 5.42% ESB avg WER. HTTP-only, no streaming worker. |
-| Long-form audio batch jobs | **Either** — measured by RTFx, not EOT | Both models run RTFx ≥50× on production hardware. |
+| Long-form audio batch jobs | **Either** - measured by RTFx, not EOT | Both models run RTFx ≥50× on production hardware. |
 
 See the [Pulse model card](/models/model-cards/speech-to-text/pulse) and [Pulse Pro model card](/models/model-cards/speech-to-text/pulse-pro) for benchmark detail and per-language coverage.
 
 ## Common measurement pitfalls
 
-- **Sampling latency from `is_final=true`.** Finals are intentionally delayed by Pulse's accuracy buffer. They look slow because they are — by design. Use interims.
-- **Forgetting `word_timestamps=true`.** Without it the `end` field on words is missing, so you can't look up the send-time for the audio a transcript covers — measurements collapse to nonsense.
+- **Sampling latency from `is_final=true`.** Finals are intentionally delayed by Pulse's accuracy buffer. They look slow because they are - by design. Use interims.
+- **Forgetting `word_timestamps=true`.** Without it the `end` field on words is missing, so you can't look up the send-time for the audio a transcript covers - measurements collapse to nonsense.
 - **Including the first session in averages.** It pays a one-time TLS + worker warm-up tax that no real user will experience after the first turn.
 - **Comparing across regions without pinning.** Same audio + same model + different client region can swing EOT by 100+ ms. Pin the region when benchmarking the model.
-- **Treating TTFT and EOT as the same number.** They measure different events — first-partial-arrival vs final-after-silence. A 100 ms TTFT and a 400 ms EOT can coexist and usually do.
+- **Treating TTFT and EOT as the same number.** They measure different events - first-partial-arrival vs final-after-silence. A 100 ms TTFT and a 400 ms EOT can coexist and usually do.
 - **Trying to derive a per-chunk "live lag" number on the client.** For live-captioning workloads, use the cookbook scripts (per-word emission timing) or live side-by-side testing in your production pipeline. Empirical end-to-end measurement beats a synthetic per-chunk formula.
 
 ## Summary
 
-- **Per-utterance, not per-chunk.** Streaming STT latency is measured between named events — speaker stops, first word appears, file uploaded — not as a continuous gap. The voice-agent industry standardised on TTFT + EOT for this reason; no widely-adopted per-chunk formula exists.
+- **Per-utterance, not per-chunk.** Streaming STT latency is measured between named events - speaker stops, first word appears, file uploaded - not as a continuous gap. The voice-agent industry standardised on TTFT + EOT for this reason; no widely-adopted per-chunk formula exists.
 - **TTFT and EOT are different metrics.** First-partial timing matters for startup health and live-captioning first-paint; EOT is what voice agents are judged on. They can move independently.
 - **Four components, attributed individually.** Connection setup, network transit, server transcription, client overhead. If a number is bad, walk the four to find which one to fix.
 - **Pulse for streaming, Pulse Pro for offline English accuracy.** Pulse Pro has no streaming worker.
@@ -137,10 +137,10 @@ See the [benchmarks README](https://github.com/smallest-inc/cookbook/tree/main/s
 
 ### Related pages
 
-- [Realtime response format](/models/documentation/speech-to-text-pulse/realtime-web-socket/response-format) — wire signals (`is_final`, `words`, `finalize`) this page measures against
-- [Realtime quickstart](/models/documentation/speech-to-text-pulse/realtime-web-socket/quickstart) — minimum working WebSocket client
-- [Pre-recorded quickstart](/models/documentation/speech-to-text-pulse/pre-recorded/quickstart) — source endpoint for the RTFx code
-- [Pulse model card](/models/model-cards/speech-to-text/pulse) — headline TTFT numbers and concurrency curves
+- [Realtime response format](/models/documentation/speech-to-text-pulse/realtime-web-socket/response-format) - wire signals (`is_final`, `words`, `finalize`) this page measures against
+- [Realtime quickstart](/models/documentation/speech-to-text-pulse/realtime-web-socket/quickstart) - minimum working WebSocket client
+- [Pre-recorded quickstart](/models/documentation/speech-to-text-pulse/pre-recorded/quickstart) - source endpoint for the RTFx code
+- [Pulse model card](/models/model-cards/speech-to-text/pulse) - headline TTFT numbers and concurrency curves
 
 <CodingAgentCallout />
 

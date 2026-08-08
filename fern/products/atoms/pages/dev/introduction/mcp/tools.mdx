@@ -1,13 +1,13 @@
 ---
 title: Available Tools
 subtitle: All 80 tools the Smallest MCP server provides.
-description: 'Reference for all 80 tools the Smallest MCP server exposes. The AI editor picks the right tool from your natural-language prompt — you do not call these directly.'
+description: 'Reference for all 80 tools the Smallest MCP server exposes. The AI editor picks the right tool from your natural-language prompt - you do not call these directly.'
 ---
 
 
 import { CodingAgentCallout } from "@/components/CodingAgentCallout";
 
-You never call these directly — just describe what you want and the AI picks the right tool. This page is a reference.
+You never call these directly - just describe what you want and the AI picks the right tool. This page is a reference.
 
 ---
 
@@ -18,7 +18,7 @@ You never call these directly — just describe what you want and the AI picks t
 | Tool | What it does |
 |---|---|
 | `get_agents` | List all agents in your org with voice, model, language, and call stats. Supports filtering by name, workflow type, and sorting. |
-| `get_agent` | Get full details for a single agent — voice config, model, prompt, language, call behavior, timeouts, and version info. |
+| `get_agent` | Get full details for a single agent - voice config, model, prompt, language, call behavior, timeouts, and version info. |
 | `create_agent` | Create a new voice agent with model, voice, language, and behavior settings. Defaults to gpt-4.1 with daniel voice. Pass `workflow_type: multi_agents` to create a Playbooks agent (see [Playbooks](#playbooks-multi-agent-agents) below). |
 | `duplicate_agent` | Duplicate an existing agent into your org (or another org). Useful for creating variants or A/B testing. |
 | `delete_agent` | Archive or unarchive an agent. Archived agents are inactive but recoverable. |
@@ -28,41 +28,41 @@ You never call these directly — just describe what you want and the AI picks t
 | Tool | What it does |
 |---|---|
 | `get_agent_prompt` | Read an agent's current system prompt and configured tools. Works for both single-prompt and conversation flow agents. |
-| `update_agent_config` | Update agent settings — name, voice, model, language, STT transcriber (Pulse / Pulse-Legacy), first message, timeouts, and more. For versioned agents, creates a draft automatically. |
-| `update_agent_prompt` | Update an agent's system prompt and optionally the first message. For versioned agents, creates a draft automatically — or pass a `draft_id` to stack the change onto an existing draft. |
+| `update_agent_config` | Update agent settings - name, voice, model, language, STT transcriber (Pulse / Pulse-Legacy), first message, timeouts, and more. For versioned agents, creates a draft automatically. |
+| `update_agent_prompt` | Update an agent's system prompt and optionally the first message. For versioned agents, creates a draft automatically - or pass a `draft_id` to stack the change onto an existing draft. |
 | `publish_draft` | Publish a draft as a new version and activate it to make it live, or discard it. Publishing triggers an automatic security check on the prompt; the tool waits for it to pass before activating and reports the real outcome (activated, still pending, or failed). Optionally add a version label and changelog. |
 
 ### Tools & pre-call API
 
 | Tool | What it does |
 |---|---|
-| `add_agent_tool` | Add or update one or more API-call tools on a single-prompt agent — HTTP requests the agent invokes during a call (e.g. look up an order, book an appointment). Pass one tool or a whole batch in a single call. Upserts by name and preserves existing tools. For versioned agents, creates a draft automatically — or pass a `draft_id` to stack onto an existing draft. |
-| `remove_agent_tool` | Remove a tool from an agent by name. For versioned agents, creates a draft automatically — or pass a `draft_id` to stack onto an existing draft. |
-| `set_pre_call_api` | Configure or disable an agent's pre-call API — one HTTP request made before the call connects to enrich the agent with variables (e.g. fetch a customer record by phone number). For versioned agents, creates a draft automatically — or pass a `draft_id` to stack onto an existing draft. |
-| `configure_call_actions` | Enable/disable the agent's `end_call` action and set or remove a `transfer_call` number. These are **agent-level** settings (the console's Tools tab) shared by single-prompt and Playbooks agents alike — on a multi-agent, the runtime injects them into every playbook, never gated behind auth. Creates a draft automatically — or pass a `draft_id` to stack onto an existing draft. |
+| `add_agent_tool` | Add or update one or more API-call tools on a single-prompt agent - HTTP requests the agent invokes during a call (e.g. look up an order, book an appointment). Pass one tool or a whole batch in a single call. Upserts by name and preserves existing tools. For versioned agents, creates a draft automatically - or pass a `draft_id` to stack onto an existing draft. |
+| `remove_agent_tool` | Remove a tool from an agent by name. For versioned agents, creates a draft automatically - or pass a `draft_id` to stack onto an existing draft. |
+| `set_pre_call_api` | Configure or disable an agent's pre-call API - one HTTP request made before the call connects to enrich the agent with variables (e.g. fetch a customer record by phone number). For versioned agents, creates a draft automatically - or pass a `draft_id` to stack onto an existing draft. |
+| `configure_call_actions` | Enable/disable the agent's `end_call` action and set or remove a `transfer_call` number. These are **agent-level** settings (the console's Tools tab) shared by single-prompt and Playbooks agents alike - on a multi-agent, the runtime injects them into every playbook, never gated behind auth. Creates a draft automatically - or pass a `draft_id` to stack onto an existing draft. |
 
 ## Playbooks (multi-agent agents)
 
-A **multi-agent (Playbooks)** agent replaces the single monolithic prompt with an **intent router + specialist playbooks (SOPs)**: every caller turn is classified to the best-matching playbook, which runs a focused prompt with its own scoped tools — with optional mid-call re-routing when the caller changes topic. Playbooks can require **weak** (caller recognition) or **strong** (full identity proof) authentication before their tools run; the identity tools are defined once and shared across all playbooks. Create one with `create_agent` (`workflow_type: multi_agents`), then build it with these tools. All edits land on a draft — `publish_draft` makes them live.
+A **multi-agent (Playbooks)** agent replaces the single monolithic prompt with an **intent router + specialist playbooks (SOPs)**: every caller turn is classified to the best-matching playbook, which runs a focused prompt with its own scoped tools - with optional mid-call re-routing when the caller changes topic. Playbooks can require **weak** (caller recognition) or **strong** (full identity proof) authentication before their tools run; the identity tools are defined once and shared across all playbooks. Create one with `create_agent` (`workflow_type: multi_agents`), then build it with these tools. All edits land on a draft - `publish_draft` makes them live.
 
 | Tool | Description |
 |---|---|
 | `get_playbooks` | Read a multi-agent's Playbooks config: the intent router (fallback + mid-call rerouting), shared auth tools, and the SOP list. Pass a `playbook_id` for one playbook's full detail (prompt, tools, intent description). Reads the active version by default, or a specific draft/version. Also reports publish-blocking gaps (missing fallback, empty auth tools, no enabled agent-level `end_call` action). |
 | `add_playbooks` | Add one or more playbooks (SOPs) to a draft in a single call. Each playbook = an intent (name + description the classifier routes on) + a specialist prompt + optional scoped API-call tools (same shape as `add_agent_tool`) and an auth level. The first playbook automatically becomes the router fallback. Names and intent names must be unique on the agent (case-insensitive, archived included). |
-| `update_playbook` | Edit one playbook — prompt, intent, auth level, tools — or **archive/restore** it (`enabled: false/true`; playbooks are never deleted so call history stays resolvable). The router fallback cannot be archived — repoint it first. |
-| `configure_playbooks` | Section-level settings: the intent router (fallback playbook, mid-call rerouting), the **conversation guide** (persona/tone/global rules injected into every playbook — define them once here, not per-SOP), and the shared weak/strong identity tools. |
+| `update_playbook` | Edit one playbook - prompt, intent, auth level, tools - or **archive/restore** it (`enabled: false/true`; playbooks are never deleted so call history stays resolvable). The router fallback cannot be archived - repoint it first. |
+| `configure_playbooks` | Section-level settings: the intent router (fallback playbook, mid-call rerouting), the **conversation guide** (persona/tone/global rules injected into every playbook - define them once here, not per-SOP), and the shared weak/strong identity tools. |
 
 <Note>
-`end_call` and `transfer_call` are **agent-level** actions, never configured per playbook — enable them with `configure_call_actions` (or the console's Tools tab) and the runtime injects them into every playbook, available even before the caller authenticates. Without an enabled `end_call` the agent has no way to hang up when the caller says goodbye; `get_playbooks` warns about this.
+`end_call` and `transfer_call` are **agent-level** actions, never configured per playbook - enable them with `configure_call_actions` (or the console's Tools tab) and the runtime injects them into every playbook, available even before the caller authenticates. Without an enabled `end_call` the agent has no way to hang up when the caller says goodbye; `get_playbooks` warns about this.
 </Note>
 
 ## Drafts
 
-On versioned agents, every config edit lands in a draft rather than going live directly. Edit tools (`update_agent_prompt`, `add_agent_tool`, `set_pre_call_api`, `remove_agent_tool`, `configure_call_actions`, and the Playbooks tools `add_playbooks` / `update_playbook` / `configure_playbooks`) accept an optional `draft_id` so multiple changes — prompt, pre-call API, and a full toolset — can be stacked into **one** draft and shipped with a single `publish_draft`. When adding several API-call tools to the same draft, pass them as one batch: the draft's tools section is written wholesale, so the last write defines the full set.
+On versioned agents, every config edit lands in a draft rather than going live directly. Edit tools (`update_agent_prompt`, `add_agent_tool`, `set_pre_call_api`, `remove_agent_tool`, `configure_call_actions`, and the Playbooks tools `add_playbooks` / `update_playbook` / `configure_playbooks`) accept an optional `draft_id` so multiple changes - prompt, pre-call API, and a full toolset - can be stacked into **one** draft and shipped with a single `publish_draft`. When adding several API-call tools to the same draft, pass them as one batch: the draft's tools section is written wholesale, so the last write defines the full set.
 
 | Tool | What it does |
 |---|---|
-| `list_drafts` | List all active (unpublished) drafts for a versioned agent — name, revision count, last editor, and last edit time. |
+| `list_drafts` | List all active (unpublished) drafts for a versioned agent - name, revision count, last editor, and last edit time. |
 | `get_draft` | Get detailed info about a draft including its latest revision, edit history, and which config sections changed per revision. |
 | `rename_draft` | Rename a draft to keep multiple drafts organized. |
 | `get_draft_diff` | Compare a draft against its source version (or any published version) to review what changed before publishing. |
@@ -74,7 +74,7 @@ On versioned agents, every config edit lands in a draft rather than going live d
 |---|---|
 | `list_versions` | List all published versions for an agent (newest first). Shows version number, label, active status, and who published it. |
 | `get_version` | Get full details for a published version including resolved config across all sections (voice, LLM, prompt, language, etc.). |
-| `update_version` | Update a published version's metadata — label, release notes, or pin status. Does not change the config (published versions are immutable). |
+| `update_version` | Update a published version's metadata - label, release notes, or pin status. Does not change the config (published versions are immutable). |
 | `activate_version` | Activate a published version to make it live. Use this to roll back to a previous version or switch between versions. |
 | `diff_versions` | Compare two published versions side-by-side to see exactly what config changed between them. |
 | `compare_version_metrics` | A/B compare call performance metrics (calls, duration, completion rate, cost) between two versions. Supports date range filtering. |
@@ -84,10 +84,10 @@ On versioned agents, every config edit lands in a draft rather than going live d
 
 | Tool | What it does |
 |---|---|
-| `make_call` | Initiate an outbound phone call using a specific agent. Triggers a real call — the agent follows its configured prompt. |
-| `chat_with_agent` | Hold a **text** conversation with a published agent over the realtime chat WebSocket — no audio, no phone. Send a list of messages, get the agent's reply after each, and return the full transcript. Use it to test an agent's prompt programmatically (build → test → refine): run a scripted conversation, read the transcript, adjust with `update_agent_prompt`, repeat. Places a real (chargeable) chat session. |
+| `make_call` | Initiate an outbound phone call using a specific agent. Triggers a real call - the agent follows its configured prompt. |
+| `chat_with_agent` | Hold a **text** conversation with a published agent over the realtime chat WebSocket - no audio, no phone. Send a list of messages, get the agent's reply after each, and return the full transcript. Use it to test an agent's prompt programmatically (build → test → refine): run a scripted conversation, read the transcript, adjust with `update_agent_prompt`, repeat. Places a real (chargeable) chat session. |
 | `list_calls` | Search and list calls across your org. Filter by status, type, date range, agent, phone number, or campaign. |
-| `debug_call` | Get detailed info about a single call — status, transcript, errors, post-call analytics, latency metrics, cost, and event timeline. Works for calls in any state. |
+| `debug_call` | Get detailed info about a single call - status, transcript, errors, post-call analytics, latency metrics, cost, and event timeline. Works for calls in any state. |
 
 ## Voices
 
@@ -117,7 +117,7 @@ On versioned agents, every config edit lands in a draft rather than going live d
 
 | Tool | What it does |
 |---|---|
-| `get_audiences` | List all audiences (contact lists) in your org — name, member count, linked campaigns, and phone number column. |
+| `get_audiences` | List all audiences (contact lists) in your org - name, member count, linked campaigns, and phone number column. |
 | `get_audience` | Get details for a specific audience by ID. |
 | `delete_audience` | Delete an audience. Cannot delete if linked to a campaign. |
 | `get_audience_members` | List members in an audience with pagination. Each member has phone number and any extra fields from the CSV. |
@@ -130,12 +130,12 @@ On versioned agents, every config edit lands in a draft rather than going live d
 | Tool | What it does |
 |---|---|
 | `get_campaigns` | List outbound calling campaigns with status, progress, audience, retry config, and execution details. |
-| `get_campaign` | Get detailed info about a specific campaign — status, execution progress, events timeline, and metrics. |
+| `get_campaign` | Get detailed info about a specific campaign - status, execution progress, events timeline, and metrics. |
 | `create_campaign` | Create a new outbound campaign with an agent, audience, retry config, and optional schedule. |
 | `start_campaign` | Start a draft or resume a paused campaign. Calls begin asynchronously. |
 | `pause_campaign` | Pause a running campaign. Active calls complete, but no new calls start. |
 | `delete_campaign` | Permanently delete a campaign and its execution data. |
-| `export_campaign_logs` | Export call logs grouped by audience member — status, duration, transcript, cost, retries, and analytics. JSON or CSV. |
+| `export_campaign_logs` | Export call logs grouped by audience member - status, duration, transcript, cost, retries, and analytics. JSON or CSV. |
 
 ## Phone Numbers
 
@@ -143,61 +143,61 @@ On versioned agents, every config edit lands in a draft rather than going live d
 |---|---|
 | `get_phone_numbers` | List phone numbers owned by your org. Returns the product ID needed for outbound calls with a specific caller ID. |
 
-## Analytics — Summary
+## Analytics - Summary
 
 | Tool | What it does |
 |---|---|
-| `get_usage_stats` | Total calls, pickup rate, average duration, cost, and unique users — each with period-over-period comparison. |
-| `get_dashboard` | Full analytics dashboard in a single call — summary KPIs, call volume, outcomes, pickup rates, hourly performance, and duration stats. |
+| `get_usage_stats` | Total calls, pickup rate, average duration, cost, and unique users - each with period-over-period comparison. |
+| `get_dashboard` | Full analytics dashboard in a single call - summary KPIs, call volume, outcomes, pickup rates, hourly performance, and duration stats. |
 | `get_credit_usage` | Daily credit consumption over time. Useful for billing and budget tracking. |
 
-## Analytics — Trends & Timeseries
+## Analytics - Trends & Timeseries
 
 | Tool | What it does |
 |---|---|
 | `get_call_volume` | Daily call volume over time. Shows how many calls were made each day. |
-| `get_call_outcomes` | Call outcome distribution — daily breakdown of completed, failed, and no-answer calls. |
-| `get_weekly_trends` | Week-over-week metrics — calls, average duration, and cost per week. |
+| `get_call_outcomes` | Call outcome distribution - daily breakdown of completed, failed, and no-answer calls. |
+| `get_weekly_trends` | Week-over-week metrics - calls, average duration, and cost per week. |
 | `get_call_counts_by_day` | Simple daily call count histogram. |
 
-## Analytics — Performance
+## Analytics - Performance
 
 | Tool | What it does |
 |---|---|
 | `get_agent_performance` | Compare agents by total calls, average duration, completion rate, and cost. Find top and bottom performers. |
-| `get_hourly_performance` | Metrics by hour of day (0-23) — call count, average duration, and cost. Identify peak hours. |
-| `get_duration_stats` | Call duration percentiles — average, median, min, max, and p95. |
+| `get_hourly_performance` | Metrics by hour of day (0-23) - call count, average duration, and cost. Identify peak hours. |
+| `get_duration_stats` | Call duration percentiles - average, median, min, max, and p95. |
 | `get_attempt_cohorts` | Success rate by attempt number (1st, 2nd, 3rd attempt). Useful for optimizing retry strategies. |
 
-## Analytics — Phone Numbers
+## Analytics - Phone Numbers
 
 | Tool | What it does |
 |---|---|
-| `get_pickup_rates` | Pickup rate per outbound phone number — total calls, answered calls, and rate. Useful for optimizing caller IDs. |
-| `get_phone_number_trends` | Per-phone-number daily trends — calls, pickup rate, and average duration over time. |
+| `get_pickup_rates` | Pickup rate per outbound phone number - total calls, answered calls, and rate. Useful for optimizing caller IDs. |
+| `get_phone_number_trends` | Per-phone-number daily trends - calls, pickup rate, and average duration over time. |
 
-## Analytics — Real-Time
+## Analytics - Real-Time
 
 | Tool | What it does |
 |---|---|
-| `get_concurrency` | Concurrent call counts for a specific date — minute-by-minute data plus per-agent max concurrency. |
+| `get_concurrency` | Concurrent call counts for a specific date - minute-by-minute data plus per-agent max concurrency. |
 | `get_call_start_distribution` | How many calls started in each hour (0-23) for a specific date. Useful for capacity planning. |
-| `get_daily_summary` | Summary for a specific date — total, completed, failed, no-answer, in-progress, in-queue, average duration, and cost. |
+| `get_daily_summary` | Summary for a specific date - total, completed, failed, no-answer, in-progress, in-queue, average duration, and cost. |
 
 ## Billing & Payments
 
 | Tool | What it does |
 |---|---|
 | `get_credit_balance` | Get your org's current credit balance, plan info, and enterprise status. |
-| `get_credit_ledger` | View credit transaction history — purchases, usage deductions, bonuses, adjustments. Filter by date, type, or product scope. |
+| `get_credit_ledger` | View credit transaction history - purchases, usage deductions, bonuses, adjustments. Filter by date, type, or product scope. |
 | `get_usage_breakdown` | Breakdown of credit usage by feature and product scope (voice AI, voice models, platform). |
 | `get_invoices` | List all Stripe invoices for your org. |
-| `get_payment_methods` | List configured payment methods (cards) — brand, last 4 digits, expiry, and which is default. |
-| `get_auto_reload` | View auto-reload config — whether it's enabled, the threshold that triggers a reload, and the reload amount. |
-| `get_billing_alerts` | View billing alert config — thresholds and notification email addresses. |
-| `update_billing_alerts` | Configure billing alerts — set up to 3 usage thresholds and additional notification emails. |
+| `get_payment_methods` | List configured payment methods (cards) - brand, last 4 digits, expiry, and which is default. |
+| `get_auto_reload` | View auto-reload config - whether it's enabled, the threshold that triggers a reload, and the reload amount. |
+| `get_billing_alerts` | View billing alert config - thresholds and notification email addresses. |
+| `update_billing_alerts` | Configure billing alerts - set up to 3 usage thresholds and additional notification emails. |
 | `get_plans` | List available plans and optionally view features included in a specific plan. |
-| `get_features` | Get the effective features for your org — actual access, limits, and credit rates after plan + overrides. |
+| `get_features` | Get the effective features for your org - actual access, limits, and credit rates after plan + overrides. |
 | `validate_coupon` | Check if a coupon code is valid and see how many credits it gives. Does not redeem it. |
 | `redeem_coupon` | Apply a coupon code to add credits to your org's balance. |
 
