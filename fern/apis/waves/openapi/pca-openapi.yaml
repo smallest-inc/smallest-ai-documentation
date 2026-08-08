@@ -1,0 +1,161 @@
+openapi: 3.0.1
+info:
+  title: Post-Call Analysis
+  description: 'LLM utilities over call transcripts: extract disposition metrics from a
+    transcript, or run a single-prompt generation.'
+  version: 1.0.0
+servers:
+- url: https://api.smallest.ai
+  description: Waves API server
+  x-fern-server-name: waves
+paths:
+  /waves/v1/pca:
+    post:
+      tags:
+      - Post-Call Analysis
+      summary: Post-call analysis
+      operationId: postCallAnalysis
+      description: |
+        Analyze a call transcript and extract structured disposition metrics. Provide the
+        transcript and the metrics you want extracted; the response returns a short summary
+        plus one result per requested metric, each with a value, a confidence score, and the
+        transcript evidence for it. Values are grounded strictly in the transcript (no
+        inference); when evidence is absent, the type's fallback is used.
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PcaRequest'
+            example:
+              transcript: "User: I want a refund for my torn jacket. Agent: I have logged your complaint and issued a full refund of $80."
+              dispositionMetrics:
+              - identifier: refund_issued
+                dispositionMetricPrompt: Was a refund issued to the customer?
+                dispositionMetricType: BOOLEAN
+      responses:
+        '200':
+          description: Analysis complete.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PcaResponse'
+              example:
+                summary: The agent logged the customer's complaint and issued a full refund of $80 for the torn jacket.
+                dispositionMetrics:
+                - identifier: refund_issued
+                  value: "true"
+                  confidence: 1
+                  reasoning: "Agent: I have logged your complaint and issued a full refund of $80."
+        '400':
+          description: Invalid request (missing transcript, or a malformed metric).
+        '401':
+          description: Missing or invalid API key.
+  /waves/v1/pca/generate:
+    post:
+      tags:
+      - Post-Call Analysis
+      summary: Generate
+      operationId: postCallGenerate
+      description: |
+        Run a single-prompt generation and get the model's text output. A lightweight
+        text-in / text-out endpoint (no chat history); for multi-turn chat use the
+        Electron chat completions API instead.
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - prompt
+              properties:
+                prompt:
+                  type: string
+                  description: The prompt to generate from.
+            example:
+              prompt: Say hello in exactly three words.
+      responses:
+        '200':
+          description: Generation complete.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  output:
+                    type: string
+                    description: The generated text.
+              example:
+                output: Hello there.
+        '400':
+          description: Invalid request (missing prompt).
+        '401':
+          description: Missing or invalid API key.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    PcaRequest:
+      type: object
+      required:
+      - transcript
+      properties:
+        transcript:
+          type: string
+          description: The full call transcript to analyze.
+        dispositionMetrics:
+          type: array
+          description: The metrics to extract. Omit or pass an empty array to get just a summary.
+          items:
+            $ref: '#/components/schemas/DispositionMetric'
+    DispositionMetric:
+      type: object
+      required:
+      - identifier
+      - dispositionMetricPrompt
+      - dispositionMetricType
+      properties:
+        identifier:
+          type: string
+          description: A key for this metric; echoed back on the result.
+        dispositionMetricPrompt:
+          type: string
+          description: What to extract, in plain language (e.g. "Was a refund issued?").
+        dispositionMetricType:
+          type: string
+          enum: [BOOLEAN, ENUM, INTEGER, STRING, SUMMARY]
+          description: The expected value type. ENUM requires `choices`.
+        choices:
+          type: array
+          items:
+            type: string
+          description: Allowed values, required when `dispositionMetricType` is ENUM.
+    PcaResponse:
+      type: object
+      properties:
+        summary:
+          type: string
+          description: A short summary of the call.
+        dispositionMetrics:
+          type: array
+          items:
+            type: object
+            properties:
+              identifier:
+                type: string
+              value:
+                type: string
+                description: The extracted value, as a string (e.g. "true", "42", an enum choice).
+              confidence:
+                type: number
+                description: Confidence from 0.0 to 1.0.
+              reasoning:
+                type: string
+                description: The transcript evidence for the value, or why a fallback was used.
