@@ -55,10 +55,10 @@ jobs:
         run: |
           for attempt in 1 2 3; do
             response=$(curl -s -o /tmp/tts-sync.wav -w "%{http_code}" \
-              -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech" \
+              -X POST "https://api.smallest.ai/waves/v1/tts" \
               -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
               -H "Content-Type: application/json" \
-              -d '{"text":"Hello from Smallest AI.","voice_id":"magnus","sample_rate":24000,"output_format":"wav"}')
+              -d '{"text":"Hello from Smallest AI.","voice_id":"magnus","model":"lightning_v3.1","sample_rate":24000,"output_format":"wav"}')
             size=$(stat -c%s /tmp/tts-sync.wav)
             echo "attempt $attempt: HTTP $response, $size bytes"
             if [ "$response" = "200" ] && [ "$size" -gt 1000 ]; then
@@ -74,10 +74,11 @@ jobs:
         run: |
           for attempt in 1 2 3; do
             response=$(curl -s -o /tmp/tts-sse.raw -w "%{http_code}" \
-              -X POST "https://api.smallest.ai/waves/v1/lightning-v3.1/stream" \
+              -X POST "https://api.smallest.ai/waves/v1/tts/live" \
               -H "Authorization: Bearer ${{ secrets.SMALLEST_API_KEY }}" \
               -H "Content-Type: application/json" \
-              -d '{"text":"Hello from streaming.","voice_id":"magnus","sample_rate":24000}')
+              -H "Accept: text/event-stream" \
+              -d '{"text":"Hello from streaming.","voice_id":"magnus","model":"lightning_v3.1","sample_rate":24000}')
             echo "attempt $attempt: HTTP $response, $(stat -c%s /tmp/tts-sse.raw) bytes"
             if [ "$response" = "200" ]; then
               echo "ok on attempt $attempt"
@@ -91,9 +92,9 @@ jobs:
         run: |
           python3 -c "
           import os, time, requests
-          url = 'https://api.smallest.ai/waves/v1/lightning-v3.1/get_speech'
+          url = 'https://api.smallest.ai/waves/v1/tts'
           headers = {'Authorization': 'Bearer ${{ secrets.SMALLEST_API_KEY }}', 'Content-Type': 'application/json'}
-          body = {'text': 'Modern problems require modern solutions.', 'voice_id': 'magnus', 'sample_rate': 24000, 'output_format': 'wav'}
+          body = {'text': 'Modern problems require modern solutions.', 'voice_id': 'magnus', 'model': 'lightning_v3.1', 'sample_rate': 24000, 'output_format': 'wav'}
           last = None
           for attempt in (1, 2, 3):
               r = requests.post(url, headers=headers, json=body)
