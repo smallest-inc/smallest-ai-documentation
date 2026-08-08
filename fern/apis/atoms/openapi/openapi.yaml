@@ -11102,6 +11102,28 @@ paths:
                           type: integer
                         onPremEnabled:
                           type: boolean
+              examples:
+                success:
+                  summary: User in two orgs
+                  value:
+                    userId: "69561896a37fd214b9a8d33a"
+                    email: "ada@example.com"
+                    firstName: "Ada"
+                    lastName: "Lovelace"
+                    phone: null
+                    picture: "https://lh3.googleusercontent.com/a/avatar.jpg"
+                    hasOnboarded: true
+                    organizations:
+                      - orgId: "69561896a37fd214b9a8d33c"
+                        name: "Acme Inc."
+                        ownerEmail: "ada@example.com"
+                        roleId: 0
+                        onPremEnabled: false
+                      - orgId: "698076af5c1b62205ff731b8"
+                        name: "Contoso"
+                        ownerEmail: "grace@example.com"
+                        roleId: 1
+                        onPremEnabled: false
         '401':
           description: Missing or invalid API key.
 
@@ -11130,6 +11152,11 @@ paths:
                   minLength: 1
                   description: The new organization name.
                   example: "Acme Inc."
+            examples:
+              default:
+                summary: Rename the org to "Acme Inc."
+                value:
+                  name: "Acme Inc."
       responses:
         '200':
           description: Organization renamed.
@@ -11144,6 +11171,12 @@ paths:
                   name:
                     type: string
                     example: "Acme Inc."
+              examples:
+                success:
+                  summary: Rename accepted
+                  value:
+                    success: true
+                    name: "Acme Inc."
         '400':
           description: Missing or empty `name`.
           content:
@@ -11157,6 +11190,12 @@ paths:
                   message:
                     type: string
                     example: "Organization name is required"
+              examples:
+                missing-name:
+                  summary: "`name` was empty or missing"
+                  value:
+                    success: false
+                    message: "Organization name is required"
 
   /conversation/chat:
     post:
@@ -11178,19 +11217,41 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/WebSessionRequest'
+            examples:
+              default:
+                summary: Start a chat session with an agent
+                value:
+                  agentId: "6a75935452c6e5eceaa16edf"
       responses:
         '200':
-          description: Session minted.
+          description: Session minted. Use `token` + `host` on the browser client to join `roomName`.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/WebSessionResponse'
+              examples:
+                success:
+                  summary: LiveKit session ready for the browser client
+                  value:
+                    status: true
+                    data:
+                      token: "eyJhbGciOiJIUzI1NiJ9.eyJtZXRhZGF0YSI6IntcIm9yZ2FuaXphdGlvbklkXCI6XCI2OTU2MTg5NmEzN2ZkMjE0YjlhOGQzM2NcIn0iLCJ2aWRlbyI6eyJyb29tSm9pbiI6dHJ1ZSwicm9vbSI6ImRlZTkyMjNhLTQ3NTEtNDlhOS1iY2JjLWNiMzVjNWE4MzcxZCJ9LCJleHAiOjE3ODYxNTk1NjR9.Tn9KCxhnmnjAFQPRWP6XMkjKYnhBiISI6VqUOIqOsRQ"
+                      roomName: "dee9223a-4751-49a9-bcbc-cb35c5a8371d"
+                      host: "wss://atoms-prod-evcaw70g.livekit.cloud"
+                      conversationId: "IyF-GCRiprATI5rx4lIdvg"
+                      callId: "CALL-1786159503332-8387f2"
         '400':
           description: Missing or invalid `agentId`.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/WebSessionErrorResponse'
+              examples:
+                missing-agent-id:
+                  summary: Missing agentId
+                  value:
+                    status: false
+                    errors: ["agentId: Required"]
 
   /conversation/webcall:
     post:
@@ -11211,19 +11272,41 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/WebSessionRequest'
+            examples:
+              default:
+                summary: Start a voice call session with an agent
+                value:
+                  agentId: "6a75935452c6e5eceaa16edf"
       responses:
         '200':
-          description: Session minted.
+          description: Session minted. Use `token` + `host` on the browser client to join `roomName`.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/WebSessionResponse'
+              examples:
+                success:
+                  summary: LiveKit session ready for the browser client
+                  value:
+                    status: true
+                    data:
+                      token: "eyJhbGciOiJIUzI1NiJ9.eyJtZXRhZGF0YSI6IntcIm9yZ2FuaXphdGlvbklkXCI6XCI2OTU2MTg5NmEzN2ZkMjE0YjlhOGQzM2NcIn0iLCJ2aWRlbyI6eyJyb29tSm9pbiI6dHJ1ZSwicm9vbSI6IjIwOWNkOGM3LTdmZjQtNGFmYy1iNWQ1LWY3MDQ0OGI1Y2UwNyJ9LCJleHAiOjE3ODYxNTk1ODl9.jf5NM4fH79_d6iBb2xTvX5JIo_PmVpjeXWOugoDLQVc"
+                      roomName: "209cd8c7-7ff4-4afc-b5d5-f70448b5ce07"
+                      host: "wss://atoms-prod-evcaw70g.livekit.cloud"
+                      conversationId: "w3fmaal3fKnzNQJ_CHfosw"
+                      callId: "CALL-1786159527700-838803"
         '400':
           description: Missing or invalid `agentId`.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/WebSessionErrorResponse'
+              examples:
+                missing-agent-id:
+                  summary: Missing agentId
+                  value:
+                    status: false
+                    errors: ["agentId: Required"]
 
   /campaign/{id}/export/by-audience-member:
     get:
@@ -11243,17 +11326,25 @@ paths:
           in: path
           required: true
           description: The campaign ID.
+          example: "6a75935452c6e5eceaa16edf"
           schema:
             type: string
             pattern: "^[a-f\\d]{24}$"
       responses:
         '200':
-          description: CSV export streamed successfully.
+          description: CSV export streamed successfully. One row per audience-member contact with call outcomes.
           content:
             text/csv:
               schema:
                 type: string
                 format: binary
+              examples:
+                sample:
+                  summary: Two contacts, one connected + one no-answer
+                  value: |
+                    audience_member_id,phone,name,call_id,status,disposition,duration_s,cost,started_at
+                    aud_01,+15551234567,Ada Lovelace,CALL-1786159503332-8387f2,completed,resolved,124,0.0421,2026-08-07T09:12:04Z
+                    aud_02,+15559876543,Grace Hopper,CALL-1786159505132-13ab06,no_answer,,0,0.0,2026-08-07T09:12:07Z
         '404':
           description: Campaign not found.
           content:
@@ -11287,17 +11378,25 @@ paths:
           in: path
           required: true
           description: The campaign ID.
+          example: "6a75935452c6e5eceaa16edf"
           schema:
             type: string
             pattern: "^[a-f\\d]{24}$"
       responses:
         '200':
-          description: CSV export streamed successfully.
+          description: CSV export streamed successfully. One row per call attempt.
           content:
             text/csv:
               schema:
                 type: string
                 format: binary
+              examples:
+                sample:
+                  summary: Two call attempts on the same campaign
+                  value: |
+                    call_id,started_at,phone,agent_id,status,disposition,duration_s,cost,recording_url,transcript_url
+                    CALL-1786159503332-8387f2,2026-08-07T09:12:04Z,+15551234567,6a75935452c6e5eceaa16edf,completed,resolved,124,0.0421,https://recordings.smallest.ai/CALL-1786159503332-8387f2.mp3,https://logs.smallest.ai/CALL-1786159503332-8387f2.json
+                    CALL-1786159505132-13ab06,2026-08-07T09:12:07Z,+15559876543,6a75935452c6e5eceaa16edf,no_answer,,0,0.0,,
         '400':
           description: Campaign not found.
           content:
@@ -11312,7 +11411,7 @@ paths:
                     type: array
                     items:
                       type: string
-                    example: ["no campaign found for id <id>"]
+                    example: ["no campaign found for id 6a75935452c6e5eceaa16edf"]
 
 components:
   securitySchemes:
