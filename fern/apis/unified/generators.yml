@@ -30,38 +30,38 @@ api:
         payment: https://api.smallest.ai
   specs:
     # Atoms API - Agent Management
-    - namespace: atoms
+    - namespace: agents
       openapi: ../atoms/openapi/openapi.yaml
       overrides: ../atoms/openapi/openapi-overrides.yaml
 
     # Waves API - Speech/TTS endpoints
-    - namespace: waves
+    - namespace: speech
       openapi: ../waves/openapi/waves-api.yaml
       overrides: ../waves/openapi/waves-api-overrides.yaml
-    - namespace: waves
+    - namespace: speech
       openapi: ../waves/openapi/get-voices-openapi.yaml
       overrides: ../waves/openapi/get-voices-openapi-overrides.yaml
-    - namespace: waves
+    - namespace: speech
       openapi: ../waves/openapi/tts-openapi.yaml
       overrides: ../waves/openapi/tts-openapi-overrides.yaml
     # Unified STT — POST /waves/v1/stt/?model=pulse|pulse-pro. Supersedes
     # pulse-stt-openapi.yaml (POST /waves/v1/pulse/get_text), which had no
     # model param and could not reach Pulse Pro. The retired spec stays in
     # the repo for docs / API-ref rendering but no longer feeds SDK gen.
-    - namespace: waves
+    - namespace: speech
       openapi: ../waves/openapi/stt-openapi.yaml
-    - namespace: waves
+    - namespace: speech
       openapi: ../waves/openapi/voice-cloning-openapi.yaml
       overrides: ../waves/openapi/voice-cloning-openapi-overrides.yaml
     # Electron LLM — OpenAI-compatible chat completions at
     # POST /waves/v1/chat/completions with model=electron. The overrides
     # file renames electron's `Tool` schema to `ElectronTool` so it does
     # not collide with hydra-ws's already-shipped flat-shaped `Tool`.
-    - namespace: waves
+    - namespace: speech
       openapi: ../waves/openapi/electron-openapi.yaml
 
     # Waves AsyncAPI specs - WebSocket streaming
-    - namespace: waves
+    - namespace: speech
       asyncapi: ../waves/asyncapi/tts-ws.yaml
       overrides: ../waves/asyncapi/tts-ws-overrides.yml
     # Unified STT WebSocket — WSS /waves/v1/stt/live?model=pulse.
@@ -69,10 +69,10 @@ api:
     # REST swap above. The overrides file renames each message type to a
     # Transcription* prefix so it does not collide with hydra-ws's already-
     # shipped ErrorEvent / ErrorEventType types under the waves namespace.
-    - namespace: waves
+    - namespace: speech
       asyncapi: ../waves/asyncapi/stt-live-ws.yaml
 
-    - namespace: waves
+    - namespace: speech
       asyncapi: ../waves/asyncapi/hydra-ws.yaml
       overrides: ../waves/asyncapi/hydra-ws-overrides.yml
 
@@ -133,19 +133,19 @@ groups:
             # Was previously only a dev dep; promoted here so a clean regen keeps it.
             requests: ">=2.31.0"
           mypy_exclude:
-            - src/smallestai/atoms/agent
-            - src/smallestai/atoms/helpers
-            - src/smallestai/waves/text_to_speech/client.py
-            - src/smallestai/waves/text_to_speech/raw_client.py
+            - src/smallestai/agents/agent
+            - src/smallestai/agents/helpers
+            - src/smallestai/speech/text_to_speech/client.py
+            - src/smallestai/speech/text_to_speech/raw_client.py
           additional_init_exports:
-            - from: atoms.client
+            - from: agents.client
               imports:
-                - AtomsClient
-                - AsyncAtomsClient
-            - from: waves.client
+                - AgentsClient
+                - AsyncAgentsClient
+            - from: speech.client
               imports:
-                - WavesClient
-                - AsyncWavesClient
+                - SpeechClient
+                - AsyncSpeechClient
 
   ts-sdk:
     generators:
