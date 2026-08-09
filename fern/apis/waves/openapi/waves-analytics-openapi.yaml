@@ -1,0 +1,736 @@
+openapi: 3.0.1
+info:
+  title: Waves Analytics and Ops
+  description: |
+    Analytics and operational endpoints for Waves. Analytics endpoints return per-org usage
+    aggregates (timeseries) and raw request logs (STT / TTS / webhooks). The ops endpoint
+    (`/waves/v1/health`) is a liveness probe for the Waves control plane.
+
+    All analytics endpoints are scoped to the API key's organization. Timeseries endpoints
+    accept an ISO 8601 datetime range (`from`, `to`) and an optional `granularity` bucket.
+    Log endpoints are paginated with `page` and `pageSize`.
+  version: 1.0.0
+servers:
+- url: https://api.smallest.ai
+  description: Waves API server
+  x-fern-server-name: waves
+paths:
+  /waves/v1/analytics/asr/logs:
+    get:
+      tags:
+      - Analytics
+      summary: List STT (ASR) request logs
+      description: |
+        Paginated log of Speech to Text requests for the calling organization. Each entry
+        records the model used, the transcript, the request parameters that were on the
+        wire (word timestamps, diarization, PII / PCI redaction, keyword boosting), and
+        any downstream signals the request opted into (emotion, gender, keyword hits).
+        Use this to audit request-level activity or to reconcile with your own logs.
+      operationId: listStreamingSpeechToTextLogs
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+        description: 1-indexed page number.
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+        description: Number of records per page.
+      responses:
+        '200':
+          description: STT logs retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreamingSpeechToTextLogsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security:
+      - bearerAuth: []
+
+  /waves/v1/analytics/asr/history/{request_id}:
+    delete:
+      tags:
+      - Analytics
+      summary: Delete an STT request from history
+      description: |
+        Soft-deletes a single Speech to Text request from the org's analytics history.
+        Idempotent: a `request_id` that does not exist still returns `success`. Use this
+        to redact a specific transcript from the dashboard log view.
+      operationId: deleteStreamingSpeechToTextHistory
+      parameters:
+      - in: path
+        name: request_id
+        required: true
+        example: "3eea9859-609b-45c5-8a25-0337c9763c96"
+        schema:
+          type: string
+        description: The `request_id` of the STT request to delete.
+      responses:
+        '200':
+          description: History entry deleted (or was already absent).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security:
+      - bearerAuth: []
+
+  /waves/v1/analytics/asr/usage/timeseries:
+    get:
+      tags:
+      - Analytics
+      summary: STT usage timeseries
+      description: |
+        Bucketed request count for Speech to Text over a datetime range. Use for a
+        traffic chart on the STT dashboard, or to reconcile daily usage.
+      operationId: getStreamingSpeechToTextUsageTimeseries
+      parameters:
+      - $ref: '#/components/parameters/From'
+      - $ref: '#/components/parameters/To'
+      - $ref: '#/components/parameters/Granularity'
+      responses:
+        '200':
+          description: Timeseries retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountTimeseriesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security:
+      - bearerAuth: []
+
+  /waves/v1/analytics/tts/logs:
+    get:
+      tags:
+      - Analytics
+      summary: List TTS request logs
+      description: |
+        Paginated log of Text to Speech requests. Each entry records the model, voice,
+        input text length, sample rate, output format, and credits consumed.
+      operationId: listTextToSpeechLogs
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+        description: 1-indexed page number.
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+        description: Number of records per page.
+      responses:
+        '200':
+          description: TTS logs retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TextToSpeechLogsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security:
+      - bearerAuth: []
+
+  /waves/v1/analytics/tts/usage/timeseries:
+    get:
+      tags:
+      - Analytics
+      summary: TTS usage timeseries
+      description: |
+        Bucketed request count for Text to Speech over a datetime range.
+      operationId: getTextToSpeechUsageTimeseries
+      parameters:
+      - $ref: '#/components/parameters/From'
+      - $ref: '#/components/parameters/To'
+      - $ref: '#/components/parameters/Granularity'
+      responses:
+        '200':
+          description: Timeseries retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountTimeseriesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security:
+      - bearerAuth: []
+
+  /waves/v1/analytics/tts/usage/credits/timeseries:
+    get:
+      tags:
+      - Analytics
+      summary: TTS credit-consumption timeseries
+      description: |
+        Bucketed credit spend for Text to Speech over a datetime range. Use this to
+        forecast spend or reconcile bills.
+      operationId: getTextToSpeechCreditsTimeseries
+      parameters:
+      - $ref: '#/components/parameters/From'
+      - $ref: '#/components/parameters/To'
+      - $ref: '#/components/parameters/Granularity'
+      responses:
+        '200':
+          description: Credit timeseries retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditsTimeseriesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security:
+      - bearerAuth: []
+
+  /waves/v1/analytics/tts/concurrency/timeseries:
+    get:
+      tags:
+      - Analytics
+      summary: TTS concurrency timeseries
+      description: |
+        Bucketed peak concurrency (simultaneous active TTS requests) over a datetime
+        range. Use to size against your account concurrency cap.
+      operationId: getTextToSpeechConcurrencyTimeseries
+      parameters:
+      - $ref: '#/components/parameters/From'
+      - $ref: '#/components/parameters/To'
+      - $ref: '#/components/parameters/Granularity'
+      responses:
+        '200':
+          description: Concurrency timeseries retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValuesTimeseriesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security:
+      - bearerAuth: []
+
+  /waves/v1/analytics/tts/ws-connections/timeseries:
+    get:
+      tags:
+      - Analytics
+      summary: TTS WebSocket-connection timeseries
+      description: |
+        Bucketed count of open TTS WebSocket connections over a datetime range.
+      operationId: getTextToSpeechWebsocketConnectionsTimeseries
+      parameters:
+      - $ref: '#/components/parameters/From'
+      - $ref: '#/components/parameters/To'
+      - $ref: '#/components/parameters/Granularity'
+      responses:
+        '200':
+          description: WebSocket-connection timeseries retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValuesTimeseriesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security:
+      - bearerAuth: []
+
+  /waves/v1/analytics/webhooks/logs:
+    get:
+      tags:
+      - Analytics
+      summary: List webhook delivery logs
+      description: |
+        Paginated log of webhook delivery attempts (e.g. `asr.completed` callbacks).
+        Each entry records the destination URL, HTTP method, event type, delivery
+        status, attempt number, response status code, and any error.
+      operationId: listWebhookLogs
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+        description: 1-indexed page number.
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+        description: Number of records per page.
+      responses:
+        '200':
+          description: Webhook logs retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookLogsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security:
+      - bearerAuth: []
+
+  /waves/v1/health:
+    get:
+      tags:
+      - Ops
+      summary: Health check
+      description: |
+        Liveness probe for the Waves control plane. Returns `status: "ok"` alongside
+        the connection state of the backing services (MongoDB, Redis, RabbitMQ). No
+        authentication required.
+      operationId: getWavesHealth
+      responses:
+        '200':
+          description: Waves control plane is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: One or more backing services are unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    From:
+      in: query
+      name: from
+      schema:
+        type: string
+        format: date-time
+      description: Start of the range, ISO 8601 datetime (e.g. `2026-08-01T00:00:00Z`).
+      example: "2026-08-01T00:00:00Z"
+    To:
+      in: query
+      name: to
+      schema:
+        type: string
+        format: date-time
+      description: End of the range, ISO 8601 datetime (e.g. `2026-08-07T00:00:00Z`).
+      example: "2026-08-07T00:00:00Z"
+    Granularity:
+      in: query
+      name: granularity
+      schema:
+        type: string
+        enum:
+        - hour
+        - day
+      description: Bucket size for the timeseries.
+      example: day
+  responses:
+    Unauthorized:
+      description: Missing or invalid API key.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+    InternalError:
+      description: Server error.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+  schemas:
+    CountTimeseriesResponse:
+      type: object
+      properties:
+        timestamps:
+          type: array
+          description: Bucket boundaries as ISO 8601 datetimes.
+          items:
+            type: string
+            format: date-time
+        values:
+          type: array
+          description: Request count in each bucket, index-aligned with `timestamps`.
+          items:
+            type: integer
+        totalRequestCount:
+          type: integer
+          description: Sum of `values` across the requested range.
+      example:
+        timestamps:
+          - "2026-08-05T00:00:00.000Z"
+          - "2026-08-06T00:00:00.000Z"
+          - "2026-08-07T00:00:00.000Z"
+        values: [412, 388, 501]
+        totalRequestCount: 1301
+    CreditsTimeseriesResponse:
+      type: object
+      properties:
+        timestamps:
+          type: array
+          items:
+            type: string
+            format: date-time
+        values:
+          type: array
+          description: Credit spend in each bucket.
+          items:
+            type: number
+        totalCredits:
+          type: number
+          description: Sum of credit spend across the requested range.
+      example:
+        timestamps:
+          - "2026-08-05T00:00:00.000Z"
+          - "2026-08-06T00:00:00.000Z"
+          - "2026-08-07T00:00:00.000Z"
+        values: [124.5, 96.2, 141.8]
+        totalCredits: 362.5
+    ValuesTimeseriesResponse:
+      type: object
+      properties:
+        timestamps:
+          type: array
+          items:
+            type: string
+            format: date-time
+        values:
+          type: array
+          items:
+            type: number
+      example:
+        timestamps:
+          - "2026-08-07T08:00:00.000Z"
+          - "2026-08-07T09:00:00.000Z"
+          - "2026-08-07T10:00:00.000Z"
+        values: [3, 5, 4]
+    StreamingSpeechToTextLogsResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StreamingSpeechToTextLogEntry'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+        totalPages:
+          type: integer
+      example:
+        status: success
+        page: 1
+        pageSize: 50
+        totalCount: 128
+        totalPages: 3
+        data:
+          - request_id: "3eea9859-609b-45c5-8a25-0337c9763c96"
+            timestamp: "2026-08-07 08:17:25"
+            request_type: "ws"
+            model: "pulse"
+            language: "en"
+            duration: 44.03
+            file_size: "0"
+            transcription: "hello what are your plans today"
+            word_timestamps: false
+            diarize: false
+            redact_pii: false
+            redact_pci: false
+            numerals: "auto"
+            keywords: ""
+            emotion_detection: false
+            gender_detection: false
+            emotions: ""
+            gender: ""
+            webhook_url: ""
+    StreamingSpeechToTextLogEntry:
+      type: object
+      properties:
+        request_id:
+          type: string
+          description: Unique ID for the request.
+        timestamp:
+          type: string
+          description: When the request was served (server-local time, "YYYY-MM-DD HH:MM:SS").
+        request_type:
+          type: string
+          description: "`rest` for pre-recorded transcription, `ws` for the streaming WebSocket."
+          enum:
+          - rest
+          - ws
+        model:
+          type: string
+          description: STT model that served the request (e.g. `pulse`, `pulse-pro`).
+        language:
+          type: string
+          description: Language code sent on the request (e.g. `en`, `hi`).
+        duration:
+          type: number
+          description: Duration of the input audio, in seconds.
+        file_size:
+          type: string
+          description: Size of the input audio, in bytes (string-encoded).
+        transcription:
+          type: string
+          description: Final transcript.
+        word_timestamps:
+          type: boolean
+          description: Whether word-level timestamps were requested.
+        diarize:
+          type: boolean
+          description: Whether speaker diarization was requested.
+        redact_pii:
+          type: boolean
+          description: Whether PII redaction was applied.
+        redact_pci:
+          type: boolean
+          description: Whether PCI redaction was applied.
+        numerals:
+          type: string
+          description: Numeral formatting mode (`auto`, `words`, `digits`).
+        keywords:
+          type: string
+          description: Comma-separated list of keyword-boost terms on the request.
+        emotion_detection:
+          type: boolean
+        gender_detection:
+          type: boolean
+        emotions:
+          type: string
+          description: Detected emotions, if `emotion_detection` was enabled.
+        gender:
+          type: string
+          description: Detected gender, if `gender_detection` was enabled.
+        webhook_url:
+          type: string
+          description: Webhook URL the completion was posted to, if async.
+    TextToSpeechLogsResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TextToSpeechLogEntry'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+        totalPages:
+          type: integer
+      example:
+        status: success
+        page: 1
+        pageSize: 50
+        totalCount: 4212
+        totalPages: 85
+        data:
+          - timestamp: "2026-08-07 08:17:20"
+            request_type: "ws"
+            model: "lightning-v3.1-pro"
+            voice_id: "blake"
+            language: "en"
+            text: "eight, seven, three, six, four. Just to confirm, is that correct?"
+            text_len: 65
+            credits: 0
+            speed: 1
+            sample_rate: 8000
+            output_format: "pcm"
+            enhancement: 1
+            similarity: 0
+            consistency: null
+            is_pvc: null
+    TextToSpeechLogEntry:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          description: When the request was served.
+        request_type:
+          type: string
+          description: "`rest` for the pre-recorded route, `ws` for the streaming WebSocket."
+          enum:
+          - rest
+          - ws
+        model:
+          type: string
+          description: TTS model that served the request (e.g. `lightning-v3.1`, `lightning-v3.1-pro`).
+        voice_id:
+          type: string
+        language:
+          type: string
+        text:
+          type: string
+          description: Input text (truncated for very long inputs).
+        text_len:
+          type: integer
+          description: Length of the input text in characters.
+        credits:
+          type: number
+          description: Credits consumed by the request.
+        speed:
+          type: number
+        sample_rate:
+          type: integer
+        output_format:
+          type: string
+          description: Audio container/encoding requested (`pcm`, `wav`, `mp3`, `ulaw`, `alaw`).
+        enhancement:
+          type: number
+        similarity:
+          type: number
+        consistency:
+          type: number
+          nullable: true
+        is_pvc:
+          type: boolean
+          nullable: true
+          description: Whether the voice used was a Personal Voice Clone.
+    WebhookLogsResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookLogEntry'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+        totalPages:
+          type: integer
+      example:
+        status: success
+        page: 1
+        pageSize: 50
+        totalCount: 87
+        totalPages: 2
+        data:
+          - org_id: "69561896a37fd214b9a8d33c"
+            request_id: "36e977cf-d027-4fe2-b9ae-733d4f26c239"
+            webhook_url: "https://your-app.example.com/webhooks/asr"
+            method: "POST"
+            event_type: "asr.completed"
+            status: "failed"
+            attempt: 10
+            response_status_code: 503
+            error: "Request failed with status code 503"
+            timestamp: "2026-08-06 10:37:27"
+            duration_ms: 819
+    WebhookLogEntry:
+      type: object
+      properties:
+        org_id:
+          type: string
+          description: The organization that owns the webhook.
+        request_id:
+          type: string
+          description: Correlates to the source request (e.g. the STT `request_id`).
+        webhook_url:
+          type: string
+        method:
+          type: string
+          description: HTTP method used to deliver the event.
+        event_type:
+          type: string
+          description: Event that fired (e.g. `asr.completed`).
+        status:
+          type: string
+          description: Delivery outcome (`success`, `failed`, `pending`).
+        attempt:
+          type: integer
+          description: Attempt count, 1-indexed. Failures are retried with backoff.
+        response_status_code:
+          type: integer
+          description: HTTP status returned by the destination.
+        error:
+          type: string
+          description: Failure reason, if any.
+        timestamp:
+          type: string
+        duration_ms:
+          type: integer
+          description: Round-trip time of the delivery attempt, in milliseconds.
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        mongo:
+          $ref: '#/components/schemas/ServiceStatus'
+        redis:
+          $ref: '#/components/schemas/ServiceStatus'
+        rabbitmq:
+          $ref: '#/components/schemas/ServiceStatus'
+      example:
+        status: ok
+        mongo:
+          status: connected
+        redis:
+          status: connected
+        rabbitmq:
+          status: connected
+    ServiceStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          example: connected
