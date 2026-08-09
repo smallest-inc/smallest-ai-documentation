@@ -11330,13 +11330,62 @@ paths:
           schema:
             type: string
             pattern: "^[a-f\\d]{24}$"
+        - name: format
+          in: query
+          required: false
+          description: Output format. Defaults to `json`.
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
       responses:
         '200':
           description: |
-            CSV export streamed successfully. One row per audience-member contact with call outcomes.
-            The exact column set matches what your dashboard's campaign export produces for this
-            campaign; check a live export against your own campaign to confirm the column list.
+            The grouped export. The default `json` returns the structured object below;
+            `format=csv` streams `text/csv` with one row per audience-member contact. The
+            CSV column set matches your dashboard's campaign export for this campaign.
           content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  campaign:
+                    type: string
+                    description: The campaign name.
+                  exportedAt:
+                    type: string
+                    format: date-time
+                  totalAudienceMembers:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        audienceMemberId:
+                          type: string
+                        audienceMemberData:
+                          type: object
+                          description: The audience member's custom fields.
+                          additionalProperties: true
+                        phoneNumber:
+                          type: string
+                        originalCall:
+                          type: object
+                          nullable: true
+                          description: The first call attempt for this member.
+                        retryAttempts:
+                          type: array
+                          items:
+                            type: object
+                        totalAttempts:
+                          type: integer
+                        finalStatus:
+                          type: string
+                        totalCallDuration:
+                          type: number
+                        totalCallCost:
+                          type: number
             text/csv:
               schema:
                 type: string
