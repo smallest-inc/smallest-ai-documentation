@@ -53,11 +53,19 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
-  /organization:
+  /user/subscription:
     get:
-      summary: Get organization details
+      summary: Get subscription and plan limits
+      description: |
+        Returns the organization's current subscription: plan id, credit balance,
+        renewal date, and the per-plan `limits` (agents, campaigns, numbers, daily and
+        concurrent calls, knowledge-base sizes) plus the `features` map that gates
+        capabilities like telephony, campaigns, and webhooks. Use it to check remaining
+        credits or whether a feature is enabled before attempting an action.
       tags:
-        - Organization
+        - User
+      x-fern-sdk-group-name: user
+      x-fern-sdk-method-name: get_subscription
       security:
         - BearerAuth: []
       responses:
@@ -73,31 +81,50 @@ paths:
                     example: true
                   data:
                     type: object
+                    description: The subscription record. Extra fields may be present.
                     properties:
                       _id:
                         type: string
-                        description: The organization ID
-                      name:
+                      organization:
                         type: string
-                        description: The organization name
-                      members:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            _id:
-                              type: string
-                              description: The member ID
-                            userEmail:
-                              type: string
-                              description: The member email
-                      subscription:
+                      planId:
+                        type: string
+                        description: The active plan identifier.
+                      totalCredits:
+                        type: number
+                      currentCredits:
+                        type: number
+                        description: Credits remaining in the current cycle.
+                      renewalDate:
+                        type: string
+                        format: date-time
+                      subscriptionActive:
+                        type: boolean
+                      onPremEnabled:
+                        type: boolean
+                      limits:
                         type: object
+                        description: Per-plan quotas.
                         properties:
-                          planId:
-                            type: string
-                            description: The subscription plan ID
-
+                          agents:
+                            type: integer
+                          campaigns:
+                            type: integer
+                          numbers:
+                            type: integer
+                          dailyCalls:
+                            type: integer
+                          concurrentCalls:
+                            type: integer
+                          knowledgeBaseItemLimit:
+                            type: integer
+                          knowledgeBaseLimits:
+                            type: integer
+                      features:
+                        type: object
+                        description: Feature flags gating capabilities for this plan.
+                        additionalProperties:
+                          type: boolean
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
         "500":
