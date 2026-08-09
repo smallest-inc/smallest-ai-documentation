@@ -332,24 +332,34 @@ paths:
                     description: |
                       Per-word timestamps in seconds. **Empty unless the
                       request sets `word_timestamps=true`.** Each entry
-                      carries `word`, `start`, `end`, `confidence` (0.0–1.0),
-                      and `speaker` when `diarize=true` is also set.
+                      carries `word`, `start`, `end`, and `confidence`
+                      (0.0–1.0). With `diarize=true`, entries also
+                      include `speaker` (integer, zero-indexed) and
+                      `speaker_confidence` (0.0–1.0).
                     items:
                       type: object
                       properties:
                         start:
                           type: number
-                          example: 0.0
+                          example: 0.16
                         end:
                           type: number
-                          example: 0.5
-                        speaker:
-                          type: string
-                          description: Speaker label when `diarize=true` is set on the request. Omitted otherwise.
-                          example: speaker_0
+                          example: 1.12
                         word:
                           type: string
-                          example: Hello
+                          example: "Hello,"
+                        confidence:
+                          type: number
+                          description: Per-word confidence, from 0.0 to 1.0.
+                          example: 0.9975
+                        speaker:
+                          type: integer
+                          description: Zero-indexed speaker label. Present when `diarize=true` is set on the request. Omitted otherwise.
+                          example: 0
+                        speaker_confidence:
+                          type: number
+                          description: Speaker-attribution confidence for this word, from 0.0 to 1.0. Present alongside `speaker`.
+                          example: 1
                   utterances:
                     type: array
                     description: |
@@ -362,17 +372,17 @@ paths:
                       properties:
                         text:
                           type: string
-                          example: Hello world.
+                          example: "Hello, how are you doing today?"
                         start:
                           type: number
-                          example: 0.0
+                          example: 0.16
                         end:
                           type: number
-                          example: 0.9
+                          example: 2.88
                         speaker:
-                          type: string
-                          description: Speaker if diarization is enabled
-                          example: speaker_0
+                          type: integer
+                          description: Zero-indexed speaker label. Present when `diarize=true` is set on the request.
+                          example: 0
                   gender:
                     type: string
                     description: Predicted gender of the speaker if requested
@@ -406,51 +416,54 @@ paths:
                         example: 0.05
                   metadata:
                     type: object
-                    description: Metadata about the transcription
+                    description: Response metadata. Present on every Pulse response.
                     properties:
-                      filename:
-                        type: string
-                        description: Name of the audio file
-                        example: audio.mp3
                       duration:
                         type: number
-                        description: Duration of the audio file in minutes
-                        example: 1.7
+                        description: Audio duration in seconds.
+                        example: 5.28
                       fileSize:
                         type: number
-                        description: Size of the audio file in bytes
-                        example: 1000000
-              example:
-                # Response shown with word_timestamps=true and diarize=true.
-                # Default requests (both flags off) return an empty words[]
-                # and empty utterances[] alongside the same transcription.
-                status: success
-                transcription: Hello world.
-                words:
-                - start: 0.0
-                  end: 0.5
-                  speaker: speaker_0
-                  word: Hello
-                - start: 0.6
-                  end: 0.9
-                  speaker: speaker_0
-                  word: world.
-                utterances:
-                - text: Hello world.
-                  start: 0.0
-                  end: 0.9
-                  speaker: speaker_0
-                gender: male
-                emotions:
-                  happiness: 0.8
-                  sadness: 0.15
-                  disgust: 0.02
-                  fear: 0.03
-                  anger: 0.05
-                metadata:
-                  filename: audio.mp3
-                  duration: 1.7
-                  fileSize: 1000000
+                        description: Bytes received on the request.
+                        example: 465740
+                      filename:
+                        type: string
+                        description: Original filename. Present on audio-by-URL requests only; absent on raw-bytes uploads.
+                        example: audio.mp3
+              examples:
+                default:
+                  summary: "Default request (no `word_timestamps`, no `diarize`)"
+                  description: |
+                    Real response with no extra flags. `words[]` and
+                    `utterances[]` are empty because `word_timestamps=true`
+                    was not set. Metadata carries only `duration` and
+                    `fileSize`.
+                  value:
+                    status: success
+                    transcription: "Hello, how are you doing today? This is a word timestamp test."
+                    words: []
+                    utterances: []
+                    metadata:
+                      duration: 5.28
+                      fileSize: 465740
+                with-word-timestamps-and-diarize:
+                  summary: "`word_timestamps=true` + `diarize=true`"
+                  description: |
+                    Each word entry carries `start`, `end`, `word`,
+                    `confidence`, and (with diarize) integer `speaker` and
+                    `speaker_confidence`. Utterances carry the sentence
+                    text plus the same integer `speaker` label.
+                  value:
+                    status: success
+                    transcription: "Hello, how are you doing today? This is a word timestamp test."
+                    words:
+                    - { start: 0.16, end: 1.12, speaker: 0, speaker_confidence: 1, word: "Hello,", confidence: 0.9975 }
+                    - { start: 1.12, end: 1.36, speaker: 0, speaker_confidence: 1, word: "how", confidence: 0.6402 }
+                    utterances:
+                    - { start: 0.16, end: 2.88, speaker: 0, text: "Hello, how are you doing today?" }
+                    metadata:
+                      duration: 5.28
+                      fileSize: 465740
         '400':
           description: |
             Bad request — validation error, malformed body, unreachable URL, or audio data too large.
