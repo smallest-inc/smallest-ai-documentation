@@ -8,7 +8,7 @@ import { CodingAgentCallout } from "@/components/CodingAgentCallout";
 
 <Badge color="purple">Real-Time</Badge>
 
-Inverse Text Normalization automatically converts spoken numbers, dates, currencies, and other entities into their written equivalents. When enabled, ITN runs as a post-processing step on every finalized transcript — no changes to your audio pipeline required.
+Inverse Text Normalization automatically converts spoken numbers, dates, currencies, and other entities into their written equivalents. When enabled, ITN runs as a post-processing step on every finalized transcript - no changes to your audio pipeline required.
 
 | Spoken (ASR output) | Written (with ITN) |
 |---|---|
@@ -28,9 +28,9 @@ Since ITN normalizes only finalized transcripts, it is recommended that you cont
 2. Set `eou_timeout_ms` to match your VAD (Voice Activity Detection) silence threshold.
 3. When your VAD detects the user has stopped speaking, send the control message that matches the lifecycle of your session:
 
-   - **Turn-boundary signal — `{"type": "finalize"}`.** Flushes the current audio buffer, runs ITN over the full utterance, and emits one `is_final: true` transcript for that turn. The WebSocket stays open and accepts audio for the next turn. Send this once per user turn in any multi-turn flow.
+   - **Turn-boundary signal - `{"type": "finalize"}`.** Flushes the current audio buffer, runs ITN over the full utterance, and emits one `is_final: true` transcript for that turn. The WebSocket stays open and accepts audio for the next turn. Send this once per user turn in any multi-turn flow.
 
-   - **Session-end signal — `{"type": "close_stream"}`.** Flushes any remaining buffered audio, emits the terminal `is_final: true` + `is_last: true` transcript, then closes the WebSocket. Send this once at the actual end of the session — end of call, app shutdown, or after the buffer of a single-shot transcription is fully streamed.
+   - **Session-end signal - `{"type": "close_stream"}`.** Flushes any remaining buffered audio, emits the terminal `is_final: true` + `is_last: true` transcript, then closes the WebSocket. Send this once at the actual end of the session - end of call, app shutdown, or after the buffer of a single-shot transcription is fully streamed.
 
 A multi-turn voice agent typically fires many `finalize` messages and exactly one `close_stream` per session. A one-off transcription of a fixed audio buffer fires only `close_stream` after the last chunk.
 
@@ -89,9 +89,9 @@ This promotes all accumulated tokens to a final transcript immediately, without 
 
 This is especially useful with `finalize_on_words=false`, where automatic finalization is disabled and you control exactly when each utterance boundary occurs. Common use cases:
 
-- **Form filling** — Finalize after each form field to get a clean ITN result per field
-- **Voice commands** — Finalize on button release or keyword detection
-- **Turn-based conversations** — Finalize when the other party starts speaking
+- **Form filling** - Finalize after each form field to get a clean ITN result per field
+- **Voice commands** - Finalize on button release or keyword detection
+- **Turn-based conversations** - Finalize when the other party starts speaking
 
 The server responds with a final transcript for the pending chunk:
 
@@ -115,15 +115,15 @@ To close the stream and flush remaining audio, send:
 { "type": "close_stream" }
 ```
 
-This flushes any remaining audio, returns the final transcript with `is_last: true`, and closes the connection. `{ "type": "finalize" }` does **not** close the stream — it only forces an immediate `is_final=true` transcript while keeping the session open.
+This flushes any remaining audio, returns the final transcript with `is_last: true`, and closes the connection. `{ "type": "finalize" }` does **not** close the stream - it only forces an immediate `is_final=true` transcript while keeping the session open.
 
 ## Examples
 
 <Note>
-The two examples below — **Python WebSocket** and **JavaScript WebSocket** — show the **single-shot** pattern (transcribe a fixed audio buffer, then close the session). For a **multi-turn voice agent** that handles many user turns on the same WebSocket, scroll down to the [Python — Multi-turn voice agent](#python--multi-turn-voice-agent-recommended-for-voice-ai) example below — it sends `{"type":"finalize"}` per turn (session stays open) and `{"type":"close_stream"}` once at the end of the call. Sending `close_stream` per turn forces a WebSocket reconnect every turn — that's the wrong pattern for voice agents.
+The two examples below - **Python WebSocket** and **JavaScript WebSocket** - show the **single-shot** pattern (transcribe a fixed audio buffer, then close the session). For a **multi-turn voice agent** that handles many user turns on the same WebSocket, scroll down to the [Python - Multi-turn voice agent](#python--multi-turn-voice-agent-recommended-for-voice-ai) example below - it sends `{"type":"finalize"}` per turn (session stays open) and `{"type":"close_stream"}` once at the end of the call. Sending `close_stream` per turn forces a WebSocket reconnect every turn - that's the wrong pattern for voice agents.
 </Note>
 
-### Python — WebSocket with ITN (single-shot file transcription)
+### Python - WebSocket with ITN (single-shot file transcription)
 
 ```python
 import asyncio
@@ -176,7 +176,7 @@ async def transcribe_file(audio_file: str):
 asyncio.run(transcribe_file("audio.wav"))
 ```
 
-### JavaScript — WebSocket with ITN (single-shot file transcription)
+### JavaScript - WebSocket with ITN (single-shot file transcription)
 
 ```javascript
 // Single-shot pattern. For a multi-turn voice agent, mirror the
@@ -220,7 +220,7 @@ ws.onmessage = (event) => {
 };
 ```
 
-### Python — Multi-turn voice agent (recommended for Voice AI)
+### Python - Multi-turn voice agent (recommended for Voice AI)
 
 For voice agents that handle many user turns in a single session, send `{"type": "finalize"}` after each turn. The WebSocket stays open and you pay the connection cost only once per call:
 
@@ -269,9 +269,9 @@ async def run_voice_agent():
         await ws.send(json.dumps({"type": "close_stream"}))
 ```
 
-### Python — Single-shot transcription
+### Python - Single-shot transcription
 
-For one-off transcription of a complete audio buffer (file or single utterance) with no further audio coming, use `close_stream` directly. It flushes, normalizes, emits `is_last: true`, and closes — no extra round-trip:
+For one-off transcription of a complete audio buffer (file or single utterance) with no further audio coming, use `close_stream` directly. It flushes, normalizes, emits `is_last: true`, and closes - no extra round-trip:
 
 ```python
 async def transcribe_once(audio_file: str):
@@ -340,11 +340,11 @@ When ITN is enabled, final responses contain the normalized transcript:
 
 ## How It Works
 
-1. **End-of-utterance detection** — The ASR pipeline detects a natural pause or hits the `max_words` limit, producing a finalized transcript. Or you send `{"type": "finalize"}` to force it.
-2. **Punctuation stripping** — Trailing punctuation (`.` `,` `!` `?` `;` `:`) is stripped from each word before normalization, since the underlying FST engine cannot parse through punctuation.
-3. **ITN normalization** — The text is passed through a Weighted Finite State Transducer (WFST) that converts spoken-form entities to written form with word alignment tracking.
-4. **Punctuation reattachment** — Stripped punctuation is mapped back to the correct output token using the word alignment from step 3.
-5. **Timestamp remapping** — Word-level timestamps from ASR are remapped to the ITN output using the alignment, spanning collapsed words.
+1. **End-of-utterance detection** - The ASR pipeline detects a natural pause or hits the `max_words` limit, producing a finalized transcript. Or you send `{"type": "finalize"}` to force it.
+2. **Punctuation stripping** - Trailing punctuation (`.` `,` `!` `?` `;` `:`) is stripped from each word before normalization, since the underlying FST engine cannot parse through punctuation.
+3. **ITN normalization** - The text is passed through a Weighted Finite State Transducer (WFST) that converts spoken-form entities to written form with word alignment tracking.
+4. **Punctuation reattachment** - Stripped punctuation is mapped back to the correct output token using the word alignment from step 3.
+5. **Timestamp remapping** - Word-level timestamps from ASR are remapped to the ITN output using the alignment, spanning collapsed words.
 
 <CodingAgentCallout />
 

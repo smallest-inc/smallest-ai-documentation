@@ -1,7 +1,7 @@
 ---
 title: "Word-level timestamps"
 sidebarTitle: "Word Timestamps"
-description: "Per-word timing events interleaved with audio chunks on the Lightning TTS WebSocket — for live captions, karaoke highlighting, and avatar lip-sync."
+description: "Per-word timing events interleaved with audio chunks on the Lightning TTS WebSocket - for live captions, karaoke highlighting, and avatar lip-sync."
 icon: "clock"
 ---
 
@@ -14,18 +14,18 @@ Pass `word_timestamps: true` on a Lightning TTS WebSocket request to receive per
 
 ## When to use this
 
-- **Live captions** — render words to the screen as they're spoken.
-- **Karaoke-style highlighting** — sync the active-word UI to playback.
-- **Avatar lip-sync** — drive viseme transitions off word boundaries.
-- **Word-level analytics** — log per-word latency or downstream events.
+- **Live captions** - render words to the screen as they're spoken.
+- **Karaoke-style highlighting** - sync the active-word UI to playback.
+- **Avatar lip-sync** - drive viseme transitions off word boundaries.
+- **Word-level analytics** - log per-word latency or downstream events.
 
 ## Endpoint support
 
 | Surface | Word timestamps |
 |---|---|
 | `wss://api.smallest.ai/waves/v1/tts/live` (WebSocket) | ✅ |
-| `POST /waves/v1/tts` (sync HTTP) | ❌ — flag accepted, silently ignored |
-| `POST /waves/v1/tts/live` (HTTP SSE) | ❌ — same |
+| `POST /waves/v1/tts` (sync HTTP) | ❌ - flag accepted, silently ignored |
+| `POST /waves/v1/tts/live` (HTTP SSE) | ❌ - same |
 
 If you need word timing, use the WebSocket path.
 
@@ -35,12 +35,12 @@ Word events are emitted only when the chosen voice family has the aligner checkp
 
 | Language | Voice family | Word events |
 |---|---|---|
-| English (`en`) | Base-queue voices — `meher`, `devansh`, `kartik`, `maithili`, `liam`, `avery` | ✅ |
+| English (`en`) | Base-queue voices - `meher`, `devansh`, `kartik`, `maithili`, `liam`, `avery` | ✅ |
 | Hindi (`hi`) | Base-queue voices (same list) | ✅ |
 | Marathi / Bengali / Gujarati / Punjabi / Odia | north-Indic family | ❌ |
 | Tamil / Telugu / Kannada / Malayalam | south-Indic family | ❌ |
 
-For unsupported voice families the flag is **accepted** — audio works normally, but no `word_timestamp` frames are emitted.
+For unsupported voice families the flag is **accepted** - audio works normally, but no `word_timestamp` frames are emitted.
 
 ## Request
 
@@ -83,7 +83,7 @@ Each `word_timestamp` frame:
 | Field | Type | Description |
 |---|---|---|
 | `data.id` | integer | 0-indexed position of the word within the input text. |
-| `data.word` | string | Exact substring from the input — un-normalized. `"$100"` stays `"$100"`, `"25th"` stays `"25th"`, `"3"` stays `"3"`. Non-Latin scripts are preserved verbatim (e.g. Devanagari for Hindi). |
+| `data.word` | string | Exact substring from the input - un-normalized. `"$100"` stays `"$100"`, `"25th"` stays `"25th"`, `"3"` stays `"3"`. Non-Latin scripts are preserved verbatim (e.g. Devanagari for Hindi). |
 | `data.start` | float (seconds) | Start of the word in the audio stream. |
 | `data.end` | float (seconds) | End of the word. |
 
@@ -197,12 +197,12 @@ ws.on("message", (raw) => {
 
 ## Backward compatibility
 
-Pure addition. Existing integrations that don't set `word_timestamps` see the same wire shape as before — same `chunk` frames, same `complete` terminator, no new event types to handle.
+Pure addition. Existing integrations that don't set `word_timestamps` see the same wire shape as before - same `chunk` frames, same `complete` terminator, no new event types to handle.
 
 ## See also
 
-- [Lightning v3.1 model card](/models/model-cards/text-to-speech/lightning-v-3-1#word-level-timestamps) — model context for the feature.
-- [Streaming TTS](/models/documentation/text-to-speech-lightning/streaming) — full WebSocket setup and audio handling.
+- [Lightning v3.1 model card](/models/model-cards/text-to-speech/lightning-v-3-1#word-level-timestamps) - model context for the feature.
+- [Streaming TTS](/models/documentation/text-to-speech-lightning/streaming) - full WebSocket setup and audio handling.
 
 <CodingAgentCallout />
 

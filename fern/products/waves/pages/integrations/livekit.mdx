@@ -11,14 +11,14 @@ This guide walks you through integrating [Smallest AI](https://smallest.ai) TTS 
 
 The `livekit-plugins-smallestai` package provides two services:
 
-- **`smallestai.STT`** — real-time speech-to-text using the Pulse API, with streaming over WebSocket (~64ms TTFT) and batch transcription over HTTP
-- **`smallestai.TTS`** — ultra-low-latency text-to-speech using the Lightning API
+- **`smallestai.STT`** - real-time speech-to-text using the Pulse API, with streaming over WebSocket (~64ms TTFT) and batch transcription over HTTP
+- **`smallestai.TTS`** - ultra-low-latency text-to-speech using the Lightning API
 
 ## Code Example
 
 The full runnable example is in the Smallest AI cookbook:
 
-[LiveKit Voice Agent — Smallest AI TTS + STT](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/livekit-voice-agent)
+[LiveKit Voice Agent - Smallest AI TTS + STT](https://github.com/smallest-inc/cookbook/tree/main/voice-agents/livekit-voice-agent)
 
 ## Setup
 
@@ -85,12 +85,12 @@ stt = smallestai.STT(language="en", diarize=True)
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `api_key` | `str` | `$SMALLEST_API_KEY` | Your Smallest AI API key |
-| `model` | `str` | `"pulse"` | STT model. `"pulse"` — streaming + batch, 38 languages. `"pulse-pro"` — higher-accuracy English-only, batch (pre-recorded) only; raises `ValueError` if used with streaming |
+| `model` | `str` | `"pulse"` | STT model. `"pulse"` - streaming + batch, 38 languages. `"pulse-pro"` - higher-accuracy English-only, batch (pre-recorded) only; raises `ValueError` if used with streaming |
 | `language` | `str` | `"en"` | Language code (e.g. `"en"`, `"hi"`, `"fr"`). LiveKit uses Pulse's streaming surface. Use `"north_indic"` (Indian-language auto-detect), `"multi-asian"` (East Asian auto-detect, US region only), or `"multi-south-indic"` (South Indian auto-detect, India region only, Beta) when the language is unknown. See the [Pulse model card](/models/model-cards/speech-to-text/pulse) for the full streaming code list |
 | `sample_rate` | `int` | `16000` | Audio sample rate in Hz. Supported: `8000`, `16000`, `22050`, `24000`, `44100`, `48000` |
 | `encoding` | `str` | `"linear16"` | PCM encoding: `"linear16"`, `"linear32"`, `"alaw"`, `"mulaw"`, `"opus"`, `"ogg_opus"` |
 | `word_timestamps` | `bool` | `True` | Include per-word `start`/`end` timestamps and confidence scores |
-| `diarize` | `bool` | `False` | Enable speaker diarization — each word includes a speaker ID |
+| `diarize` | `bool` | `False` | Enable speaker diarization - each word includes a speaker ID |
 | `eou_timeout_ms` | `int` | `100` | Silence (ms) before the server finalizes an utterance. Range `100`–`10000`ms; defaults to `100`ms so server-side EOU adds minimal latency on top of LiveKit's own end-of-turn detection. Acts as a ceiling when `endpointing` is enabled; the sole finalization trigger when disabled |
 | `endpointing` | `bool` | `True` | Finalize on trailing silence instead of waiting on `eou_timeout_ms` alone |
 | `keywords` | `list[tuple[str, float]]` | `[]` | Boost recognition via `(keyword, intensifier)` pairs, e.g. `[("NVIDIA", 2.0)]`. Intensifier ~1.0 (mild) to ~5.0 (strong); avoid values above 5 (hallucination risk). Streaming only, up to 10,000 keywords per session |
@@ -121,9 +121,9 @@ smallest_tts = smallestai.TTS(
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `api_key` | `str` | `$SMALLEST_API_KEY` | Your Smallest AI API key |
-| `model` | `str` | `"lightning_v3.1_pro"` | TTS model. `"lightning_v3.1_pro"` — premium 44.1 kHz pool with curated American, British, and Indian voices; `"lightning_v3.1"` — standard pool with 217 voices across 12 languages |
+| `model` | `str` | `"lightning_v3.1_pro"` | TTS model. `"lightning_v3.1_pro"` - premium 44.1 kHz pool with curated American, British, and Indian voices; `"lightning_v3.1"` - standard pool with 217 voices across 12 languages |
 | `voice_id` | `str` | auto | Voice ID for synthesis. Defaults to `"meher"` for `lightning_v3.1_pro` and `"sophia"` for `lightning_v3.1`. Pro voices must be paired with `lightning_v3.1_pro`; standard voices with `lightning_v3.1` |
-| `language` | `str` | `"en"` | Language code. `lightning_v3.1` supports 12 codes plus `"auto"`; `lightning_v3.1_pro` supports `"en"`, `"hi"`, and `"auto"` only — see the [model cards](/models/model-cards/text-to-speech) for the full lists |
+| `language` | `str` | `"en"` | Language code. `lightning_v3.1` supports 12 codes plus `"auto"`; `lightning_v3.1_pro` supports `"en"`, `"hi"`, and `"auto"` only - see the [model cards](/models/model-cards/text-to-speech) for the full lists |
 | `speed` | `float` | `1.0` | Playback speed multiplier (0.5–2.0) |
 | `sample_rate` | `int` | `24000` | Output audio sample rate in Hz. Supported: `8000`, `16000`, `24000`, `44100` |
 | `output_format` | `str` | `"pcm"` | Output encoding for HTTP synthesis: `"pcm"`, `"mp3"`, `"wav"`, `"ulaw"`, `"alaw"`. WebSocket streaming always returns PCM. |
@@ -200,7 +200,7 @@ python3 agent.py dev
 
 The `dev` flag starts the agent worker in development mode. To interact with it, open the [LiveKit Agents Playground](https://agents-playground.livekit.io) and enter your `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET`. The agent will greet the user automatically on session start.
 
-The pipeline is fully interruptible — if the user speaks while the bot is talking, audio stops immediately and the bot re-engages without any custom logic.
+The pipeline is fully interruptible - if the user speaks while the bot is talking, audio stops immediately and the bot re-engages without any custom logic.
 
 ---
 
