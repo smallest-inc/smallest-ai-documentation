@@ -1,0 +1,92 @@
+---
+title: "Crew vs platform config ownership"
+sidebarTitle: "Config Ownership"
+description: "What a crew build owns (LLM turn) versus what the platform owns (voice, STT, redaction, first message, timeouts). Change platform settings on the agent config; change crew settings in code and redeploy."
+icon: "scale-balanced"
+---
+
+
+import { CodingAgentCallout } from "@/components/CodingAgentCallout";
+
+A crew build attaches to an existing agent and takes over the **LLM turn only**. Everything else about the call keeps running from the platform agent config, which is read fresh at the start of every call. This page is the reference for deciding which knob to touch and where.
+
+## The one-line rule
+
+Change your **prompt, LLM messages, and function tools** in crew code and `agent-crew deploy`. Change **voice, STT, redaction, first message, timeouts, and detection** in the agent settings (dashboard or `update_agent`); those take effect on the next call, no redeploy.
+
+## Prerequisites: create the agent first
+
+You cannot create a new agent through a crew build. Create the agent first (from the dashboard or via `client.atoms.agents.create_agent(...)`), then attach a crew to that agent id:
+
+```bash
+smallestai agent-crew init --agent-id <AGENT_ID>
+```
+
+The crew scaffold hooks the deployed WebSocket URL to the existing agent doc. From that point on the two halves cooperate as described below.
+
+## What your crew code owns
+
+Runs inside the crew you deploy. The platform sends events into this loop and consumes what the crew emits back. It never intervenes on any of these decisions during a call.
+
+| Concern | Mechanism in your crew code |
+|---|---|
+| System prompt / instructions | Crew node Python |
+| LLM messages per turn | LLM request event in, LLM response events out |
+| Function tools (`@function_tool`) | Registered inside the crew; schema stays crew-side |
+| `end_call` | Emit the end-call event |
+| `transfer_call` (cold or warm) | Emit the transfer event with cold or warm options |
+| `speak()` (direct utterance) | Emit the speak event |
+| Mute / unmute the user | Emit the mute or unmute event |
+| Custom timeline events | Emit log events |
+
+Change any of these in code and redeploy the crew. The dashboard cannot change them.
+
+## What the platform always owns
+
+Loaded from the agent config into the pipeline at call start. The crew build has no runtime channel to override any of these during a call.
+
+| Concern | Agent config field |
+|---|---|
+| PII redaction (transcript + recording) | `redactionConfig.isEnabled` |
+| First message spoken by TTS pre-turn | `firstMessage` |
+| TTS provider | `synthesizerType` |
+| TTS voice, speed, similarity | `synthesizerArgs`, `synthesizerSpeed` |
+| STT provider | `transcriberType` |
+| STT language + supported languages | `defaultLanguage`, `supportedLanguages` |
+| Language auto-switching | `languageSwitching` |
+| Interruption handling | `allowInterruptions`, `interruptionBackoffTimer` |
+| Wait for the user to speak first | `waitForUserToSpeakFirst`, `waitForUserToSpeakTimeoutSecs` |
+| Voicemail detection | `voiceMailDetectionConfig` |
+| Smart turn / VAD | `smartTurnConfig`, `voiceDetectionConfig` |
+| Denoising | `denoisingConfig.isEnabled` |
+| Session and idle timeouts | `sessionTimeoutConfig`, `llmIdleTimeoutConfig` |
+| Background sound | `backgroundSound` |
+| Pronunciation dictionary | `pronunciationDicts` |
+| Mute user until first bot response | `muteUserUntilFirstBotResponse` |
+
+Change any of these on the agent (dashboard or `update_agent`) and the next call picks them up.
+
+## Safe no-ops on a crew agent
+
+The following fields exist in the agent config UI but are never consumed for a crew agent. Editing them is harmless (no effect) and does not fix crew misbehavior.
+
+- **Dashboard Tools panel** (the toggles that expose `transfer_call`, `end_call`, and other tool names). This panel controls the single-prompt agent branch. For a crew agent the platform reads tools from the crew build, not from this panel. Toggling `transfer_call` here does not wire it up to a crew's `@function_tool transfer_call` and cannot break the crew's own tool.
+- **Dashboard prompt field** on the same panel. Also single-prompt only. Not read for a crew agent.
+- **`modelName`** on the agent doc. Informational. The crew serves its own model.
+- **Agent-level `tools` field**. Consumed only by the multi-agent branch, unreachable for a crew agent.
+
+## Gotcha: PII redaction is ON by default on dashboard-created agents
+
+New agents created from the dashboard ship with `redactionConfig.isEnabled: true`. Redaction rewrites emails, names, and numbers in the surfaced transcript before the LLM sees them and before synthesis, and can trim a few leading words around them. If your caller reads out an account number or a date and your transcript shows `[ACCOUNTNUMBER_1]` where the digits should be, redaction is the reason.
+
+Turn it off on the agent settings if the destination needs the raw values (dashboard, or `redactionConfig.isEnabled: false` via `update_agent`). Because redaction is platform-owned, the crew cannot toggle it at runtime.
+
+## Guidance
+
+- Editing dashboard-side voice, STT, redaction, or first-message settings on a crew agent **is** effective. Those are platform-owned. Turn `redactionConfig.isEnabled` off on the dashboard if you do not want it; the crew does not need to do anything.
+- Editing dashboard-side prompt or Tools-panel entries on a crew agent **is not** effective. Those are crew-owned and only read on the single-prompt branch. Change them in crew code and redeploy.
+- If a customer report describes a crew regression that lines up with a dashboard toggle change, check the crew deploy history first. Dashboard toggles on the single-prompt branch are inert for crew agents and cannot cause crew-side regressions.
+
+<CodingAgentCallout />
+
+{/* coding-agent-callout-injected */}
