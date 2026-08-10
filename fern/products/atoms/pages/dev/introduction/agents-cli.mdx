@@ -147,6 +147,49 @@ smallestai agents phone-status "$AGENT_ID"
 smallestai agents call "$AGENT_ID" --to "+14155550100"
 ```
 
+## Diagnose a crew agent
+
+`smallestai agent-crew doctor` inspects an agent's live config and flags the mistakes that
+most often stop a crew agent from working:
+
+```bash
+smallestai agent-crew doctor                 # the agent linked in this project
+smallestai agent-crew doctor --agent-id <id> # or a specific agent
+```
+
+It checks for:
+
+- No live crew build (deploy hasn't been made live, so your code isn't serving).
+- A workflow type that isn't `single_prompt` (a crew attaches to single-prompt agents).
+- PII redaction turned on (it rewrites the transcript, including emails and numbers).
+- `transfer_call` enabled in the dashboard Tools panel (ignored for a crew agent, and a
+  common source of confusion).
+
+It then prints the crew-vs-platform ownership tables below.
+
+## Config ownership: crew vs platform
+
+A crew build takes over **only the LLM turn**. Everything else about the call stays on
+the platform agent config and is read fresh on each call.
+
+- **Your crew code owns:** the system prompt, LLM messages, function tools
+  (`@function_tool`, including `transfer_call`), `end_call`, `speak()`, and mute/unmute.
+  Change these in code and `agent-crew deploy`.
+- **The platform owns (your crew cannot override at runtime):** voice/TTS, STT provider
+  and language, **PII redaction**, first message, interruption, voicemail detection,
+  timeouts, background sound, and pronunciation. Change these in the agent settings; they
+  take effect on the next call, **no redeploy**.
+
+Two consequences worth knowing:
+
+- The dashboard **Tools** panel (including its `transfer_call` toggle) is a single-prompt
+  control. For a crew agent it is ignored, so enabling it there does nothing. Define tools
+  in code.
+- New agents created from the dashboard have **PII redaction ON by default**. Redaction
+  rewrites emails, names, and numbers in the surfaced transcript (and can trim a few
+  leading words around them). If you don't want it, set `redactionConfig.isEnabled` to
+  false in the agent settings.
+
 ## Related
 
 <CardGroup cols={2}>
