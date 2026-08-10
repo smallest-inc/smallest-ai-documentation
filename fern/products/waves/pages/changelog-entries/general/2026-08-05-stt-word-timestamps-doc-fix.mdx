@@ -1,0 +1,15 @@
+---
+title: "STT API: clarify that words[] and utterances[] need word_timestamps=true"
+---
+
+The STT API-ref example response showed populated `words[]` and `utterances[]` arrays, but a default request from the docs explorer or Postman returns both arrays empty (the `transcription` string is fine).
+
+Both arrays are gated on the `word_timestamps=true` query parameter. The same flag turns on both. Without it, the API still transcribes but does not attach per-word timings or sentence-level segments.
+
+Fixed on both endpoint schemas (`/waves/v1/stt/` and legacy `/waves/v1/pulse/get_text`):
+
+- Response schema `words` and `utterances` descriptions now state the gate.
+- Example responses now carry a YAML comment naming the request shape they correspond to (word_timestamps=true, plus diarize=true where the example includes `speaker`).
+- `word_timestamps` query-parameter description now spells out default-off behavior and links to the Word Timestamps feature page.
+
+Live-verified: same wav sample against both endpoints returned `transcription` populated with empty `words[]` / `utterances[]` when `word_timestamps` was omitted, and 12 words + 2 utterances when the flag was set.
