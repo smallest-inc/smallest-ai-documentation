@@ -18,7 +18,7 @@ Three events fire per call:
 | `post-conversation` | After the call ends | Full transcript, recording URL, call metadata, agent variables |
 | `analytics-completed` | After post-call analytics are computed | Summary, disposition + success metrics, call metadata |
 
-All three events share the same `callId` — use it as the join key when correlating events for the same call.
+All three events share the same `callId` - use it as the join key when correlating events for the same call.
 
 ---
 
@@ -47,7 +47,7 @@ Click **Create** to add a new webhook endpoint.
 | Field | Description |
 |-------|-------------|
 | **Endpoint URL** | Your server URL that receives the POST requests |
-| **Description** | Optional human-readable label (e.g. `"Debt Collection Agent's Endpoint"`) — echoed back in every event body |
+| **Description** | Optional human-readable label (e.g. `"Debt Collection Agent's Endpoint"`) - echoed back in every event body |
 
 The right panel shows example Flask code for handling webhooks with HMAC signature verification.
 
@@ -190,7 +190,7 @@ Every webhook event shares the same top-level envelope:
 |---|---|---|
 | `url` | string | The webhook URL endpoint. |
 | `description` | string | Human-readable label configured on the webhook. |
-| `event` | string | `{agentId}.{eventType}` — e.g. `69fc7dd072a0c1d28d948ace.post-conversation`. |
+| `event` | string | `{agentId}.{eventType}` - e.g. `69fc7dd072a0c1d28d948ace.post-conversation`. |
 | `metadata` | object | Event-specific payload. See per-event sections below. |
 | `id` | string | Unique webhook delivery ID (separate from `callId`). |
 
@@ -258,8 +258,8 @@ Fired **after** the call ends. Contains the full transcript, call metadata, reco
 | `conversationType` | string | e.g. `"telephonyOutbound"` |
 | `callId` | string | Unique call ID. |
 | `recordingUrl` | string | URL to the composite call recording (`.wav`). |
-| `callData` | object | Call-level metadata — see table below. |
-| `transcript` | array | Ordered list of transcript turns — see table below. |
+| `callData` | object | Call-level metadata - see table below. |
+| `transcript` | array | Ordered list of transcript turns - see table below. |
 | `variables` | object | Key-value map of all agent variables injected into the call. |
 
 ### `metadata.callData`
@@ -370,14 +370,14 @@ Fired **after** Atoms finishes running the configured disposition and success me
 | `conversationType` | string | e.g. `"telephonyOutbound"` |
 | `callId` | string | Unique call ID. |
 | `analytics` | object | Contains `summary`, `dispositionMetrics`, and `successMetrics`. |
-| `callData` | object | Same structure as `post-conversation.callData` — but the `callDirection` field may be absent. |
+| `callData` | object | Same structure as `post-conversation.callData` - but the `callDirection` field may be absent. |
 
 ### `metadata.analytics`
 
 | Field | Type | Description |
 |---|---|---|
 | `summary` | string | LLM-generated plain-text summary of the call. |
-| `dispositionMetrics` | array | Array of metric objects — see schema below. |
+| `dispositionMetrics` | array | Array of metric objects - see schema below. |
 | `successMetrics` | array | Array of metric objects (same schema as disposition metrics). May be empty `[]`. |
 
 ### `analytics.dispositionMetrics[]` and `analytics.successMetrics[]`
@@ -467,15 +467,15 @@ Call initiated
 └─────────────────────┘
 ```
 
-All three events share the same `callId` — use it as the join key.
+All three events share the same `callId` - use it as the join key.
 
 ---
 
 ## Integration notes
 
-1. **`variables` is dynamic** — never hard-code column mappings. Store as JSON or iterate keys.
-2. **`dispositionMetrics` / `successMetrics` are agent-configured** — the set of identifiers and their types will differ across agents.
-3. **`pre-conversation` uses `toPhone` / `fromPhone`** while `post-conversation` and `analytics-completed` use `toNumber` / `fromNumber` — normalize these in your ingestion layer.
+1. **`variables` is dynamic** - never hard-code column mappings. Store as JSON or iterate keys.
+2. **`dispositionMetrics` / `successMetrics` are agent-configured** - the set of identifiers and their types will differ across agents.
+3. **`pre-conversation` uses `toPhone` / `fromPhone`** while `post-conversation` and `analytics-completed` use `toNumber` / `fromNumber` - normalize these in your ingestion layer.
 4. **Timestamps** are always UTC ISO 8601 strings.
 5. **`callDuration`** is a float representing seconds (not milliseconds).
 6. **`recordingUrl`** only appears in `post-conversation`.

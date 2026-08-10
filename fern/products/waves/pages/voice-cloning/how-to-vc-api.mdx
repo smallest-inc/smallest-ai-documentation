@@ -8,7 +8,7 @@ icon: "compact-disc"
 
 import { CodingAgentCallout } from "@/components/CodingAgentCallout";
 
-Create an instant voice clone via a single `POST` call. Uploads the audio, runs preprocessing, and returns pre-generated sample clips of the cloned voice — all in one request.
+Create an instant voice clone via a single `POST` call. Uploads the audio, runs preprocessing, and returns pre-generated sample clips of the cloned voice - all in one request.
 
 <Tip>
   This is the recommended way to clone voices programmatically. It replaces the older two-step flow and the model-specific `/lightning-large/add_voice` endpoint, which are both now deprecated.
@@ -16,7 +16,7 @@ Create an instant voice clone via a single `POST` call. Uploads the audio, runs 
 
 ## Requirements
 
-- A Smallest AI API key — grab one from the [API Keys page](https://app.smallest.ai/dashboard/api-keys).
+- A Smallest AI API key - grab one from the [API Keys page](https://app.smallest.ai/dashboard/api-keys).
 - A clean audio sample, 5–15 seconds, under 5 MB. Supported types: `.mp3`, `.wav`, `.mp4`, `.webm`.
 
 ```bash
@@ -157,9 +157,9 @@ curl -H "Authorization: Bearer $SMALLEST_API_KEY" \
 | `modelIds` contains | Works with |
 |---|---|
 | `lightning-v3.1` | `POST /waves/v1/tts` (with `model: lightning_v3.1` or `lightning_v3.1_pro`) and the unified TTS streaming/WebSocket endpoints |
-| `lightning-large` only | Deprecated `lightning-large` endpoints only — will return an empty audio response on the current `lightning_v3.1` pool |
+| `lightning-large` only | Deprecated `lightning-large` endpoints only - will return an empty audio response on the current `lightning_v3.1` pool |
 
-Clones created via the current `POST /waves/v1/voice-cloning` endpoint always produce `lightning-v3.1`-compatible voices. The older `POST /waves/v1/lightning-large/add_voice` endpoint (deprecated) only produces `lightning-large`-compatible voices — those will not work if you try to use them with `lightning-v3.1`.
+Clones created via the current `POST /waves/v1/voice-cloning` endpoint always produce `lightning-v3.1`-compatible voices. The older `POST /waves/v1/lightning-large/add_voice` endpoint (deprecated) only produces `lightning-large`-compatible voices - those will not work if you try to use them with `lightning-v3.1`.
 
 <Note>
   If you see a short (~100–200 byte) WAV response from a TTS request with a cloned voice, the most common cause is using a `lightning-large`-only clone on the `lightning-v3.1` endpoint. Check `modelIds` on the clone.
@@ -167,7 +167,7 @@ Clones created via the current `POST /waves/v1/voice-cloning` endpoint always pr
 
 ## Delete a clone
 
-The current public delete endpoint lives at `/waves/v1/lightning-large` despite the path suggesting otherwise — it deletes any voice clone on your organization regardless of the underlying model.
+The current public delete endpoint lives at `/waves/v1/lightning-large` despite the path suggesting otherwise - it deletes any voice clone on your organization regardless of the underlying model.
 
 ```bash
 curl -X DELETE "https://api.smallest.ai/waves/v1/lightning-large" \
@@ -192,11 +192,11 @@ curl -X DELETE "https://api.smallest.ai/waves/v1/lightning-large" \
 
 If you're currently using `POST /waves/v1/lightning-large/add_voice`, switch to `POST /waves/v1/voice-cloning`:
 
-- **Same auth** — `Authorization: Bearer $SMALLEST_API_KEY`.
+- **Same auth** - `Authorization: Bearer $SMALLEST_API_KEY`.
 - **Same multipart shape** for `displayName` + `file`.
-- **New optional fields** — `language`, `description`, `accent`, `tags`.
-- **Response includes `samples`** — pre-generated audio clips of the cloned voice, which the legacy endpoint did not provide.
-- **Default model is `lightning-v3.1`** — the new unified TTS model. Voices cloned via the legacy endpoint only worked on `lightning-large` and returned empty audio on `lightning-v3.1`.
+- **New optional fields** - `language`, `description`, `accent`, `tags`.
+- **Response includes `samples`** - pre-generated audio clips of the cloned voice, which the legacy endpoint did not provide.
+- **Default model is `lightning-v3.1`** - the new unified TTS model. Voices cloned via the legacy endpoint only worked on `lightning-large` and returned empty audio on `lightning-v3.1`.
 
 The legacy endpoint still works but is marked deprecated in the API reference.
 

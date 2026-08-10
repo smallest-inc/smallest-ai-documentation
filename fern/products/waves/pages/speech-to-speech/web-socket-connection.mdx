@@ -1,6 +1,6 @@
 ---
 title: "WebSocket connection"
-description: "Connect to the Hydra speech-to-speech WebSocket — auth, query parameters, idle timeout, close codes. Python, Node, and browser snippets."
+description: "Connect to the Hydra speech-to-speech WebSocket - auth, query parameters, idle timeout, close codes. Python, Node, and browser snippets."
 icon: "plug"
 ---
 
@@ -68,7 +68,7 @@ All frames are **JSON text frames** (UTF-8). Binary frames are not used.
 
 ## Authentication
 
-Auth happens during the WebSocket handshake. If `api_key` is missing or invalid, **the server returns HTTP 401 and the WebSocket never opens** — no event frames, no close code.
+Auth happens during the WebSocket handshake. If `api_key` is missing or invalid, **the server returns HTTP 401 and the WebSocket never opens** - no event frames, no close code.
 
 ```python
 try:
@@ -79,7 +79,7 @@ except websockets.exceptions.InvalidStatus as e:
         print("Bad API key")
 ```
 
-A valid `api_key` gives you ~30 seconds of idle tolerance per session — see [Idle timeout](#idle-timeout) below.
+A valid `api_key` gives you ~30 seconds of idle tolerance per session - see [Idle timeout](#idle-timeout) below.
 
 ## What you get back
 
@@ -97,10 +97,10 @@ The server now waits for one `session.configure` from you before accepting audio
 
 ## Idle timeout
 
-If neither side sends a frame for ~**30 seconds**, the server closes with code `1000` (normal close). A fresh connect starts a new session — there is no resume; replay any required state in the new `session.configure`.
+If neither side sends a frame for ~**30 seconds**, the server closes with code `1000` (normal close). A fresh connect starts a new session - there is no resume; replay any required state in the new `session.configure`.
 
 <Tip>
-**Heartbeat with silence frames.** If your client has a UX pause where the user might think for a while (a long deliberation prompt, a UI confirmation step), keep streaming `input_audio_buffer.append` with whatever the mic is producing — silence still counts as traffic and keeps the session alive. Stopping the mic stream and resuming it later is exactly the case the 30 s timeout will catch.
+**Heartbeat with silence frames.** If your client has a UX pause where the user might think for a while (a long deliberation prompt, a UI confirmation step), keep streaming `input_audio_buffer.append` with whatever the mic is producing - silence still counts as traffic and keeps the session alive. Stopping the mic stream and resuming it later is exactly the case the 30 s timeout will catch.
 </Tip>
 
 ## Close codes
@@ -110,13 +110,13 @@ If neither side sends a frame for ~**30 seconds**, the server closes with code `
 | `1000` | Normal close, including idle timeout | Reconnect if the user is still active |
 | `1013` | Server at capacity. Preceded by an `error` event with `code: "server_full"`. | Back off with jitter; surface a queue message |
 
-Auth failures are **not** a close code — they're HTTP 401 at handshake time, as noted above.
+Auth failures are **not** a close code - they're HTTP 401 at handshake time, as noted above.
 
 ## Next
 
-- [Managing sessions](/models/documentation/speech-to-speech-hydra/managing-sessions) — `session.configure`, voices, persona, mid-session updates
-- [Audio I/O](/models/documentation/speech-to-speech-hydra/audio-i-o) — input PCM16, output rate negotiation, browser AudioWorklet
-- [Errors & reconnection](/models/documentation/speech-to-speech-hydra/errors-reconnection) — full error catalog
+- [Managing sessions](/models/documentation/speech-to-speech-hydra/managing-sessions) - `session.configure`, voices, persona, mid-session updates
+- [Audio I/O](/models/documentation/speech-to-speech-hydra/audio-i-o) - input PCM16, output rate negotiation, browser AudioWorklet
+- [Errors & reconnection](/models/documentation/speech-to-speech-hydra/errors-reconnection) - full error catalog
 
 <CodingAgentCallout />
 
