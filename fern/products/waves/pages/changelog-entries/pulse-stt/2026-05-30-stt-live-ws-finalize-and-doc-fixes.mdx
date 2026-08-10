@@ -16,6 +16,6 @@ The unified Speech-to-Text WebSocket API reference page now documents both contr
 **Spec-level cleanup:**
 
 - Removed the spurious `is_last: true` field from the `close_stream` client payload schema. `is_last` is a server-emitted response field; it's meaningless in the client-sent control message and the server ignores it.
-- Added `from_finalize`, `transcript`, `full_transcript`, `language`, and `languages` fields to the `TranscriptionEvent` response schema (they were missing from the spec despite being emitted by the server - verified against `pulse.asr.schema.ts`'s `lightningAsrWebsocketResponseDtoSchema`).
+- Added `from_finalize`, `transcript`, `full_transcript`, `language`, and `languages` fields to the `TranscriptionEvent` response schema (they were missing from the spec despite being emitted by the server).
 
 **Migration:** none for customers. Any code already on `close_stream`-per-turn will keep working but pays a reconnect cost on every turn. Switch to `finalize` per turn + `close_stream` once at end-of-session to drop turn-2-N latency by 200–800 ms.
