@@ -1,0 +1,16 @@
+---
+title: "STT API-ref: response examples now match the real API"
+---
+
+Follow-up to yesterday's `word_timestamps` clarification. That PR fixed the description but the response schema itself still drifted from what the live API returns. Postman side-by-side surfaced it.
+
+Corrected on both endpoint schemas (`/waves/v1/stt/` and legacy `/waves/v1/pulse/get_text`):
+
+- **`speaker` is an integer, not a string.** Real responses carry `speaker: 0` (zero-indexed), not `speaker: "speaker_0"`.
+- **`speaker_confidence` field added** to word entries. Present alongside `speaker` when `diarize=true` is set on Pulse.
+- **Pulse metadata is `{duration, fileSize}` only.** The old example claimed `language`, `request_id`, `processing_time_ms`, `rtfx`, and `num_chunks` on a Pulse response; those are Pulse Pro only.
+- **Pulse Pro includes `totalBytes`, `request_id`, and `language`** at the top level and richer `metadata` (`processing_time_ms`, `rtfx`, `num_chunks`). Also does not diarize, so `words[]` entries omit `speaker` and `speaker_confidence`, and there is no `utterances[]` field.
+- **`duration` is seconds, not minutes.** Description on the legacy Pulse endpoint schema said minutes; corrected.
+- **Response examples split by scenario.** The unified endpoint now shows three named examples: `pulse-default` (empty arrays), `pulse-full` (word_timestamps + diarize), and `pulse-pro`. The legacy endpoint shows two named examples: default and with word_timestamps + diarize.
+
+Live-verified against `api.smallest.ai` on a WAV generated via TTS: default, word_timestamps + diarize, Pulse Pro, and webhook async paths all match the updated schemas.
