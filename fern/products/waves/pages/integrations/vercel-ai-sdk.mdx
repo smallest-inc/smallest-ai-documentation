@@ -34,7 +34,7 @@ Two models, selected via the `model` field on the unified `POST /waves/v1/tts` r
 | Model ID | Description |
 |---|---|
 | `lightning_v3.1` | Default. 44.1 kHz, natural expressive speech, ~200 ms TTFB, 20 accepted language codes (12 with trained voices) plus `auto` for cross-language routing, voice cloning supported. See the [Lightning v3.1 model card](/models/model-cards/text-to-speech/lightning-v-3-1#supported-languages) for the full language list. |
-| `lightning_v3.1_pro` | Premium broadcast-quality pool. 31 languages (adds 8 Asian & Middle Eastern + Greek/Finnish/Norwegian/Dutch/Swedish over base). American / British / Indian accents; Indian voices code-switch automatically. No voice cloning. See the [Lightning v3.1 Pro model card](/models/model-cards/text-to-speech/lightning-v-3-1-pro). |
+| `lightning_v3.1_pro` | Premium broadcast-quality pool. 31 languages (adds 8 Asian & Middle Eastern + Greek/Finnish/Norwegian/Dutch/Swedish over base). American / British / Indian accents; Indian voices code-switch automatically. Supports voice cloning (`model: lightning-v3.1-pro`). See the [Lightning v3.1 Pro model card](/models/model-cards/text-to-speech/lightning-v-3-1-pro). |
 
 The package also exports `DEFAULT_LIGHTNING_MODEL` (`lightning_v3.1`) and `LIGHTNING_V3_1_PRO_MODEL` so you don't have to hard-code the ids; bumping `DEFAULT_LIGHTNING_MODEL` on a new Lightning release flows through to every caller that imports the constant.
 
@@ -264,7 +264,7 @@ const { transcript } = await SmallestAITranscriptionStream.transcribeOnce(
 
 ## Voice Cloning
 
-The provider exposes the voice-cloning REST endpoints alongside TTS / STT. Defaults to `lightning_v3.1` — the only cloning-capable model (the premium `lightning_v3.1_pro` pool does not support cloning).
+The provider exposes the voice-cloning REST endpoints alongside TTS / STT. Cloning accepts `model: lightning-v3.1` (the default) or `lightning-v3.1-pro`; pair the resulting `voice_id` with the matching TTS model.
 
 ```typescript
 import { smallestai } from 'smallestai-vercel-provider';
