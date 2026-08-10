@@ -53,11 +53,19 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
-  /organization:
+  /user/subscription:
     get:
-      summary: Get organization details
+      summary: Get subscription and plan limits
+      description: |
+        Returns the organization's current subscription: plan id, credit balance,
+        renewal date, and the per-plan `limits` (agents, campaigns, numbers, daily and
+        concurrent calls, knowledge-base sizes) plus the `features` map that gates
+        capabilities like telephony, campaigns, and webhooks. Use it to check remaining
+        credits or whether a feature is enabled before attempting an action.
       tags:
-        - Organization
+        - User
+      x-fern-sdk-group-name: user
+      x-fern-sdk-method-name: get_subscription
       security:
         - BearerAuth: []
       responses:
@@ -73,31 +81,50 @@ paths:
                     example: true
                   data:
                     type: object
+                    description: The subscription record. Extra fields may be present.
                     properties:
                       _id:
                         type: string
-                        description: The organization ID
-                      name:
+                      organization:
                         type: string
-                        description: The organization name
-                      members:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            _id:
-                              type: string
-                              description: The member ID
-                            userEmail:
-                              type: string
-                              description: The member email
-                      subscription:
+                      planId:
+                        type: string
+                        description: The active plan identifier.
+                      totalCredits:
+                        type: number
+                      currentCredits:
+                        type: number
+                        description: Credits remaining in the current cycle.
+                      renewalDate:
+                        type: string
+                        format: date-time
+                      subscriptionActive:
+                        type: boolean
+                      onPremEnabled:
+                        type: boolean
+                      limits:
                         type: object
+                        description: Per-plan quotas.
                         properties:
-                          planId:
-                            type: string
-                            description: The subscription plan ID
-
+                          agents:
+                            type: integer
+                          campaigns:
+                            type: integer
+                          numbers:
+                            type: integer
+                          dailyCalls:
+                            type: integer
+                          concurrentCalls:
+                            type: integer
+                          knowledgeBaseItemLimit:
+                            type: integer
+                          knowledgeBaseLimits:
+                            type: integer
+                      features:
+                        type: object
+                        description: Feature flags gating capabilities for this plan.
+                        additionalProperties:
+                          type: boolean
         "401":
           $ref: "#/components/responses/UnauthorizedErrorResponse"
         "500":
@@ -11042,6 +11069,414 @@ paths:
                         type: string
                         example: "Invoice not found: in_1THiCSRwh8g1U6dfOcUtTdq9"
 
+  /account/get-account-details:
+    get:
+      tags:
+        - Account
+      summary: Get account details
+      description: |
+        Returns the calling user's profile (email, name, avatar) along with every organization
+        the user belongs to. Use this to resolve the user's active org list before switching
+        context, or to render user info in a management UI.
+      operationId: getAccountDetails
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Account details retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId:
+                    type: string
+                    description: Unique user ID.
+                    example: "69561896a37fd214b9a8d33a"
+                  email:
+                    type: string
+                    format: email
+                    example: "user@example.com"
+                  firstName:
+                    type: string
+                    example: "Ada"
+                  lastName:
+                    type: string
+                    example: "Lovelace"
+                  phone:
+                    type: string
+                    nullable: true
+                  picture:
+                    type: string
+                    description: URL of the user's avatar image.
+                  hasOnboarded:
+                    type: boolean
+                    description: Whether the user has completed initial onboarding.
+                  organizations:
+                    type: array
+                    description: Organizations the user is a member of. `roleId` is 0 for owner, 1 for member (and higher values for finer-grained roles).
+                    items:
+                      type: object
+                      properties:
+                        orgId:
+                          type: string
+                        name:
+                          type: string
+                        ownerEmail:
+                          type: string
+                          format: email
+                        roleId:
+                          type: integer
+                        onPremEnabled:
+                          type: boolean
+              examples:
+                success:
+                  summary: User in two orgs
+                  value:
+                    userId: "69561896a37fd214b9a8d33a"
+                    email: "ada@example.com"
+                    firstName: "Ada"
+                    lastName: "Lovelace"
+                    phone: null
+                    picture: "https://lh3.googleusercontent.com/a/avatar.jpg"
+                    hasOnboarded: true
+                    organizations:
+                      - orgId: "69561896a37fd214b9a8d33c"
+                        name: "Acme Inc."
+                        ownerEmail: "ada@example.com"
+                        roleId: 0
+                        onPremEnabled: false
+                      - orgId: "698076af5c1b62205ff731b8"
+                        name: "Contoso"
+                        ownerEmail: "grace@example.com"
+                        roleId: 1
+                        onPremEnabled: false
+        '401':
+          description: Missing or invalid API key.
+
+  /account/update-org-name:
+    put:
+      tags:
+        - Account
+      summary: Update the organization name
+      description: |
+        Renames the organization scoped by the API key. Requires the `owner` role. The `name`
+        is what shows up in dashboards, invoices, and the org switcher.
+      operationId: updateOrganizationName
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  description: The new organization name.
+                  example: "Acme Inc."
+            examples:
+              default:
+                summary: Rename the org to "Acme Inc."
+                value:
+                  name: "Acme Inc."
+      responses:
+        '200':
+          description: Organization renamed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  name:
+                    type: string
+                    example: "Acme Inc."
+              examples:
+                success:
+                  summary: Rename accepted
+                  value:
+                    success: true
+                    name: "Acme Inc."
+        '400':
+          description: Missing or empty `name`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Organization name is required"
+              examples:
+                missing-name:
+                  summary: "`name` was empty or missing"
+                  value:
+                    success: false
+                    message: "Organization name is required"
+
+  /conversation/chat:
+    post:
+      tags:
+        - Web Call
+      summary: Start a web chat session
+      description: |
+        Mints a short-lived LiveKit access token and creates a room the browser client can
+        join to have a text-first chat with the agent. The response includes the room name,
+        the LiveKit host to connect to, a `conversationId` for correlation, and a `callId`
+        that shows up in call logs. Pair with the [Web SDK](/voice-agents/developer-guide/client-libraries)
+        to render the session in-browser.
+      operationId: startWebChatConversation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebSessionRequest'
+            examples:
+              default:
+                summary: Start a chat session with an agent
+                value:
+                  agentId: "6a75935452c6e5eceaa16edf"
+      responses:
+        '200':
+          description: Session minted. Use `token` + `host` on the browser client to join `roomName`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebSessionResponse'
+              examples:
+                success:
+                  summary: LiveKit session ready for the browser client
+                  value:
+                    status: true
+                    data:
+                      token: "eyJhbGciOiJIUzI1NiJ9.eyJtZXRhZGF0YSI6IntcIm9yZ2FuaXphdGlvbklkXCI6XCI2OTU2MTg5NmEzN2ZkMjE0YjlhOGQzM2NcIn0iLCJ2aWRlbyI6eyJyb29tSm9pbiI6dHJ1ZSwicm9vbSI6ImRlZTkyMjNhLTQ3NTEtNDlhOS1iY2JjLWNiMzVjNWE4MzcxZCJ9LCJleHAiOjE3ODYxNTk1NjR9.Tn9KCxhnmnjAFQPRWP6XMkjKYnhBiISI6VqUOIqOsRQ"
+                      roomName: "dee9223a-4751-49a9-bcbc-cb35c5a8371d"
+                      host: "wss://atoms-prod-evcaw70g.livekit.cloud"
+                      conversationId: "IyF-GCRiprATI5rx4lIdvg"
+                      callId: "CALL-1786159503332-8387f2"
+        '400':
+          description: Missing or invalid `agentId`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebSessionErrorResponse'
+              examples:
+                missing-agent-id:
+                  summary: Missing agentId
+                  value:
+                    status: false
+                    errors: ["agentId: Required"]
+
+  /conversation/webcall:
+    post:
+      tags:
+        - Web Call
+      summary: Start a web call session
+      description: |
+        Mints a short-lived LiveKit access token and creates a room the browser client can
+        join to have a voice-first call with the agent. Same response shape as `/conversation/chat`;
+        the difference is the audio track defaults on the client side. Pair with the
+        [Web SDK](/voice-agents/developer-guide/client-libraries) to open the room in-browser.
+      operationId: startWebCallConversation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebSessionRequest'
+            examples:
+              default:
+                summary: Start a voice call session with an agent
+                value:
+                  agentId: "6a75935452c6e5eceaa16edf"
+      responses:
+        '200':
+          description: Session minted. Use `token` + `host` on the browser client to join `roomName`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebSessionResponse'
+              examples:
+                success:
+                  summary: LiveKit session ready for the browser client
+                  value:
+                    status: true
+                    data:
+                      token: "eyJhbGciOiJIUzI1NiJ9.eyJtZXRhZGF0YSI6IntcIm9yZ2FuaXphdGlvbklkXCI6XCI2OTU2MTg5NmEzN2ZkMjE0YjlhOGQzM2NcIn0iLCJ2aWRlbyI6eyJyb29tSm9pbiI6dHJ1ZSwicm9vbSI6IjIwOWNkOGM3LTdmZjQtNGFmYy1iNWQ1LWY3MDQ0OGI1Y2UwNyJ9LCJleHAiOjE3ODYxNTk1ODl9.jf5NM4fH79_d6iBb2xTvX5JIo_PmVpjeXWOugoDLQVc"
+                      roomName: "209cd8c7-7ff4-4afc-b5d5-f70448b5ce07"
+                      host: "wss://atoms-prod-evcaw70g.livekit.cloud"
+                      conversationId: "w3fmaal3fKnzNQJ_CHfosw"
+                      callId: "CALL-1786159527700-838803"
+        '400':
+          description: Missing or invalid `agentId`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebSessionErrorResponse'
+              examples:
+                missing-agent-id:
+                  summary: Missing agentId
+                  value:
+                    status: false
+                    errors: ["agentId: Required"]
+
+  /campaign/{id}/export/by-audience-member:
+    get:
+      tags:
+        - Campaigns
+      summary: Export campaign results grouped by audience member
+      description: |
+        Returns one row per contact in the campaign audience with the outcome of every call
+        attempt for that contact (status, disposition, duration, cost, call ID). Use this to
+        reconcile a campaign run against a CRM, or to identify contacts that never connected.
+        The response streams as CSV.
+      operationId: exportCampaignResultsByAudienceMember
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The campaign ID.
+          example: "6a75935452c6e5eceaa16edf"
+          schema:
+            type: string
+            pattern: "^[a-f\\d]{24}$"
+        - name: format
+          in: query
+          required: false
+          description: Output format. Defaults to `json`.
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        '200':
+          description: |
+            The grouped export. The default `json` returns the structured object below;
+            `format=csv` streams `text/csv` with one row per audience-member contact. The
+            CSV column set matches your dashboard's campaign export for this campaign.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  campaign:
+                    type: string
+                    description: The campaign name.
+                  exportedAt:
+                    type: string
+                    format: date-time
+                  totalAudienceMembers:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        audienceMemberId:
+                          type: string
+                        audienceMemberData:
+                          type: object
+                          description: The audience member's custom fields.
+                          additionalProperties: true
+                        phoneNumber:
+                          type: string
+                        originalCall:
+                          type: object
+                          nullable: true
+                          description: The first call attempt for this member.
+                        retryAttempts:
+                          type: array
+                          items:
+                            type: object
+                        totalAttempts:
+                          type: integer
+                        finalStatus:
+                          type: string
+                        totalCallDuration:
+                          type: number
+                        totalCallCost:
+                          type: number
+        '404':
+          description: Campaign not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Campaign not found"]
+
+  /campaign/{id}/logs/export:
+    get:
+      tags:
+        - Campaigns
+      summary: Export campaign call logs
+      description: |
+        Returns one row per call attempt in the campaign (timestamp, contact, agent, outcome,
+        duration, cost, recording URL, transcript URL). Use this for a flat call-level audit
+        trail of a campaign. The response streams as CSV.
+      operationId: exportCampaignLogs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The campaign ID.
+          example: "6a75935452c6e5eceaa16edf"
+          schema:
+            type: string
+            pattern: "^[a-f\\d]{24}$"
+      responses:
+        '200':
+          description: |
+            CSV export streamed successfully. One row per call attempt.
+            The exact column set matches what your dashboard's campaign export produces for this
+            campaign; check a live export against your own campaign to confirm the column list.
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Campaign not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["no campaign found for id 6a75935452c6e5eceaa16edf"]
+
 components:
   securitySchemes:
     BearerAuth:
@@ -11091,6 +11526,55 @@ components:
         pattern: "^[a-f\\d]{24}$"
 
   schemas:
+    WebSessionRequest:
+      type: object
+      required:
+        - agentId
+      properties:
+        agentId:
+          type: string
+          description: The agent to attach the browser client to.
+          example: "6a75935452c6e5eceaa16edf"
+    WebSessionResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+              description: Short-lived LiveKit access token. Pass on the browser client when connecting to `host`.
+              example: "eyJhbGciOiJIUzI1NiJ9..."
+            roomName:
+              type: string
+              description: LiveKit room UUID. Pre-created for this session.
+              example: "dee9223a-4751-49a9-bcbc-cb35c5a8371d"
+            host:
+              type: string
+              description: LiveKit WebSocket URL to connect to.
+              example: "wss://atoms-prod-evcaw70g.livekit.cloud"
+            conversationId:
+              type: string
+              description: Correlates browser events, transcripts, and post-call analytics.
+              example: "IyF-GCRiprATI5rx4lIdvg"
+            callId:
+              type: string
+              description: Call ID surfaced in call-logs and analytics endpoints.
+              example: "CALL-1786159503332-8387f2"
+    WebSessionErrorResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: false
+        errors:
+          type: array
+          items:
+            type: string
+          example: ["agentId: Required"]
     WebEngageIntegrationSet:
       type: object
       description: A single WebEngage credential set
@@ -14595,6 +15079,21 @@ tags:
       Read-only access to your organization's credit balance, ledger, usage breakdown, and invoices. Authenticate with your user API key (`Authorization: Bearer <key>`); the organization is resolved from the key itself, no `X-Organization-Id` header is required. Only these read endpoints accept the API key. Purchase, auto-reload, and payment-method routes remain UI-only.
 
       **Base URL for this section is `https://api.smallest.ai` (not `/atoms/v1`).**
+  - name: Account
+    description: |
+      Read the calling user's profile and the organizations they belong to, and rename the
+      organization scoped by the API key. Owner role required for the rename.
+  - name: Web Call
+    description: |
+      Mint a short-lived LiveKit access token and pre-provision a room the browser client can
+      join to have a chat or a voice call with an agent. Pair with the Web SDK to render the
+      session in-browser. `/conversation/chat` and `/conversation/webcall` share the same
+      request and response shapes; they differ in the default media track on the client.
+  - name: Campaigns
+    description: |
+      Bulk outbound calling. A campaign attaches an agent to an audience CSV and drives one
+      call per contact through the retry policy. Read-only export routes stream results as
+      CSV (grouped by audience member, or flat call-level logs).
 
 servers:
   - url: https://api.smallest.ai/atoms/v1
