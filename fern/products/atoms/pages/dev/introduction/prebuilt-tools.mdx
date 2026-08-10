@@ -1,0 +1,57 @@
+---
+title: Prebuilt tools
+subtitle: Drop-in tools your crew agent's LLM can call, like web search.
+description: "Use smallestai.tools to add prebuilt capabilities (web search, and more) to a crew agent in one line. Third-party libraries install as optional extras."
+---
+
+
+import { CodingAgentCallout } from "@/components/CodingAgentCallout";
+
+`smallestai.tools` gives your crew agent ready-made tools its LLM can call. Each tool
+plugs into the crew's `ToolRegistry` in one line and is also usable on its own. The
+third-party libraries they wrap install as **optional extras**, imported lazily.
+
+## Web search (Exa)
+
+```bash
+pip install "smallestai[exa]"     # reads EXA_API_KEY
+```
+
+Register it inside a crew node so the model can call it:
+
+```python
+from smallestai.tools import ExaSearchTool
+
+class Assistant(OutputCrewNode):
+    def __init__(self):
+        super().__init__(name="assistant")
+        self.tool_registry = ToolRegistry()
+        self.tool_registry.discover(self)          # your own @function_tools
+        ExaSearchTool().register(self.tool_registry)  # + web search, one line
+        self.tool_schemas = self.tool_registry.get_schemas()
+```
+
+Or call it directly, outside a crew:
+
+```python
+results = await ExaSearchTool().run(query="latest voice AI news")
+```
+
+## Discovering tools
+
+```python
+from smallestai.tools import list_tools, get_tool
+
+list_tools()            # {"exa_search": ExaSearchTool, ...}
+get_tool("exa_search")  # the tool class by name
+```
+
+## If the extra isn't installed
+
+Importing `smallestai.tools` never pulls a third-party library. Running a tool without its
+extra raises a clear error, for example `pip install "smallestai[exa]"`. The registry is
+built to add more tools over time; they follow the same pattern.
+
+<CodingAgentCallout />
+
+{/* coding-agent-callout-injected */}

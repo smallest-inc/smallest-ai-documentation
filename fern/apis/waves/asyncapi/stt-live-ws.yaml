@@ -337,6 +337,10 @@ channels:
       errorEvent:
         name: TranscriptionErrorEvent
         $ref: '#/components/messages/TranscriptionErrorEvent'
+      speechStarted:
+        $ref: '#/components/messages/SpeechStartedEvent'
+      speechEnded:
+        $ref: '#/components/messages/SpeechEndedEvent'
 operations:
   sendAudio:
     action: send
@@ -365,6 +369,8 @@ operations:
     messages:
     - $ref: '#/channels/transcription/messages/transcriptionEvent'
     - $ref: '#/channels/transcription/messages/errorEvent'
+    - $ref: '#/channels/transcription/messages/speechStarted'
+    - $ref: '#/channels/transcription/messages/speechEnded'
 components:
   securitySchemes:
     bearerAuth:
@@ -483,3 +489,58 @@ components:
             x-fern-type-name: TranscriptionErrorEventType
           status:  { type: string, example: error }
           message: { type: string }
+    SpeechStartedEvent:
+      x-fern-type-name: SpeechStartedEvent
+      name: SpeechStartedEvent
+      contentType: application/json
+      summary: |
+        Acoustic voice-activity onset. Emitted only when `vad_events=true` was set
+        on connect, interleaved with the `transcription` stream on the same
+        connection. Independent of transcript finalization (`is_final`).
+      payload:
+        x-fern-type-name: SpeechStartedEvent
+        title: SpeechStartedEvent
+        type: object
+        required: [type, session_id, timestamp]
+        properties:
+          type:
+            type: string
+            enum: [speech_started]
+            x-fern-type-name: SpeechStartedEventType
+            description: Discriminator. Always `speech_started` for this event.
+          session_id:
+            type: string
+            description: Matches the `session_id` on `transcription` messages from the same connection; use it to correlate VAD events with transcript turns.
+          timestamp:
+            type: number
+            description: Acoustic onset of speech, in seconds from the first audio frame sent on this connection.
+      examples:
+      - name: speech_started
+        payload: { type: speech_started, session_id: a1b2c3d4, timestamp: 1.84 }
+    SpeechEndedEvent:
+      x-fern-type-name: SpeechEndedEvent
+      name: SpeechEndedEvent
+      contentType: application/json
+      summary: |
+        Acoustic voice-activity offset. Emitted only when `vad_events=true` was set
+        on connect, after a run of silence following speech.
+      payload:
+        x-fern-type-name: SpeechEndedEvent
+        title: SpeechEndedEvent
+        type: object
+        required: [type, session_id, timestamp]
+        properties:
+          type:
+            type: string
+            enum: [speech_ended]
+            x-fern-type-name: SpeechEndedEventType
+            description: Discriminator. Always `speech_ended` for this event.
+          session_id:
+            type: string
+            description: Same session identifier returned on the `transcription` messages.
+          timestamp:
+            type: number
+            description: Acoustic offset of speech (end of a continuous voiced region), in seconds from the first audio frame.
+      examples:
+      - name: speech_ended
+        payload: { type: speech_ended, session_id: a1b2c3d4, timestamp: 4.52 }
