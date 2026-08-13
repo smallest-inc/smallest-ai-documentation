@@ -1508,7 +1508,11 @@ paths:
       description: |
         Retrieve paginated conversation logs with support for various filters. Returns call logs for agents belonging to the authenticated user's organization.
 
-        **Scope your request for performance.** An unscoped call has to sort your organization's entire conversation history, which is slow on large accounts and can time out at the gateway. For high-frequency polling (for example, discovering new inbound calls), always narrow the query: pass a `dateFrom` window sized to your poll interval plus `sortBy=createdAt&sortOrder=desc&limit=N`, and optionally `agentIds` / `campaignIds` / `callTypes`. `dateFrom` acts as a "created after" bound (`createdAt >= dateFrom`) and is index-backed. `agentIds` and `campaignIds` accept comma-separated IDs.
+        **For fast polling, use the default sort.** The default query (no `sortBy`) sorts by `updatedAt` descending and is index-backed, so it stays fast even on large accounts. To discover recent calls, request the first page and keep the list small: `page=1&limit=N` (optionally `callTypes=telephony_inbound` for inbound only). This returns in well under a second. To detect new calls between polls, track the conversation IDs you have already seen rather than a single timestamp, since the default order is `updatedAt` (a recently-updated older call can move to the top).
+
+        **Avoid `sortBy=createdAt`, `dateFrom`, and `dateTo` on large accounts.** These sort or range-filter on `createdAt`, which is not index-backed for the organization-wide query and forces a full scan of your conversation history. On accounts with a large history this can exceed the gateway timeout and return a 504. Prefer the default `updatedAt` sort above.
+
+        `agentIds` and `campaignIds` accept comma-separated IDs and narrow the result set, but do not pair them with `sortBy=createdAt` or `dateFrom` on large accounts (the `createdAt` sort/filter is the slow part, not the number of agents).
       tags:
         - Logs
       security:
