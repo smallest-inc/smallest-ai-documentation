@@ -1505,7 +1505,10 @@ paths:
       summary: Get all conversation logs
       x-fern-sdk-group-name: calls
       x-fern-sdk-method-name: list
-      description: Retrieve paginated conversation logs with support for various filters. Returns call logs for agents belonging to the authenticated user's organization.
+      description: |
+        Retrieve paginated conversation logs with support for various filters. Returns call logs for agents belonging to the authenticated user's organization.
+
+        **Scope your request for performance.** An unscoped call has to sort your organization's entire conversation history, which is slow on large accounts and can time out at the gateway. For high-frequency polling (for example, discovering new inbound calls), always narrow the query: pass a `dateFrom` window sized to your poll interval plus `sortBy=createdAt&sortOrder=desc&limit=N`, and optionally `agentIds` / `campaignIds` / `callTypes`. `dateFrom` acts as a "created after" bound (`createdAt >= dateFrom`) and is index-backed. `agentIds` and `campaignIds` accept comma-separated IDs.
       tags:
         - Logs
       security:
