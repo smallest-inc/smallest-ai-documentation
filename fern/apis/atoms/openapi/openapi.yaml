@@ -840,6 +840,281 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
+  /agent/{id}/widget-config:
+    get:
+      operationId: getAgentWidgetConfig
+      summary: Get widget configuration
+      description: Returns the current web widget configuration for the agent. Also includes `assistantId` (same as the agent ID) as a convenience field for the widget embed code.
+      tags:
+        - Widget
+      deprecated: true
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Agent ObjectId
+      responses:
+        "200":
+          description: Widget configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: All fields may be absent if not yet configured
+                    properties:
+                      assistantId:
+                        type: string
+                        description: Same as the agent ID. Convenience field for the widget embed code
+                      position:
+                        type: string
+                        enum: [bottom-right, bottom-left, top-right, top-left]
+                      size:
+                        type: string
+                        enum: [tiny, compact, full]
+                      borderRadius:
+                        type: number
+                      mode:
+                        type: string
+                        enum: [chat, voice]
+                      theme:
+                        type: string
+                        enum: [light, dark]
+                      baseColor:
+                        type: string
+                      accentColor:
+                        type: string
+                      title:
+                        type: string
+                      startButtonText:
+                        type: string
+                      endButtonText:
+                        type: string
+                      avatarUrl:
+                        type: string
+                        nullable: true
+                      voiceShowTranscript:
+                        type: boolean
+                      consentRequired:
+                        type: boolean
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Agent not found
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+    patch:
+      operationId: updateAgentWidgetConfig
+      summary: Update widget configuration
+      description: |
+        Updates the web widget configuration for the agent. Only provided fields are updated (partial update). When `avatarUrl` is changed, the old CDN avatar is automatically deleted from S3. The `avatarUrl` must be a URL from the platform's CDN domain. Use `POST /agent/{id}/avatar/presigned-url` to upload first.
+      tags:
+        - Widget
+      deprecated: true
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Agent ObjectId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                widgetConfig:
+                  type: object
+                  description: All fields are optional (only provided fields are updated)
+                  properties:
+                    position:
+                      type: string
+                      enum: [bottom-right, bottom-left, top-right, top-left]
+                    size:
+                      type: string
+                      enum: [tiny, compact, full]
+                    borderRadius:
+                      type: number
+                      minimum: 0
+                      maximum: 50
+                    mode:
+                      type: string
+                      enum: [chat, voice]
+                    theme:
+                      type: string
+                      enum: [light, dark]
+                    baseColor:
+                      type: string
+                    accentColor:
+                      type: string
+                    agentBubbleColor:
+                      type: string
+                    textOnAccentColor:
+                      type: string
+                    secondaryTextColor:
+                      type: string
+                    primaryTextColor:
+                      type: string
+                    title:
+                      type: string
+                    startButtonText:
+                      type: string
+                    endButtonText:
+                      type: string
+                    ctaTitle:
+                      type: string
+                      nullable: true
+                    ctaSubtitle:
+                      type: string
+                      nullable: true
+                    ctaName:
+                      type: string
+                      nullable: true
+                    widgetName:
+                      type: string
+                      nullable: true
+                    avatarUrl:
+                      type: string
+                      nullable: true
+                      description: Must be a platform CDN URL. Use `POST /agent/{id}/avatar/presigned-url` to obtain one.
+                    voiceEmptyMessage:
+                      type: string
+                      nullable: true
+                    voiceActiveEmptyMessage:
+                      type: string
+                      nullable: true
+                    chatEmptyMessage:
+                      type: string
+                      nullable: true
+                    chatFirstMessage:
+                      type: string
+                      nullable: true
+                    chatPlaceholder:
+                      type: string
+                    voiceShowTranscript:
+                      type: boolean
+                    consentRequired:
+                      type: boolean
+                    consentTitle:
+                      type: string
+                    consentContent:
+                      type: string
+                    consentStorageKey:
+                      type: string
+                      nullable: true
+                    publicKey:
+                      type: string
+                    allowlist:
+                      type: array
+                      items:
+                        type: string
+      responses:
+        "200":
+          description: Updated widget configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: The updated widgetConfig object
+        "400":
+          description: Invalid agent ID or `avatarUrl` is not a valid CDN URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Agent not found
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
+  /agent/{id}/avatar/presigned-url:
+    post:
+      operationId: getAgentAvatarPresignedUrl
+      summary: Get avatar upload URL
+      description: |
+        Generates a pre-signed S3 upload URL for the agent's widget avatar image. Upload the image directly to S3 using the returned `presignedUrl`, then save `cdnUrl` as the agent's avatar via `PATCH /agent/{id}/widget-config`.
+      tags:
+        - Widget
+      deprecated: true
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Agent ObjectId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, contentType, fileSize]
+              properties:
+                fileName:
+                  type: string
+                  description: Original file name (used to construct the S3 key)
+                contentType:
+                  type: string
+                  description: "MIME type. Must start with `image/`"
+                fileSize:
+                  type: number
+                  description: File size in bytes. Must be greater than 0 and at most 2 MB (2,097,152 bytes)
+      responses:
+        "200":
+          description: Pre-signed upload URL and CDN URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      presignedUrl:
+                        type: string
+                        description: S3 pre-signed PUT URL (expires in 300 s)
+                      cdnUrl:
+                        type: string
+                        description: Final public CDN URL to save on the agent after upload
+                      key:
+                        type: string
+                        description: S3 object key
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Agent not found
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+
   /agent/{id}/workflow:
     get:
       x-fern-ignore: true
@@ -11409,6 +11684,106 @@ components:
           type: boolean
         data:
           type: object
+    WidgetConfig:
+      type: object
+      description: |
+        Configuration for the embeddable web widget. Used by `GET /agent/{id}/widget-config`
+        (returned with `assistantId` injected) and `PATCH /agent/{id}/widget-config`
+        (merge-patched). Every field is optional. Only the fields present in a PATCH
+        request body are written, so partial updates are safe.
+      properties:
+        position:
+          type: string
+          enum: [bottom-right, bottom-left, top-right, top-left]
+        size:
+          type: string
+          enum: [tiny, compact, full]
+        borderRadius:
+          type: number
+          minimum: 0
+          maximum: 50
+        mode:
+          type: string
+          enum: [chat, voice]
+        theme:
+          type: string
+          enum: [light, dark]
+        baseColor:
+          type: string
+        accentColor:
+          type: string
+        agentBubbleColor:
+          type: string
+        textOnAccentColor:
+          type: string
+        secondaryTextColor:
+          type: string
+        primaryTextColor:
+          type: string
+        title:
+          type: string
+        startButtonText:
+          type: string
+          minLength: 1
+        endButtonText:
+          type: string
+          minLength: 1
+        ctaTitle:
+          type: string
+          nullable: true
+        ctaSubtitle:
+          type: string
+          nullable: true
+        ctaName:
+          type: string
+          nullable: true
+        widgetName:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+          description: |
+            Must start with the CDN distribution domain prefix configured for the
+            organization. Submit a non-CDN URL and the server returns 400.
+        voiceEmptyMessage:
+          type: string
+          nullable: true
+        voiceActiveEmptyMessage:
+          type: string
+          nullable: true
+        chatEmptyMessage:
+          type: string
+          nullable: true
+        chatFirstMessage:
+          type: string
+          nullable: true
+        chatPlaceholder:
+          type: string
+          minLength: 1
+        voiceShowTranscript:
+          type: boolean
+        consentRequired:
+          type: boolean
+        consentTitle:
+          type: string
+          minLength: 1
+        consentContent:
+          type: string
+          minLength: 1
+        consentStorageKey:
+          type: string
+          nullable: true
+        publicKey:
+          type: string
+        assistantId:
+          type: string
+          description: Injected by `GET /agent/{id}/widget-config` (equals the agent ID).
+        allowlist:
+          type: array
+          items:
+            type: string
+          description: List of origins (domains) authorized to embed this widget.
     Product:
       type: object
       description: 'A phone-number product owned by the organization — either a platform-rented number (`productType: telephony`) or a SIP-imported number (`productType: custom-telephony`).'
