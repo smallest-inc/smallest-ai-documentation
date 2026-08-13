@@ -846,7 +846,8 @@ paths:
       summary: Get widget configuration
       description: Returns the current web widget configuration for the agent. Also includes `assistantId` (same as the agent ID) as a convenience field for the widget embed code.
       tags:
-        - Agents
+        - Widget
+      deprecated: true
       security:
         - BearerAuth: []
       parameters:
@@ -873,7 +874,7 @@ paths:
                     properties:
                       assistantId:
                         type: string
-                        description: Same as the agent ID — convenience field for the widget embed code
+                        description: Same as the agent ID. Convenience field for the widget embed code
                       position:
                         type: string
                         enum: [bottom-right, bottom-left, top-right, top-left]
@@ -915,9 +916,10 @@ paths:
       operationId: updateAgentWidgetConfig
       summary: Update widget configuration
       description: |
-        Updates the web widget configuration for the agent. Only provided fields are updated (partial update). When `avatarUrl` is changed, the old CDN avatar is automatically deleted from S3. The `avatarUrl` must be a URL from the platform's CDN domain — use `POST /agent/{id}/avatar/presigned-url` to upload first.
+        Updates the web widget configuration for the agent. Only provided fields are updated (partial update). When `avatarUrl` is changed, the old CDN avatar is automatically deleted from S3. The `avatarUrl` must be a URL from the platform's CDN domain. Use `POST /agent/{id}/avatar/presigned-url` to upload first.
       tags:
-        - Agents
+        - Widget
+      deprecated: true
       security:
         - BearerAuth: []
       parameters:
@@ -936,7 +938,7 @@ paths:
               properties:
                 widgetConfig:
                   type: object
-                  description: All fields are optional — only provided fields are updated
+                  description: All fields are optional (only provided fields are updated)
                   properties:
                     position:
                       type: string
@@ -1053,7 +1055,8 @@ paths:
       description: |
         Generates a pre-signed S3 upload URL for the agent's widget avatar image. Upload the image directly to S3 using the returned `presignedUrl`, then save `cdnUrl` as the agent's avatar via `PATCH /agent/{id}/widget-config`.
       tags:
-        - Agents
+        - Widget
+      deprecated: true
       security:
         - BearerAuth: []
       parameters:
@@ -1076,10 +1079,10 @@ paths:
                   description: Original file name (used to construct the S3 key)
                 contentType:
                   type: string
-                  description: "MIME type — must start with `image/`"
+                  description: "MIME type. Must start with `image/`"
                 fileSize:
                   type: number
-                  description: File size in bytes — must be > 0 and ≤ 2 MB (2,097,152 bytes)
+                  description: File size in bytes. Must be greater than 0 and at most 2 MB (2,097,152 bytes)
       responses:
         "200":
           description: Pre-signed upload URL and CDN URL
@@ -11686,7 +11689,7 @@ components:
       description: |
         Configuration for the embeddable web widget. Used by `GET /agent/{id}/widget-config`
         (returned with `assistantId` injected) and `PATCH /agent/{id}/widget-config`
-        (merge-patched). Every field is optional — only the fields present in a PATCH
+        (merge-patched). Every field is optional. Only the fields present in a PATCH
         request body are written, so partial updates are safe.
       properties:
         position:
