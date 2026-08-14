@@ -28,15 +28,15 @@ pip install smallestai
 ```
 
 <Note>
-  **Expected boot output on `smallestai>=5.0.0`.** Startup includes a validation routine that exercises your `setup_handler` against a placeholder WebSocket to surface init-time errors. This dry-run reaches `await session.start()` before any client has connected and logs:
+  **One harmless startup log on older `smallestai` versions.** On boot the server runs a quick self-check of your `setup_handler`. On versions up to the latest release, that self-check logs a single benign line and then serves normally:
 
   ```
   ERROR | Startup validation failed — pod will not accept sessions. ValueError: Session not initialized
   ```
 
-  The server proceeds past this point - `Application startup complete.` follows, `Uvicorn` binds on `:8080`, and real client connections handshake normally.
+  Ignore it: `Application startup complete.` follows, Uvicorn binds on `:8080`, and connections work. Upgrade to the latest `smallestai` to stop seeing it.
 
-  A different error at the same point in startup - for example `OpenAIError: Missing credentials` - indicates a real configuration issue. Set `OPENAI_API_KEY` (or configure Electron, below) before booting.
+  A *different* error at that point is real. For example `OpenAIError: Missing credentials` means a node failed to construct. Set the missing credential (or point the node at your model) before booting.
 </Note>
 
 Verify the installation:
@@ -152,7 +152,7 @@ pip install -r requirements.txt
 ```
 
 <Info>
-  Multi-node uses `smallestai>=5.0.0` because `sentiment_analyzer.py` imports `SDKAgentLogEvent` (introduced in 4.4.7). Same boot-log caveat as the Installation section applies - you'll see the `Session not initialized` ERROR; the pod still serves.
+  Multi-node uses `smallestai>=5.0.0` because `sentiment_analyzer.py` imports `SDKAgentLogEvent` (introduced in 4.4.7). Same harmless boot log as the Installation section applies on older versions (the `Session not initialized` line); the pod still serves, and upgrading removes it.
 </Info>
 
 `app.py` wires both nodes into a single `CrewSession`. `support_agent.py` is the user-facing `OutputCrewNode`; it can query the sibling sentiment node mid-conversation. `sentiment_analyzer.py` is a `BackgroundCrewNode` - it listens to every transcript event, classifies sentiment, and updates state the support agent reads.
