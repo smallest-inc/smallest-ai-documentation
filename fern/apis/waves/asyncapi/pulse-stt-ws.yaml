@@ -262,6 +262,23 @@ servers:
               description: |
                 Alias for `vad_events`. When both are set, `vad_events`
                 takes precedence and `vad` is ignored.
+            external_session_id:
+              type: string
+              maxLength: 128
+              pattern: ^[a-zA-Z0-9_\-.]+$
+              description: |
+                Optional client-provided session identifier for correlation —
+                e.g. your own call or conversation ID. Only alphanumeric
+                characters, hyphens, underscores, and dots allowed; max 128
+                characters. Stored on the session's usage/analytics record so
+                you can join STT usage back to your own systems. It never
+                affects transcription.
+
+                **Not echoed back.** Unlike the TTS WebSocket (where a
+                client-provided `session_id` is returned as
+                `external_session_id` on every response), STT responses carry
+                only the server-generated `session_id`. Keep your own mapping
+                client-side if you need per-message correlation.
 channels:
   pulseStream:
     address: /waves/v1/pulse/get_text
@@ -319,7 +336,7 @@ channels:
           properties:
             session_id:
               type: string
-              description: Unique identifier for the transcription session
+              description: Server-generated unique identifier for the transcription session. The client-provided `external_session_id` query parameter is not echoed back.
             transcript:
               type: string
               description: Partial or complete transcription text for the current segment
