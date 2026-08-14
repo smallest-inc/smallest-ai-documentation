@@ -228,6 +228,23 @@ servers:
                 `URLSearchParams` in JavaScript and `urlencode()` in Python
                 handle the encoding for you. Pass the raw string, not a
                 JSON-encoded array.
+            external_session_id:
+              type: string
+              maxLength: 128
+              pattern: ^[a-zA-Z0-9_\-.]+$
+              description: |
+                Optional client-provided session identifier for correlation —
+                e.g. your own call or conversation ID. Only alphanumeric
+                characters, hyphens, underscores, and dots allowed; max 128
+                characters. Stored on the session's usage/analytics record so
+                you can join STT usage back to your own systems. It never
+                affects transcription.
+
+                **Not echoed back.** Unlike the TTS WebSocket (where a
+                client-provided `session_id` is returned as
+                `external_session_id` on every response), STT responses carry
+                only the server-generated `session_id`. Keep your own mapping
+                client-side if you need per-message correlation.
 channels:
   transcription:
     address: /waves/v1/stt/live
@@ -427,7 +444,7 @@ components:
           is_final:       { type: boolean, description: 'True when this segment will not be revised.' }
           is_last:        { type: boolean, description: 'True on the terminal segment, fires only after the client sends `{"type":"close_stream"}`.' }
           from_finalize:  { type: boolean, description: 'True when this `is_final` was produced by a client-sent `{"type":"finalize"}` rather than the server''s automatic finalizer. Useful in multi-turn flows for per-turn latency measurement.' }
-          session_id:     { type: string }
+          session_id:     { type: string, description: 'Server-generated session identifier, stable for the connection lifetime. The client-provided `external_session_id` query param is not echoed back — keep your own mapping if you need it.' }
           language:       { type: string, nullable: true, description: 'The language code Pulse detected or was pinned to for this segment.' }
           languages:      { type: array, nullable: true, items: { type: string }, description: 'Populated when language detection emits multiple candidates.' }
           words:
