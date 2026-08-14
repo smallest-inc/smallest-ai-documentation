@@ -43,7 +43,11 @@ Your webhook will receive the following types of events:
 - `post-conversation` - Fired **after** the call ends; contains full transcript, recording URL, call metadata, and agent variables
 - `analytics-completed` - Fired **after** post-call analytics are computed; contains summary, disposition metrics, and success metrics
 
-All three events share the same `callId` - use it as the join key when correlating events for the same call.
+All three events fire for **both inbound and outbound** calls. The `conversationType` field tells them apart: `telephonyInbound` or `telephonyOutbound`. All three events share the same `callId` - use it as the join key when correlating events for the same call.
+
+<Tip>
+**Detecting new inbound calls in real time:** subscribe to `pre-conversation`. It fires the moment an inbound call connects and delivers `callId`, `fromPhone`, and `toPhone`, so you get every new call as it happens. This is the right way to react to inbound traffic - there is no need to poll the conversation logs API for new calls.
+</Tip>
 
 ## Webhook Payload Format
 
