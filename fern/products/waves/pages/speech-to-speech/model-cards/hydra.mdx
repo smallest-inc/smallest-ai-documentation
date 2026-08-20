@@ -25,8 +25,8 @@ Hydra is Smallest AI's **speech-to-speech model**. A single WebSocket carries mi
   <Card title="Tool calling" icon="screwdriver-wrench" href="#key-capabilities">
     Standard JSON-schema function calls, executed on your side.
   </Card>
-  <Card title="6 voices" icon="user-music" href="#voices">
-    `wren`, `sloane`, `marlowe`, `reed`, `knox`, `tate`.
+  <Card title="10 voices on v1.1" icon="user-music" href="#voices">
+    `zoe`, `maya`, `elena`, `ivy`, `grace`, `alex`, `aria`, `leo`, `sam`, `kai`.
   </Card>
 </CardGroup>
 
@@ -37,7 +37,7 @@ Hydra is Smallest AI's **speech-to-speech model**. A single WebSocket carries mi
 | **Developed by** | Smallest AI |
 | **Model type** | Full-duplex speech-to-speech |
 | **API surface** | WebSocket (`wss://api.smallest.ai/waves/v1/s2s`) |
-| **Model ID (query param)** | `model=hydra` |
+| **Model ID (query param)** | `model=hydra-v1.1` (default) · `model=hydra-v1.0` · `model=hydra` (deprecated) - see [Model versions](#model-versions) |
 | **Wire version** | v1 |
 | **License** | Proprietary, hosted API |
 
@@ -55,8 +55,8 @@ Hydra is Smallest AI's **speech-to-speech model**. A single WebSocket carries mi
   <Capability icon="bolt" name="Tool / Function Calling">
     Standard JSON-schema tools with streamed arguments, executed on your side.
   </Capability>
-  <Capability icon="user-music" name="6 Voices" href="#voices">
-    `wren`, `sloane`, `marlowe`, `reed`, `knox`, `tate`. Frozen at handshake.
+  <Capability icon="user-music" name="Per-version Voices" href="#voices">
+    Ten on `hydra-v1.1`, fourteen on `hydra-v1.0`. Frozen at handshake.
   </Capability>
   <Capability icon="sparkles" name="Bot Speaks First">
     `generate_initial_response: true` lets the bot open with a greeting before the user speaks.
@@ -70,7 +70,7 @@ Hydra is Smallest AI's **speech-to-speech model**. A single WebSocket carries mi
 
 ## How to use it
 
-See the [Hydra quickstart](/models/documentation/speech-to-speech-hydra/quickstart) for a working end-to-end browser client - clone the reference repo, paste your API key, and talk to Hydra. Hydra is selected via the `model` query parameter on the unified Speech-to-Speech endpoint: `wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=$SMALLEST_API_KEY`. For browser clients, mint a short-lived token server-side rather than embedding the long-lived key in the page.
+See the [Hydra quickstart](/models/documentation/speech-to-speech-hydra/quickstart) for a working end-to-end browser client - clone the reference repo, paste your API key, and talk to Hydra. Hydra is selected via the `model` query parameter on the unified Speech-to-Speech endpoint: `wss://api.smallest.ai/waves/v1/s2s?model=hydra-v1.1&api_key=$SMALLEST_API_KEY`. See [Model versions](#model-versions) for the other tags. For browser clients, mint a short-lived token server-side rather than embedding the long-lived key in the page.
 
 The [Overview](/models/documentation/speech-to-speech-hydra/overview) covers the full event catalog (session config, tool calling, interruption, errors).
 
@@ -125,14 +125,17 @@ Hydra currently supports **English only**. Additional languages are on the roadm
 
 ## Model versions
 
-Two Hydra versions are served on the same endpoint; pick one with `?model=`. The session protocol (event catalog, `session.configure` shape, tool calling, interruption handling) is identical between the two, so switching is a one-parameter change on the query string.
+Three Hydra tags are served on the same endpoint; pick one with `?model=`. The session protocol (event catalog, `session.configure` shape, tool calling, interruption handling) is identical across all three, so switching versions is a one-parameter change on the query string.
 
 | Version | Query string | Notes |
 |---|---|---|
 | **`hydra-v1.1`** (current release, default) | `?model=hydra-v1.1` | Latest speech-to-speech model. Recommended for all new integrations. |
-| `hydra` (original release) <Badge color="yellow">Deprecated</Badge> | `?model=hydra` | Original release. Existing sessions still open; the server emits a `warning` frame with `code: "model_deprecated"` on connect. Migrate to `?model=hydra-v1.1`. Listed on the [Deprecation Notices](/models/deprecations/notices) page. |
+| `hydra-v1.0` | `?model=hydra-v1.0` | Served, not deprecated. The server's deprecation message for `?model=hydra` names this tag as the migration target. |
+| `hydra` (original release) <Badge color="yellow">Deprecated</Badge> | `?model=hydra` | Original release. Existing sessions still open; the server emits a `warning` frame with `code: "model_deprecated"` immediately before `session.created`. Listed on the [Deprecation Notices](/models/deprecations/notices) page. |
 
 ## Voices
+
+Set on `session.configure.session.voice` and frozen at handshake. Rosters are per version and do not overlap - when you switch versions, also pick a voice from the new roster. Omit `voice` and the server applies `sterling`. An unrecognised voice is rejected with an `error` frame (`code: "invalid_request_error"`), not silently defaulted, so validate client-side.
 
 ### `hydra-v1.1` (current release)
 
@@ -142,18 +145,17 @@ Ten voice IDs. This is the roster to use for new integrations.
 |---|
 | `zoe`, `maya`, `elena`, `ivy`, `grace`, `alex`, `aria`, `leo`, `sam`, `kai` |
 
+### `hydra-v1.0`
+
+Fourteen voice IDs.
+
+| Voice ID |
+|---|
+| `vaughn`, `brooks`, `cole`, `hayes`, `pierce`, `sterling`, `ellis`, `lane`, `quinn`, `arden`, `rowan`, `blair`, `emery`, `sawyer` |
+
 ### `hydra` (original release) <Badge color="yellow">Deprecated</Badge>
 
-Six voice IDs. Migrate to `hydra-v1.1` and pick a voice from the roster above.
-
-| Voice ID | Notes |
-|---|---|
-| `wren` | Default (server-side default if `voice` is omitted). |
-| `sloane` | - |
-| `marlowe` | - |
-| `reed` | - |
-| `knox` | - |
-| `tate` | - |
+Migrate to `hydra-v1.1` or `hydra-v1.0` and pick a voice from that version's roster above.
 
 ---
 
@@ -162,7 +164,8 @@ Six voice IDs. Migrate to `hydra-v1.1` and pick a voice from the roster above.
 | Endpoint | Method | Use case |
 |---|---|---|
 | `wss://api.smallest.ai/waves/v1/s2s?model=hydra-v1.1` | WebSocket | Realtime full-duplex speech-to-speech (current release) |
-| `wss://api.smallest.ai/waves/v1/s2s?model=hydra` | WebSocket | Realtime full-duplex speech-to-speech (original release) |
+| `wss://api.smallest.ai/waves/v1/s2s?model=hydra-v1.0` | WebSocket | Realtime full-duplex speech-to-speech |
+| `wss://api.smallest.ai/waves/v1/s2s?model=hydra` | WebSocket | Realtime full-duplex speech-to-speech (original release, deprecated) |
 
 See [Hydra (Realtime / WebSocket)](/models/api-reference/speech-to-speech/speech-to-speech) for the full event schema. The [documentation hub](/models/documentation/speech-to-speech-hydra/overview) covers the event catalog, session config, tool calling, interruption handling, and errors end-to-end.
 
@@ -197,7 +200,7 @@ Pricing: Contact your Smallest AI account manager. Hydra is billed by session mi
 
 | Specification | Details |
 |---|---|
-| **Endpoint** | `wss://api.smallest.ai/waves/v1/s2s?model=hydra&api_key=<KEY>` |
+| **Endpoint** | `wss://api.smallest.ai/waves/v1/s2s?model=hydra-v1.1&api_key=<KEY>` (current release; see [Model versions](#model-versions)) |
 | **Frame format** | JSON (UTF-8 text frames). No binary frames. |
 | **Authentication** | `api_key` query parameter (browser clients should mint a short-lived token server-side) |
 | **Input audio** | PCM16 signed little-endian, 16 kHz, mono, base64 in `input_audio_buffer.append` |

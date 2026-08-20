@@ -27,10 +27,17 @@ servers:
               type: string
               enum:
               - hydra-v1.1
+              - hydra-v1.0
               - hydra
               default: hydra-v1.1
               description: |
-                Speech-to-speech model. `hydra-v1.1` is the current release and the recommended default. `hydra` is the original release and is **deprecated**: sessions still open, but the server emits a `warning` frame with `code: "model_deprecated"` on connect. Migrate to `?model=hydra-v1.1`. The session protocol is identical between the two, so switching is a one-parameter change on the query string. See the [Deprecation Notices](/models/deprecations/notices) page.
+                Speech-to-speech model. Three tags are served:
+
+                - `hydra-v1.1` — current release and the recommended default.
+                - `hydra-v1.0` — also served, not deprecated. This is the tag the server's own deprecation message for `?model=hydra` names as the migration target.
+                - `hydra` — original release, **deprecated**. Sessions still open, but the server emits a `warning` frame with `code: "model_deprecated"` immediately before `session.created`.
+
+                The session protocol is identical across all three, so switching versions is a one-parameter change on the query string. See the [Deprecation Notices](/models/deprecations/notices) page.
             api_key:
               type: string
               description: 'Your Smallest AI API key (the same one used for the REST APIs). Treat as a secret; for browser clients mint a short-lived token server-side rather than shipping the key.'
@@ -398,14 +405,15 @@ channels:
 
       ## Model versions
 
-      Two Hydra versions are served on this endpoint; select one with `?model=`. Everything else in this reference — event catalog, `session.configure` shape, tool calling, interruption handling, audio formats — is identical between them, so switching is a one-parameter change on the query string.
+      Three Hydra tags are served on this endpoint; select one with `?model=`. Everything else in this reference — event catalog, `session.configure` shape, tool calling, interruption handling — is identical across them, so switching versions is a one-parameter change on the query string.
 
-      | Version | Query string | Notes |
+      | Version | Query string | Status |
       |---|---|---|
-      | **`hydra-v1.1`** (current release, default) | `?model=hydra-v1.1` | Latest speech-to-speech model. Recommended for all new integrations. Ten voices. |
-      | `hydra` (original release, **deprecated**) | `?model=hydra` | Deprecated 2026-08-20. Sessions still open, but the server emits a `warning` frame with `code: "model_deprecated"` immediately before `session.created`. Six voices. Migrate to `?model=hydra-v1.1`. |
+      | **`hydra-v1.1`** (current release, default) | `?model=hydra-v1.1` | Latest speech-to-speech model. Recommended for all new integrations. |
+      | `hydra-v1.0` | `?model=hydra-v1.0` | Served, not deprecated. The server's deprecation message for `?model=hydra` names this tag as the migration target. |
+      | `hydra` (original release) | `?model=hydra` | **Deprecated** 2026-08-20. Sessions still open, but the server emits a `warning` frame with `code: "model_deprecated"` immediately before `session.created`. |
 
-      See the [Deprecation Notices](/models/deprecations/notices) page and the [Hydra model card](/models/model-cards/speech-to-speech/hydra).
+      See the [Deprecation Notices](/models/deprecations/notices) page and the [Hydra model card](/models/model-cards/speech-to-speech/hydra) for the per-version reference.
 
       ## How it works
 
@@ -422,12 +430,13 @@ channels:
 
       ## Voices
 
-      Set on `session.configure.session.voice` and frozen at handshake. The two rosters **do not overlap** — when you switch model versions, also pick a new voice.
+      Set on `session.configure.session.voice` and frozen at handshake. Rosters are **per version and do not overlap** — when you switch versions, also pick a voice from the new roster.
 
       - **`hydra-v1.1`** (current release), ten voices: `zoe`, `maya`, `elena`, `ivy`, `grace`, `alex`, `aria`, `leo`, `sam`, `kai`.
-      - **`hydra`** (original release, deprecated), six voices: `wren`, `sloane`, `marlowe`, `reed`, `knox`, `tate`. `wren` is the server-side default when `voice` is omitted.
+      - **`hydra-v1.0`**, fourteen voices: `vaughn`, `brooks`, `cole`, `hayes`, `pierce`, `sterling`, `ellis`, `lane`, `quinn`, `arden`, `rowan`, `blair`, `emery`, `sawyer`.
+      - **`hydra`** (original release, deprecated): migrate to one of the tags above and pick a voice from its roster.
 
-      Unknown or wrong-roster values silently fall back to the default, so validate client-side. The [Hydra model card](/models/model-cards/speech-to-speech/hydra) carries the per-version table.
+      Omit `voice` and the server applies `sterling`. An unrecognised voice is rejected with an `error` frame (`code: "invalid_request_error"`, `param: "session.configure.session.voice"`) rather than silently defaulted — validate client-side. The [Hydra model card](/models/model-cards/speech-to-speech/hydra) carries the per-version table.
 
       ## Idle timeout
 
@@ -591,19 +600,28 @@ components:
           - leo
           - sam
           - kai
-          - wren
-          - sloane
-          - marlowe
-          - reed
-          - knox
-          - tate
+          - vaughn
+          - brooks
+          - cole
+          - hayes
+          - pierce
+          - sterling
+          - ellis
+          - lane
+          - quinn
+          - arden
+          - rowan
+          - blair
+          - emery
+          - sawyer
           description: |
-            Voice identifier. The valid roster depends on the model you connected with, and the two rosters do not overlap:
+            Voice identifier. The roster is per model version and the rosters do not overlap:
 
-            - `?model=hydra-v1.1` (current release): `zoe`, `maya`, `elena`, `ivy`, `grace`, `alex`, `aria`, `leo`, `sam`, `kai`.
-            - `?model=hydra` (original release, deprecated): `wren`, `sloane`, `marlowe`, `reed`, `knox`, `tate`. `wren` is the server-side default when `voice` is omitted.
+            - `?model=hydra-v1.1` (current release), ten voices: `zoe`, `maya`, `elena`, `ivy`, `grace`, `alex`, `aria`, `leo`, `sam`, `kai`.
+            - `?model=hydra-v1.0`, fourteen voices: `vaughn`, `brooks`, `cole`, `hayes`, `pierce`, `sterling`, `ellis`, `lane`, `quinn`, `arden`, `rowan`, `blair`, `emery`, `sawyer`.
+            - `?model=hydra` (original release, deprecated): migrate to one of the tags above and pick a voice from its roster.
 
-            The enum lists the union of both rosters — AsyncAPI cannot express a per-`?model=` constraint on a server query parameter. Unknown or wrong-roster values silently fall back to the default, so **validate client-side**. See the [Hydra model card](/models/model-cards/speech-to-speech/hydra) for the per-version table.
+            Omit the field and the server applies `sterling`. An unrecognised voice is **rejected, not defaulted** — the server replies with an `error` frame carrying `code: "invalid_request_error"` and `param: "session.configure.session.voice"` — so validate client-side. The enum above is the union of the two supported rosters; AsyncAPI cannot express a constraint conditioned on a server query parameter. See the [Hydra model card](/models/model-cards/speech-to-speech/hydra) for the per-version table.
         tools:
           type: array
           items: { $ref: '#/components/schemas/Tool' }
