@@ -27,18 +27,6 @@ The CLI comes bundled with the SDK:
 pip install smallestai
 ```
 
-<Note>
-  **Expected boot output on `smallestai>=5.0.0`.** Startup includes a validation routine that exercises your `setup_handler` against a placeholder WebSocket to surface init-time errors. This dry-run reaches `await session.start()` before any client has connected and logs:
-
-  ```
-  ERROR | Startup validation failed — pod will not accept sessions. ValueError: Session not initialized
-  ```
-
-  The server proceeds past this point - `Application startup complete.` follows, `Uvicorn` binds on `:8080`, and real client connections handshake normally.
-
-  A different error at the same point in startup - for example `OpenAIError: Missing credentials` - indicates a real configuration issue. Set `OPENAI_API_KEY` (or configure Electron, below) before booting.
-</Note>
-
 Verify the installation:
 
 ```bash
@@ -150,10 +138,6 @@ curl -sL https://github.com/smallest-inc/cookbook/archive/refs/heads/main.tar.gz
 cd background_agent
 pip install -r requirements.txt
 ```
-
-<Info>
-  Multi-node uses `smallestai>=5.0.0` because `sentiment_analyzer.py` imports `SDKAgentLogEvent` (introduced in 4.4.7). Same boot-log caveat as the Installation section applies - you'll see the `Session not initialized` ERROR; the pod still serves.
-</Info>
 
 `app.py` wires both nodes into a single `CrewSession`. `support_agent.py` is the user-facing `OutputCrewNode`; it can query the sibling sentiment node mid-conversation. `sentiment_analyzer.py` is a `BackgroundCrewNode` - it listens to every transcript event, classifies sentiment, and updates state the support agent reads.
 
