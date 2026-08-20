@@ -123,9 +123,22 @@ Hydra currently supports **English only**. Additional languages are on the roadm
 
 ---
 
+## Model versions
+
+Two Hydra versions are served on the same endpoint; pick one with `?model=`. The session protocol (event catalog, `session.configure` shape, tool calling, interruption handling) is identical between the two, so switching is a one-parameter change on the query string.
+
+| Version | Query string | Notes |
+|---|---|---|
+| **`hydra-v1.1`** (current release) | `?model=hydra-v1.1` | Latest speech-to-speech model. Different voice roster from the original. |
+| `hydra` (original release) | `?model=hydra` | Original release. Continues to serve requests that pass `model=hydra`; voice roster is unchanged. |
+
 ## Voices
 
-Six voice IDs are accepted on `session.configure.session.voice` and frozen at handshake.
+Voice IDs are accepted on `session.configure.session.voice` and frozen at handshake. The roster depends on which model version you connect with.
+
+### `hydra` (original release)
+
+Six voice IDs.
 
 | Voice ID | Notes |
 |---|---|
@@ -136,13 +149,22 @@ Six voice IDs are accepted on `session.configure.session.voice` and frozen at ha
 | `knox` | - |
 | `tate` | - |
 
+### `hydra-v1.1` (current release)
+
+Ten voice IDs. The V1.1 roster is separate from the original `hydra` roster; when you switch a session to `?model=hydra-v1.1`, also pick a voice from this list.
+
+| Voice ID |
+|---|
+| `zoe`, `maya`, `elena`, `ivy`, `grace`, `alex`, `aria`, `leo`, `sam`, `kai` |
+
 ---
 
 ## API Reference
 
 | Endpoint | Method | Use case |
 |---|---|---|
-| `wss://api.smallest.ai/waves/v1/s2s?model=hydra` | WebSocket | Realtime full-duplex speech-to-speech |
+| `wss://api.smallest.ai/waves/v1/s2s?model=hydra-v1.1` | WebSocket | Realtime full-duplex speech-to-speech (current release) |
+| `wss://api.smallest.ai/waves/v1/s2s?model=hydra` | WebSocket | Realtime full-duplex speech-to-speech (original release) |
 
 See [Hydra (Realtime / WebSocket)](/models/api-reference/speech-to-speech/speech-to-speech) for the full event schema. The [documentation hub](/models/documentation/speech-to-speech-hydra/overview) covers the event catalog, session config, tool calling, interruption handling, and errors end-to-end.
 
