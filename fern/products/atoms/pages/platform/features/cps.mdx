@@ -1,0 +1,271 @@
+---
+title: "Calls Per Second (CPS)"
+sidebarTitle: "Calls per second"
+subtitle: "Control how fast new outbound calls start, so you can hand us bulk volume without overrunning your carrier's rate limit."
+description: "Control how fast new outbound calls start, so you can hand us bulk volume without overrunning your carrier's rate limit."
+slug: /voice-agents/platform/create-agent/cps
+---
+
+**Calls per second (CPS)** is how fast new outbound calls *begin*. [Concurrency](/voice-agents/platform/create-agent/concurrency) is how many calls run *at once*. They are different limits and they apply at the same time.
+
+An easy way to hold the two apart:
+
+| | Question it answers | Analogy |
+|---|---|---|
+| **CPS** | How fast may new calls start? | How wide the door is |
+| **Concurrency** | How many calls may run together? | How many seats are in the room |
+
+A campaign of 5,000 contacts on 2 CPS and 50 concurrency starts two calls every second until all 50 seats are full, then keeps 50 conversations running, starting a new one each time a seat frees, never faster than two per second.
+
+<Note>
+  CPS applies to **outbound** calls only, the calls the platform initiates: single API calls, campaigns, retries, and test calls. Inbound calls are not paced, they arrive at whatever rate your callers dial.
+</Note>
+
+## Why It Exists
+
+Every telephony carrier enforces a limit on how many call attempts per second it will accept on a trunk. Exceed it and the carrier rejects the excess with a SIP error, so those calls never connect. The rejections look like failed calls in your reports, and repeated overruns can get a trunk throttled or suspended.
+
+Before CPS existed, the only way to stay under a carrier's limit was to throttle on your side, drip-feeding requests to our API at the rate your trunk allowed. That defeats the point of a queue.
+
+With CPS you do the opposite: **hand us everything at once.** Push 10,000 calls at our API in a burst, declare the rate your trunk supports, and we hold them in the queue and release them at exactly that rate. Nothing is dropped, calls wait their turn.
+
+<Tip>
+  CPS is free and included with your plan. You are billed for concurrency, not for pacing.
+</Tip>
+
+## The Two Kinds of Numbers
+
+The Concurrency page splits CPS into two sections, because the limit comes from somewhere different in each case.
+
+<CardGroup cols={2}>
+  <Card title="Rented numbers" icon="phone">
+    Numbers you rent from Smallest, on our Plivo or Twilio trunks. **We** own the carrier relationship, so the rate is set per provider by your plan. Read-only in the dashboard.
+  </Card>
+  <Card title="Imported numbers" icon="server">
+    Numbers you brought via SIP on your own carrier trunk. **You** own the carrier relationship, so you set the rate to match what your carrier allows. Editable by org admins.
+  </Card>
+</CardGroup>
+
+### Rented numbers (Smallest telephony)
+
+One rate per provider, covering all your rented numbers on that provider. If you have eight Plivo numbers, they share the Plivo rate, they don't get one each.
+
+The card shows either a rate reserved for your organization, or your plan's standard shared rate. To change it, contact your account team, it's a plan setting, not a dashboard toggle.
+
+### Imported numbers (your SIP trunks)
+
+Imported numbers are grouped by **SIP trunk**, identified by the termination URL you entered when importing. Every number on a trunk shares one rate.
+
+This grouping is the important part, and it is not cosmetic. Carriers enforce CPS **at the trunk**, not per number. If you have 30 numbers on one trunk that accepts 2 CPS, the whole set of 30 has to stay under 2 CPS combined. Pacing each number at 2 would send 60 attempts a second at a trunk that accepts 2.
+
+<Warning>
+  **Set each trunk's CPS to what your carrier actually allows.** If you don't know the number, ask your carrier before raising it, this is the value that protects you from rejected calls. Every imported number starts at **1 call/sec**, the safe floor for an unknown trunk.
+</Warning>
+
+Numbers you import against the same termination URL join the same trunk group automatically and inherit its rate. Trivial differences in how you type the URL don't split the group, `sip:trunk.example.com:5060;transport=udp` and `trunk.example.com:5060` are recognised as the same trunk. Different ports are treated as genuinely different trunks.
+
+## Setting a Trunk's CPS
+
+<Steps>
+  ### Open Concurrency
+  Go to **Concurrency** in the sidebar and scroll to **Calls per second (CPS)**. Rented-number rates are at the top; your imported trunks are below, each listing the numbers on it.
+
+  ### Edit the trunk
+  Click **Edit** on the trunk row, set the rate, and save. Valid range is **1 to 50** calls/sec.
+
+  ### Confirm it applied
+  The row updates to the new rate, and the **Total across trunks** figure at the top of the section recalculates.
+</Steps>
+
+<Note>
+  Only **org admins** can change a trunk's CPS, the same permission model as concurrency reservations. Members can view the page.
+</Note>
+
+### Changes take effect within about a second
+
+A CPS change applies to **calls already queued**, not just new ones. Lower a trunk from 20 to 2 in the middle of a running campaign and the drain rate drops to 2 within roughly a second, including for the thousands of calls already waiting. Raising it lifts the rate just as quickly.
+
+This matters when you're reacting to a problem. If your carrier starts rejecting calls, you can pull the rate down mid-campaign and the queue immediately respects the new value.
+
+<Tip>
+  Because the limit is a property of the trunk, changing it moves **every number on that trunk** at once. You don't have to edit numbers one at a time.
+</Tip>
+
+## What Happens When You Exceed the Rate
+
+Nothing is dropped. Calls that arrive faster than the rate allows **wait in the queue** and dial as capacity becomes available. A 600-call burst on a 4 CPS trunk drains over about 150 seconds, in submission order.
+
+Two limits can hold a call back, and it's worth knowing which one you're hitting:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Calls start slowly but steadily, in order | CPS, calls are being paced | Raise the trunk's CPS if your carrier allows it |
+| Calls start fast, then stall in bursts | Concurrency, all seats are full | Raise concurrency or reserve slots for the agent |
+
+## Planning Your Total Rate
+
+Some carriers cap CPS across your **whole account**, not just per trunk. If yours does, the **Total across trunks** figure at the top of the imported-numbers section is the number to watch, keep it at or below your account-level cap.
+
+<Warning>
+  Adding a trunk raises your total. If your carrier's account limit is 10 CPS and you already have two trunks at 5 each, importing a third number on a new trunk at the default 1 CPS puts you at 11, over the cap.
+</Warning>
+
+## Managing CPS via API
+
+Both endpoints are on the standard Atoms API base, authenticated with your API key. See [API Keys](/voice-agents/platform/account/api-keys).
+
+### View your CPS settings
+
+```bash cURL
+curl -X GET "https://api.smallest.ai/atoms/v1/product/cps-limits" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY"
+```
+
+Returns your per-provider rates for rented numbers, your imported-number trunks with the numbers on each, and the total across trunks:
+
+```json
+{
+  "status": true,
+  "data": {
+    "providers": {
+      "plivo": { "cpsLimit": 5, "isUnlimited": false },
+      "twilio": { "cpsLimit": null, "isUnlimited": false }
+    },
+    "trunks": [
+      {
+        "terminationUrl": "trunk.yourcarrier.com:5060",
+        "cpsLimit": 2,
+        "numbers": [
+          {
+            "productId": "6a1b2c3d4e5f60718293a4b5",
+            "phoneNumber": "+14155550100",
+            "name": "Support line",
+            "isActive": true
+          }
+        ]
+      }
+    ],
+    "totalCps": 2
+  }
+}
+```
+
+On a provider card, `cpsLimit: null` with `isUnlimited: false` means no dedicated reservation, you're on your plan's shared rate. `isUnlimited: true` means an unlimited reservation.
+
+### Set a trunk's CPS
+
+```bash cURL
+curl -X PATCH "https://api.smallest.ai/atoms/v1/product/custom-trunk/cps-limit" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "terminationUrl": "trunk.yourcarrier.com:5060",
+    "cpsLimit": 2
+  }'
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `terminationUrl` | Yes | The trunk to update. Normalized the same way as at import, so the form you type doesn't have to match byte-for-byte |
+| `cpsLimit` | Yes | Whole number, `1` to `50`. Applies to every number on the trunk |
+
+Responds with the number of numbers updated:
+
+```json
+{ "status": true, "data": { "numbersUpdated": 3 } }
+```
+
+| Status | Meaning |
+|---|---|
+| `200` | Applied. `numbersUpdated` is how many numbers on the trunk moved |
+| `400` | `cpsLimit` outside 1–50, not a whole number, or `terminationUrl` missing |
+| `403` | Not an org admin, or not a member of the organization |
+| `404` | No imported numbers on that termination URL for your organization |
+
+<Note>
+  There is no endpoint for rented-number provider rates, those are plan settings. Contact your account team.
+</Note>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Ask your carrier for the real number">
+    The single most useful thing you can do is find out what your trunk actually accepts and set that. Guessing high causes rejected calls; guessing low just makes campaigns slower than they need to be.
+  </Accordion>
+  <Accordion title="Stop throttling on your side">
+    If you currently drip-feed requests to our API to protect your trunk, you can stop. Set the trunk's CPS and submit in bulk, the queue does the pacing and you get better throughput because the queue is always full.
+  </Accordion>
+  <Accordion title="Set the rate before a big campaign">
+    A campaign submits its contacts quickly. Setting the trunk's CPS up front means the whole batch paces correctly from the first call rather than after you notice a problem.
+  </Accordion>
+  <Accordion title="Pair CPS with concurrency">
+    CPS controls how fast calls start; concurrency controls how many run together. A high CPS with low concurrency starts calls quickly and then queues them anyway. Size both for the volume you expect, and see [Concurrency](/voice-agents/platform/create-agent/concurrency) for reserving slots.
+  </Accordion>
+  <Accordion title="Watch the total if your carrier caps your account">
+    Per-trunk limits keep each trunk safe, but they don't stop the sum from exceeding an account-level cap. Check **Total across trunks** when you add a trunk.
+  </Accordion>
+</AccordionGroup>
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="What's the difference between CPS and concurrency?">
+    CPS limits how fast new calls **start**. Concurrency limits how many calls run **at the same time**. Both apply together: a call needs the trunk to be within its CPS rate *and* a free concurrency slot.
+
+    Example: 2 CPS with 50 concurrency starts two calls a second until 50 are running, then holds at 50, starting a new call each time one ends, never more than two per second.
+  </Accordion>
+  <Accordion title="Do calls get dropped if I exceed the CPS limit?">
+    No. Calls that arrive faster than the rate **queue** and dial in order as capacity frees. Pacing changes *when* a call starts, never *whether* it happens.
+  </Accordion>
+  <Accordion title="How fast does a CPS change take effect?">
+    Within about a second, and it applies to calls **already queued**, not just new submissions. Lowering the rate mid-campaign immediately slows the existing backlog; raising it speeds the backlog up just as fast.
+  </Accordion>
+  <Accordion title="Why do all the numbers on one trunk share a rate?">
+    Because that's how carriers enforce it. The limit lives on the trunk, so every number provisioned on that trunk draws from the same allowance. Pacing each number separately would multiply your real rate by the number of numbers and overrun the carrier.
+  </Accordion>
+  <Accordion title="I imported two numbers on the same trunk but typed the URL differently. Are they one trunk or two?">
+    One trunk. Termination URLs are normalized, so scheme prefixes, capitalisation, and SIP URI parameters don't create separate groups: `sip:trunk.example.com:5060;transport=udp` and `trunk.example.com:5060` are the same trunk.
+
+    **Ports are the exception** and are treated as distinct, `trunk.example.com:5060` and `trunk.example.com:5061` are two trunks, because different ports can genuinely be different endpoints.
+  </Accordion>
+  <Accordion title="What CPS does a newly imported number start at?">
+    **1 call/sec.** It's the safe floor for a trunk whose limit we don't know. If the number joins a trunk you already have, it inherits that trunk's rate instead.
+  </Accordion>
+  <Accordion title="What's the maximum CPS I can set?">
+    **50** calls/sec per trunk through the dashboard and API. If your carrier supports more and you need it, talk to your account team.
+  </Accordion>
+  <Accordion title="Can I turn pacing off for a trunk?">
+    No. Every imported number is paced, with a minimum of 1 call/sec. There's no unpaced mode, because an unpaced trunk is exactly the situation that gets calls rejected by the carrier.
+  </Accordion>
+  <Accordion title="Can I set CPS per number instead of per trunk?">
+    No, and it wouldn't protect you. The carrier's limit applies to the trunk, so the only value that keeps you under it is one shared by every number on that trunk.
+  </Accordion>
+  <Accordion title="Who can change CPS?">
+    Org admins. Members can view the Concurrency page but the API returns `403` on the update. This matches concurrency reservations, and reflects that a wrong value can cause carrier-side rejections for the whole organization.
+  </Accordion>
+  <Accordion title="Does CPS apply to inbound calls?">
+    No, outbound only. Inbound calls arrive at whatever rate people dial you. Use [concurrency](/voice-agents/platform/create-agent/concurrency) to plan inbound capacity, and note that inbound calls can't be queued.
+  </Accordion>
+  <Accordion title="Does CPS apply to campaigns and retries too?">
+    Yes. Every outbound call the platform initiates is paced by the same trunk rate, single API calls, campaign dials, automatic retries, and test calls. They all draw from one allowance per trunk.
+  </Accordion>
+  <Accordion title="Can I change the CPS for my rented Smallest numbers?">
+    Not from the dashboard, those rates come from your plan because we own the carrier relationship. Contact your account team to change them.
+  </Accordion>
+  <Accordion title="My campaign is slower than I expected. Is CPS the cause?">
+    Check which limit you're hitting. Calls starting slowly but steadily in order points at CPS, raise the trunk's rate if your carrier allows. Calls starting fast and then stalling points at concurrency, all slots are in use.
+
+    Also check **Total across trunks** against any account-level cap your carrier enforces.
+  </Accordion>
+</AccordionGroup>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Concurrency" icon="users" href="/voice-agents/platform/create-agent/concurrency">
+    How many calls can run at the same time, and how to reserve slots per agent.
+  </Card>
+  <Card title="Phone Numbers" icon="phone" href="/voice-agents/platform/deploy/phone-numbers">
+    Rent numbers or import your own via SIP, including the termination URL that identifies a trunk.
+  </Card>
+</CardGroup>
