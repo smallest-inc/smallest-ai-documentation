@@ -271,19 +271,24 @@ class AudioPlayer(private val sampleRate: Int) {
 private fun handleServerEvent(text: String) {
     val json = JSONObject(text)
     when (json.optString("type")) {
-        "session.created"      -> { /* update UI on main thread */ }
-        "output_audio.delta"    -> {
+        "session.created"     -> { /* update UI on main thread; also carries sample_rate, channels */ }
+        "output_audio.delta"   -> {
             val pcm = Base64.decode(json.getString("audio"), Base64.NO_WRAP)
             player.enqueue(pcm)
         }
-        "agent_start_talking"   -> { /* UI: show "speaking" */ }
-        "agent_stop_talking"    -> { /* UI: hide "speaking" */ }
+        "transcript"            -> { /* json.getString("role"), json.getString("text") */ }
+        "agent.start_talking"   -> { /* UI: show "speaking" */ }
+        "agent.stop_talking"    -> { /* UI: hide "speaking" */ }
         "interruption"          -> player.flush()
         "session.closed"        -> stop()
         "error"                 -> Log.e("Atoms", "[${json.optString("code")}] ${json.optString("message")}")
     }
 }
 ```
+
+Confirmed server → client types on this gateway: `session.created` (`session_id`, `call_id`, `sample_rate`, `channels`), `output_audio.delta`, `transcript` (`role`, `text`), `agent.start_talking`, `agent.stop_talking`, `session.closed` (`reason`: `client_requested`, `websocket_closed`, or `setup_failed`), and `error` (`code`, `message`). `interruption` also arrives on the wire (confirmed by device testing), but it's relayed verbatim from the STT/LLM/TTS worker rather than part of the gateway's own typed contract, so treat its shape as provisional.
+
+Client → server, you can also send `input_text.send` (`{"type": "input_text.send", "text": "..."}`, works alongside voice input, no documented length cap) and `session.close` (`{"type": "session.close"}`) for a clean shutdown reported as `session.closed.reason == "client_requested"` instead of `"websocket_closed"`.
 
 ## Threading model
 
@@ -369,11 +374,34 @@ context.registerReceiver(
 
 ### Reconnect on transient failure
 
-OkHttp's `onFailure` fires on network drops. Reconnect with exponential backoff up to 30 s. Do not retry on 4401/4403 codes (auth failure); check `response?.code` in the failure handler.
+OkHttp's `onFailure` fires on network drops, and `onClosing`/`onClosed` fires for server-initiated closes. Don't decide retry vs. give-up from the close code alone: every fatal setup failure (agent not found, credits exhausted, a dependency timing out) closes with the same code, `4000`, whether or not it's actually retryable. Auth failures (bad token, unknown `agent_id`) never reach these callbacks at all, they're rejected as a plain HTTP `401`/`403` before the WebSocket upgrade completes, so `onFailure` fires with that HTTP response and the socket never opens.
+
+For a `4000` close, capture the `code` from the `error` message the server sends immediately before it, that's the only reliable retry signal:
+
+```kotlin
+private var lastErrorCode: String? = null
+
+// inside handleServerEvent's "error" branch:
+"error" -> {
+    lastErrorCode = json.optString("code")
+    Log.e("Atoms", "[${json.optString("code")}] ${json.optString("message")}")
+}
+
+override fun onClosing(ws: WebSocket, code: Int, reason: String) {
+    val retryable = lastErrorCode == null ||
+        lastErrorCode in setOf("internal_error", "worker_not_ready", "503")
+    lastErrorCode = null
+    if (code != 1000 && retryable) {
+        // exponential backoff 500 ms → 30 s
+        reconnect()
+    }
+    // else e.g. "404" (agent not found): don't retry, surface to the user
+}
+```
 
 ### Mic mute while agent speaks
 
-Stop `AudioRecord` briefly on `agent_start_talking` and restart on `agent_stop_talking` if device AEC is underperforming. The user's speech during the agent turn goes undetected, which is usually the right trade-off versus audible self-feedback.
+Stop `AudioRecord` briefly on `agent.start_talking` and restart on `agent.stop_talking` if device AEC is underperforming. The user's speech during the agent turn goes undetected, which is usually the right trade-off versus audible self-feedback.
 
 ### Battery
 
