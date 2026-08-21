@@ -171,6 +171,54 @@ curl --request POST \
   </tbody>
 </table>
 
+## Performance
+
+Speaker labels are integrated into the STT response, so one call returns transcript, word timestamps, and per-word speaker attribution. Both modes (batch and streaming) are language-agnostic and cover overlapping speech, far-field meetings, and narrowband telephone audio.
+
+Internal-benchmark Diarization Error Rate (DER, lower is better) on public datasets. Scored with `pyannote.metrics`: no collar, overlapping speech counted, permutation-optimal speaker matching, duration-pooled. Competitors run through their public APIs with diarization enabled at default settings. Speed figures are end-to-end round-trip through each vendor's public API.
+
+### Batch (offline)
+
+Macro-average across six datasets (`ami_ihm`, `ami_sdm`, `callhome_eng`, `callhome_deu`, `callhome_spa`, `simsamu`):
+
+| System | DER | Miss | Speaker-confusion |
+|---|---:|---:|---:|
+| Smallest.ai (Pulse) | 21.1 | 13.2 | 2.7 |
+| ElevenLabs Scribe v2 | 29.0 | 21.7 | 3.7 |
+| Deepgram Nova-3 | 33.3 | 23.7 | 4.8 |
+
+End-to-end API round-trip (median RTF, lower is faster):
+
+| System | RTF | ~× real-time |
+|---|---:|---:|
+| Smallest.ai (Pulse) | 0.004 | ~240x |
+| Deepgram | 0.007 | ~140x |
+| pyannoteAI | 0.022 | ~45x |
+| AssemblyAI | 0.028 | ~36x |
+| ElevenLabs | 0.060 | ~17x |
+
+### Streaming (~1s latency)
+
+Macro-average across eight open-source corpora:
+
+| System | DER | RTF n=1 |
+|---|---:|---:|
+| Smallest.ai (Pulse streaming) | 27.6 | 0.03 |
+| Pyannote Live-1 | 26.6 | 1.07 |
+| Deepgram Nova-3 live | 41.9 | 0.90 |
+
+Indic-DiarBench streaming (22 Indic languages, 440 files, DER):
+
+| System | DER (overall) |
+|---|---:|
+| Smallest.ai (Pulse streaming) | 23.2 |
+| Pyannote Live-1 | 37.1 |
+| Deepgram Nova-3 live | 77.6 |
+
+ElevenLabs and Sarvam do not offer streaming diarization. pyannoteAI's flagship precision-2 is batch-only; their streaming model is Live-1.
+
+Full per-dataset numbers and methodology live on the [Performance](/models/documentation/speech-to-text-pulse/benchmarks/performance) and [Metrics Overview](/models/documentation/speech-to-text-pulse/benchmarks/metrics-overview) pages.
+
 <CodingAgentCallout />
 
 {/* coding-agent-callout-injected */}
