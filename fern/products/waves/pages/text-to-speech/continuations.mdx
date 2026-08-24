@@ -76,6 +76,7 @@ Verified against a live connection: `status: "complete"` behaves differently her
 - **`complete` does not close the WebSocket while the context is open.** Unlike a plain non-continuation request (see [Response Format](/models/documentation/text-to-speech-lightning/streaming#response-format), where `complete` is terminal and the server closes the connection), a mid-context `complete` just marks that one release as done — the connection stays open and you can send more fragments on the same `context_id` afterward.
 - **`session_id` is stable for the whole connection; `request_id` changes per released segment.** Use `session_id` if you need to correlate frames back to the connection; don't assume one `request_id` spans an entire context.
 - **No `context_id` is echoed back on any response frame.** If you multiplex more than one `context_id` on a single connection, track which context a frame belongs to by send order — don't rely on the response to disambiguate.
+- **No frame marks "the context is fully done."** A `complete` after a sentence-boundary or `max_buffer_delay_ms` release looks identical to one after your closing frame (`continue: false` / `context_close: true`). Don't return on the first `complete` you see — drain frames until the connection goes idle (or you close it yourself once you've accounted for every fragment you sent).
 
 ## Concurrency and billing
 
@@ -110,11 +111,17 @@ async def stream_with_continuation(fragments):
                 "max_buffer_delay_ms": 1500,
             }))
 
+        # A context can release audio in more than one segment — each gets
+        # its own chunk/complete pair, and there's no "final complete"
+        # flag on the wire. Keep draining until the socket goes quiet
+        # rather than returning on the first complete, or you can drop
+        # whatever's still in flight for a later segment.
         while True:
-            data = json.loads(await ws.recv())
-            if data.get("status") == "complete":
+            try:
+                data = json.loads(await asyncio.wait_for(ws.recv(), timeout=5))
+            except asyncio.TimeoutError:
                 break
-            # handle "chunk" frames as usual
+            # handle "chunk" frames; "complete" marks one released segment, not necessarily the whole context
 
 asyncio.run(stream_with_continuation([
     "Let me check that for you.",
@@ -123,7 +130,7 @@ asyncio.run(stream_with_continuation([
 ]))
 ```
 
-The three fragments above are buffered and joined into one continuous generation instead of three separately-paced ones, because they share `context_id: "call-1"`.
+The three fragments above share `context_id: "call-1"`, so they're buffered and joined instead of spoken as three separately-paced generations — in practice this reliably collapses to a single release when fragments arrive close together, but the receive loop doesn't assume that.
 
 ## Related
 
