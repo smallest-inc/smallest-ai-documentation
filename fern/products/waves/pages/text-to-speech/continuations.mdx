@@ -64,6 +64,19 @@ Three ways to close a context, depending on why you're closing it:
 
 Closing the WebSocket connection also ends every open context on it (nothing buffered is flushed — there's nothing left to bill or play).
 
+<Warning>
+If a context has nothing buffered when you send its closing frame (`continue: false` with no `text`, or `context_close: true`) — for example, everything already released earlier via a sentence boundary or `max_buffer_delay_ms` — the server sends back **no frame at all** for that message. Don't block waiting on a response to the closing frame itself.
+</Warning>
+
+## Response frames during a continuation
+
+Verified against a live connection: `status: "complete"` behaves differently here than it does for a one-shot request.
+
+- **One `chunk`/`complete` pair per *released segment*, not one per context.** Every time buffered text is released — on a sentence boundary, on `max_buffer_delay_ms`, or on the frame that closes the context — you get its own run of `chunk` frames followed by a `complete`. A context fed in one long burst typically collapses to a single release (and a single `complete`), but a context spread across multiple flushes emits multiple `complete` frames while the context is still open.
+- **`complete` does not close the WebSocket while the context is open.** Unlike a plain non-continuation request (see [Response Format](/models/documentation/text-to-speech-lightning/streaming#response-format), where `complete` is terminal and the server closes the connection), a mid-context `complete` just marks that one release as done — the connection stays open and you can send more fragments on the same `context_id` afterward.
+- **`session_id` is stable for the whole connection; `request_id` changes per released segment.** Use `session_id` if you need to correlate frames back to the connection; don't assume one `request_id` spans an entire context.
+- **No `context_id` is echoed back on any response frame.** If you multiplex more than one `context_id` on a single connection, track which context a frame belongs to by send order — don't rely on the response to disambiguate.
+
 ## Concurrency and billing
 
 Fragments sharing one `context_id` on the same connection occupy a single concurrency slot, not one per fragment — chunking your input more finely doesn't cost you additional concurrent-call capacity. Billing still applies per generated segment through the normal path.
