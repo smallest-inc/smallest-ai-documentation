@@ -531,51 +531,7 @@ If you need word timing, use the WebSocket path.
 
 <Badge color="purple">Real-Time</Badge>
 
-Tag a sequence of WebSocket fragments with the same `context_id` to have them buffered, joined at natural sentence boundaries, and spoken as one continuous generation - each fragment is primed with the audio from the one before it, so pacing and intonation carry across chunks instead of resetting per-request. Built for text arriving incrementally, e.g. LLM token streams.
-
-### Request
-
-```json
-{
-  "context_id": "call-1",
-  "voice_id": "meher",
-  "text": "Let me check that for you.",
-  "model": "lightning_v3.1",
-  "continue": true,
-  "max_buffer_delay_ms": 1500
-}
-```
-
-Send `continue: false` on the last fragment (it may omit `text`) to close the context out.
-
-### Parameters
-
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `context_id` | string | - | Alphanumeric, `-`, `_`, `.` only, max 128 chars. Groups fragments into one continuation. |
-| `continue` | boolean | `false` | With `context_id` set: `true` means more fragments are coming. `false` closes the context. |
-| `max_buffer_delay_ms` | integer | `3000` | Upper bound (0-5000 ms) on how long a fragment waits for a clean sentence boundary before it's spoken anyway. |
-| `context_close` | boolean | `false` | Immediate teardown - releases buffered text and drops the context's carried state right away instead of waiting out its idle timeout. |
-
-`context_id` cannot be combined with `flush` or `max_buffer_flush_ms` (the older, timer-based buffer) - that's a validation error. Close a continuation with `continue: false` or `context_close: true` instead.
-
-### Response frames
-
-Verified against a live connection - `complete` behaves differently here than on a one-shot request: it fires **per released segment**, not once per context, and it does not close the WebSocket while the context is still open. `session_id` stays constant for the connection; `request_id` changes per released segment. `context_id` itself is never echoed back on any response frame.
-
-### Concurrency
-
-Fragments sharing one `context_id` on the same connection occupy a single concurrency slot, not one per fragment.
-
-### Where it works
-
-| Surface | Continuations |
-|---|---|
-| `wss://api.smallest.ai/waves/v1/tts/live` (WebSocket) | ✅ |
-| `POST /waves/v1/tts` (sync HTTP) | ❌ - not applicable |
-| `POST /waves/v1/tts/live` (HTTP SSE) | ❌ - same |
-
-Full parameter reference, buffering/release rules, and a worked example on the [Continuations](/models/documentation/text-to-speech-lightning/continuations) page.
+Tag a sequence of WebSocket fragments with the same `context_id` to have them buffered, joined at natural sentence boundaries, and spoken as one continuous generation instead of resetting per-request - useful for text arriving incrementally (e.g. LLM token streams). WebSocket only; cannot be combined with `flush` or `max_buffer_flush_ms`. See [Continuations](/models/documentation/text-to-speech-lightning/continuations) for the full parameter reference and buffering rules.
 
 ---
 
