@@ -81,6 +81,11 @@ channels:
       Supported on English + Hindi base-queue voices. See
       [Word-level timestamps](/models/documentation/text-to-speech-lightning/word-timestamps).
 
+      Send the same `context_id` on a sequence of text fragments to have
+      them buffered, joined at natural sentence boundaries, and spoken as
+      one continuous generation instead of one reset-per-fragment. See
+      [Continuations](/models/documentation/text-to-speech-lightning/continuations).
+
       ## Connection timeout
 
       The server closes idle WebSocket connections to free resources. The
@@ -171,11 +176,31 @@ channels:
               minimum: 0
             continue:
               type: boolean
-              description: This setting controls whether the system should buffer and wait for more input after receiving the current one. If not set, it assumes no more input is coming.
+              description: |
+                Buffering control. Meaning depends on whether `context_id`
+                is also set:
+
+                - **Without `context_id`** (legacy buffer): `true` holds
+                  this text and waits for a later request with
+                  `flush: true` before generating any audio.
+                - **With `context_id`** (continuations): `true` means
+                  "more text for this context is coming" — the fragment
+                  is buffered only until it reaches a natural sentence
+                  boundary or `max_buffer_delay_ms` elapses, whichever is
+                  first. Send `continue: false` to close out the context
+                  and speak whatever is left buffered — this frame may
+                  omit `text`. See
+                  [Continuations](/models/documentation/text-to-speech-lightning/continuations).
+
+                If not set, assumes no more input is coming.
               default: false
             flush:
               type: boolean
-              description: This setting controls whether the system should flush the current buffer.
+              description: |
+                This setting controls whether the system should flush the
+                current buffer. Legacy buffering only — cannot be combined
+                with `context_id` (end a context with `continue: false` or
+                `context_close: true` instead).
               default: false
             complete_backoff_ms:
               type: number
@@ -183,6 +208,46 @@ channels:
               default: 4000
               minimum: 0
               maximum: 10000
+            context_id:
+              type: string
+              description: |
+                Groups a sequence of text fragments into one continuous
+                synthesis ("continuations"). Send the same `context_id` on
+                every fragment belonging to one utterance — fragments are
+                buffered and joined at natural sentence boundaries, and
+                each new generation in the context is primed with the
+                audio from the previous one so prosody carries across
+                fragments instead of resetting per-chunk.
+
+                Fragments sharing a `context_id` on the same connection
+                count as a single concurrency slot, not one per fragment.
+
+                Cannot be combined with `flush` or `max_buffer_flush_ms` —
+                those are the legacy buffering contract. End a context
+                with `continue: false` or `context_close: true` instead.
+                See [Continuations](/models/documentation/text-to-speech-lightning/continuations).
+              maxLength: 128
+              pattern: ^[a-zA-Z0-9_\-.]+$
+            max_buffer_delay_ms:
+              type: integer
+              description: |
+                Only meaningful together with `context_id`. Upper bound
+                (ms) on how long a fragment may wait for a clean sentence
+                boundary before it's spoken anyway. The deadline starts on
+                the first still-buffered fragment and does not reset as
+                more fragments arrive, so a chatty client can't hold
+                playback in silence indefinitely.
+              default: 3000
+              minimum: 0
+              maximum: 5000
+            context_close:
+              type: boolean
+              description: |
+                Ends a `context_id` immediately: releases any buffered
+                text and drops that context's carried audio state right
+                away instead of waiting out its idle timeout. May be sent
+                without `text` / `voice_id`.
+              default: false
             language:
               type: string
               description: |
@@ -412,7 +477,7 @@ channels:
                 Frame type discriminator:
                 - `chunk` — base64-encoded audio chunk in `data.audio`.
                 - `word_timestamp` — per-word timing event in `data.{id,word,start,end}`. Only emitted when the request set `word_timestamps: true` and the voice family supports it.
-                - `complete` — terminal frame; the server closes the WebSocket after this.
+                - `complete` — terminal frame; the server closes the WebSocket after this. **Exception:** inside a `context_id` continuation, `complete` marks one released segment as done, not the end of the connection — the socket stays open and more segments (each with its own `complete`) can follow. See [Continuations](/models/documentation/text-to-speech-lightning/continuations).
             data:
               type: object
               description: Frame-specific payload. Shape depends on `status` — see the per-frame examples below.

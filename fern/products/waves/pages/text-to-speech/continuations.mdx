@@ -1,0 +1,142 @@
+---
+title: "Continuations"
+sidebarTitle: "Continuations"
+description: "Group a sequence of streamed text fragments into one continuous synthesis on the Lightning TTS WebSocket, so prosody carries across chunks instead of resetting per-request."
+icon: "link"
+---
+
+
+import { CodingAgentCallout } from "@/components/CodingAgentCallout";
+
+<Badge color="purple">Real-Time</Badge>
+
+By default, every WebSocket request is its own independent generation — send `text` + `voice_id`, get back audio, done. That's fine for one-shot utterances, but text arriving incrementally (LLM token streams, live-typed captions) usually needs to land as *one* utterance, not a string of separately-generated fragments with a prosody reset between each.
+
+Send the same `context_id` on a sequence of fragments to have them buffered, joined at natural sentence boundaries, and spoken as one continuous generation — each new fragment in the context is primed with the audio from the one before it, so pacing and intonation carry across chunk boundaries.
+
+## Endpoint support
+
+Continuations are WebSocket-only:
+
+| Surface | `context_id` |
+|---|---|
+| `POST /waves/v1/tts` (sync HTTP) | Not supported |
+| `POST /waves/v1/tts/live` (HTTP SSE) | Not supported |
+| `wss://api.smallest.ai/waves/v1/tts/live` (WebSocket) | Supported |
+
+## When to use it
+
+- Text is arriving **incrementally from an LLM** and you want to start speaking before the model has finished generating the full response, without a flat, reset-per-chunk cadence.
+- You're **already using `continue` + `flush`** (the legacy buffer) for streamed input but want the server — not a fixed timer — to decide where sentences end.
+- You want fragments **billed and rate-limited as one concurrent call**, not one per chunk.
+
+If you have the complete text up front, skip this — a single request already produces one continuous generation.
+
+## Parameters
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `context_id` | string | — | Groups fragments into one continuation. Alphanumeric, `-`, `_`, `.` only; max 128 chars. |
+| `continue` | boolean | `false` | With `context_id` set: `true` means more fragments are coming for this context. Send `continue: false` (optionally with no `text`) to close it out. |
+| `max_buffer_delay_ms` | integer | `3000` | Upper bound (0–5000 ms) on how long a fragment waits for a clean sentence boundary before it's spoken anyway. |
+| `context_close` | boolean | `false` | Ends the context immediately — releases buffered text and drops the carried audio state right away instead of waiting out its idle timeout. May be sent without `text` / `voice_id`. |
+
+<Warning>
+`context_id` cannot be combined with `flush` or `max_buffer_flush_ms` — those belong to the older, timer-based buffering contract. Mixing them is a validation error. Close out a continuation with `continue: false` or `context_close: true` instead.
+</Warning>
+
+## How buffering works
+
+A fragment sent with `context_id` is released to the synthesizer as soon as any one of these is true:
+
+1. It arrives with `continue: false` — no more input is coming.
+2. The buffered text ends a sentence (terminal punctuation `. ? ! …`, guarding against decimals, thousands separators, and abbreviations like "Mr.") **and** is long enough that speaking it doesn't sound abruptly clipped.
+3. `max_buffer_delay_ms` elapses since the first still-buffered fragment — the clock doesn't restart as more fragments arrive.
+4. The buffer grows past the max chunk size — it's split at the last sentence boundary or last space within that window.
+
+## Ending a continuation
+
+Three ways to close a context, depending on why you're closing it:
+
+- **Natural end of input** — send `continue: false` on the last fragment. It may carry no `text` at all: `{"context_id": "call-1", "voice_id": "meher", "continue": false}`.
+- **Immediate teardown** — send `context_close: true`. Use this when you know no more text is coming and want the server to drop the context's carried state right away rather than at its idle timeout. May omit `text` / `voice_id`.
+- **Barge-in** — `cancel_request: true` discards whatever is currently buffered for the context without speaking it, but does not end the context itself; you can keep streaming into the same `context_id` afterward.
+
+Closing the WebSocket connection also ends every open context on it (nothing buffered is flushed — there's nothing left to bill or play).
+
+<Warning>
+If a context has nothing buffered when you send its closing frame (`continue: false` with no `text`, or `context_close: true`) — for example, everything already released earlier via a sentence boundary or `max_buffer_delay_ms` — the server sends back **no frame at all** for that message. Don't block waiting on a response to the closing frame itself.
+</Warning>
+
+## Response frames during a continuation
+
+Verified against a live connection: `status: "complete"` behaves differently here than it does for a one-shot request.
+
+- **One `chunk`/`complete` pair per *released segment*, not one per context.** Every time buffered text is released — on a sentence boundary, on `max_buffer_delay_ms`, or on the frame that closes the context — you get its own run of `chunk` frames followed by a `complete`. A context fed in one long burst typically collapses to a single release (and a single `complete`), but a context spread across multiple flushes emits multiple `complete` frames while the context is still open.
+- **`complete` does not close the WebSocket while the context is open.** Unlike a plain non-continuation request (see [Response Format](/models/documentation/text-to-speech-lightning/streaming#response-format), where `complete` is terminal and the server closes the connection), a mid-context `complete` just marks that one release as done — the connection stays open and you can send more fragments on the same `context_id` afterward.
+- **`session_id` is stable for the whole connection; `request_id` changes per released segment.** Use `session_id` if you need to correlate frames back to the connection; don't assume one `request_id` spans an entire context.
+- **No `context_id` is echoed back on any response frame.** If you multiplex more than one `context_id` on a single connection, track which context a frame belongs to by send order — don't rely on the response to disambiguate.
+- **No frame marks "the context is fully done."** A `complete` after a sentence-boundary or `max_buffer_delay_ms` release looks identical to one after your closing frame (`continue: false` / `context_close: true`). Don't return on the first `complete` you see — drain frames until the connection goes idle (or you close it yourself once you've accounted for every fragment you sent).
+
+## Concurrency and billing
+
+Fragments sharing one `context_id` on the same connection occupy a single concurrency slot, not one per fragment — chunking your input more finely doesn't cost you additional concurrent-call capacity. Billing still applies per generated segment through the normal path.
+
+## Example
+
+```python
+# ci:skip — illustrates a message sequence, not a runnable standalone script
+import asyncio
+import json
+import os
+
+import websockets
+
+API_KEY = os.environ["SMALLEST_API_KEY"]
+WS_URL = "wss://api.smallest.ai/waves/v1/tts/live"
+
+async def stream_with_continuation(fragments):
+    async with websockets.connect(
+        WS_URL,
+        additional_headers={"Authorization": f"Bearer {API_KEY}"},
+    ) as ws:
+        for i, text in enumerate(fragments):
+            is_last = i == len(fragments) - 1
+            await ws.send(json.dumps({
+                "context_id": "call-1",
+                "voice_id": "meher",
+                "model": "lightning_v3.1_pro",
+                "text": text,
+                "continue": not is_last,
+                "max_buffer_delay_ms": 1500,
+            }))
+
+        # A context can release audio in more than one segment — each gets
+        # its own chunk/complete pair, and there's no "final complete"
+        # flag on the wire. Keep draining until the socket goes quiet
+        # rather than returning on the first complete, or you can drop
+        # whatever's still in flight for a later segment.
+        while True:
+            try:
+                data = json.loads(await asyncio.wait_for(ws.recv(), timeout=5))
+            except asyncio.TimeoutError:
+                break
+            # handle "chunk" frames; "complete" marks one released segment, not necessarily the whole context
+
+asyncio.run(stream_with_continuation([
+    "Let me check that for you.",
+    " Your order ships tomorrow",
+    " and arrives by Friday.",
+]))
+```
+
+The three fragments above share `context_id: "call-1"`, so they're buffered and joined instead of spoken as three separately-paced generations — in practice this reliably collapses to a single release when fragments arrive close together, but the receive loop doesn't assume that.
+
+## Related
+
+- [Streaming](/models/documentation/text-to-speech-lightning/streaming) — WebSocket vs SSE, response frame shapes, and the legacy `continue` + `flush` buffer this feature supersedes for incremental input.
+- [Word-level timestamps](/models/documentation/text-to-speech-lightning/word-timestamps) — another WebSocket-only opt-in feature, combinable with continuations.
+
+<CodingAgentCallout />
+
+{/* coding-agent-callout-injected */}

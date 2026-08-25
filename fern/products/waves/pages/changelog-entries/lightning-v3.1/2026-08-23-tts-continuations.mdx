@@ -1,0 +1,11 @@
+---
+title: "TTS: context_id continuations on the WebSocket"
+---
+
+The `wss://api.smallest.ai/waves/v1/tts/live` WebSocket accepts a new `context_id` field, plus `max_buffer_delay_ms` and `context_close`.
+
+Send the same `context_id` on a sequence of text fragments (e.g. tokens arriving from an LLM) to have them buffered, joined at natural sentence boundaries, and spoken as one continuous generation — each new fragment in the context is primed with the audio from the one before it, so prosody carries across chunks instead of resetting per-request. Fragments sharing a `context_id` on one connection also count as a single concurrency slot, not one per fragment.
+
+Close a context with `continue: false` (optionally without `text`) once input ends naturally, or `context_close: true` for an immediate teardown. `context_id` cannot be combined with the older `flush` / `max_buffer_flush_ms` buffer — that's still available unchanged for existing integrations.
+
+Full parameter reference, buffering rules, and a worked example on the new [Continuations](/models/documentation/text-to-speech-lightning/continuations) page.

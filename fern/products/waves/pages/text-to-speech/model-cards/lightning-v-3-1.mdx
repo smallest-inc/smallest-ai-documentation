@@ -384,6 +384,7 @@ Route selection is via the `model` body field on the unified endpoints. Pass `"m
 | `output_format` | string | No | `"pcm"` | Audio format |
 | `pronunciation_dicts` | array | No | - | Custom pronunciation IDs (WebSocket only) |
 | `word_timestamps` | boolean | No | `false` | Opt in to per-word timing events. WebSocket only. See [Word-level timestamps](#word-level-timestamps). |
+| `context_id` | string | No | - | Groups a sequence of fragments into one continuous generation. WebSocket only. See [Continuations](#continuations). |
 
 <Card title="Quickstart" icon="rocket" href="/models/documentation/text-to-speech-lightning/quickstart">
   Generate your first audio in under a minute with a single API call.
@@ -523,6 +524,14 @@ ws.onmessage = (event) => {
 | `POST /waves/v1/tts/live` (HTTP SSE) | ❌ - same |
 
 If you need word timing, use the WebSocket path.
+
+---
+
+## Continuations
+
+<Badge color="purple">Real-Time</Badge>
+
+Tag a sequence of WebSocket fragments with the same `context_id` to have them buffered, joined at natural sentence boundaries, and spoken as one continuous generation instead of resetting per-request - useful for text arriving incrementally (e.g. LLM token streams). WebSocket only; cannot be combined with `flush` or `max_buffer_flush_ms`. See [Continuations](/models/documentation/text-to-speech-lightning/continuations) for the full parameter reference and buffering rules.
 
 ---
 
