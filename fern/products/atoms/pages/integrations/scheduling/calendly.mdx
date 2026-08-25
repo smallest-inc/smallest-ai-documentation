@@ -1,19 +1,17 @@
 ---
 title: "Calendly"
-description: "Calendly scheduling for your voice agent — coming soon."
-icon: "calendar"
+description: "Give your voice agent live calendar scheduling through Calendly — check availability, book, and cancel meetings during a call."
+icon: "calendar-check"
 ---
 
 
 import { CodingAgentCallout } from "@/components/CodingAgentCallout";
 
-<Info>
-Calendly connect is coming soon. Talk to our team to get early access.
-</Info>
+[Calendly](https://calendly.com/) is scheduling automation for meetings. Connect it to a Smallest AI agent so callers can check availability and book or cancel meetings without leaving the call.
 
-## What your agent will be able to do
+---
 
-Once connected, Calendly will expose the same scheduling tools as [Cal.com](/voice-agents/integrations/scheduling/cal-com):
+## What your agent can do
 
 | Tool | What it does |
 |------|---------------|
@@ -21,16 +19,132 @@ Once connected, Calendly will expose the same scheduling tools as [Cal.com](/voi
 | **Book meeting** | Creates a new booking for a caller |
 | **Cancel meeting** | Cancels an existing booking |
 
-As with Cal.com, these are granted per agent — you won't have to enable all three.
+These are granted per agent from the Tools tab after you connect — you don't have to enable all three.
 
-Native Calendly scheduling isn't available yet, but you don't have to wait to give your agent calendar access:
+---
+
+## Prerequisites
+
+- A [Calendly](https://calendly.com/) account with API access
+- An **event type** for your agent to book against (the slug or URI, found under Event Types)
+
+---
+
+## Connecting Calendly
+
+Like Cal.com, Calendly connects with a personal access token rather than OAuth — you bring your own token.
+
+<Steps>
+  <Step title="Get your Calendly personal access token">
+    Sign in at [calendly.com](https://calendly.com/) and open **Integrations → API & Webhooks** to create a personal access token.
+  </Step>
+  <Step title="Pick an event type">
+    Copy the event type's slug or URI from **Event Types**. This is what your agent books against.
+  </Step>
+  <Step title="Paste both into the Integrations page">
+    Find Calendly on the Integrations page and click **Connect**. Enter the personal access token and event type, then save.
+
+    The token is stored encrypted and used only for your agent's scheduling — it's never shown again after you save it.
+  </Step>
+</Steps>
+
+---
+
+## Using Calendly in your agent's prompt
+
+```
+CALENDAR TOOLS (Calendly):
+Your agent can check availability and book or cancel meetings.
+
+When the caller wants to schedule:
+1. Ask what they'd like to book.
+2. Ask for their preferred date.
+3. Check availability and offer 2-3 time slots.
+4. Confirm their selection before booking.
+5. Book the meeting and confirm the details out loud.
+```
+
+```
+Caller: "I'd like to book a call for next week."
+
+Agent: "Happy to help. What day works best?"
+
+Caller: "Tuesday, if possible."
+
+Agent calls: check_availability
+Response: 10:00 AM, 2:00 PM, 3:30 PM available
+
+Agent: "I have 10 AM, 2 PM, or 3:30 PM on Tuesday. Which works for you?"
+
+Caller: "2 PM works."
+
+Agent calls: book_meeting
+Response: booking confirmed
+
+Agent: "You're booked for Tuesday at 2 PM. You'll get a confirmation
+        email shortly. Anything else I can help with?"
+```
+
+---
+
+## Good to know
+
+<AccordionGroup>
+  <Accordion title="One event type per connection" icon="calendar">
+    Each Calendly connection books against a single event type. If you offer several appointment types, connect the event type your agent should use, or reach out if you need an agent to book across multiple event types.
+  </Accordion>
+  <Accordion title="No reschedule tool" icon="circle-info">
+    Calendly doesn't have a reschedule endpoint — rescheduling is only available through a hosted link a person visits directly. If a caller wants to move a meeting, have your agent cancel the existing booking and book a new one instead.
+  </Accordion>
+  <Accordion title="Booking isn't auto-retried" icon="triangle-exclamation">
+    If a booking request times out, it isn't automatically retried — this avoids creating a duplicate booking from a single caller request. If your agent gets a timeout, have it confirm with the caller before trying again.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Connection failed" icon="xmark">
+    **Possible causes:**
+    - Personal access token is invalid or was revoked in Calendly
+    - Event type slug/URI doesn't match an event type in your account
+
+    **Solutions:**
+    1. Generate a new personal access token under Integrations → API & Webhooks
+    2. Double-check the event type slug or URI under Event Types
+  </Accordion>
+  <Accordion title="No availability showing" icon="calendar-xmark">
+    **Possible causes:**
+    - The connected event type has no open slots in the requested range
+    - Wrong event type connected
+
+    **Solutions:**
+    1. Check availability for that event type directly in Calendly
+    2. Verify the correct event type is connected
+  </Accordion>
+  <Accordion title="Booking failed" icon="plus">
+    **Possible causes:**
+    - The requested slot was taken between check and book
+    - Event type requires fields your agent didn't collect
+
+    **Solutions:**
+    1. Have the agent re-check availability and offer a new time
+    2. Review required booking fields on the event type in Calendly
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
 
 <CardGroup cols={2}>
   <Card title="Cal.com" icon="calendar-check" href="/voice-agents/integrations/scheduling/cal-com">
-    Connect Cal.com today for live availability checks and booking
+    Compare with the Cal.com integration
   </Card>
   <Card title="Custom APIs" icon="code" href="/voice-agents/platform/create-agent/agent-settings/api-calls">
-    Call Calendly's REST API directly from your agent
+    Connect any other calendar via REST API
   </Card>
 </CardGroup>
 
