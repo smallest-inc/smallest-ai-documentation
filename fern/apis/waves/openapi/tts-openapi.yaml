@@ -51,7 +51,6 @@ paths:
         curl -X POST "https://api.smallest.ai/waves/v1/tts" \
           -H "Authorization: Bearer $SMALLEST_API_KEY" \
           -H "Content-Type: application/json" \
-          -H "Accept: audio/wav" \
           -d '{
             "text": "Hello from Waves TTS.",
             "voice_id": "magnus",
@@ -65,7 +64,6 @@ paths:
         curl -X POST "https://api.smallest.ai/waves/v1/tts" \
           -H "Authorization: Bearer $SMALLEST_API_KEY" \
           -H "Content-Type: application/json" \
-          -H "Accept: audio/wav" \
           -d '{
             "text": "Hello from the Lightning v3.1 Pro pool.",
             "voice_id": "meher",
@@ -80,7 +78,6 @@ paths:
         curl -X POST "https://api.smallest.ai/waves/v1/tts" \
           -H "Authorization: Bearer $SMALLEST_API_KEY" \
           -H "Content-Type: application/json" \
-          -H "Accept: audio/wav" \
           -d '{
             "text": "Good morning, this is a Pro voice speaking.",
             "voice_id": "meher",
@@ -96,7 +93,6 @@ paths:
         curl -X POST "https://api.smallest.ai/waves/v1/tts" \
           -H "Authorization: Bearer $SMALLEST_API_KEY" \
           -H "Content-Type: application/json" \
-          -H "Accept: audio/wav" \
           -d '{
             "text": "Namaste, this is an Indian-accented Pro voice.",
             "voice_id": "meher",
@@ -109,20 +105,19 @@ paths:
 
         ## Common gotchas
 
-        - **Set `Accept: audio/wav`.** Omitting it can return an empty or unplayable response.
+        - **Response `Content-Type` header is always `audio/wav`, even when `output_format` is `mp3`, `pcm`, `ulaw`, or `alaw`.** The bytes still match the requested format. MIME-sniffing consumers (WhatsApp Cloud API upload, some browsers, some S3 uploaders) must override the MIME on their side. See the `output_format` field for the recommended per-format MIME overrides.
+        - **The `Accept` request header is ignored.** Only the `output_format` body field controls what is returned. No content negotiation is performed.
         - **Pair voice IDs with the right model.** Voice catalogs differ between `lightning_v3.1` and `lightning_v3.1_pro`. The API does not reject mismatched pairings, but using a Pro-only `voice_id` with `model=lightning_v3.1` (or omitting `model`) can return wrong or hallucinated audio. Pair Pro voices with `model=lightning_v3.1_pro`; standard catalog voices with `model=lightning_v3.1` (the default).
         - **Cloned voices** (`voice_*`) work with the pool they were cloned onto. The voice-cloning API accepts `model: lightning-v3.1` (default) or `lightning-v3.1-pro`; pair the resulting `voice_id` with the matching TTS `model` (`lightning_v3.1` or `lightning_v3.1_pro`). Check the clone's `modelIds` if unsure.
         - **44.1 kHz output** is supported but most playback environments are happy with 24 kHz — drop the sample rate if bandwidth matters.
       parameters:
       - name: Accept
         in: header
-        required: true
+        required: false
         schema:
           type: string
-          enum:
-          - audio/wav
-          default: audio/wav
-        description: Must be `audio/wav` to receive binary audio. Required for proper playback.
+        description: |
+          **Ignored.** Content negotiation is not implemented on this endpoint. Only the `output_format` body field controls what is returned. Sending `Accept: audio/mpeg` when `output_format: mp3` does not change the response `Content-Type` header, which is always `audio/wav` (see the `output_format` field and 200 response for detail).
       - name: x-expire-content
         in: header
         required: false
