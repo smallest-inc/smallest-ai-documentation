@@ -135,7 +135,15 @@ campaign_id = result["data"]["_id"]
 | `phone_ids` | list | Yes | Phone number IDs (from `client.atoms.phone_numbers.list()`) |
 | `description` | string | No | Campaign description |
 | `max_retries` | int | No | Retry unanswered (0-10, default: 3) |
-| `retry_delay` | int | No | Minutes between retries (default: 15) |
+| `retry_delay` | int | No | Minutes between retries (1-1440, default: 15) |
+
+<Warning>
+Send `max_retries` and `retry_delay` as **integers, not strings**. Over the raw
+REST API, `{"maxRetries": "3"}` returns `400 "Expected number, received
+string"` — use `{"maxRetries": 3}`. Field names are case-sensitive and differ
+by surface: SDK snake_case (`max_retries`), REST camelCase (`maxRetries`). A
+wrong-case or misspelled key is silently ignored and defaults to 3.
+</Warning>
 
 ## Starting a Campaign
 
