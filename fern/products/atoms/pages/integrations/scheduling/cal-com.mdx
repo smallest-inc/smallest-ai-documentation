@@ -1,0 +1,154 @@
+---
+title: "Cal.com"
+description: "Give your voice agent live calendar scheduling through Cal.com — check availability, book, reschedule, and cancel meetings during a call."
+icon: "calendar-check"
+---
+
+
+import { CodingAgentCallout } from "@/components/CodingAgentCallout";
+
+[Cal.com](https://cal.com/) is open scheduling infrastructure for meetings. Connect it to a Smallest AI agent so callers can check availability and book, reschedule, or cancel meetings without leaving the call.
+
+---
+
+## What your agent can do
+
+| Tool | What it does |
+|------|---------------|
+| **Check availability** | Looks up open slots on your connected event type |
+| **Book meeting** | Creates a new booking for a caller |
+| **Reschedule meeting** | Moves an existing booking to a new time |
+| **Cancel meeting** | Cancels an existing booking |
+
+These are granted per agent from the Tools tab after you connect — you don't have to enable all four.
+
+---
+
+## Prerequisites
+
+- A [Cal.com](https://cal.com/) account with API access
+- An **event type** for your agent to book against (the numeric ID or slug, found under Event Types)
+
+---
+
+## Connecting Cal.com
+
+Unlike Salesforce or HubSpot, Cal.com doesn't use OAuth — you bring your own API key.
+
+<Steps>
+  <Step title="Get your Cal.com API key">
+    Sign in at [app.cal.com](https://app.cal.com/) and open **Settings → Developer → API keys** to create one.
+  </Step>
+  <Step title="Pick an event type">
+    Copy the event type's numeric ID or slug from **Event Types**. This is what your agent books against.
+  </Step>
+  <Step title="Paste both into the Integrations page">
+    Find Cal.com on the Integrations page and click **Connect**. Enter the API key and event type, then save.
+
+    The key is stored encrypted and used only for your agent's scheduling — it's never shown again after you save it.
+  </Step>
+</Steps>
+
+---
+
+## Using Cal.com in your agent's prompt
+
+```
+CALENDAR TOOLS (Cal.com):
+Your agent can check availability and book, reschedule, or cancel meetings.
+
+When the caller wants to schedule:
+1. Ask what they'd like to book.
+2. Ask for their preferred date.
+3. Check availability and offer 2-3 time slots.
+4. Confirm their selection before booking.
+5. Book the meeting and confirm the details out loud.
+```
+
+```
+Caller: "I'd like to book a call for next week."
+
+Agent: "Happy to help. What day works best?"
+
+Caller: "Tuesday, if possible."
+
+Agent calls: check_availability
+Response: 9:00 AM, 1:30 PM, 4:00 PM available
+
+Agent: "I have 9 AM, 1:30 PM, or 4 PM on Tuesday. Which works for you?"
+
+Caller: "1:30 works."
+
+Agent calls: book_meeting
+Response: booking confirmed
+
+Agent: "You're booked for Tuesday at 1:30 PM. You'll get a confirmation
+        email shortly. Anything else I can help with?"
+```
+
+---
+
+## Good to know
+
+<AccordionGroup>
+  <Accordion title="One event type per connection" icon="calendar">
+    Each Cal.com connection books against a single event type. If you offer several appointment types (consultation, follow-up, etc.), connect the event type your agent should use, or reach out if you need an agent to book across multiple event types.
+  </Accordion>
+  <Accordion title="Booking isn't auto-retried" icon="triangle-exclamation">
+    If a booking request times out, it isn't automatically retried — this avoids creating a duplicate booking from a single caller request. If your agent gets a timeout, have it confirm with the caller before trying again.
+  </Accordion>
+  <Accordion title="Reschedule and cancel need an existing booking" icon="clock-rotate-left">
+    Rescheduling or cancelling acts on a booking your agent already created (or one looked up during the call) — it isn't a general search across your whole calendar.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Connection failed" icon="xmark">
+    **Possible causes:**
+    - API key is invalid or was revoked in Cal.com
+    - Event type ID/slug doesn't match an event type in your account
+
+    **Solutions:**
+    1. Generate a new API key under Settings → Developer → API keys
+    2. Double-check the event type ID or slug under Event Types
+  </Accordion>
+  <Accordion title="No availability showing" icon="calendar-xmark">
+    **Possible causes:**
+    - The connected event type has no open slots in the requested range
+    - Wrong event type connected
+
+    **Solutions:**
+    1. Check availability for that event type directly in Cal.com
+    2. Verify the correct event type is connected
+  </Accordion>
+  <Accordion title="Booking failed" icon="plus">
+    **Possible causes:**
+    - The requested slot was taken between check and book
+    - Event type requires fields your agent didn't collect
+
+    **Solutions:**
+    1. Have the agent re-check availability and offer a new time
+    2. Review required booking fields on the event type in Cal.com
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CRM Integrations" icon="users" href="/voice-agents/integrations">
+    Sync customer data alongside scheduling
+  </Card>
+  <Card title="Custom APIs" icon="code" href="/voice-agents/platform/create-agent/agent-settings/api-calls">
+    Connect any other calendar via REST API
+  </Card>
+</CardGroup>
+
+<CodingAgentCallout />
+
+{/* coding-agent-callout-injected */}
