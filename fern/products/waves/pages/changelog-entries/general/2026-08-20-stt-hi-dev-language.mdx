@@ -1,0 +1,15 @@
+---
+title: "STT: new language `hi-dev` (Devanagari-only Hindi)"
+---
+
+Pulse STT streaming supports a new Hindi language code, `hi-dev`, that transcribes Hindi audio using a pure-Hindi model and writes everything in Devanagari.
+
+The existing `hi` code stays as the bilingual model: it transcribes Hindi speech but renders borrowed English words in Roman script, producing mixed-script output like `मेरी email आईडी पर invoice भेज दीजिए`.
+
+`hi-dev` uses the pure-Hindi model to keep the output script-consistent: `मेरी ईमेल आईडी पर इनवॉइस भेज दीजिए`.
+
+Pick `hi-dev` when the downstream consumer needs Devanagari-only text (Devanagari-only UIs, government or regulated formatting, Hindi NLP pipelines that break on Latin characters). Stay on `hi` for customer-support and tech-support transcripts where recognisable English terms in Roman script are preferable.
+
+Endpoint: `wss://api.smallest.ai/waves/v1/stt/live?language=hi-dev`. Same auth, message shape, and parameters as every other language.
+
+Streaming only; not available on `POST /waves/v1/stt/`. India region only; requests routed to `wss://api.us.smallest.ai/...` are rejected with `LANGUAGE_NOT_ENABLED_IN_REGION`.

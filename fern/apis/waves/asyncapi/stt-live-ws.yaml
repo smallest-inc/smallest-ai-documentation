@@ -35,11 +35,13 @@ servers:
                 Selects the ASR model. Today only `pulse` is supported on the streaming endpoint. `pulse-pro` returns `400` before WebSocket upgrade, use `POST /waves/v1/stt/?model=pulse-pro` (HTTP) for Pulse Pro.
             language:
               type: string
-              enum: [en, hi, de, es, ru, it, fr, nl, pt, zh, yue, ja, ko, gu, mr, or, bn, ta, te, kn, ml, north_indic, multi-asian, multi-south-indic]
+              enum: [en, hi, hi-dev, de, es, ru, it, fr, nl, pt, zh, yue, ja, ko, gu, mr, or, bn, ta, te, kn, ml, north_indic, multi-asian, multi-south-indic]
               description: |
-                Language code. This endpoint is **Streaming (Real-Time, WebSocket)** — for pre-recorded audio, use `POST /waves/v1/stt/` (different supported language set).
+                Language code. This endpoint is **Streaming (Real-Time, WebSocket)**. For pre-recorded audio, use `POST /waves/v1/stt/` (different supported language set).
 
-                **21 single-language codes:** `en`, `hi`, `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `zh`, `yue`, `ja`, `ko`, `gu`, `mr`, `or`, `bn`, `ta`, `te`, `kn`, `ml`.
+                **22 single-language codes:** `en`, `hi`, `hi-dev`, `de`, `es`, `ru`, `it`, `fr`, `nl`, `pt`, `zh`, `yue`, `ja`, `ko`, `gu`, `mr`, `or`, `bn`, `ta`, `te`, `kn`, `ml`.
+
+                **`hi` vs `hi-dev`.** Both are Hindi. `hi` is the bilingual Hindi model: it transcribes Hindi speech but writes borrowed English words in Roman script, producing mixed-script output. `hi-dev` is the pure-Hindi model: everything is written in Devanagari, English loanwords are transliterated. Use `hi-dev` when the downstream consumer needs script-consistent Hindi (Devanagari-only UIs, government or regulated formatting, Hindi NLP pipelines that break on Latin characters). Streaming-only; not available on `POST /waves/v1/stt/`. India region only.
 
                 **3 regional auto-detect aggregators** for unknown audio:
                 - `north_indic` — auto-detects across `en`, `hi`, `gu`, `mr`, `bn`, `or`
