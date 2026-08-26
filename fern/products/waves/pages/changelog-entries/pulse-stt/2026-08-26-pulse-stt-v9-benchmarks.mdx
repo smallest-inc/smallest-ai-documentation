@@ -1,0 +1,13 @@
+---
+title: Improved Pulse STT release - stronger repeated-entity dictation and background-speaker handling
+---
+
+Pulse STT has been updated with an improved English model. The Pulse Performance page (`/models/documentation/speech-to-text-pulse/benchmarks/performance`) has been refreshed with new WER for the standard public benchmarks - **FLEURS**, **HuggingFace ESB**, and **WildASR** - and improves on every one of them. WildASR sees the largest single-benchmark move, driven by big gains on the harder degradation subsets (Far-field, Clipping, Reverberation, Noise Gap).
+
+Beyond the public benchmarks, two production-facing failure modes see substantial gains:
+
+- **Repeated-entity dictation** - spoken digit sequences, alphanumeric IDs, PAN / credit-card / reference-number utterances, and any content with long runs of the same token. WER on this class of audio drops by **54% relatively** vs. the previous model. This is the same failure mode where earlier releases would collapse `"3 3 3 3 3 3 3"` down to a shorter run; the new model preserves run length far more consistently.
+
+- **Background-speaker robustness** - audio where a secondary speaker or crosstalk is audible under the primary speaker. WER on this class also drops by **61% relatively**, so multi-speaker call recordings and open-office capture behave much closer to clean single-speaker audio than before.
+
+These improvements are live behind the existing Pulse STT streaming endpoints - no API changes, no request-side flags to flip.
