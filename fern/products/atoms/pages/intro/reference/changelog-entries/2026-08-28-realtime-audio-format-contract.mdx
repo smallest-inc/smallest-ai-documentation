@@ -1,0 +1,16 @@
+---
+title: "Realtime Agent WebSocket: per-direction audio format contract"
+---
+
+The realtime voice-agent WebSocket API now has a documented contract for the audio you send and the audio the agent sends back. Previously the only knob was `sample_rate`, and it silently set only the output; input audio was read at a hardcoded rate regardless of what the client asked for. That mismatch was invisible: the call worked, the transcription was wrong.
+
+Two new fields on [`POST /conversation/register-call`](/voice-agents/api-reference/calls/register-call) and on the WebSocket connect URL:
+
+- **`input_audio_format`** — what you send. `pcm_{8000,16000,22050,24000,44100,48000}`, `mulaw_8000`, `alaw_8000`, or `opus_{8000,16000,24000,48000}`.
+- **`output_audio_format`** — what the agent sends back. `pcm_{8000,16000,24000}` on every voice, plus `pcm_44100` on `lightning-v3.1` and `lightning-v3.1-pro`.
+
+One `<encoding>_<rate>` token per direction. `sample_rate` is deprecated in favor of `output_audio_format` and stays accepted forever; existing integrations do not need to change. Sending both is fine when they agree; a disagreement is refused with HTTP 400 rather than one silently winning.
+
+An unsupported input token is refused at register-call with the list of accepted values in the error. An `output_audio_format` the agent's voice cannot render is refused there too, before any session exists, rather than failing mid-call.
+
+Full contract, defaults, Opus framing rules, error bodies, and worked examples on the new [Audio Formats](/voice-agents/platform/agent-sdk/audio-formats) page.
