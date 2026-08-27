@@ -20,7 +20,7 @@ This page is about the WebSocket API only. On phone calls the carrier fixes the 
    Content-Type: application/json
    ```
 
-   The JSON body contains `agent_id`, and optionally `sample_rate`, `input_audio_format`, and `output_audio_format`. On success it returns HTTP 201 with `access_token`, `expires_in`, `sample_rate`, `input_audio_format`, and `output_audio_format` inside a `data` object.
+   The JSON body contains `agent_id`, and optionally `input_audio_format` and `output_audio_format`. On success it returns HTTP 201 with `access_token`, `expires_in`, `sample_rate`, `input_audio_format`, and `output_audio_format` inside a `data` object.
 
 2. Connect to the WebSocket:
 
@@ -81,14 +81,24 @@ If the agent's voice cannot render the `output_audio_format` you ask for, regist
 ## Defaults
 
 - If you send nothing, the output format is `pcm_24000` and the input format matches it.
-- If you send only `sample_rate`, that sets the output format to `pcm_<sample_rate>`, and the input format defaults to the same token.
+- If you send only `output_audio_format`, the input format defaults to the same token.
 
-So a client that sends `sample_rate: 24000` and streams 24 kHz PCM needs nothing else.
+So a client sending and receiving 24 kHz PCM needs to declare nothing at all.
+
+### `sample_rate` is deprecated
 
 `sample_rate` is the older spelling of `output_audio_format`: a bare rate, meaning
-PCM at that rate. You may send either one. Sending both is fine only if they agree.
-`sample_rate: 24000` with `output_audio_format: "pcm_16000"` is refused with HTTP
-400, rather than one silently winning over the other.
+PCM at that rate. `sample_rate: 24000` and `output_audio_format: "pcm_24000"` are
+the same request.
+
+It is still accepted and will keep being accepted, so existing integrations do not
+need to change. New code should use `output_audio_format`, because `sample_rate`
+cannot express an encoding and only ever set the output direction. A client that
+assumed it set both is the mistake this contract exists to remove.
+
+Sending both is fine only if they agree. `sample_rate: 24000` with
+`output_audio_format: "pcm_16000"` is refused with HTTP 400 rather than one
+silently winning over the other.
 
 ## Your declaration must match your bytes
 
