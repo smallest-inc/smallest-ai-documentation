@@ -83,14 +83,18 @@ servers:
                   prompt testing.
             sample_rate:
               type: integer
-              enum: [8000, 16000, 24000, 48000]
+              enum: [8000, 16000, 24000, 44100]
               default: 24000
               description: |
-                Requested audio sample rate (Hz). Honored when authenticating
-                with a raw `sk_` API key. With a `wct_` token the rate is fixed
-                at 24000 and this param is ignored. The negotiated rate is
-                always echoed in the `session.created` event. Use 8000 for
-                telephony-quality audio.
+                Sample rate (Hz) of the audio the agent sends back. Honored when
+                authenticating with a raw `sk_` API key. With a `wct_` token this
+                param is ignored, because the rate was already resolved when the
+                call was registered - from that request's `sample_rate` or
+                `output_audio_format`, defaulting to 24000 rather than being
+                fixed at it. `44100` is rendered only by the `lightning-v3.1` and
+                `lightning-v3.1-pro` voices. The negotiated rate is always echoed
+                in the `session.created` event. Use 8000 for telephony-quality
+                audio.
 
 channels:
   agentSession:
@@ -464,10 +468,23 @@ components:
             description: Call-log identifier; matches the `call_id` in conversation logs.
           sample_rate:
             type: integer
-            description: Negotiated audio sample rate in Hz for both input and output audio.
+            description: |
+              Negotiated sample rate in Hz of the audio the agent sends back.
+              Same value as `output_audio_format`'s rate.
           channels:
             type: integer
             description: Number of audio channels (typically 1).
+          input_audio_format:
+            type: string
+            description: |
+              The input format resolved for this session, as an
+              `<encoding>_<rate>` token. Read it back to confirm the server
+              understood what you are sending before you send audio.
+            example: pcm_24000
+          output_audio_format:
+            type: string
+            description: The output format resolved for this session.
+            example: pcm_24000
         examples:
           - value:
               type: session.created
@@ -498,10 +515,13 @@ components:
               - `websocket_closed` — the WebSocket dropped.
               - `ended` — the agent pipeline ended the session (e.g. the agent
                 hung up or the conversation completed).
+              - `setup_failed` — the session opened but the agent worker could
+                not be queued.
 
-              Fatal setup/auth failures do **not** produce `session.closed` —
-              the server emits an `error` and closes the socket with code 4000
-              instead.
+              A failure *before* the session opens produces no `session.closed`:
+              the server emits an `error` and closes with code 4000. The
+              `setup_failed` path above fails *after* the session is open, so it
+              sends `session.closed` and then the `error` and the 4000 close.
         examples:
           - value:
               type: session.closed
@@ -716,9 +736,13 @@ components:
             description: |
               Machine-readable error code. Values emitted by the gateway:
               `invalid_event` (a client message failed validation),
+              `invalid_json` (the frame was not JSON at all),
               `no_session` (message received before the session was ready),
-              `internal_error`, or the HTTP status code of a setup failure as a
-              string (e.g. `401`, `400`, `503`).
+              `too_many_updates`, `worker_not_ready`, `internal_error`, or the
+              HTTP status code of a setup failure as a string (e.g. `401`, `400`,
+              `503`). A setup failure after the handshake arrives this way rather
+              than as an HTTP status - an unknown `agent_id`, for example, is
+              `code: "404"` followed by close code 4000.
           message:
             type: string
             description: Human-readable error message.
