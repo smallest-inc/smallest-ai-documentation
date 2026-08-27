@@ -133,7 +133,23 @@ Formats that are refused, and why:
 | `mulaw_*`, `alaw_*` at any rate other than 8000 | G.711 only exists at 8000 Hz |
 | `ulaw_8000` | Wrong spelling. Use `mulaw_8000` |
 
-An `output_audio_format` the agent's voice cannot render is also refused at register-call.
+Sending `sample_rate` and `output_audio_format` with different rates:
+
+```json
+{
+  "status": false,
+  "errors": ["sample_rate 24000 and output_audio_format 'pcm_16000' disagree; send one"]
+}
+```
+
+An `output_audio_format` the agent's voice cannot render is refused the same way, and the error lists the rates that voice does support:
+
+```json
+{
+  "status": false,
+  "errors": ["output_audio_format 'pcm_48000' is not supported by this agent's voice. Supported: pcm_8000, pcm_16000, pcm_24000"]
+}
+```
 
 ## Worked example
 
