@@ -1,0 +1,807 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Waves Public API",
+    "version": "1.0.0",
+    "description": "Engineering-owned contract generated from the runtime Zod schemas in waves-platform."
+  },
+  "servers": [
+    {
+      "url": "https://api.smallest.ai"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API key"
+      }
+    },
+    "schemas": {
+      "PiiTextRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000,
+            "description": "Text to inspect and redact."
+          },
+          "replacement_format": {
+            "type": "string",
+            "enum": [
+              "tag",
+              "asterisk"
+            ],
+            "default": "tag",
+            "description": "Replace entities with typed tags or same-length asterisks."
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "PiiTextResponse": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "redacted_text": {
+            "type": "string"
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "Detected PII category."
+                },
+                "original_text": {
+                  "type": "string",
+                  "description": "Detected text before replacement."
+                },
+                "replacement": {
+                  "type": "string",
+                  "description": "Text substituted into the redacted output."
+                },
+                "score": {
+                  "type": "number",
+                  "description": "Detection confidence score."
+                },
+                "position": {}
+              },
+              "required": [
+                "type",
+                "original_text",
+                "replacement",
+                "score"
+              ]
+            }
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "redacted_text",
+          "entities",
+          "request_id"
+        ]
+      },
+      "PiiAudioRequest": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "beep",
+              "silence",
+              "noise"
+            ],
+            "default": "beep",
+            "description": "Audio replacement applied to detected PII spans."
+          },
+          "audio": {
+            "type": "string",
+            "format": "binary"
+          }
+        },
+        "required": [
+          "audio"
+        ]
+      },
+      "PiiAudioResponse": {
+        "type": "object",
+        "properties": {
+          "audio_base64": {
+            "type": "string",
+            "description": "Base64-encoded redacted WAV audio."
+          },
+          "redaction_method": {
+            "type": "string",
+            "enum": [
+              "beep",
+              "silence",
+              "noise"
+            ]
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "audio_base64",
+          "redaction_method",
+          "request_id"
+        ]
+      },
+      "PiiError": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "error"
+            ]
+          },
+          "error_code": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "authentication_required",
+              "unauthenticated",
+              "organization_required",
+              "rate_limit_exceeded",
+              "service_unavailable",
+              "upstream_error",
+              "upstream_overloaded",
+              "internal_server_error"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "error_code",
+          "message",
+          "request_id"
+        ]
+      },
+      "TtsRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000,
+            "description": "Text to synthesize."
+          },
+          "voice_id": {
+            "type": "string",
+            "description": "Voice catalog ID or completed clone ID."
+          },
+          "model": {
+            "type": "string",
+            "enum": [
+              "lightning_v3.1",
+              "lightning_v3.1_pro",
+              "lightning_v3.1_pro_07_26"
+            ],
+            "default": "lightning_v3.1",
+            "description": "Lightning model pool. Omit for standard Lightning v3.1."
+          },
+          "speed": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 2,
+            "default": 1,
+            "description": "Speaking-speed multiplier."
+          },
+          "sample_rate": {
+            "type": "number",
+            "default": 44100,
+            "description": "Output sample rate in Hz: 8000, 16000, 24000, or 44100.",
+            "enum": [
+              8000,
+              16000,
+              24000,
+              44100
+            ]
+          },
+          "save_history": {
+            "type": "boolean",
+            "default": false,
+            "description": "Save this synthesis in history."
+          },
+          "language": {
+            "type": "string",
+            "default": "auto",
+            "description": "Synthesis language or auto detection.",
+            "enum": [
+              "en",
+              "hi",
+              "mr",
+              "kn",
+              "ta",
+              "bn",
+              "gu",
+              "de",
+              "fr",
+              "es",
+              "it",
+              "pl",
+              "nl",
+              "ru",
+              "ar",
+              "he",
+              "sv",
+              "ml",
+              "te",
+              "pt",
+              "pa",
+              "or",
+              "auto",
+              "el",
+              "fi",
+              "no",
+              "zh",
+              "id",
+              "ja",
+              "ko",
+              "ms",
+              "tr",
+              "vi"
+            ]
+          },
+          "number_pronunciation_language": {
+            "type": "string",
+            "description": "Optional language used to normalize numbers independently of synthesis."
+          },
+          "math_notation": {
+            "type": "boolean",
+            "default": false,
+            "description": "Read digit-flanked mathematical operators as words."
+          },
+          "output_format": {
+            "type": "string",
+            "enum": [
+              "wav",
+              "ulaw",
+              "alaw",
+              "pcm",
+              "mp3"
+            ],
+            "default": "pcm",
+            "description": "Audio encoding for each returned chunk."
+          },
+          "add_wav_header": {
+            "type": "boolean",
+            "default": false,
+            "description": "Prepend a WAV header when returning compatible audio."
+          },
+          "pronunciation_dicts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            },
+            "description": "Pronunciation dictionary IDs to apply."
+          },
+          "enhancement": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Quality enhancement level: 0, 1, or 2.",
+            "enum": [
+              0,
+              1,
+              2
+            ]
+          },
+          "similarity": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Voice similarity control from 0 to 1."
+          },
+          "word_timestamps": {
+            "type": "boolean",
+            "default": false,
+            "description": "Emit word_timestamp response frames when supported."
+          }
+        },
+        "required": [
+          "text",
+          "voice_id"
+        ]
+      },
+      "TtsHttpError": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "error"
+            ]
+          },
+          "error_code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "message"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/waves/v1/tts": {
+      "post": {
+        "operationId": "synthesizeSpeech",
+        "tags": [
+          "Text to Speech"
+        ],
+        "summary": "Synthesize speech",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Requested audio media type, normally audio/wav."
+            },
+            "required": true,
+            "description": "Requested audio media type, normally audio/wav.",
+            "name": "Accept",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TtsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Synthesized audio bytes.",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed with HTTP 400.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsHttpError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed with HTTP 401.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsHttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed with HTTP 403.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsHttpError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request failed with HTTP 429.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsHttpError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed with HTTP 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsHttpError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request failed with HTTP 502.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsHttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request failed with HTTP 503.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsHttpError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/waves/v1/tts/live": {
+      "post": {
+        "operationId": "streamSpeechSse",
+        "tags": [
+          "Text to Speech"
+        ],
+        "summary": "Stream speech over server-sent events",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TtsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Server-sent audio chunk and completion events.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed with HTTP 400.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsHttpError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed with HTTP 401.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsHttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed with HTTP 403.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsHttpError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request failed with HTTP 429.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsHttpError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed with HTTP 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsHttpError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request failed with HTTP 502.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsHttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request failed with HTTP 503.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsHttpError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/waves/v1/pii/text": {
+      "post": {
+        "operationId": "redactPiiText",
+        "tags": [
+          "PII Redaction"
+        ],
+        "summary": "Redact PII from text",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PiiTextRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Redacted text and detected entities.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiTextResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed with HTTP 400.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed with HTTP 401.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed with HTTP 403.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request failed with HTTP 429.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed with HTTP 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request failed with HTTP 502.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request failed with HTTP 503.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/waves/v1/pii/audio": {
+      "post": {
+        "operationId": "redactPiiAudio",
+        "tags": [
+          "PII Redaction"
+        ],
+        "summary": "Redact PII from WAV audio",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/PiiAudioRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Base64-encoded WAV audio with PII spans replaced.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiAudioResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed with HTTP 400.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed with HTTP 401.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed with HTTP 403.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request failed with HTTP 429.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed with HTTP 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request failed with HTTP 502.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request failed with HTTP 503.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PiiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {},
+  "x-smallest-source": {
+    "repository": "waves-platform",
+    "hash": "0208d63fd3bfbf05",
+    "files": [
+      "src/contracts/tts.contract.ts",
+      "src/routes/pii/pii.audio.schema.ts",
+      "src/routes/pii/pii.route.ts",
+      "src/routes/pii/pii.schema.ts",
+      "src/routes/speech/tts/lightning-v3/speech/tts.routes.ts",
+      "src/services/websocket.ts"
+    ]
+  }
+}

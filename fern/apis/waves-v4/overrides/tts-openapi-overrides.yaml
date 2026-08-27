@@ -150,3 +150,26 @@ paths:
         - **Use a streaming-friendly client.** `curl -N`, Python `iter_lines`, or a `fetch` `ReadableStream` reader. Buffering clients will hide the latency win.
         - **Audio is base64 inside the event payload**, not the raw event bytes. Decode the `data.audio` field per event.
         - **`output_format=pcm`** gives the lowest overhead for streaming playback. `wav`/`mp3` work but add per-chunk framing bytes.
+  /waves/v1/pii/text:
+    post:
+      x-fern-server-name: waves
+      x-fern-audiences:
+      - v4docs
+      tags:
+      - PII Redaction
+      summary: Redact PII from text
+      description: |
+        Detect and replace personally identifiable information in text. Choose
+        `tag` replacements such as `<EMAIL_ADDRESS>` or mask detected spans with
+        asterisks. The response includes the redacted text and detected entities.
+  /waves/v1/pii/audio:
+    post:
+      x-fern-server-name: waves
+      x-fern-audiences:
+      - v4docs
+      tags:
+      - PII Redaction
+      summary: Redact PII from audio
+      description: |
+        Upload a 16-bit PCM WAV file and replace spoken PII with a beep, silence,
+        or noise. The response contains the redacted WAV as base64-encoded audio.
