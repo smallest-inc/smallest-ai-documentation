@@ -103,10 +103,12 @@ interface AtomsAgentConfig {
   apiKey:          string;    // Required. A short-lived access token from /register-call (recommended for browsers), or a raw API key.
   agentId:         string;    // Required. Agent to connect to.
   baseUrl?:        string;    // Default: wss://api.smallest.ai. Override for local dev.
-  sampleRate?:     number;    // Default: 24000. Audio sample rate in Hz.
+  sampleRate?:     number;    // Deprecated. Applies to raw-API-key auth only and is ignored when connecting with a short-lived access token — the rate is resolved on /register-call. Prefer output_audio_format on that call. See Audio Formats.
   autoCaptureMic?: boolean;   // Default: true. If false, no microphone is captured and mute()/unmute() are no-ops. See the Push-to-talk pattern below for the correct way to start muted.
 }
 ```
+
+The `sampleRate` field predates the per-direction audio contract and only sets output. On the recommended access-token flow, the rate is pinned when `/register-call` runs and the SDK does not transmit `sampleRate` on the WebSocket connect. Use [`output_audio_format`](/voice-agents/platform/agent-sdk/audio-formats) on `/register-call` instead; `input_audio_format` on the same call declares what your microphone actually produces.
 
 ## Methods
 
