@@ -52,6 +52,14 @@ Atoms accepts major credit cards and offers invoice billing for enterprise accou
 
 Yes. You can bring your own number via SIP trunk integration. Navigate to Deploy → Phone Numbers → Import and select "Import via SIP" to configure your existing number.
 
+### My SIP trunk returns silence, no SIP response. What's wrong?
+
+Almost always the transport. Our SIP ingress accepts **TCP** and **TLS** only. UDP INVITEs are silently dropped, no rejection. Append `;transport=tls` (port 5061, preferred) or `;transport=tcp` (port 5060) to the origination URL you configure at your provider. See [SIP Trunking → Transport contract](/voice-agents/platform/deploy/phone-numbers/sip-trunking#transport-contract) for the exact URL shape and a `sipsak` OPTIONS ping you can run to confirm reachability.
+
+### My SIP INVITE reaches you but the agent never picks up. What am I missing?
+
+The `To:` header on your INVITE must carry the number in E.164 with the leading `+` (`sip:+919240923803@...`, not `sip:919240923803@...`). Without the `+` the ingress does not map the request to your imported number. Rewrite your SBC's request URI to always send `+<country_code><number>`. Full checklist under [SIP Trunking → Troubleshooting](/voice-agents/platform/deploy/phone-numbers/sip-trunking#troubleshooting).
+
 ### What LLM models are available?
 
 GPT-4o, Electron models, and others. Available models may vary by plan.
