@@ -1438,6 +1438,59 @@ paths:
                   description: |
                     Session mode. `webcall` = full voice pipeline (audio in +
                     audio out). `chat` = text-only pipeline. Defaults to `webcall`.
+                sample_rate:
+                  type: integer
+                  enum: [8000, 16000, 24000, 44100]
+                  default: 24000
+                  description: |
+                    Sample rate in Hz of the audio the agent sends **back**. The
+                    older spelling of `output_audio_format`: a bare rate, meaning
+                    PCM at that rate. `44100` is only rendered by the
+                    `lightning-v3.1` and `lightning-v3.1-pro` voices; asking for a
+                    rate the agent's voice cannot render is refused here rather
+                    than failing mid-call. This does **not** set the rate of the
+                    audio you send - use `input_audio_format`.
+                  example: 24000
+                input_audio_format:
+                  type: string
+                  enum:
+                    - pcm_8000
+                    - pcm_16000
+                    - pcm_22050
+                    - pcm_24000
+                    - pcm_44100
+                    - pcm_48000
+                    - mulaw_8000
+                    - alaw_8000
+                    - opus_8000
+                    - opus_16000
+                    - opus_24000
+                    - opus_48000
+                  description: |
+                    The format you will **send**, as one `<encoding>_<rate>` token
+                    naming both the encoding and the rate. Defaults to PCM at the
+                    output rate, so a client sending only `sample_rate` needs
+                    nothing else.
+
+                    The recogniser is configured at this rate and your audio is
+                    not resampled, so the token must match the bytes you send: a
+                    mismatch produces wrong transcripts and no error. G.711 exists
+                    only at 8000. Opus is raw packets, one per WebSocket message;
+                    Ogg-framed Opus is a different format and is refused.
+
+                    A browser client can also declare this later, on the connect
+                    URL, once its `AudioContext` reports the rate it actually got.
+                  example: pcm_24000
+                output_audio_format:
+                  type: string
+                  enum: [pcm_8000, pcm_16000, pcm_24000, pcm_44100]
+                  default: pcm_24000
+                  description: |
+                    The format the agent sends back. Same token shape as
+                    `input_audio_format`. Sending this together with `sample_rate`
+                    is allowed only if they agree; disagreeing values are refused
+                    rather than resolved by a precedence rule.
+                  example: pcm_24000
                 variables:
                   type: object
                   additionalProperties:
@@ -1488,6 +1541,17 @@ paths:
                           Negotiated audio sample rate (Hz) for the session. Echoed
                           back in the WebSocket `session.created` event.
                         example: 24000
+                      input_audio_format:
+                        type: string
+                        description: |
+                          The input format resolved for this session. Read it back
+                          to confirm the server understood what you meant before
+                          you send any audio.
+                        example: pcm_24000
+                      output_audio_format:
+                        type: string
+                        description: The output format resolved for this session.
+                        example: pcm_24000
         "400":
           description: |
             Validation failed (e.g. missing `agent_id`), or the organization has
