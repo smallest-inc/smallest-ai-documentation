@@ -109,11 +109,11 @@ interface AtomsAgentConfig {
 }
 ```
 
-**You do not declare your input format.** The SDK reads the rate the browser actually gave its `AudioContext` and sends that as `input_audio_format` at connect, on both auth paths. Declaring one on `/register-call` has no effect when you use this SDK, because the measured value replaces it. A rate the recogniser does not accept is resampled to one it does, so the declared format always describes the bytes. See [Audio Formats](/voice-agents/platform/agent-sdk/audio-formats).
+**You do not declare your input format.** The SDK reads the rate the browser actually gave its `AudioContext` and sends that as `input_audio_format` at connect, on both auth paths. Declaring one on `/register-call` has no effect when you use this SDK, because the measured value replaces it. The SDK resamples automatically, so the format it declares always matches the audio it sends. See [Audio Formats](/voice-agents/platform/agent-sdk/audio-formats).
 
 **Output depends on how you authenticate.** With a `/register-call` token the backend already chose the format and `outputAudioFormat` is ignored. With a raw API key nothing has chosen it, so set `outputAudioFormat`; leave it unset for `pcm_24000`. `pcm_44100` needs a `lightning-v3.1` voice, and a rate the agent's voice cannot render is refused at connect.
 
-`sampleRate` predates the per-direction contract. It no longer names the session's rate, only the rate the SDK asks the browser to capture at, which is worth lowering if your users are on metered connections.
+`sampleRate` only controls microphone capture; it does not set the session's audio rate. Lower it if your users are on metered connections.
 
 ## Methods
 

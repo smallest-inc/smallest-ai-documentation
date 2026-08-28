@@ -14,8 +14,8 @@ accepted tokens lives in the
 references. This page covers the rules those enums cannot express.
 
 A token is `<encoding>_<rate>`, one per direction: `input_audio_format` for what
-you send, `output_audio_format` for what you get back. Encoding and rate are not
-independent, so a single token cannot name a combination that does not exist.
+you send, `output_audio_format` for what you get back. Not every encoding
+supports every rate. The tables below list every valid token.
 
 This page is about the WebSocket API only. On phone calls the carrier fixes the
 sample rate both ways, so `input_audio_format` does not apply.
@@ -42,18 +42,30 @@ sample rate both ways, so `input_audio_format` does not apply.
 | `alaw` | 8000 | G.711 A-law. Same |
 | `opus` | 8000, 16000, 24000, 48000 | The rate Opus decodes *to*, which is yours to pick |
 
-The input list is deliberately wider than the output list below. You may send
-22050 or 48000 even though no voice renders at them: what you send is bounded by
-the recogniser, what you get back is bounded by the voice. The two lists
-differing is not an inconsistency.
+Input and output support different rates. Input rates are limited by what speech
+recognition accepts; output rates by what the agent's voice can produce. That is
+why you can send `pcm_48000` even though no voice speaks at 48 kHz.
 
-`opus_12000` is absent for the mirror reason. Opus encodes at 12 kHz, but the
-recogniser does not accept that rate, so the pair has nowhere to go.
+`opus_12000` is not supported: Opus can encode at 12 kHz, but speech recognition
+does not accept 12 kHz input.
 
 An unsupported token is refused before any session exists, and the error names
 the accepted values: `input_audio_format '<token>' is not supported. Supported:
 ...` from register-call, or `Unsupported input_audio_format '<token>'. Supported:
 ...` if you pass it on the connect URL instead.
+
+## What a request looks like
+
+```json
+{
+  "agent_id": "agent_123",
+  "input_audio_format": "pcm_16000",
+  "output_audio_format": "pcm_24000"
+}
+```
+
+Both fields are optional. Leave them out and you get `pcm_24000` both ways.
+A full request and response is in the [worked example](#worked-example) below.
 
 ## Output rate depends on the voice
 
@@ -78,10 +90,9 @@ Supported: ...`, listing what that voice does render. No session is created.
   with the bytes `OggS`, and writes a log entry.
 </Info>
 
-Opus is roughly 30 times smaller than the same audio as PCM: measured on a
-6 second utterance, 9,359 bytes as Opus against 288,000 bytes as `pcm_24000`,
-both producing the same transcript. That saving is on your uplink, which is
-usually the leg that costs.
+Opus is roughly 30 times smaller than the same audio as PCM: 9,359 bytes against
+288,000 for the same 6 second utterance, with the same transcript. The saving is
+on upload bandwidth, which is usually the constrained direction for callers.
 
 A WebRTC or Janus source already carries Opus, so `opus_*` avoids decoding it
 just to re-encode it as PCM.
@@ -104,22 +115,25 @@ matching the output.
 fine when they agree; if they disagree the call is refused with HTTP 400
 rather than one silently winning.
 
-Both fields are accepted on register-call and on the connect URL, so a client
-that authenticates with a raw API key and never calls register-call can still
-name its output in tokens. `sample_rate` is therefore deprecated everywhere,
-with no path left where it is the only option.
+You can set `output_audio_format` in the register-call body or as a query
+parameter on the connect URL. If you connect directly with an API key and never
+call register-call, use the connect URL. `sample_rate` is deprecated in both
+places.
 
-With a `wct_` access token the connect URL's `output_audio_format` is ignored,
-as `sample_rate` is: register-call already resolved the output against the
-agent's voice, and the token carries the result. `input_audio_format` is the
-exception and is read from the URL on both paths, because a browser only learns
-the rate its `AudioContext` actually gave it after opening one, which is after
-the token was minted.
+Which connect-URL parameters are read depends on how you authenticate:
+
+- **Register-call token (`wct_`)**: `output_audio_format` and `sample_rate` on
+  the URL are ignored. The output format was already chosen and validated at
+  register-call, and the token carries it.
+- **Raw API key**: set `output_audio_format` on the connect URL.
+- **`input_audio_format` is read from the URL in both cases.** A browser only
+  knows its real microphone rate after it opens an `AudioContext`, which usually
+  happens after register-call.
 
 ## Worked example
 
 <CodeBlocks>
-```bash title="Register the call"
+```bash title="Register the call (India region; US is api.us.smallest.ai)"
 curl -X POST https://api.smallest.ai/atoms/v1/conversation/register-call \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
@@ -158,7 +172,6 @@ curl -X POST https://api.smallest.ai/atoms/v1/conversation/register-call \
   find a wrong declaration before you send audio.
 </Tip>
 
-Hosts above are the India region. For the US region use `api.us.smallest.ai`.
 
 <CodingAgentCallout />
 
