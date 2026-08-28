@@ -2,6 +2,30 @@
 
 Comparison of `waves-platform` + `atoms-platform` backend routes against Fern-published spec.
 
+## Update 2026-08-29 — probe-driven corrections landed
+
+A live probe against `api.smallest.ai` surfaced additional drift in the specs added by this branch. The corrections below have been committed:
+
+- **`lightning-v3.2-openapi.yaml`**
+  - `get_voices` is **public** (no auth) — `security` removed.
+  - Response schema rewritten to the real shape: `{voices:[{voiceId, displayName, tags:{accent, language[], gender, age, usecases[], emotions[]}}]}`.
+  - `prosody` enum corrected: `slow | normal | fast` (was `normal | monotone | expressive`).
+  - `accent` corrected from free-form string to a fixed 10-value enum: `general american, indian american, irish, italian, new york, british, canadian, scottish, southern american, australian`.
+- **`s2s-analytics-openapi.yaml`**
+  - `usage/timeseries` response is `{timestamps: string[], values: number[], totalRequestCount: number}` (not `{buckets:[…]}`).
+  - `logs` response is `{status, data:[…], page, pageSize, totalCount, totalPages}` (not `{logs:[…], next_cursor}`); pagination is 1-indexed `page`, not cursor.
+- **`pca-openapi.yaml`** — verified already correct (`transcript: string`, `/generate` uses `prompt`).
+- **Path prefix** — confirmed. `waves-platform/apps/main-backend/src/app.ts` rewrites `/waves/v1/*` → `/api/v1/*`, so all docs paths under `/waves/v1/*` are canonical.
+
+### Backend follow-ups (owned by waves-platform, not this repo)
+
+- `voice-library` endpoints (`/voice/{voiceId}/{save,upvote}`) validate `voiceId` as a Mongo ObjectId while the catalog exposes friendly slugs (`cody`, `mishka`, …). This is a real API contract bug — callers have no public path to obtain a valid ID. Fix in `waves-platform/apps/main-backend/src/routes/voice/voice.controller.ts` by looking up by catalog slug (`Voice.findOne({ voiceId })`).
+- Missing guardrails observed in probes:
+  - `analytics/s2s/usage/timeseries` accepts invalid `granularity` (e.g. `week`) and silently returns empty data instead of 400.
+  - `analytics/s2s/logs` has no upper bound on `limit` — accepts `limit=10000`.
+- The `docs-in-code` scaffold pushed to atoms + waves is the long-term fix; those probes would be a CI diff going forward.
+
+
 ## Compact summary
 
 | Product | Backend endpoints | Documented | Delta | Highest-impact fix |

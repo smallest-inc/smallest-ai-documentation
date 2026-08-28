@@ -63,9 +63,10 @@ paths:
       tags: [Text to Speech]
       operationId: getVoicesV32
       summary: List Lightning v3.2 voices
-      description: Returns the voice catalog for the v3.2 model. Voice IDs here are **not** compatible with v3.1.
-      security:
-        - BearerAuth: []
+      description: |
+        Returns the voice catalog for the v3.2 model. Voice IDs here are **not** compatible with v3.1.
+
+        **Public endpoint** — no authentication required.
       responses:
         '200':
           description: Voice catalog
@@ -79,14 +80,24 @@ paths:
                     items:
                       type: object
                       properties:
-                        voice_id: { type: string }
-                        name: { type: string }
-                        language: { type: string }
-                        gender: { type: string, enum: [male, female, neutral] }
-                        accent: { type: string, nullable: true }
-                        supported_emotions:
-                          type: array
-                          items: { type: string, enum: [neutral, sad, happy, angry] }
+                        voiceId: { type: string, description: "Slug used in `voice_id` on `get_speech`." }
+                        displayName: { type: string }
+                        tags:
+                          type: object
+                          properties:
+                            accent: { type: string }
+                            language:
+                              type: array
+                              items: { type: string }
+                            gender: { type: string, enum: [male, female, neutral] }
+                            age: { type: string, description: "e.g. `young`, `middle_aged`, `senior`." }
+                            usecases:
+                              type: array
+                              items: { type: string }
+                              description: "e.g. `Narration`, `Advertisement`, `Sales agent`, `Conversational`."
+                            emotions:
+                              type: array
+                              items: { type: string, enum: [neutral, sad, happy, angry] }
 
 components:
   securitySchemes:
@@ -186,13 +197,27 @@ components:
           description: Perceptual loudness. `silent` returns near-inaudible audio (useful for timing tests).
         prosody:
           type: string
-          enum: [normal, monotone, expressive]
+          enum: [slow, normal, fast]
           default: normal
           description: |
-            `monotone` for IVR balance-reads; `expressive` for character agents / storytelling.
+            Speaking pace. `slow` for storytelling / calm confirmations, `normal` for most conversation,
+            `fast` for urgent alerts or dense information reads.
         accent:
           type: string
-          description: Accent overlay (e.g., british, american, indian). Some voices reject specific accents — check `get_voices` metadata.
+          enum:
+            - general american
+            - indian american
+            - irish
+            - italian
+            - new york
+            - british
+            - canadian
+            - scottish
+            - southern american
+            - australian
+          description: |
+            Accent overlay. Fixed vocabulary — the backend rejects any value outside this list.
+            Some voices reject specific accents at synthesis time; check the catalog metadata.
         instruction:
           type: string
           description: |
