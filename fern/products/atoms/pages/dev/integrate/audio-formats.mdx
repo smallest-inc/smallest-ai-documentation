@@ -104,12 +104,17 @@ matching the output.
 fine when they agree; if they disagree the call is refused with HTTP 400
 rather than one silently winning.
 
-The two fields are not interchangeable everywhere. `output_audio_format` is a
-register-call field only. The connect URL does not accept it, so if you connect
-straight from a raw API key without registering the call first, `sample_rate` is
-the only way to set the output rate. `input_audio_format`, by contrast, is
-accepted in both places: a browser only learns the rate its `AudioContext`
-actually gave it after opening one, which is after the token was minted.
+Both fields are accepted on register-call and on the connect URL, so a client
+that authenticates with a raw API key and never calls register-call can still
+name its output in tokens. `sample_rate` is therefore deprecated everywhere,
+with no path left where it is the only option.
+
+With a `wct_` access token the connect URL's `output_audio_format` is ignored,
+as `sample_rate` is: register-call already resolved the output against the
+agent's voice, and the token carries the result. `input_audio_format` is the
+exception and is read from the URL on both paths, because a browser only learns
+the rate its `AudioContext` actually gave it after opening one, which is after
+the token was minted.
 
 ## Worked example
 
