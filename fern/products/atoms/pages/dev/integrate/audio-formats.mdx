@@ -36,8 +36,9 @@ sample rate both ways, so `input_audio_format` does not apply.
 the default.
 
 `pcm_44100` works only with the `lightning-v3.1` and `lightning-v3.1-pro`
-voices. Any other voice rejects it at register-call with
-`unsupported_audio_format`, and no session is created.
+voices. Any other voice rejects it at register-call with HTTP 400 and
+`output_audio_format '<token>' is not supported by this agent's voice.
+Supported: ...`, listing what that voice does render. No session is created.
 
 ## Sending Opus
 
@@ -73,8 +74,9 @@ matching the output.
 { "agent_id": "agent_123", "input_audio_format": "pcm_16000", "output_audio_format": "pcm_24000" }
 ```
 
-`sample_rate` still works and still returns in the response. If you send both,
-the format tokens win.
+`sample_rate` still works and still returns in the response. Sending both is
+fine when they agree; if they disagree the call is refused with HTTP 400
+rather than one silently winning.
 
 ## Worked example
 
