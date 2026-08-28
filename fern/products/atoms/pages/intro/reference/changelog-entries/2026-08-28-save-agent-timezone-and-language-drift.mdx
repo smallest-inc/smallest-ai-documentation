@@ -1,0 +1,15 @@
+---
+title: "Save-agent API: `timezone` object shape, expanded language enum, native-types callout"
+---
+
+Fixed two drifts on [`PUT /agent/{id}/branches/{branchId}/draft`](/voice-agents/api-reference/agent-versioning-branches/update-branch-draft) that were sending real integrations into hours of 400s.
+
+**`timezone` is an object, not a string.** The `UpdateBranchDraftRequest.timezone` field was documented as a bare string; the backend expects `{"label": "(GMT+5:30) Asia/Kolkata", "offset": 330}`. A brand-new customer sending `"Asia/Kolkata"` was refused with `Invalid config: timezone: Expected object, received string` for 48h before we caught it. Corrected + example added.
+
+**`language.default` and `language.supported` now list all 18 supported codes.** Docs previously listed 9 (`en, hi, mr, gu, ta, es, north_indic, bn, or`); the platform accepts 18 (adding `te, kn, ml, fr, de, it, nl, pt, ru`). Verified against `packages/atoms-types/src/common/enums.ts:15-35` at `atoms-platform@main`.
+
+**Native JSON types callout on the endpoint.** The single most common integration bug on this endpoint is sending JSON-stringified values instead of native types (e.g. `"language.supported": "en"` instead of `["en"]`, or `"isEnabled": "false"` instead of `false`). The endpoint description now says so up front, with the exact Zod error string the API returns.
+
+Every claim in this update was live-tested with `scripts/spec-live-tests/save_agent_shapes_live_test.py`. 15/15 checks pass.
+
+Cross-product follow-up: language enum sync automation between Waves and Atoms is queued so this class of drift is caught in CI going forward.

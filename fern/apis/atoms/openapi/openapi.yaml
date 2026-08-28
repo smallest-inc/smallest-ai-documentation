@@ -7815,6 +7815,10 @@ paths:
       x-fern-sdk-method-name: update_draft
       description: |
         Upsert the open draft on this branch. If no draft is open, one is created automatically. The request body is an agent config partial in the same camelCase shape as `GET /agent/{id}` (`globalPrompt`, `firstMessage`, `synthesizer`, `language`, `voiceDetectionConfig`, `smartTurnConfig`, ...) and must contain at least one recognized field; the server merges it into the existing draft and returns the resulting draft as a revision-shaped snapshot.
+
+        **Send native JSON types, not stringified values.** Arrays (`language.supported: ["en"]`), booleans (`language.switching.isEnabled: false`), and objects (`timezone: {"label": "(GMT+5:30) Asia/Kolkata", "offset": 330}`) must be sent as real JSON. Passing `"[\"en\"]"`, `"false"`, or `"Asia/Kolkata"` instead is refused with a Zod-style error naming the offending path and the received type (e.g. `Invalid config: language.supported: Expected array, received string`). This is the single most common integration bug on this endpoint.
+
+        Publish the draft with `POST /agent/{id}/branches/{branchId}/draft/publish` to make the changes live. The draft PUT alone does **not** affect running calls.
       tags:
         - Agent Versioning - Branches
       security:
@@ -11909,7 +11913,7 @@ components:
           properties:
             default:
               type: string
-              enum: [en, hi, mr, gu, ta, es, north_indic, bn, or]
+              enum: [en, hi, mr, gu, ta, te, kn, ml, es, north_indic, bn, or, fr, de, it, nl, pt, ru]
               description: "The default language of the agent. Note: `ta` cannot be combined with other languages in `supported`."
               default: en
             supported:
@@ -11919,7 +11923,7 @@ components:
                 Tamil (`ta`) cannot be combined with other languages.
               items:
                 type: string
-                enum: [en, hi, mr, gu, ta, es, north_indic, bn, or]
+                enum: [en, hi, mr, gu, ta, te, kn, ml, es, north_indic, bn, or, fr, de, it, nl, pt, ru]
             switching:
               type: object
               description: Language switching configuration for the agent. If enabled, the agent will be able to switch between languages based on the user's language.
@@ -12420,7 +12424,7 @@ components:
             default:
               type: string
               description: The default language of the agent
-              enum: [en, hi, mr, gu, ta, es, north_indic, bn, or]
+              enum: [en, hi, mr, gu, ta, te, kn, ml, es, north_indic, bn, or, fr, de, it, nl, pt, ru]
             switching:
               type: object
               description: Language switching configuration for the agent
@@ -12837,7 +12841,7 @@ components:
               description: STT engine in use on the resolved version.
             defaultLanguage:
               type: string
-              enum: [en, hi, mr, gu, ta, es, north_indic, bn, or]
+              enum: [en, hi, mr, gu, ta, te, kn, ml, es, north_indic, bn, or, fr, de, it, nl, pt, ru]
               description: Default language set on the resolved version.
             supportedLanguages:
               type: array
@@ -13608,8 +13612,18 @@ components:
           enum: ["", office, cafe, call_center, static]
           description: Ambient background sound during calls.
         timezone:
-          type: string
-          description: IANA timezone identifier used for date/time interpretation in prompts and tool calls.
+          type: object
+          description: |
+            Agent timezone applied to date/time interpretation in prompts, tool calls, and analytics bucketing. Object with a `label` (IANA-style label) and an `offset` (UTC offset in minutes). Sending a bare string is refused with `Invalid config: timezone: Expected object, received string`.
+          properties:
+            label:
+              type: string
+              description: Human-readable timezone label (e.g. `(GMT+5:30) Asia/Kolkata`).
+              example: "(GMT+5:30) Asia/Kolkata"
+            offset:
+              type: number
+              description: UTC offset in minutes (e.g. `330` for Asia/Kolkata, `-300` for EST).
+              example: 330
         globalKnowledgeBaseId:
           type: string
           description: Knowledge base attached to the agent for retrieval-augmented responses.
