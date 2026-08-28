@@ -21,13 +21,16 @@ This page is about the WebSocket API only. On phone calls the carrier fixes the
 sample rate both ways, so `input_audio_format` does not apply.
 
 <Warning>
-  **Your declared rate must match the bytes you actually send.** A mismatch does
-  not raise an error. It degrades transcription, sometimes past the point of
-  usefulness: 8 kHz audio declared as `pcm_16000` plays back at double speed, and
-  "hello there can you hear me clearly" transcribes as "how old are they very".
+  **Declare the rate of the audio that you send.** The server does not compare
+  the rate to the audio. A wrong rate does not cause an error.
 
-  In a browser, read `audioContext.sampleRate` at runtime and declare that. Do
-  not assume 44100 or 48000 — the value depends on the device and the OS.
+  If the rate is wrong, the recogniser returns incorrect text. For example, you
+  send 8 kHz audio and you declare `pcm_16000`. The audio then plays two times
+  too fast. "hello there can you hear me clearly" becomes "how old are they very".
+
+  In a browser, open the audio context first. Then read
+  `audioContext.sampleRate` and declare that value. Do not assume 44100 or
+  48000. The value changes with the device and the operating system.
 </Warning>
 
 ## What you can send
@@ -65,13 +68,14 @@ Supported: ...`, listing what that voice does render. No session is created.
 ## Sending Opus
 
 <Info>
-  Send **exactly one Opus packet per WebSocket message**. Opus is a framed codec
-  and the packet boundary is what tells the decoder where a frame ends. Two
-  packets in one message, or one packet split across two, decodes to noise.
+  **Send one Opus packet in each WebSocket message.** Opus is a framed codec.
+  The message boundary shows the decoder where a packet ends. Do not put two
+  packets in one message. Do not divide one packet across two messages. Each of
+  these errors makes noise.
 
-  Send raw Opus packets, not Ogg pages. If your source produces an Ogg stream,
-  strip the container first. A message beginning with the bytes `OggS` is dropped
-  and logged.
+  Send raw Opus packets. Do not send Ogg pages. If your source makes an Ogg
+  stream, remove the container first. The server discards a message that starts
+  with the bytes `OggS`, and writes a log entry.
 </Info>
 
 Opus is roughly 30 times smaller than the same audio as PCM: measured on a
@@ -137,9 +141,9 @@ curl -X POST https://api.smallest.ai/atoms/v1/conversation/register-call \
 </CodeBlocks>
 
 <Tip>
-  The response echoes the formats we resolved. Read them back and confirm they
-  are what you meant — it is the cheapest way to catch a wrong declaration
-  before you send a single byte of audio.
+  The response contains the formats that the server resolved. Read these values
+  and make sure that they agree with your request. This is the easiest way to
+  find a wrong declaration before you send audio.
 </Tip>
 
 Hosts above are the India region. For the US region use `api.us.smallest.ai`.

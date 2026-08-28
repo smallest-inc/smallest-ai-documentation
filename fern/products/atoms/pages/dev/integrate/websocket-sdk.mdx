@@ -69,13 +69,13 @@ await agent.connect();
 ```
 
 <Tip>
-  **In the browser, don't ship your raw API key.** Instead, mint a short-lived,
-  single-use access token server-side with `POST /conversation/register-call`
-  (see the **Register Call** endpoint under **Realtime Agent** in the API
-  reference) and pass that token as `apiKey`. See the
-  [Browser Voice Cookbook](/voice-agents/platform/agent-sdk/browser-voice-cookbook)
-  for the full three-step flow. Passing a raw `sk_` key still works and is fine
-  for server-side or trusted clients.
+  **Do not put your raw API key in a browser.** On your server, call
+  `POST /conversation/register-call` to get a short-lived, single-use access
+  token. See the **Register Call** endpoint under **Realtime Agent** in the API
+  reference. Then pass that token as `apiKey`. For the full three-step flow, see
+  the [Browser Voice Cookbook](/voice-agents/platform/agent-sdk/browser-voice-cookbook).
+
+  A raw `sk_` key also works. Use it only on a server or on a trusted client.
 </Tip>
 
 The CDN equivalent uses the `AtomsSdk` global:
@@ -93,7 +93,7 @@ The CDN equivalent uses the `AtomsSdk` global:
 ```
 
 <Warning>
-  `connect()` calls `navigator.mediaDevices.getUserMedia()`. Browsers only expose the microphone on **secure contexts**: HTTPS in production, or `http://localhost` / `http://127.0.0.1` in development. Serving the page from a non-loopback HTTP origin throws a permission error.
+  `connect()` calls `navigator.mediaDevices.getUserMedia()`. A browser gives access to the microphone only on a **secure context**. In production, use HTTPS. In development, you can also use `http://localhost` or `http://127.0.0.1`. If you serve the page from a different HTTP origin, the browser throws a permission error.
 </Warning>
 
 ## Configuration
@@ -156,7 +156,7 @@ talkButton.addEventListener("pointerup",   () => agent.mute());
 ```
 
 <Warning>
-  Do not pass `autoCaptureMic: false` for push-to-talk. That mode skips microphone setup entirely and there is no public method to start the mic after `connect()`, so `mute()` and `unmute()` silently do nothing and `isMuted` always returns `false`. Use the default (`autoCaptureMic: true`) and call `mute()` right after `connect()` instead.
+  Do not use `autoCaptureMic: false` for push-to-talk. That mode does not start the microphone. No public method starts the microphone after `connect()`. Thus `mute()` and `unmute()` do nothing, and `isMuted` always returns `false`. Keep the default value `autoCaptureMic: true`. Then call `mute()` immediately after `connect()`.
 </Warning>
 
 ### Agent-speaking indicator
