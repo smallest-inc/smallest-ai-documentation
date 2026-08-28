@@ -87,8 +87,10 @@ servers:
               default: 24000
               deprecated: true
               description: |
-                Deprecated, use `output_audio_format` on register-call. Still
-                accepted. Sample rate (Hz) of the audio the agent sends back. Honored when
+                On this URL, this is the only way to set the output rate:
+                `output_audio_format` is a register-call field and is not accepted
+                here. Prefer register-call with `output_audio_format` where you
+                can. Sample rate (Hz) of the audio the agent sends back. Honored when
                 authenticating with a raw `sk_` API key. With a `wct_` token this
                 param is ignored, because the rate was already resolved when the
                 call was registered - from that request's `sample_rate` or
@@ -147,7 +149,7 @@ channels:
       | `agent_id` | Yes | string | — | The Atoms agent to connect to. |
       | `variables` | No | string | — | URL-encoded JSON object of per-call prompt variables. Overrides the agent's `defaultVariables` for this session only. Values must be `string`, `number`, or `boolean`. Reserved system-variable keys are stripped server-side (they are populated by the server): `call_id`, `conversation_type`, `agent_number`, `user_number`, `current_date`, `current_time`, `current_day`, `agent_gender`, `default_language`, `supported_languages`, `timezone`. |
       | `mode` | No | `webcall` \| `chat` | `webcall` | Session mode. `webcall` = full voice pipeline (audio in + audio out). `chat` = text-only pipeline. Invalid values are rejected with a connection error. |
-      | `sample_rate` | No | integer | `24000` | **Deprecated, use `output_audio_format` on register-call.** Still accepted. Sample rate in Hz of the audio the agent sends **back**. Valid values: `8000`, `16000`, `24000`, and `44100` on the `lightning-v3.1` and `lightning-v3.1-pro` voices only. A rate the agent's voice cannot render is refused. This does **not** set the rate of the audio you send: use `input_audio_format` below. Echoed in `session.created.sample_rate`. Set to `8000` for telephony-quality audio streams. (With a `wct_` token this parameter is ignored: the rate was already resolved on register-call and travels in the token.) |
+      | `sample_rate` | No | integer | `24000` | **On this URL, this is the only way to set the output rate.** `output_audio_format` is a register-call field and is not accepted as a query parameter here. Prefer register-call with `output_audio_format` where you can. Sample rate in Hz of the audio the agent sends **back**. Valid values: `8000`, `16000`, `24000`, and `44100` on the `lightning-v3.1` and `lightning-v3.1-pro` voices only. A rate the agent's voice cannot render is refused. This does **not** set the rate of the audio you send: use `input_audio_format` below. Echoed in `session.created.sample_rate`. Set to `8000` for telephony-quality audio streams. (With a `wct_` token this parameter is ignored: the rate was already resolved on register-call and travels in the token.) |
       | `input_audio_format` | No | `<encoding>_<rate>` token | matches the output rate | The format you are **sending**, as one token naming both encoding and rate: `pcm_{8000,16000,22050,24000,44100,48000}`, `mulaw_8000`, `alaw_8000`, or `opus_{8000,16000,24000,48000}`. An unsupported value is refused at upgrade with `Unsupported input_audio_format '<value>'. Supported: …`. Declared here rather than in the token because a browser only learns what rate its `AudioContext` actually gave it after opening one, which is after the token was minted. The recogniser is configured at this rate and your audio is not resampled, so it must match the bytes you send. Full contract in [Audio Formats](/voice-agents/platform/agent-sdk/audio-formats). |
 
       \* `token` or `Authorization: Bearer <key>` — not both.
