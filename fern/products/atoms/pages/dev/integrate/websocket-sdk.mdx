@@ -100,15 +100,20 @@ The CDN equivalent uses the `AtomsSdk` global:
 
 ```typescript
 interface AtomsAgentConfig {
-  apiKey:          string;    // Required. A short-lived access token from /register-call (recommended for browsers), or a raw API key.
-  agentId:         string;    // Required. Agent to connect to.
-  baseUrl?:        string;    // Default: wss://api.smallest.ai. Override for local dev.
-  sampleRate?:     number;    // Deprecated. Sets the rate the SDK captures the microphone at; it is never sent to the server. The session's rates are resolved on /register-call. Prefer input_audio_format and output_audio_format there. See Audio Formats.
-  autoCaptureMic?: boolean;   // Default: true. If false, no microphone is captured and mute()/unmute() are no-ops. See the Push-to-talk pattern below for the correct way to start muted.
+  apiKey:             string;  // Required. A short-lived access token from /register-call (recommended for browsers), or a raw API key.
+  agentId:            string;  // Required. Agent to connect to.
+  baseUrl?:           string;  // Default: wss://api.smallest.ai. Override for local dev.
+  sampleRate?:        number;  // Default: 24000. The rate the SDK asks the browser for. A request, not a guarantee, and never sent to the server. See Audio Formats.
+  outputAudioFormat?: string;  // Default: pcm_24000. The rate the agent speaks at. Read only with a raw API key: a /register-call token already carries the format.
+  autoCaptureMic?:    boolean; // Default: true. If false, no microphone is captured and mute()/unmute() are no-ops. See the Push-to-talk pattern below for the correct way to start muted.
 }
 ```
 
-The `sampleRate` field predates the per-direction audio contract. It now only sets the rate the SDK opens its microphone at, and is never transmitted on the WebSocket connect on any auth path; the session's rates come from `/register-call`. Use [`output_audio_format`](/voice-agents/platform/agent-sdk/audio-formats) on `/register-call` instead; `input_audio_format` on the same call declares what your microphone actually produces.
+**You do not declare your input format.** The SDK reads the rate the browser actually gave its `AudioContext` and sends that as `input_audio_format` at connect, on both auth paths. Declaring one on `/register-call` has no effect when you use this SDK, because the measured value replaces it. A rate the recogniser does not accept is resampled to one it does, so the declared format always describes the bytes. See [Audio Formats](/voice-agents/platform/agent-sdk/audio-formats).
+
+**Output depends on how you authenticate.** With a `/register-call` token the backend already chose the format and `outputAudioFormat` is ignored. With a raw API key nothing has chosen it, so set `outputAudioFormat`; leave it unset for `pcm_24000`. `pcm_44100` needs a `lightning-v3.1` voice, and a rate the agent's voice cannot render is refused at connect.
+
+`sampleRate` predates the per-direction contract. It no longer names the session's rate, only the rate the SDK asks the browser to capture at, which is worth lowering if your users are on metered connections.
 
 ## Methods
 
