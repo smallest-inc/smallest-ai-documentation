@@ -30,6 +30,28 @@ sample rate both ways, so `input_audio_format` does not apply.
   not assume 44100 or 48000 — the value depends on the device and the OS.
 </Warning>
 
+## What you can send
+
+| Encoding | Rates | Notes |
+|---|---|---|
+| `pcm` | 8000, 16000, 22050, 24000, 44100, 48000 | Signed 16-bit little-endian, mono |
+| `mulaw` | 8000 | G.711 mu-law. G.711 exists only at 8 kHz |
+| `alaw` | 8000 | G.711 A-law. Same |
+| `opus` | 8000, 16000, 24000, 48000 | The rate Opus decodes *to*, which is yours to pick |
+
+The input list is deliberately wider than the output list below. You may send
+22050 or 48000 even though no voice renders at them: what you send is bounded by
+the recogniser, what you get back is bounded by the voice. The two lists
+differing is not an inconsistency.
+
+`opus_12000` is absent for the mirror reason. Opus encodes at 12 kHz, but the
+recogniser does not accept that rate, so the pair has nowhere to go.
+
+An unsupported token is refused before any session exists, and the error names
+the accepted values: `input_audio_format '<token>' is not supported. Supported:
+...` from register-call, or `Unsupported input_audio_format '<token>'. Supported:
+...` if you pass it on the connect URL instead.
+
 ## Output rate depends on the voice
 
 `pcm_8000`, `pcm_16000` and `pcm_24000` work with every voice. `pcm_24000` is
