@@ -1,0 +1,99 @@
+openapi: 3.0.1
+info:
+  title: Waves Speech-to-Speech Analytics
+  description: |
+    Analytics for the Speech-to-Speech (S2S) pipeline. Same shape as TTS/ASR analytics — use these
+    when you have S2S usage split across your organization and want it separately trended.
+  version: 1.0.0
+servers:
+  - url: https://api.smallest.ai
+    x-fern-server-name: waves
+paths:
+  /waves/v1/analytics/s2s/usage/timeseries:
+    get:
+      tags: [Analytics]
+      operationId: getS2sUsageTimeseries
+      summary: S2S usage over time
+      description: Usage counts and duration for S2S calls, grouped by time bucket.
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/StartTime'
+        - $ref: '#/components/parameters/EndTime'
+        - $ref: '#/components/parameters/Granularity'
+      responses:
+        '200':
+          description: Time-bucketed usage
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  buckets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp: { type: string, format: date-time }
+                        request_count: { type: integer }
+                        duration_seconds: { type: number }
+                        credits: { type: number }
+
+  /waves/v1/analytics/s2s/logs:
+    get:
+      tags: [Analytics]
+      operationId: getS2sLogs
+      summary: S2S request logs
+      description: Recent per-request logs for the S2S pipeline (session id, model, duration, latency, cost).
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/StartTime'
+        - $ref: '#/components/parameters/EndTime'
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 500 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+          description: Pagination cursor from previous response.
+      responses:
+        '200':
+          description: Log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp: { type: string, format: date-time }
+                        session_id: { type: string }
+                        model: { type: string }
+                        duration_seconds: { type: number }
+                        latency_ms: { type: number }
+                        credits: { type: number }
+                  next_cursor: { type: string, nullable: true }
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    StartTime:
+      name: start_time
+      in: query
+      schema: { type: string, format: date-time }
+      description: Inclusive lower bound. Defaults to 24 h ago.
+    EndTime:
+      name: end_time
+      in: query
+      schema: { type: string, format: date-time }
+      description: Exclusive upper bound. Defaults to now.
+    Granularity:
+      name: granularity
+      in: query
+      schema: { type: string, enum: [minute, hour, day], default: hour }
+      description: Bucket size for time series aggregation.

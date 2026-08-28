@@ -1,0 +1,200 @@
+openapi: 3.0.1
+info:
+  title: Waves Lightning v3.2 TTS API
+  description: |
+    Lightning v3.2 adds prosody controls (`emotion`, `pitch`, `volume`, `prosody`, `accent`) and free-form
+    `instruction` on top of the v3.1 request shape. Voices between v3.1 and v3.2 are **not** interchangeable —
+    look up v3.2 voices via `/waves/v1/lightning-v3.2/get_voices`.
+
+    ## When to use v3.2 over v3.1
+
+    - You want per-utterance affect (`emotion=happy`, `prosody=expressive`) — v3.1 has no way to do this
+    - You're driving an LLM-authored voice direction (`instruction: "sound reassuring, speak slowly"`)
+    - You need an accent overlay on a base voice (`accent=british`)
+
+    Supported languages: `en`, `hi`, `auto`. If you need broader coverage, stay on v3.1_pro.
+  version: 1.0.0
+servers:
+  - url: https://api.smallest.ai
+    description: Waves API server
+    x-fern-server-name: waves
+paths:
+  /waves/v1/lightning-v3.2/get_speech:
+    post:
+      tags: [Text to Speech]
+      operationId: synthesizeSpeechV32
+      summary: Synthesize speech (Lightning v3.2)
+      description: |
+        Sync TTS with prosody controls. Same base params as v3.1 plus emotion/pitch/volume/prosody/accent/instruction.
+
+        `instruction` overrides the tuple `emotion` + `pitch` + `volume` + `prosody` when set — use it when
+        the fixed vocabulary doesn't cover your intent.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: Accept
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [audio/wav, audio/mpeg, audio/pcm, audio/basic]
+          description: Must be set to a supported audio mime type. Omitting it can return an empty response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LightningV32Request'
+      responses:
+        '200':
+          description: Binary audio stream
+          content:
+            audio/wav: { schema: { type: string, format: binary } }
+            audio/mpeg: { schema: { type: string, format: binary } }
+            audio/pcm: { schema: { type: string, format: binary } }
+            audio/basic: { schema: { type: string, format: binary } }
+        '400': { description: Invalid parameters }
+        '401': { description: Unauthorized }
+        '402': { description: Insufficient credits }
+        '429': { description: Rate limited }
+
+  /waves/v1/lightning-v3.2/get_voices:
+    get:
+      tags: [Text to Speech]
+      operationId: getVoicesV32
+      summary: List Lightning v3.2 voices
+      description: Returns the voice catalog for the v3.2 model. Voice IDs here are **not** compatible with v3.1.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Voice catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  voices:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        voice_id: { type: string }
+                        name: { type: string }
+                        language: { type: string }
+                        gender: { type: string, enum: [male, female, neutral] }
+                        accent: { type: string, nullable: true }
+                        supported_emotions:
+                          type: array
+                          items: { type: string, enum: [neutral, sad, happy, angry] }
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    LightningV32Request:
+      type: object
+      required: [text, voice_id]
+      properties:
+        text:
+          type: string
+          maxLength: 8000
+          description: Utterance to synthesize. Trimmed server-side.
+        voice_id:
+          type: string
+          description: v3.2 voice ID (from `/get_voices`). NOT v3.1 or v3.1_pro voices.
+        speed:
+          type: number
+          minimum: 0.5
+          maximum: 2
+          default: 1
+          description: Playback rate multiplier. Outside 0.7–1.5 will sound artifacted.
+        sample_rate:
+          type: integer
+          enum: [8000, 16000, 24000, 44100]
+          default: 44100
+          description: |
+            8000 for telephony (ulaw/alaw), 24000 for real-time voice agents,
+            44100 for studio-quality audiobook export.
+        language:
+          type: string
+          enum: [en, hi, auto]
+          default: auto
+          description: v3.2 supports en + hi. `auto` detects at synth time.
+        number_pronunciation_language:
+          type: string
+          description: |
+            Force digit reading in a specific language regardless of base text language.
+            Example: Hindi narration with English number reads → `en`.
+        math_notation:
+          type: boolean
+          default: false
+          description: Enable when the text contains LaTeX / math expressions.
+        enhancement:
+          type: integer
+          enum: [0, 1, 2]
+          default: 0
+          description: |
+            Post-processing quality tier. 0 = lowest latency (real-time agents),
+            2 = highest quality, ~2× compute cost (async audiobook export).
+        similarity:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Voice fidelity vs stability. Higher = closer to reference but more artifacts on unusual words.
+        word_timestamps:
+          type: boolean
+          default: false
+          description: Emit per-word timing metadata. ~5% latency penalty. Turn on for captioning / lip-sync.
+        output_format:
+          type: string
+          enum: [pcm, wav, mp3, ulaw, alaw]
+          default: pcm
+          description: |
+            pcm: raw stream for WebRTC/audio SDK ingestion (lowest latency).
+            wav: universal; use with `add_wav_header=true`.
+            mp3: compressed download (slower TTFB).
+            ulaw/alaw: SIP/PSTN only, pair with `sample_rate=8000`.
+        save_history:
+          type: boolean
+          default: true
+          description: Off for privacy-sensitive prompts (PII).
+        pronunciation_dicts:
+          type: array
+          items: { type: string }
+          description: Applied in order. Use for brand names, SKUs, medical terms.
+        add_wav_header:
+          type: boolean
+          default: false
+          description: True for direct `<audio>` playback; false for raw pipe-through.
+        emotion:
+          type: string
+          enum: [neutral, sad, happy, angry]
+          default: neutral
+          description: Category-level affect. "angry" is not "louder" — see `volume`.
+        pitch:
+          type: string
+          enum: [low, mid, high]
+          default: mid
+          description: Register shift. Not a substitute for choosing a different `voice_id`.
+        volume:
+          type: string
+          enum: [silent, low, normal, high]
+          default: normal
+          description: Perceptual loudness. `silent` returns near-inaudible audio (useful for timing tests).
+        prosody:
+          type: string
+          enum: [normal, monotone, expressive]
+          default: normal
+          description: |
+            `monotone` for IVR balance-reads; `expressive` for character agents / storytelling.
+        accent:
+          type: string
+          description: Accent overlay (e.g., british, american, indian). Some voices reject specific accents — check `get_voices` metadata.
+        instruction:
+          type: string
+          description: |
+            Free-form voice direction. **Overrides the emotion/pitch/volume/prosody tuple** when set.
+            Prefer this when you want an LLM to author the direction inline.
