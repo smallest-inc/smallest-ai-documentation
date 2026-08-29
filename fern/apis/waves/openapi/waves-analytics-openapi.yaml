@@ -41,9 +41,44 @@ paths:
         schema:
           type: integer
           minimum: 1
-          maximum: 100
+          maximum: 50
           default: 50
-        description: Number of records per page.
+        description: Number of records per page. Max 50.
+      - in: query
+        name: text
+        schema:
+          type: string
+        description: Case-insensitive substring match against the transcription.
+      - in: query
+        name: language
+        schema:
+          type: string
+        description: Exact-match filter on language code (e.g. `en`, `hi`).
+      - in: query
+        name: model
+        schema:
+          type: string
+        description: Exact-match filter on STT model (e.g. `pulse`).
+      - in: query
+        name: durationMin
+        schema:
+          type: number
+        description: Minimum audio duration in seconds.
+      - in: query
+        name: durationMax
+        schema:
+          type: number
+        description: Maximum audio duration in seconds.
+      - in: query
+        name: timestampFrom
+        schema:
+          type: integer
+        description: Lower bound on request timestamp, Unix seconds.
+      - in: query
+        name: timestampTo
+        schema:
+          type: integer
+        description: Upper bound on request timestamp, Unix seconds.
       responses:
         '200':
           description: STT logs retrieved successfully.
@@ -76,7 +111,8 @@ paths:
         example: "3eea9859-609b-45c5-8a25-0337c9763c96"
         schema:
           type: string
-        description: The `request_id` of the STT request to delete.
+          format: uuid
+        description: The `request_id` (UUID) of the STT request to delete.
       responses:
         '200':
           description: History entry deleted (or was already absent).
@@ -108,7 +144,6 @@ paths:
       parameters:
       - $ref: '#/components/parameters/From'
       - $ref: '#/components/parameters/To'
-      - $ref: '#/components/parameters/Granularity'
       responses:
         '200':
           description: Timeseries retrieved successfully.
@@ -146,9 +181,39 @@ paths:
         schema:
           type: integer
           minimum: 1
-          maximum: 100
+          maximum: 50
           default: 50
-        description: Number of records per page.
+        description: Number of records per page. Max 50.
+      - in: query
+        name: text
+        schema:
+          type: string
+        description: Case-insensitive substring match against the input text.
+      - in: query
+        name: creditsMin
+        schema:
+          type: number
+        description: Minimum credits consumed by the request.
+      - in: query
+        name: creditsMax
+        schema:
+          type: number
+        description: Maximum credits consumed by the request.
+      - in: query
+        name: timestampFrom
+        schema:
+          type: integer
+        description: Lower bound on request timestamp, Unix seconds.
+      - in: query
+        name: timestampTo
+        schema:
+          type: integer
+        description: Upper bound on request timestamp, Unix seconds.
+      - in: query
+        name: model
+        schema:
+          type: string
+        description: Exact-match filter on TTS model (e.g. `lightning-v3.1-pro`).
       responses:
         '200':
           description: TTS logs retrieved successfully.
@@ -175,7 +240,6 @@ paths:
       parameters:
       - $ref: '#/components/parameters/From'
       - $ref: '#/components/parameters/To'
-      - $ref: '#/components/parameters/Granularity'
       responses:
         '200':
           description: Timeseries retrieved successfully.
@@ -203,7 +267,6 @@ paths:
       parameters:
       - $ref: '#/components/parameters/From'
       - $ref: '#/components/parameters/To'
-      - $ref: '#/components/parameters/Granularity'
       responses:
         '200':
           description: Credit timeseries retrieved successfully.
@@ -231,7 +294,6 @@ paths:
       parameters:
       - $ref: '#/components/parameters/From'
       - $ref: '#/components/parameters/To'
-      - $ref: '#/components/parameters/Granularity'
       responses:
         '200':
           description: Concurrency timeseries retrieved successfully.
@@ -258,7 +320,6 @@ paths:
       parameters:
       - $ref: '#/components/parameters/From'
       - $ref: '#/components/parameters/To'
-      - $ref: '#/components/parameters/Granularity'
       responses:
         '200':
           description: WebSocket-connection timeseries retrieved successfully.
@@ -297,9 +358,42 @@ paths:
         schema:
           type: integer
           minimum: 1
-          maximum: 100
+          maximum: 50
           default: 50
-        description: Number of records per page.
+        description: Number of records per page. Max 50.
+      - in: query
+        name: timestampFrom
+        schema:
+          type: integer
+        description: Lower bound on delivery timestamp, Unix seconds.
+      - in: query
+        name: timestampTo
+        schema:
+          type: integer
+        description: Upper bound on delivery timestamp, Unix seconds.
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - success
+          - failed
+        description: Delivery-outcome filter.
+      - in: query
+        name: webhookUrl
+        schema:
+          type: string
+        description: Case-insensitive substring match against the destination URL.
+      - in: query
+        name: eventType
+        schema:
+          type: string
+        description: Exact-match filter on event type (e.g. `asr.completed`).
+      - in: query
+        name: requestId
+        schema:
+          type: string
+        description: Case-insensitive substring match against the source request id.
       responses:
         '200':
           description: Webhook logs retrieved successfully.
@@ -362,16 +456,6 @@ components:
         format: date-time
       description: End of the range, ISO 8601 datetime (e.g. `2026-08-07T00:00:00Z`).
       example: "2026-08-07T00:00:00Z"
-    Granularity:
-      in: query
-      name: granularity
-      schema:
-        type: string
-        enum:
-        - hour
-        - day
-      description: Bucket size for the timeseries.
-      example: day
   responses:
     Unauthorized:
       description: Missing or invalid API key.

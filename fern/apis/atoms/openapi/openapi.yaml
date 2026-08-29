@@ -1350,13 +1350,15 @@ paths:
             type: string
         - in: query
           name: on
-          required: false
+          required: true
           schema:
-            type: boolean
-            default: true
+            type: string
+            enum:
+              - "true"
+              - "false"
           description: |
-            `true` (default) — archive the agent.
-            `false` — unarchive (restore) a previously archived agent.
+            `"true"` — archive the agent.
+            `"false"` — unarchive (restore) a previously archived agent.
       responses:
         "200":
           description: Agent archived or unarchived successfully
@@ -2269,8 +2271,9 @@ paths:
           required: true
           schema:
             type: string
+            pattern: "^CALL-\\d{13}-[a-fA-F0-9]{6}$"
             example: CALL-1781127346211-e765f7
-          description: The `callId` string for the conversation (e.g. `CALL-1778226705739-7e4c17`). This is the `callId` field returned by `GET /conversation`, **not** the Mongo `_id` — passing `_id` returns `400 Invalid call ID format`.
+          description: The `callId` string for the conversation (e.g. `CALL-1778226705739-7e4c17`). This is the `callId` field returned by `GET /conversation`, not the internal document id.
       responses:
         "200":
           description: Successful response — presigned URL ready to fetch.
@@ -2432,6 +2435,7 @@ paths:
           required: true
           schema:
             type: string
+            minLength: 1
             example: CALL-1781127346211-e765f7
           description: The `callId` string for the conversation to cancel.
       responses:
@@ -3243,6 +3247,7 @@ paths:
               properties:
                 name:
                   type: string
+                  maxLength: 40
                   description: The name of the campaign
                   example: "My Campaign"
                 description:
@@ -3700,6 +3705,7 @@ paths:
                   description: Name of the knowledge base (1–40 characters, trimmed)
                 description:
                   type: string
+                  maxLength: 150
               required:
                 - name
       responses:
@@ -4477,7 +4483,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [plivo, twilio]
+            enum: [twilio, plivo, custom, whatsapp]
           description: Telephony provider to search.
         - in: query
           name: areaCode
@@ -4510,7 +4516,7 @@ paths:
                           example: "US"
                         provider:
                           type: string
-                          enum: [plivo, twilio]
+                          enum: [twilio, plivo, custom, whatsapp]
                           example: "plivo"
                         areaCode:
                           type: string
@@ -4613,7 +4619,7 @@ paths:
                   example: "13183747513"
                 provider:
                   type: string
-                  enum: [plivo, twilio]
+                  enum: [twilio, plivo, custom, whatsapp]
       responses:
         "200":
           description: Rental processed. Inspect `data.requiresAction` to determine whether the customer needs to complete a payment-method action.
@@ -4796,6 +4802,15 @@ paths:
                   type: string
                   description: Password for SIP authentication (if your trunk requires it)
                   example: "my-sip-password"
+                cpsLimit:
+                  type: number
+                  minimum: 1
+                  default: 1
+                  description: |
+                    Calls-per-second cap for this imported trunk. Defaults to 1 CPS (the
+                    safe floor for an unknown trunk). Capped server-side at the
+                    `CUSTOM_NUMBER_CPS_CEILING`. Every imported number is always paced.
+                  example: 1
             example:
               phoneNumber: "+14155551234"
               sipTerminationUrl: "trunk.your-provider.com"
@@ -5960,6 +5975,7 @@ paths:
               properties:
                 name:
                   type: string
+                  maxLength: 80
                   description: The name of the audience
                   example: "test_audience"
                 description:
@@ -11192,7 +11208,8 @@ paths:
               properties:
                 name:
                   type: string
-                  minLength: 1
+                  minLength: 2
+                  maxLength: 50
                   description: The new organization name.
                   example: "Acme Inc."
             examples:
@@ -12031,6 +12048,7 @@ components:
             - gpt-4o
             - gpt-4.1
             - gpt-5.2
+            - gpt-5.2-azure
             - gpt-realtime
             - gpt-realtime-mini
           default: electron
@@ -12315,6 +12333,7 @@ components:
             - gpt-4o
             - gpt-4.1
             - gpt-5.2
+            - gpt-5.2-azure
             - gpt-realtime
             - gpt-realtime-mini
           description: LLM model for this draft
@@ -12506,6 +12525,7 @@ components:
             - gpt-4o
             - gpt-4.1
             - gpt-5.2
+            - gpt-5.2-azure
             - gpt-realtime
             - gpt-realtime-mini
           description: The LLM model to use for the agent. LLM model will be used to generate the response and take decisions based on the user's query.
@@ -13605,7 +13625,7 @@ components:
           description: The agent's opening line at call start.
         slmModel:
           type: string
-          enum: [electron, electron-kogta, electron-kogta-v2, gpt-4o, gpt-4.1, gpt-5.2, gpt-realtime, gpt-realtime-mini]
+          enum: [electron, electron-kogta, electron-kogta-v2, gpt-4o, gpt-4.1, gpt-5.2, gpt-5.2-azure, gpt-realtime, gpt-realtime-mini]
           description: LLM model powering the agent. See `CreateAgentRequest.slmModel` for org-level access notes.
         backgroundSound:
           type: string
@@ -14283,8 +14303,12 @@ components:
 
     WorkflowType:
       type: string
-      enum: [workflow_graph, single_prompt]
-      description: The type of workflow configuration. workflow_graph uses a node-based visual workflow, single_prompt uses a simple prompt-based configuration.
+      enum: [workflow_graph, single_prompt, multi_agents]
+      description: |
+        The type of workflow configuration.
+        - `single_prompt` — simple prompt-based agent (default).
+        - `workflow_graph` — node-based visual workflow.
+        - `multi_agents` — multi-agent orchestration (restricted; requires `slmModel` to be one of `[electron, gpt-5.2-azure]`).
 
     WorkflowGraphData:
       type: object

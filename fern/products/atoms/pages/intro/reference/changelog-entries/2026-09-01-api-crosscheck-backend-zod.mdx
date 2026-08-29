@@ -1,0 +1,33 @@
+---
+title: "API reference: schema and enum corrections against backend Zod validators"
+---
+
+Atoms and Waves API reference updated to match what the backend actually enforces. Every change is Zod-derived and, where possible, live-verified against production.
+
+## Atoms
+
+- **`DELETE /agent/{id}/archive`.** `on` query flipped from optional `boolean` (default `true`) to required string enum `"true" | "false"`. This matches the Zod validator; passing a JSON boolean was already rejected, the previous docs were misleading. See the endpoint description for the exact accepted values.
+- **`GET /conversation/{callId}/recording/download-url`.** Added the callId regex pattern `^CALL-\d{13}-[a-fA-F0-9]{6}$` so the SDK types it correctly and clients see it in the API-ref.
+- **`POST /conversation/{callId}/cancel`.** Added `minLength: 1` on the path parameter (matches Zod).
+- **`POST /campaign`.** `name` gains `maxLength: 40`.
+- **`POST /knowledgebase`.** `description` gains `maxLength: 150`.
+- **`POST /audience`.** `name` gains `maxLength: 80`.
+- **`PUT /account/update-org-name`.** `name` minLength grew from 1 to 2, gains `maxLength: 50`.
+- **`GET /product/get-available-numbers` and `POST /product/rent-number`.** `provider` enum extended to `[twilio, plivo, custom, whatsapp]` (was `[plivo, twilio]`) on both query and response.
+- **`POST /product/import-phone-number`.** Adds `cpsLimit` (number, `minimum: 1`, `default: 1`, capped server-side by `CUSTOM_NUMBER_CPS_CEILING`). Every imported number is always paced.
+- **`slmModel` and the three `CreateAgentRequest` LLM enums.** Extended to include `gpt-5.2-azure` alongside `gpt-5.2` for Azure-hosted access.
+- **`WorkflowType` enum.** Adds `multi_agents` alongside the existing `workflow_graph` and `single_prompt`. `multi_agents` is restricted; the server requires `slmModel` to be one of `[electron, gpt-5.2-azure]`.
+
+## Waves
+
+- **`GET /waves/v1/{model}/get_voices`.** Removes `bearerAuth` requirement. This endpoint is public per `optionalAuthMiddleware`; live-verified as `HTTP/2 200` without an `Authorization` header. SDK-generated client bindings should mark this method as no-auth-required.
+- **`GET /waves/v1/voice/get-all-models`.** Auth is now optional (`{}` union with `bearerAuth`). Both anonymous and authenticated calls are accepted, matching the same middleware behavior.
+- **`POST /waves/v1/pulse/get_text`.** Documents four backend query params that were missing from the spec: `webhook_method` (`POST | GET`, default `POST`), `redact_pii`, `redact_pci` (both `"true" | "false"`, English/Hindi only), and `numerals` (`"true" | "false" | auto`, default `auto`).
+- **`POST /waves/v1/tts`.** Response body content-type mapping is now correct per format (`wav → audio/wav`, `mp3 → audio/mpeg`, `ulaw`/`alaw` → `audio/basic`, `pcm → application/octet-stream`); already documented in a prior changelog entry, no change required here.
+- **`POST /waves/v1/voice-cloning`.** `language` field gains the explicit 22-value enum matching `LIGHTNING_V3_1_LANGUAGES`. Also drops the retired `/waves/v1/lightning-large/add_voice` reference from the endpoint description.
+- **PCA (Post-Call Analytics).** Three response fields added to match the backend contract.
+- **Waves Analytics.** Response schemas expanded to cover the new dashboard metric surfaces.
+
+## Path parameter naming
+
+The backend's Zod validators destructure path params under different names on some endpoints (`req.params.id`, `req.params.conversationId`). This audit intentionally does not rename the OpenAPI placeholders. Path parameter names in OpenAPI are docs-only: the URL is `/conversation/CALL-XXX/cancel` regardless of whether the spec uses `{callId}`, `{id}`, or `{conversationId}`. Keeping the docs-facing name `callId` consistent across `/conversation/{callId}/recording/download-url`, `/conversation/{callId}/cancel`, and every other conversation-scoped endpoint is safer for readers and avoids a breaking SDK method-argument rename with zero customer-observable benefit.
