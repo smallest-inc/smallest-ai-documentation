@@ -1,6 +1,6 @@
 ---
 title: 'Speaker diarization'
-description: 'Label each word and utterance with turn-by-turn speaker IDs'
+description: 'Attach zero-indexed speaker labels to each word and utterance in a transcript. Available on Pulse batch and streaming with the same response shape and the same enable flag.'
 ---
 
 
@@ -8,26 +8,29 @@ import { CodingAgentCallout } from "@/components/CodingAgentCallout";
 
 <Badge color="green">Pre-Recorded</Badge> <Badge color="purple">Real-Time</Badge>
 
-## Enabling speaker diarization
+Diarization labels each word and utterance with an integer speaker id in the same response you already get for transcription. One API call, no separate diarization vendor, no reconciliation of two timelines.
 
-### Pre-Recorded API
+Available on Pulse in both batch (`POST /waves/v1/stt/`) and streaming (`WSS /waves/v1/stt/live`). Same enable flag. Same response shape. Not available on Pulse Pro — the Pro pool is optimised for English word accuracy and does not diarize; a request with `diarize=true` on `?model=pulse-pro` returns transcript-only with no speaker fields.
 
-Pass `diarize=true` when calling the Pulse STT POST endpoint. Combines with `word_timestamps`, `redact_pii`, `redact_pci` without changing your audio payload.
+Language-agnostic: works across every language Pulse supports.
+
+## Enable
+
+Add `diarize=true`. Pair with `word_timestamps=true` if you want per-word speaker labels (per-utterance labels come regardless).
+
+### Batch (Pre-Recorded)
 
 ```bash
-# Download sample audio (or use your own file)
 curl -sL -o audio.wav "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
 
 curl --request POST \
-  --url "https://api.smallest.ai/waves/v1/stt/?model=pulse&language=en&diarize=true" \
+  --url "https://api.smallest.ai/waves/v1/stt/?model=pulse&language=en&diarize=true&word_timestamps=true" \
   --header "Authorization: Bearer $SMALLEST_API_KEY" \
   --header "Content-Type: audio/wav" \
   --data-binary "@audio.wav"
 ```
 
-### Real-Time WebSocket API
-
-Add `diarize=true` to your WebSocket connection query parameters when connecting to the Pulse STT WebSocket API.
+### Streaming (Real-Time WebSocket)
 
 ```javascript
 const url = new URL("wss://api.smallest.ai/waves/v1/stt/live?model=pulse");
@@ -35,141 +38,87 @@ url.searchParams.append("language", "en");
 url.searchParams.append("encoding", "linear16");
 url.searchParams.append("sample_rate", "16000");
 url.searchParams.append("diarize", "true");
+url.searchParams.append("word_timestamps", "true");
 
 const ws = new WebSocket(url.toString(), {
-  headers: {
-    Authorization: `Bearer ${API_KEY}`,
-  },
+  headers: { Authorization: `Bearer ${API_KEY}` },
 });
 ```
 
-## Output format & field of interest
+## Response shape
 
-When enabled, every entry in `words` includes a `speaker` field (integer ID: `0`, `1`, …) and `speaker_confidence` field (0.0 to 1.0) for real-time API, or string labels (`speaker_0`, `speaker_1`, …) for pre-recorded API. The `utterances` array also carries `speaker` labels so you can reconstruct conversations, build turn-taking analytics, or display multi-speaker captions.
+The response carries two arrays that both gain speaker labels when `diarize=true`:
 
-### Pre-Recorded API
+- `words[]` — per-word entries. Present when `word_timestamps=true` (batch) or on final events (streaming). Each entry gains `speaker` (integer) and `speaker_confidence` (0.0–1.0) when diarization is on.
+- `utterances[]` — sentence-level entries. Present by default on batch; on streaming with `sentence_timestamps=true`. Each entry gains `speaker` (integer) when diarization is on.
 
-## Sample request
+Speaker labels are **integers, zero-indexed** (`0`, `1`, `2`, ...) on both batch and streaming. Labels are stable within a single response or session but not across separate requests: speaker `0` in one call is not necessarily the same physical speaker as speaker `0` in the next.
 
-
-
-```bash
-# Download sample audio (or use your own file)
-curl -sL -o audio.wav "https://github.com/smallest-inc/cookbook/raw/main/speech-to-text/getting-started/samples/audio.wav"
-
-curl --request POST \
-  --url "https://api.smallest.ai/waves/v1/stt/?model=pulse&language=en&diarize=true" \
-  --header "Authorization: Bearer $SMALLEST_API_KEY" \
-  --header "Content-Type: audio/wav" \
-  --data-binary "@audio.wav"
-```
-
-## Sample response
-
-### Pre-Recorded API Response
+### Batch response
 
 ```json
 {
-  "transcription": "Agent: Hello world. Customer: Hi there.",
+  "status": "success",
+  "transcription": "Agent: Hello, how can I help. Customer: I need to reset my password.",
   "words": [
-    { "start": 0.0, "end": 0.4, "speaker": "speaker_0", "word": "Hello" },
-    { "start": 0.4, "end": 0.8, "speaker": "speaker_0", "word": "world." },
-    { "start": 1.0, "end": 1.2, "speaker": "speaker_1", "word": "Hi" },
-    { "start": 1.2, "end": 1.6, "speaker": "speaker_1", "word": "there." }
+    { "start": 0.24, "end": 0.40, "word": "Hello,",   "confidence": 0.998, "speaker": 0, "speaker_confidence": 1.00 },
+    { "start": 0.40, "end": 0.72, "word": "how",      "confidence": 0.996, "speaker": 0, "speaker_confidence": 1.00 },
+    { "start": 0.72, "end": 1.10, "word": "can",      "confidence": 0.999, "speaker": 0, "speaker_confidence": 1.00 },
+    { "start": 1.20, "end": 1.60, "word": "I",        "confidence": 0.999, "speaker": 1, "speaker_confidence": 0.92 },
+    { "start": 1.60, "end": 1.92, "word": "need",     "confidence": 0.997, "speaker": 1, "speaker_confidence": 0.94 }
   ],
   "utterances": [
-    { "text": "Hello world.", "start": 0.0, "end": 0.8, "speaker": "speaker_0" },
-    { "text": "Hi there.", "start": 1.0, "end": 1.6, "speaker": "speaker_1" }
+    { "start": 0.24, "end": 1.10, "speaker": 0, "text": "Hello, how can I help." },
+    { "start": 1.20, "end": 3.44, "speaker": 1, "text": "I need to reset my password." }
   ]
 }
 ```
 
-### Real-Time WebSocket API Response
+### Streaming response
+
+Streaming emits **`transcription` events**. Only events with `is_final: true` carry the `words[]` array; interim (partial) events send a running `transcript` string only.
 
 ```json
+// interim event (no words, no speaker attribution yet)
+{ "type": "transcription", "transcript": "Hello, how can I", "is_final": false, "is_last": false }
+
+// final event (words[] with speaker + speaker_confidence)
 {
-  "session_id": "sess_12345abcde",
-  "transcript": "Hello world. Hi there.",
+  "type": "transcription",
+  "transcript": "Hello, how can I help.",
   "is_final": true,
   "is_last": false,
-  "language": "en",
   "words": [
-    {
-      "word": "Hello",
-      "start": 0.0,
-      "end": 0.4,
-      "confidence": 0.98,
-      "speaker": 0,
-      "speaker_confidence": 0.95
-    },
-    {
-      "word": "world.",
-      "start": 0.4,
-      "end": 0.8,
-      "confidence": 0.97,
-      "speaker": 0,
-      "speaker_confidence": 0.92
-    },
-    {
-      "word": "Hi",
-      "start": 1.0,
-      "end": 1.2,
-      "confidence": 0.99,
-      "speaker": 1,
-      "speaker_confidence": 0.88
-    },
-    {
-      "word": "there.",
-      "start": 1.2,
-      "end": 1.6,
-      "confidence": 0.96,
-      "speaker": 1,
-      "speaker_confidence": 0.91
-    }
-  ],
-  "utterances": [
-    {
-      "text": "Hello world.",
-      "start": 0.0,
-      "end": 0.8,
-      "speaker": 0
-    },
-    {
-      "text": "Hi there.",
-      "start": 1.0,
-      "end": 1.6,
-      "speaker": 1
-    }
+    { "word": "Hello,", "start": 0.32, "end": 0.80, "confidence": 0.964, "speaker": 0, "speaker_confidence": 0.87 },
+    { "word": "how",    "start": 0.80, "end": 0.88, "confidence": 0.931, "speaker": 0, "speaker_confidence": 1.00 },
+    { "word": "can",    "start": 1.28, "end": 1.52, "confidence": 0.959, "speaker": 0, "speaker_confidence": 1.00 },
+    { "word": "I",      "start": 1.52, "end": 2.00, "confidence": 0.980, "speaker": 0, "speaker_confidence": 1.00 },
+    { "word": "help.",  "start": 2.40, "end": 2.96, "confidence": 0.943, "speaker": 0, "speaker_confidence": 1.00 }
   ]
 }
 ```
 
-## Response Fields
+Practical consequences of the interim/final split:
 
-<table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', borderRadius: '8px', overflow: 'hidden' }}>
-  <thead>
-    <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)' }}>
-      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopLeftRadius: '8px' }}>Field</th>
-      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Type</th>
-      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>When Included</th>
-      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '800', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderTopRightRadius: '8px' }}>Description</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>`speaker`</td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>integer (realtime) / string (pre-recorded)</td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>`diarize=true`</td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>Speaker label. Real-time API uses integer IDs (0, 1, ...), pre-recorded API uses string labels (speaker_0, speaker_1, ...)</td>
-    </tr>
-    <tr>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomLeftRadius: '8px' }}>`speaker_confidence`</td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>number</td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)' }}>`diarize=true` (realtime only)</td>
-      <td style={{ padding: '12px 16px', border: '0.5px solid rgba(209, 213, 219, 0.2)', borderBottomRightRadius: '8px' }}>Confidence score for the speaker assignment (0.0 to 1.0)</td>
-    </tr>
-  </tbody>
-</table>
+- **Do not render speaker attribution off interim events.** They are transcript-string only. Speaker labels are correct only from `is_final: true` events.
+- If you are driving live captions and want a running speaker chip on-screen, hold the current speaker from the last `is_final` event and update on the next one.
+
+## Response fields
+
+| Field | Type | When present | Notes |
+|---|---|---|---|
+| `words[i].speaker` | integer | `diarize=true` (batch: always; streaming: only on `is_final=true`) | Zero-indexed. Stable within one response/session. |
+| `words[i].speaker_confidence` | number (0.0–1.0) | `diarize=true` (same visibility as `words[i].speaker`) | Confidence that the speaker attribution is correct. |
+| `utterances[i].speaker` | integer | `diarize=true` (batch: always; streaming: with `sentence_timestamps=true`) | Zero-indexed. Utterances are turn-length segments. |
+
+Every other field on `words` (`word`, `start`, `end`, `confidence`) is present regardless of `diarize`. Same for `utterances` (`text`, `start`, `end`).
+
+## Gotchas
+
+- **Pulse Pro does not diarize.** `POST /waves/v1/stt/?model=pulse-pro&diarize=true` returns a transcript-only response with no `speaker` fields on `words[]` and no `utterances[]`. Route diarization traffic to `?model=pulse`.
+- **Interim events on streaming carry no speaker.** Only finals do. See the note above.
+- **Labels are not identity.** `speaker: 0` in call A and `speaker: 0` in call B are unrelated. If you need to persist "this is Alice" across calls, do the mapping yourself (voice-print embedding, dashboard tagging, etc).
+- **`word_timestamps=true` is required for per-word speakers on batch.** Without it, `words[]` is empty and only `utterances[]` carries speaker labels.
 
 <CodingAgentCallout />
 

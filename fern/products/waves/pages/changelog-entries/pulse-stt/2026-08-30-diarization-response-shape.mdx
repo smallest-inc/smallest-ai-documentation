@@ -1,0 +1,15 @@
+---
+title: "Pulse STT: diarization response shape correction and rewrite"
+---
+
+Fixed two things the [Speaker diarization](/models/documentation/speech-to-text-pulse/features/word-boosting) page and the streaming WS spec got wrong, plus tightened the page for developers rather than marketing.
+
+**`speaker` is an integer on both batch and streaming.** The page previously claimed the batch API returned string labels (`speaker_0`, `speaker_1`, ...) while streaming returned integers. Live: both return integers, zero-indexed. Example values in the docs and the response-fields table are updated. The `stt-live-ws.yaml` spec had `speaker` typed as `string` on the streaming word/utterance schemas; corrected to `integer` with `example: 0` on both.
+
+**`speaker_confidence` appears on batch too.** The table previously claimed the field was streaming-only. Live: batch responses also include `speaker_confidence` (0.0–1.0) on `words[]`. Corrected.
+
+**Interim streaming events do not carry `words[]`.** New section clarifies that speaker attribution appears only on `is_final: true` transcription events. Live captions that rely on interim events should hold the speaker from the last final event and update on the next one.
+
+**Pulse Pro carve-out.** `?model=pulse-pro&diarize=true` returns a transcript-only response with no `speaker` fields and no `utterances[]`. Now documented explicitly on the page.
+
+Every claim on the page is verified against live production. Reproduce with `python3 scripts/spec-live-tests/diarization_live_test.py` (new); 16/16 checks pass.
