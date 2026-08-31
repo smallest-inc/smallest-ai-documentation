@@ -30,7 +30,7 @@ You need:
 
 ## Transport contract
 
-**This is the section that costs people days when it is missed.** Our SIP ingress accepts SIP signalling on TCP and TLS only. UDP INVITEs are silently dropped; you get no response, not even a rejection. Every retransmission times out.
+Our SIP ingress accepts SIP signalling on TCP and TLS only. UDP INVITEs are dropped without a response and every retransmission times out.
 
 | Transport | Port | Status |
 |---|---|---|
@@ -40,7 +40,7 @@ You need:
 
 Media is separate and stays RTP over UDP regardless of signalling transport. Nothing about audio quality or jitter changes when you move signalling to TCP or TLS.
 
-### Origination URL — what to send
+### Origination URL: what to send
 
 The URL your dashboard shows is a bare SIP URI:
 
@@ -57,7 +57,7 @@ sip:+919240923803@5rdbhjuwtlk.sip.livekit.cloud;transport=tcp   ← fallback, po
 
 If your provider only lets you paste the hostname, configure the transport in the trunk's SIP settings instead of in the URI.
 
-### Origination URL — how it appears in your dashboard
+### Origination URL: how it appears in your dashboard
 
 The **Import SIP Number** dialog shows the bare origination URL for copy-paste convenience. Adding the transport parameter and the `+` prefix is on your side, because those depend on where you paste it (some provider UIs have a separate transport field, others accept the URI parameter).
 
@@ -82,14 +82,14 @@ If you run a Kamailio SBC, see the [Kamailio configuration](#kamailio) accordion
 1. Open the [Phone Numbers](https://app.smallest.ai/dashboard/phone-numbers/rent-numbers) tab in your dashboard.
 2. Click **Buy Numbers** in the top-right, then the **Import SIP Number** tab.
 3. Fill in:
-   - **Phone Number** — E.164 with the `+`, e.g. `+12025551234`.
-   - **SIP Termination URL** — where **we** send outbound calls (your provider's SIP host). Just the host, or host with port. Not a full URI.
+   - **Phone Number**. E.164 with the `+`, e.g. `+12025551234`.
+   - **SIP Termination URL**. Where **we** send outbound calls (your provider's SIP host). Just the host, or host with port. Not a full URI.
      - `sip.yourprovider.com`
      - `sip.yourprovider.com:5060`
      - `203.0.113.10:5081`
      If you paste a full URI, only the host is kept (scheme, `;transport=` parameter, and any userinfo are stripped). Values that cannot be normalised to a valid host are refused with a clear error.
-   - **Display Name** — free-text label (optional).
-   - **Username / Password** — for credential auth. Leave blank if your provider does IP-based auth.
+   - **Display Name**. Free-text label (optional).
+   - **Username / Password**. For credential auth. Leave blank if your provider does IP-based auth.
 4. Copy the **SIP Origination URL** shown in the dialog. That is the host your provider sends inbound INVITEs to; remember to append `;transport=tls` (or `;transport=tcp`) and the `+`-prefixed E.164 number when you configure your provider.
 5. Click **Add Custom Number**.
 
@@ -148,16 +148,16 @@ The single most common cause: your INVITE is going over UDP. Our ingress accepts
 - Packet capture on your side shows outbound INVITE frames with no reply frames of any kind.
 - An `OPTIONS` request to the ingress over UDP also gets nothing back.
 
-**Fix**: add `;transport=tcp` (port 5060) or `;transport=tls` (port 5061) to the request URI, or configure the transport in your trunk's SIP settings. That single change is the fix for the vast majority of "no response" reports.
+**Fix**: add `;transport=tcp` (port 5060) or `;transport=tls` (port 5061) to the request URI, or configure the transport in your trunk's SIP settings.
 
-Confirm with a `sipsak` OPTIONS ping after the change:
+Confirm with a `sipsak` OPTIONS ping after the change. Quote the URI, otherwise the shell splits at `;` and sipsak falls back to UDP on port 5060.
 
 ```bash
 # TCP
-sipsak -vv -s sip:5rdbhjuwtlk.sip.livekit.cloud;transport=tcp
+sipsak -vv -s 'sip:5rdbhjuwtlk.sip.livekit.cloud;transport=tcp'
 
 # TLS
-sipsak -vv -s sips:5rdbhjuwtlk.sip.livekit.cloud
+sipsak -vv -s 'sips:5rdbhjuwtlk.sip.livekit.cloud'
 ```
 
 You should see `SIP/2.0 200 OK` from the ingress. If OPTIONS times out on both TCP and TLS, the reachability problem is between your egress and our ingress (firewall, security group, routing), not on our side.
@@ -235,7 +235,7 @@ Reproduce the failing call, then stop the capture. Email `support@smallest.ai` w
 
     1. Create an Elastic SIP Trunk in Twilio Console.
     2. On the trunk's **Origination** tab, add the SIP URI `sip:5rdbhjuwtlk.sip.livekit.cloud;transport=tls`. Twilio uses TLS on 5061 by default when you specify `transport=tls`.
-    3. On the **Termination** tab, note the termination URI (a hostname ending `.pstn.twilio.com`) — that is your **SIP Termination URL** at Step 2 above.
+    3. On the **Termination** tab, note the termination URI (a hostname ending `.pstn.twilio.com`). That is your **SIP Termination URL** at Step 2 above.
     4. Assign your numbers to the trunk.
     5. Import the number on Smallest AI with the Twilio termination host.
     6. Test both directions.
@@ -252,7 +252,7 @@ Reproduce the failing call, then stop the capture. Email `support@smallest.ai` w
 
     1. Create a SIP Connection in the Telnyx Portal.
     2. On **Inbound**, add the Smallest destination as an inbound SIP URI: `sip:5rdbhjuwtlk.sip.livekit.cloud;transport=tls`.
-    3. On **Outbound**, note the outbound SIP URI Telnyx assigns — that is your **SIP Termination URL** for Step 2.
+    3. On **Outbound**, note the outbound SIP URI Telnyx assigns. That is your **SIP Termination URL** for Step 2.
     4. Assign numbers to the connection.
     5. Import each number on Smallest AI with the Telnyx termination host.
 
@@ -268,7 +268,7 @@ Reproduce the failing call, then stop the capture. Email `support@smallest.ai` w
 
     1. Create a Voice API application in Vonage Dashboard.
     2. In the answer URL webhook, use the `connect` NCCO to send the call to `sip:5rdbhjuwtlk.sip.livekit.cloud;transport=tls`.
-    3. Note the outbound SIP endpoint Vonage assigns to your app — that is your **SIP Termination URL** for Step 2.
+    3. Note the outbound SIP endpoint Vonage assigns to your app. That is your **SIP Termination URL** for Step 2.
     4. Link your numbers to the application.
     5. Import each number on Smallest AI with the Vonage termination host.
 
