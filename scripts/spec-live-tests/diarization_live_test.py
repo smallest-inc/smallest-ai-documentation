@@ -105,18 +105,21 @@ except ImportError:
 
 async def run_stream():
     import websockets
+    # Sample audio is 24 kHz mono s16le PCM (verified: wave.getframerate() == 24000).
+    # Handshake, chunk math, and comment must all agree.
+    SAMPLE_RATE = 24000
     url = ("wss://api.smallest.ai/waves/v1/stt/live"
-           "?model=pulse&language=en&encoding=linear16&sample_rate=16000"
+           f"?model=pulse&language=en&encoding=linear16&sample_rate={SAMPLE_RATE}"
            "&diarize=true&word_timestamps=true")
     with open(SAMPLE_PATH, "rb") as f:
         wav = f.read()
-    pcm = wav[44:]  # strip WAV header; the sample is 24k mono PCM16
+    pcm = wav[44:]  # strip WAV header (canonical 44-byte RIFF header on this sample)
     interim_events = 0
     final_events = 0
     final_events_with_words = 0
     final_events_with_speaker = 0
     async with websockets.connect(url, additional_headers={"Authorization": f"Bearer {KEY}"}) as ws:
-        chunk = 16000 * 2
+        chunk = SAMPLE_RATE * 2  # 1 second of 16-bit mono at SAMPLE_RATE
         for i in range(0, len(pcm), chunk):
             await ws.send(pcm[i:i + chunk])
             await asyncio.sleep(0.2)
