@@ -1,6 +1,6 @@
 ---
 title: 'Speaker diarization'
-description: 'Attach zero-indexed speaker labels to each word and utterance in a transcript. Available on Pulse batch and streaming with the same response shape and the same enable flag.'
+description: 'Attach zero-indexed speaker labels to each word and utterance in a transcript on Pulse batch and streaming.'
 ---
 
 
@@ -10,7 +10,7 @@ import { CodingAgentCallout } from "@/components/CodingAgentCallout";
 
 Diarization labels each word and utterance with an integer speaker id in the same response you already get for transcription. One API call, no separate diarization vendor, no reconciliation of two timelines.
 
-Available on Pulse in both batch (`POST /waves/v1/stt/`) and streaming (`WSS /waves/v1/stt/live`). Same enable flag. Same response shape. Not available on Pulse Pro — the Pro pool is optimised for English word accuracy and does not diarize; a request with `diarize=true` on `?model=pulse-pro` returns transcript-only with no speaker fields.
+Available on Pulse in both batch (`POST /waves/v1/stt/`) and streaming (`WSS /waves/v1/stt/live`).
 
 Language-agnostic: works across every language Pulse supports.
 
@@ -49,10 +49,10 @@ const ws = new WebSocket(url.toString(), {
 
 The response carries two arrays that both gain speaker labels when `diarize=true`:
 
-- `words[]` — per-word entries. Present when `word_timestamps=true` (batch) or on final events (streaming). Each entry gains `speaker` (integer) and `speaker_confidence` (0.0–1.0) when diarization is on.
-- `utterances[]` — sentence-level entries. Present by default on batch; on streaming with `sentence_timestamps=true`. Each entry gains `speaker` (integer) when diarization is on.
+- `words[]`. Per-word entries. Present when `word_timestamps=true` (batch) or on final events (streaming). Each entry gains `speaker` (integer) and `speaker_confidence` (0.0 to 1.0) when diarization is on.
+- `utterances[]`. Sentence-level entries. Present by default on batch, and on streaming with `sentence_timestamps=true`. Each entry gains `speaker` (integer) when diarization is on.
 
-Speaker labels are **integers, zero-indexed** (`0`, `1`, `2`, ...) on both batch and streaming. Labels are stable within a single response or session but not across separate requests: speaker `0` in one call is not necessarily the same physical speaker as speaker `0` in the next.
+Speaker labels are **integers, zero-indexed** (`0`, `1`, `2`, ...) on both batch and streaming. Labels are stable within a single response or session, not across separate requests. Speaker `0` in one call is not necessarily the same physical speaker as speaker `0` in the next.
 
 ### Batch response
 
