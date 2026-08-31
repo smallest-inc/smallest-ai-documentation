@@ -1,6 +1,6 @@
 ---
 title: "SIP Trunking (BYOSIP)"
-description: "Bring your own phone numbers using SIP Trunking"
+description: "Bring your own phone numbers using SIP Trunking. Includes the transport contract you have to get right and the debug path when a call goes silent."
 icon: "network-wired"
 ---
 
@@ -9,264 +9,296 @@ import { CodingAgentCallout } from "@/components/CodingAgentCallout";
 
 ## What is SIP Trunking?
 
-SIP Trunking allows you to connect your existing phone numbers from any telephony provider directly to Smallest AI's platform. Instead of renting numbers through us, you can bring your own numbers and route calls through a SIP trunk that connects your provider to our infrastructure.
+SIP Trunking lets you connect phone numbers you already own to Smallest AI. Instead of renting numbers through us, you keep them at your provider (or your own PBX / SBC) and route calls to our SIP infrastructure. Two flows:
 
-## How it Works
+- **Inbound**: your provider receives the PSTN call and forwards the SIP INVITE to Smallest's ingress.
+- **Outbound**: your Atoms agent originates a call, Smallest sends the INVITE to your provider's termination host, and your provider completes the call to the PSTN.
 
-1. **Your telephony provider** (e.g., Telstra, Vonage, Telnyx, Twilio) hosts your phone numbers
-2. You configure those numbers to route through an **SIP Trunk** that connects directly to Smallest AI's SIP infrastructure
-3. Once configured:
-   - **Inbound calls** to your numbers are delivered by your provider over the SIP trunk to Smallest AI
-   - **Outbound calls** from your AI agent are sent from Smallest AI back to your provider, who then completes the call to the PSTN
-4. Smallest AI handles the conversation and media, while your provider handles the telephony backbone
+We handle the conversation and media. Your provider handles the PSTN side.
 
-## Benefits of SIP Trunking
+## Before you start
 
-- **Keep your existing numbers**: No need to port or change phone numbers
-- **Use your preferred provider**: Work with any telephony provider that supports SIP trunking
-- **Flexibility**: Maintain control over your telephony infrastructure
-- **Scale easily**: Add or remove numbers without platform limitations
+You need:
 
-## Prerequisites
+1. **A telephony provider that supports SIP trunking.** Twilio, Telnyx, Vonage, Bandwidth, Plivo, an Asterisk / FreeSWITCH / Kamailio SBC of your own, and most enterprise carriers all work. If it can send and receive SIP over TCP or TLS, it will work here.
+2. **Phone numbers configured to route to a SIP trunk** in your provider's settings.
+3. **From your provider, know**:
+   - the outbound (termination) SIP host you will send outbound calls to (a hostname or IP, optional port)
+   - which transports it accepts for inbound INVITEs from us (UDP, TCP, TLS)
+   - whether it wants credential auth or IP-based auth
+4. **Numbers in E.164 format** with the leading `+` (`+91XXXXXXXXXX`, not `91XXXXXXXXXX`). Our ingress requires the `+` on the request URI. Without it, the call routes as if the destination were unmapped.
 
-To set up SIP trunking, you will need:
+## Transport contract
 
-### 1. A Telephony Provider that Supports SIP Trunking
+Our SIP ingress accepts SIP signalling on TCP and TLS only. UDP INVITEs are dropped without a response and every retransmission times out.
 
-Common providers include:
+| Transport | Port | Status |
+|---|---|---|
+| **TLS** | 5061 | **Preferred.** Signalling is encrypted end to end. |
+| **TCP** | 5060 | Supported. Use this if your build lacks a TLS module. |
+| UDP | 5060 | **Not accepted.** INVITEs are dropped with no response. |
 
-- Telstra
-- Vonage
-- Telnyx
-- Twilio
-- Bandwidth
-- And many others
+Media is separate and stays RTP over UDP regardless of signalling transport. Nothing about audio quality or jitter changes when you move signalling to TCP or TLS.
 
-### 2. Phone Numbers Ready to Route
+### Origination URL: what to send
 
-Your numbers must be configured to point to a SIP trunk in your provider's settings.
-
-### 3. SIP Trunk Configuration Details
-
-You'll need to obtain from your provider:
-
-- **SIP server URI** for outbound calls (e.g., `sip.yourprovider.com`)
-- **Supported transports**: UDP, TCP, or TLS
-- **Media encryption**: SRTP support (if required)
-
-### 4. Authentication Credentials
-
-Depending on your provider's requirements:
-
-- SIP username
-- SIP password
-- Or mutual TLS configuration
-
-<Note>
-  Smallest AI does not currently have a fixed IP range for SIP servers. Make sure your provider can accept
-  connections without IP whitelisting, or contact us for alternative solutions.
-</Note>
-
-## Setting Up SIP Trunking
-
-### Step 1: Configure Your Provider
-
-In your telephony provider's dashboard:
-
-1. **Set up inbound routing** to point to Smallest AI's SIP server:
-
-   ```
-   sip:5rdbhjuwtlk.sip.livekit.cloud
-   ```
-
-2. **Configure your SIP trunk** with the following settings:
-
-   - **Transport**: UDP, TCP, or TLS (as supported by your provider)
-   - **Media encryption**: SRTP (if required)
-   - **Codec support**: Ensure common codecs (G.711, Opus) are enabled
-
-3. **Note your outbound SIP server details** including:
-   - SIP server URI
-   - Username (if required)
-   - Password (if required)
-
-### Step 2: Import Your Number on Smallest AI
-
-1. Navigate to the [Phone Numbers](https://app.smallest.ai/dashboard/phone-numbers/rent-numbers) tab in your dashboard
-2. Click the **Buy Numbers** button in the top-right corner
-3. Select the **Import SIP Number** tab
-4. Fill in the required information:
-   - **Phone Number**: Your phone number in E.164 format (e.g., +12025551234)
-   - **SIP Termination URL**: Your provider's SIP server URI for outbound calls
-   - **Display Name**: A friendly name for this number (optional)
-   - **Username**: SIP authentication username (if required)
-   - **Password**: SIP authentication password (if required)
-5. Copy the **SIP Origination URL** provided:
-   ```
-   sip:5rdbhjuwtlk.sip.livekit.cloud
-   ```
-6. Click **Add Custom Number**
-
-<Tip>
-  Make sure the phone number you enter matches exactly with the number configured in your provider's
-  dashboard, including country code.
-</Tip>
-
-### Step 3: Test Your Setup
-
-Once your number is imported:
-
-1. Assign it to one of your agents
-2. Make a test inbound call to verify the connection
-3. Make a test outbound call from your agent
-4. Check call quality and verify audio in both directions
-
-## Technical Details
-
-### Supported Features
-
-| Feature             | Support                       |
-| ------------------- | ----------------------------- |
-| Transport Protocols | UDP, TCP, TLS                 |
-| Media Encryption    | SRTP                          |
-| Authentication      | Username/Password, Mutual TLS |
-| Codecs              | G.711 (PCMU/PCMA), Opus       |
-| DTMF                | RFC 2833, SIP INFO            |
-
-### SIP Origination URL
-
-For **inbound calls** (from your provider to Smallest AI):
+The URL your dashboard shows is a bare SIP URI:
 
 ```
 sip:5rdbhjuwtlk.sip.livekit.cloud
 ```
 
-Configure this in your telephony provider's settings to route incoming calls to Smallest AI.
+**Append a transport parameter and a `+`-prefixed number when your provider sends INVITEs.** Two shapes work:
 
-### SIP Termination URL
+```
+sip:+91XXXXXXXXXX@5rdbhjuwtlk.sip.livekit.cloud;transport=tls   ← preferred, port 5061
+sip:+91XXXXXXXXXX@5rdbhjuwtlk.sip.livekit.cloud;transport=tcp   ← fallback, port 5060
+```
 
-For **outbound calls** (from Smallest AI to your provider):
+If your provider only lets you paste the hostname, configure the transport in the trunk's SIP settings instead of in the URI.
 
-You provide your provider's SIP termination host when importing the number. This tells Smallest AI where to send outbound calls.
+### Origination URL: how it appears in your dashboard
 
-Use a **hostname or IP address, optionally with a port** - not a full SIP URI:
+The **Import SIP Number** dialog shows the bare origination URL for copy-paste convenience. Adding the transport parameter and the `+` prefix is on your side, because those depend on where you paste it (some provider UIs have a separate transport field, others accept the URI parameter).
 
-- `sip.yourprovider.com`
-- `sip.yourprovider.com:5060`
-- `203.0.113.10:5081`
+## Setting up SIP Trunking
+
+### Step 1: Configure your provider (outbound to us)
+
+Point inbound calls to your number at Smallest's SIP ingress using **TLS on 5061** (or TCP on 5060 as a fallback).
+
+At a minimum:
+
+- **Destination URI**: `sip:+E164@5rdbhjuwtlk.sip.livekit.cloud;transport=tls`
+- **Transport**: TLS (or TCP)
+- **Codecs**: G.711 (PCMU / PCMA) and Opus are both accepted. Send whichever your provider prefers.
+- **DTMF**: RFC 2833 or SIP INFO. Both are read.
+- **Media encryption**: SRTP is accepted; not required.
+
+If you run a Kamailio SBC, see the [Kamailio configuration](#kamailio) accordion below for the specific `listen=` and `tls` module lines.
+
+### Step 2: Import the number on Smallest AI
+
+1. Open the [Phone Numbers](https://app.smallest.ai/dashboard/phone-numbers/rent-numbers) tab in your dashboard.
+2. Click **Buy Numbers** in the top-right, then the **Import SIP Number** tab.
+3. Fill in:
+   - **Phone Number**. E.164 with the `+`, e.g. `+12025551234`.
+   - **SIP Termination URL**. Where **we** send outbound calls (your provider's SIP host). Just the host, or host with port. Not a full URI.
+     - `sip.yourprovider.com`
+     - `sip.yourprovider.com:5060`
+     - `203.0.113.10:5081`
+     If you paste a full URI, only the host is kept (scheme, `;transport=` parameter, and any userinfo are stripped). Values that cannot be normalised to a valid host are refused with a clear error.
+   - **Display Name**. Free-text label (optional).
+   - **Username / Password**. For credential auth. Leave blank if your provider does IP-based auth.
+4. Copy the **SIP Origination URL** shown in the dialog. That is the host your provider sends inbound INVITEs to; remember to append `;transport=tls` (or `;transport=tcp`) and the `+`-prefixed E.164 number when you configure your provider.
+5. Click **Add Custom Number**.
+
+<Tip>
+The phone number you type here must match the number your provider is sending in the `To:` header, including the country code and the `+`.
+</Tip>
+
+### Step 3: Test
+
+Once the number is imported and the agent is assigned:
+
+1. Make an **inbound** test call from a real phone. If the agent picks up and audio flows both ways, you are done. If you hear silence or the call never connects, jump to [Troubleshooting](#troubleshooting).
+2. Make an **outbound** test call from the agent (via the dashboard, or [POST /conversation/outbound](/voice-agents/api-reference/calls/start-outbound-call)) to your own phone. Check that your provider bills the call to your termination trunk.
+3. On both directions, check call quality and audio symmetry.
+
+## Technical details
+
+### Supported features
+
+| Feature | Support |
+|---|---|
+| Signalling transport (inbound to us) | **TLS on 5061** (preferred), **TCP on 5060**. UDP is not accepted. |
+| Media | RTP over UDP. SRTP optional. |
+| Codecs | G.711 (PCMU / PCMA), Opus |
+| DTMF | RFC 2833, SIP INFO |
+| Authentication (inbound to us) | Credential or IP-based, whichever your provider prefers |
+| E.164 formatting | Required, with the leading `+` on the request URI |
+
+### SIP Origination URL (inbound to us)
+
+The host your provider sends INVITEs to for calls arriving on **your** numbers. The URL from your dashboard (`sip:5rdbhjuwtlk.sip.livekit.cloud`) needs `;transport=tls` or `;transport=tcp` and the `+`-prefixed number:
+
+```
+sip:+E164@5rdbhjuwtlk.sip.livekit.cloud;transport=tls
+```
+
+### SIP Termination URL (outbound from us)
+
+The host **we** send INVITEs to for outbound calls your agent originates. You paste this at Step 2 above. It is your provider's SIP host, optionally with a port. Not a full URI.
 
 <Note>
-If you paste a full SIP URI (for example `sip:sip.yourprovider.com:5060;transport=udp`), it is automatically normalized to the bare host - the scheme, parameters, and any user info are stripped. Values that can't be normalized to a valid host (for example a website URL) are rejected with a clear error at import time.
+If you paste a full SIP URI (for example `sip:sip.yourprovider.com:5060;transport=udp`), the scheme, parameters, and any userinfo are stripped and only the bare host is stored. Values that cannot be normalised to a valid host are refused at import time.
 </Note>
+
+### IP allowlisting
+
+Smallest does not require you to allowlist a specific inbound IP range on your provider side; use credential or IP-based auth at the SIP layer instead. If your setup does need our egress IPs (for example, a restrictive corporate firewall on your termination host), contact support.
 
 ## Troubleshooting
 
-### Calls Not Connecting
+### Silence, no SIP response
 
-- Verify the SIP Origination URL is correctly configured in your provider's settings
-- Check that your provider allows connections from Smallest AI's infrastructure
-- Ensure authentication credentials are correct
+The single most common cause: your INVITE is going over UDP. Our ingress accepts TCP and TLS only; UDP INVITEs are dropped with no reply, no ICMP, no rejection. Symptoms:
 
-### One-Way Audio
+- Your SBC sends INVITE, retransmits per RFC 3261 (T1 backoff), all time out.
+- Packet capture on your side shows outbound INVITE frames with no reply frames of any kind.
+- An `OPTIONS` request to the ingress over UDP also gets nothing back.
 
-- Verify media encryption settings match between your provider and Smallest AI
-- Check that your provider's firewall allows RTP traffic
-- Ensure SRTP is properly configured if required
+**Fix**: add `;transport=tcp` (port 5060) or `;transport=tls` (port 5061) to the request URI, or configure the transport in your trunk's SIP settings.
 
-### Call Quality Issues
+Confirm with a `sipsak` OPTIONS ping after the change. Quote the URI, otherwise the shell splits at `;` and sipsak falls back to UDP on port 5060.
 
-- Check codec compatibility between your provider and Smallest AI
-- Verify network latency and bandwidth availability
-- Review your provider's SIP trunk capacity and limits
+```bash
+# TCP
+sipsak -vv -s 'sip:5rdbhjuwtlk.sip.livekit.cloud;transport=tcp'
 
-### Authentication Failures
+# TLS
+sipsak -vv -s 'sips:5rdbhjuwtlk.sip.livekit.cloud'
+```
 
-- Double-check username and password are entered correctly
-- Verify your provider requires authentication (some use IP-based authentication)
-- Contact your provider to confirm authentication method
+You should see `SIP/2.0 200 OK` from the ingress. If OPTIONS times out on both TCP and TLS, the reachability problem is between your egress and our ingress (firewall, security group, routing), not on our side.
 
-<Warning>
-  If you experience persistent issues, contact Smallest AI support at support@smallest.ai with your phone
-  number and provider details for assistance.
-</Warning>
+### Call rings but the agent never picks up (or vice versa)
 
-## Common Provider Examples
+Check the `To:` header on the INVITE against the number you imported. Two common mismatches:
 
-We support all major telephony providers that offer SIP trunking. Below are detailed setup guides for the most popular providers:
+- **Missing `+` prefix.** Our ingress requires the leading `+` on the request URI. A `To: sip:91XXXXXXXXXX@...` INVITE reaches us but does not match a mapped number, so the ingress does not route it to an agent. Rewrite your SBC to always send `sip:+91XXXXXXXXXX@...`.
+- **Wrong country code.** The number you typed at import time must match the number in the INVITE exactly, digit for digit, including the country code.
+
+### One-way audio
+
+- Confirm the `200 OK` on the answered INVITE carries an SDP body with an `m=audio` line for RTP. In a `tcpdump` capture: `tcpdump -i any -s0 -w /tmp/sip.pcap port 5060 or port 5061`, then open in Wireshark and inspect the `200 OK` SDP.
+- If RTP is present in the SDP but no audio flows, media (RTP over UDP) is blocked at your firewall or NAT. SIP signalling and media traverse separately.
+- If SRTP is required on your side, verify the SDP negotiates `RTP/SAVP` rather than `RTP/AVP`.
+
+### Retransmission or duplicate INVITEs
+
+TCP and TLS carry SIP signalling reliably; there is no need for the RFC 3261 UDP-style retransmit ladder. If you see duplicate INVITEs from your SBC, check that your transport is actually TCP or TLS on the wire, not falling back to UDP because of a config typo.
+
+### Kamailio
 
 <AccordionGroup>
-  <Accordion title="Twilio" icon="phone-volume">
-    Twilio supports SIP trunking through **Elastic SIP Trunking**, which provides reliable connectivity for both
-    inbound and outbound calls.
+  <Accordion title="Adding TCP transport" icon="wrench">
+    In your `kamailio.cfg`:
 
-    **Quick Setup Steps:**
+    ```
+    listen=tcp:YOUR_IP:5060
+    ```
 
-    1. Create an Elastic SIP Trunk in Twilio Console
-    2. Configure Termination (outbound) and Origination (inbound) settings
-    3. Assign your phone numbers to the trunk
-    4. Import numbers on Smallest AI with your trunk credentials
-    5. Test inbound and outbound calls
-
-    <Card title="Complete Twilio Setup Guide" icon="arrow-right" href="/voice-agents/platform/deploy/phone-numbers">
-      View the detailed step-by-step guide with troubleshooting and advanced configuration
-    </Card>
+    Open port 5060 TCP inbound in your security group. Reload Kamailio and re-send INVITEs to `sip:+E164@5rdbhjuwtlk.sip.livekit.cloud;transport=tcp`.
 
   </Accordion>
+  <Accordion title="Adding TLS transport" icon="lock">
+    Requires the `tls` module compiled in and configured with certificates. Check whether TLS is compiled in:
 
-  <Accordion title="Telnyx" icon="signal-bars">
-    Telnyx provides flexible, global SIP trunking with competitive pricing and excellent call quality.
+    ```bash
+    kamailio -V | grep -i tls
+    ```
 
-    **Quick Setup Steps:**
+    If absent, rebuild Kamailio with `--with-tls` or install the `kamailio-tls-modules` package (Debian / Ubuntu). Then in `kamailio.cfg`:
 
-    1. Create a SIP Connection in Telnyx Portal
-    2. Configure inbound and outbound settings
-    3. Set up authentication (IP or credential-based)
-    4. Assign your phone numbers to the connection
-    5. Import numbers on Smallest AI with your connection details
+    ```
+    listen=tls:YOUR_IP:5061
+    ```
 
-    <Card title="Complete Telnyx Setup Guide" icon="arrow-right" href="/voice-agents/platform/deploy/phone-numbers">
-      View the comprehensive guide with authentication options and monitoring setup
-    </Card>
-
-  </Accordion>
-
-  <Accordion title="Vonage" icon="phone-arrow-up-right">
-    Vonage offers Voice API with robust SIP connectivity and global reach.
-
-    **Quick Setup Steps:**
-
-    1. Create a Voice API application in Vonage Dashboard
-    2. Configure SIP endpoints and authentication
-    3. Set up answer URL with SIP connect action
-    4. Link your phone numbers to the application
-    5. Import numbers on Smallest AI with your API credentials
-
-    <Card title="Complete Vonage Setup Guide" icon="arrow-right" href="/voice-agents/platform/deploy/phone-numbers">
-      View the detailed guide with NCCO configuration and webhook setup
-    </Card>
+    Configure `tls.cfg` with your certificate chain and re-send INVITEs to `sip:+E164@5rdbhjuwtlk.sip.livekit.cloud;transport=tls`.
 
   </Accordion>
 </AccordionGroup>
 
-<Note>
-  Each provider has unique configuration steps and terminology. For detailed setup instructions specific to
-  your provider, see the dedicated guides above or contact Smallest AI support at support@smallest.ai for
-  personalized guidance.
-</Note>
+### Still stuck
 
-## Best Practices
+Capture a call attempt on your side:
 
-1. **Test thoroughly**: Always test both inbound and outbound calls before production use
-2. **Monitor call quality**: Keep an eye on call metrics and audio quality
-3. **Keep credentials secure**: Store SIP authentication credentials safely
-4. **Document your setup**: Maintain records of your SIP trunk configuration
-5. **Plan for redundancy**: Consider backup trunks or failover options for critical applications
+```bash
+tcpdump -i any -s0 -w /tmp/sip.pcap 'port 5060 or port 5061 or portrange 10000-60000'
+```
+
+Reproduce the failing call, then stop the capture. Email `support@smallest.ai` with:
+
+- the pcap
+- the exact `To:` and `Request-URI` from one failing INVITE (sanitise any secrets first)
+- the number you imported, and the phone number you dialled
+- the transport you configured (`;transport=tcp` or `;transport=tls`)
+
+## Common provider examples
+
+<AccordionGroup>
+  <Accordion title="Twilio" icon="phone-volume">
+    Twilio supports SIP trunking through **Elastic SIP Trunking**. Both inbound and outbound flow through their trunk.
+
+    **Quick setup**:
+
+    1. Create an Elastic SIP Trunk in Twilio Console.
+    2. On the trunk's **Origination** tab, add the SIP URI `sip:5rdbhjuwtlk.sip.livekit.cloud;transport=tls`. Twilio uses TLS on 5061 by default when you specify `transport=tls`.
+    3. On the **Termination** tab, note the termination URI (a hostname ending `.pstn.twilio.com`). That is your **SIP Termination URL** at Step 2 above.
+    4. Assign your numbers to the trunk.
+    5. Import the number on Smallest AI with the Twilio termination host.
+    6. Test both directions.
+
+    <Card title="Complete Twilio Setup Guide" icon="arrow-right" href="/voice-agents/platform/deploy/phone-numbers">
+      Detailed step-by-step with authentication, IP whitelisting, and DID configuration.
+    </Card>
+
+  </Accordion>
+  <Accordion title="Telnyx" icon="signal-bars">
+    Telnyx SIP Connections support both credential and IP-based auth. Both work here.
+
+    **Quick setup**:
+
+    1. Create a SIP Connection in the Telnyx Portal.
+    2. On **Inbound**, add the Smallest destination as an inbound SIP URI: `sip:5rdbhjuwtlk.sip.livekit.cloud;transport=tls`.
+    3. On **Outbound**, note the outbound SIP URI Telnyx assigns. That is your **SIP Termination URL** for Step 2.
+    4. Assign numbers to the connection.
+    5. Import each number on Smallest AI with the Telnyx termination host.
+
+    <Card title="Complete Telnyx Setup Guide" icon="arrow-right" href="/voice-agents/platform/deploy/phone-numbers">
+      Authentication options, DID routing, and monitoring.
+    </Card>
+
+  </Accordion>
+  <Accordion title="Vonage" icon="phone-arrow-up-right">
+    Vonage Voice API supports SIP endpoints via the `sip.connect` NCCO action.
+
+    **Quick setup**:
+
+    1. Create a Voice API application in Vonage Dashboard.
+    2. In the answer URL webhook, use the `connect` NCCO to send the call to `sip:5rdbhjuwtlk.sip.livekit.cloud;transport=tls`.
+    3. Note the outbound SIP endpoint Vonage assigns to your app. That is your **SIP Termination URL** for Step 2.
+    4. Link your numbers to the application.
+    5. Import each number on Smallest AI with the Vonage termination host.
+
+    <Card title="Complete Vonage Setup Guide" icon="arrow-right" href="/voice-agents/platform/deploy/phone-numbers">
+      NCCO configuration, webhook setup, and SIP endpoint details.
+    </Card>
+
+  </Accordion>
+  <Accordion title="Own SBC (Asterisk, FreeSWITCH, Kamailio)" icon="server">
+    Configure your outbound trunk to `5rdbhjuwtlk.sip.livekit.cloud` with `transport=tls` on 5061 (or `transport=tcp` on 5060 as a fallback). Do not use UDP. Set the request URI to `sip:+E164@5rdbhjuwtlk.sip.livekit.cloud;transport=tls`.
+
+    For Kamailio-specific `listen=` / TLS module setup, see the [Kamailio](#kamailio) accordion under Troubleshooting.
+
+    For your termination host (what we send outbound to), open the port you configure Smallest to send to. Both TCP and TLS are recommended; UDP is fine on your termination side but not required.
+
+  </Accordion>
+</AccordionGroup>
+
+## Best practices
+
+1. **Use TLS in production.** Signalling in the clear over TCP is fine for staging; TLS is the norm on production trunks.
+2. **Test both directions and both transports.** If TLS is your primary, confirm TCP fallback works before you need it.
+3. **Store SIP credentials in a secrets manager.** Not in your provider's plaintext trunk config where possible.
+4. **Keep numbers in E.164 with the `+`.** Both when importing and in every INVITE `To:` header.
 
 ## Limitations
 
-- No fixed IP range currently available for IP-based authentication
-- SRTP encryption may be required depending on provider
-- Some providers may have additional configuration requirements
+- Signalling over UDP is not accepted. TCP or TLS only.
+- SRTP is optional, not required. If you require SRTP end to end, negotiate it in your SDP.
+- No fixed inbound IP range is published for provider allowlisting. Contact support if your setup needs it.
 
 ## Pricing
 
@@ -277,15 +309,13 @@ Imported numbers via SIP trunking:
 - Standard Smallest AI per-minute call rates apply
 - No additional fees for SIP trunk configuration
 
-Check the [Pricing page](https://smallest.ai/pricing) for current per-minute rates.
+See the [Pricing page](https://smallest.ai/pricing) for current per-minute rates.
 
-## Need Help?
+## Need help?
 
-If you need assistance setting up SIP trunking:
-
-- Email: support@smallest.ai
-- Join our [Discord community](https://smallest.ai/discord)
-- Check our [FAQ section](/voice-agents/platform/troubleshooting/faq) for common questions
+- Email: `support@smallest.ai`
+- [Discord community](https://smallest.ai/discord)
+- [FAQ](/voice-agents/platform/troubleshooting/faq)
 
 <CodingAgentCallout />
 
