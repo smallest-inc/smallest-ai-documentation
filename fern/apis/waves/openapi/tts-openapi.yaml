@@ -105,8 +105,7 @@ paths:
 
         ## Common gotchas
 
-        - **Response `Content-Type` header is always `audio/wav`, even when `output_format` is `mp3`, `pcm`, `ulaw`, or `alaw`.** The bytes still match the requested format. MIME-sniffing consumers (WhatsApp Cloud API upload, some browsers, some S3 uploaders) must override the MIME on their side. See the `output_format` field for the recommended per-format MIME overrides.
-        - **The `Accept` request header is ignored.** Only the `output_format` body field controls what is returned. No content negotiation is performed.
+        - **The `Accept` request header is ignored.** Only the `output_format` body field controls what is returned. No content negotiation is performed. The response `Content-Type` header is set per format automatically (see the 200 response for the exact mapping).
         - **Pair voice IDs with the right model.** Voice catalogs differ between `lightning_v3.1` and `lightning_v3.1_pro`. The API does not reject mismatched pairings, but using a Pro-only `voice_id` with `model=lightning_v3.1` (or omitting `model`) can return wrong or hallucinated audio. Pair Pro voices with `model=lightning_v3.1_pro`; standard catalog voices with `model=lightning_v3.1` (the default).
         - **Cloned voices** (`voice_*`) work with the pool they were cloned onto. The voice-cloning API accepts `model: lightning-v3.1` (default) or `lightning-v3.1-pro`; pair the resulting `voice_id` with the matching TTS `model` (`lightning_v3.1` or `lightning_v3.1_pro`). Check the clone's `modelIds` if unsure.
         - **44.1 kHz output** is supported but most playback environments are happy with 24 kHz — drop the sample rate if bandwidth matters.
@@ -117,7 +116,7 @@ paths:
         schema:
           type: string
         description: |
-          **Ignored.** Content negotiation is not implemented on this endpoint. Only the `output_format` body field controls what is returned. Sending `Accept: audio/mpeg` when `output_format: mp3` does not change the response `Content-Type` header, which is always `audio/wav` (see the `output_format` field and 200 response for detail).
+          **Ignored.** Content negotiation is not implemented on this endpoint. Only the `output_format` body field controls what is returned. The response `Content-Type` is set per format automatically (see 200 response).
       - name: x-expire-content
         in: header
         required: false
@@ -184,16 +183,21 @@ paths:
       responses:
         '200':
           description: |
-            Synthesized speech. The response body is raw audio in the format requested via the `output_format` body field.
+            Synthesized speech. The response body is raw audio in the format requested via the `output_format` body field. The response `Content-Type` header maps to the requested format:
 
-            **The response `Content-Type` header is always `audio/wav`, regardless of `output_format`.** The bytes themselves are correct (an `mp3` request returns MPEG audio; `wav` returns RIFF/WAVE; `pcm` returns raw signed 16-bit LE samples). Consumers that MIME-sniff on `Content-Type` (WhatsApp Cloud API upload, some browsers, some S3 uploaders) must override the MIME on their side: `audio/mpeg` for `mp3`, `audio/wav` for `wav`, `audio/basic` for `ulaw`/`alaw`, no registered MIME for `pcm`. See the `output_format` field description for detail.
+            | `output_format` | Content-Type |
+            |---|---|
+            | `wav` | `audio/wav` |
+            | `mp3` | `audio/mpeg` |
+            | `ulaw`, `alaw` | `audio/basic` |
+            | `pcm` | `application/octet-stream` |
           headers:
             Content-Type:
               schema:
                 type: string
-                enum: [audio/wav]
+                enum: [audio/wav, audio/mpeg, audio/basic, application/octet-stream]
               description: |
-                Always `audio/wav` today, regardless of `output_format`. The body bytes are still in the requested format; only the header is fixed.
+                Set per `output_format`: `wav` -> `audio/wav`; `mp3` -> `audio/mpeg`; `ulaw`/`alaw` -> `audio/basic`; `pcm` -> `application/octet-stream`.
             X-Session-Id:
               schema:
                 type: string
@@ -216,14 +220,12 @@ paths:
                 type: string
                 format: binary
                 description: |
-                  Audio bytes in the format requested via `output_format`. Despite the `audio/wav` key here (which reflects the actual response `Content-Type` header the server sends), the byte payload is:
+                  Audio bytes in the format requested via `output_format`:
 
                   - `wav`: RIFF/WAVE container, PCM int16 at the requested `sample_rate`
                   - `mp3`: MPEG-1 Layer III (128 kbps, mono, at the requested `sample_rate`)
                   - `pcm`: raw signed 16-bit little-endian samples, no container
                   - `ulaw` / `alaw`: raw G.711 samples, no container
-
-                  MIME-sniffing consumers should override the header client-side.
         '400':
           description: Bad request.
           content:

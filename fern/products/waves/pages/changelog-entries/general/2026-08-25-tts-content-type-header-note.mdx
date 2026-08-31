@@ -1,16 +1,16 @@
 ---
-title: "TTS API-ref: response `Content-Type` is `audio/wav` regardless of `output_format`"
+title: "TTS API-ref: response `Content-Type` is now set per `output_format`"
 ---
 
-The Lightning v3.1 / v3.1 Pro synchronous TTS endpoint always sets the response `Content-Type` header to `audio/wav`, even when `output_format` is `mp3`, `pcm`, `ulaw`, or `alaw`. The bytes in the body still match the requested format (a `mp3` request returns MPEG-1 Layer III; `file(1)` and the `ID3` / `0xFF Fx` frame-sync bytes confirm), but downstream consumers that MIME-sniff the `Content-Type` header (WhatsApp Cloud API media upload, some browsers, some S3 uploaders) will treat the payload as WAV unless the MIME is overridden client-side.
+The synchronous TTS endpoint (`POST /waves/v1/tts`) now returns a `Content-Type` header that matches the requested `output_format`:
 
-The API reference now documents this on the `output_format` field and on the `200` response block. Recommended overrides:
+| `output_format` | `Content-Type` |
+|---|---|
+| `wav` | `audio/wav` |
+| `mp3` | `audio/mpeg` |
+| `ulaw`, `alaw` | `audio/basic` |
+| `pcm` | `application/octet-stream` |
 
-- `mp3` → `audio/mpeg`
-- `wav` → `audio/wav`
-- `ulaw` / `alaw` → `audio/basic`
-- `pcm` → no registered MIME (treat as raw signed 16-bit LE at the requested `sample_rate`)
+Consumers that MIME-sniffed the response header (WhatsApp Cloud API media upload, some browsers, some S3 uploaders) no longer need a client-side override; the header is correct on the wire.
 
-The request `Accept` header is not honored either. Only `output_format` in the body controls what is returned.
-
-Verified against the platform source: `res.setHeader("Content-Type", "audio/wav")` is hardcoded across all TTS controllers and the Zod validator's `output_format` enum is `["wav", "ulaw", "alaw", "pcm", "mp3"]`. Other formats (`ogg`, `opus`, `aac`) return HTTP 400 `invalid_enum_value`.
+The API reference now documents the mapping on the `200` response block and on the `Content-Type` response header. The request `Accept` header is still ignored; only the `output_format` body field controls what is returned.
