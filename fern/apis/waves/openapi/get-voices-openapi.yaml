@@ -1,9 +1,7 @@
 openapi: 3.0.1
 info:
   title: Get Voices
-  description: 'API Endpoint to get voices supported by our TTS models.
-
-    '
+  description: 'List the voices available on a Lightning v3.1 pool.'
   version: 1.0.0
 servers:
 - url: https://api.smallest.ai
@@ -14,9 +12,18 @@ paths:
     get:
       tags:
       - Voices
-      summary: Get Voices
+      summary: Get voices for a pool
       description: |
-        List voices available for Lightning v3.1. The response is the union of the standard and Pro voice catalogs — the API does not return a per-voice "is Pro" flag, so consult the [Lightning v3.1 Pro](/models/model-cards/text-to-speech/lightning-v-3-1-pro) and [Lightning v3.1](/models/model-cards/text-to-speech/lightning-v-3-1) model cards for the canonical per-pool voice lists. Use the `voice_id` from this response together with `"model": "lightning_v3.1"` (default) or `"model": "lightning_v3.1_pro"` on the unified `/waves/v1/tts` route to pick the pool.
+        Return the voice catalog for the chosen Lightning v3.1 pool. Two pools:
+
+        - `lightning-v3.1` — the Standard catalog. Supports voice cloning; 20 language codes.
+        - `lightning-v3.1-pro` — the Pro catalog. Curated set across American, British, and Indian accents plus 29 additional languages. Same latency and concurrency as Standard, on dedicated inference.
+
+        The endpoint is pool-scoped: `/waves/v1/lightning-v3.1/get_voices` returns Standard voices only; `/waves/v1/lightning-v3.1-pro/get_voices` returns Pro voices only. Call one or both depending on which pool you plan to use.
+
+        Each voice carries tags (`language`, `accent`, `gender`, `age`, `emotions`, `usecases`). Filter client-side to find the voices that match a target language, accent, or use case. Pass the returned `voiceId` as `voice_id` on the unified [`POST /waves/v1/tts`](/models/api-reference/text-to-speech/synthesize-speech) route, together with `"model": "lightning_v3.1"` (Standard) or `"model": "lightning_v3.1_pro"` (Pro).
+
+        To browse every voice across every model in one call, use [`GET /waves/v1/voice/get-all-models`](/models/api-reference/text-to-speech/get-all-voices) instead. For the canonical per-language voice list (with previews and recommended pairings), see the [Lightning v3.1](/models/model-cards/text-to-speech/lightning-v-3-1) and [Lightning v3.1 Pro](/models/model-cards/text-to-speech/lightning-v-3-1-pro) model cards.
       operationId: getWavesVoices
       parameters:
       - in: path
@@ -26,9 +33,10 @@ paths:
           type: string
           enum:
           - lightning-v3.1
+          - lightning-v3.1-pro
           default: lightning-v3.1
         description: |
-          The catalog to query. Currently only `lightning-v3.1` is supported — the response returns the union of standard Lightning v3.1 voices and Lightning v3.1 Pro voices. The API does not include a per-voice Pro flag; consult the model cards for the canonical per-pool catalogs.
+          The pool to query. `lightning-v3.1` returns Standard voices; `lightning-v3.1-pro` returns Pro voices. Note the hyphenated path form differs from the underscored body form used on `POST /waves/v1/tts` (`lightning_v3.1`, `lightning_v3.1_pro`).
       responses:
         '200':
           description: Voices retrieved successfully.
@@ -39,7 +47,7 @@ paths:
                 properties:
                   voices:
                     type: array
-                    description: List of available voices.
+                    description: List of available voices for the chosen pool.
                     items:
                       type: object
                       required:
@@ -48,33 +56,33 @@ paths:
                       properties:
                         voiceId:
                           type: string
-                          description: Unique Voice ID. Pass this value as `voice_id` on `POST /waves/v1/tts` (or the streaming route).
+                          description: Unique voice identifier. Pass this value as `voice_id` on `POST /waves/v1/tts` (or the streaming route).
                           example: avery
                         displayName:
                           type: string
-                          description: Display name for the voice.
+                          description: Human-readable name for the voice.
                           example: Avery
                         tags:
                           type: object
-                          description: Tag metadata used to identify the voice's characteristics. Filter on these fields to find voices for a target language, accent, or use case. Fields may be empty on some voices.
+                          description: Metadata describing the voice. Filter client-side to find voices for a target language, accent, or use case. Fields may be empty on some voices.
                           properties:
                             language:
                               type: array
-                              description: Languages the voice was trained on (e.g., `["english"]`, `["english", "hindi"]`).
+                              description: Languages the voice was trained on (e.g. `["english"]`, `["english", "hindi"]`).
                               items:
                                 type: string
                               example: ["english"]
                             accent:
                               type: string
-                              description: Accent of the voice (e.g., `american`, `british`, `indian`).
+                              description: Accent (e.g. `american`, `british`, `indian`).
                               example: american
                             gender:
                               type: string
-                              description: Gender of the voice (`male` or `female`).
+                              description: Gender label (`male` or `female`).
                               example: female
                             age:
                               type: string
-                              description: Age range of the voice (e.g., `young`, `middle aged`, `senior`).
+                              description: Age range (e.g. `young`, `middle aged`, `senior`).
                               example: young
                             emotions:
                               type: array
@@ -84,41 +92,75 @@ paths:
                               example: []
                             usecases:
                               type: array
-                              description: Recommended use cases for the voice (e.g., `conversational`, `narration`).
+                              description: Recommended use cases (e.g. `conversational`, `narration`).
                               items:
                                 type: string
                               example: ["conversational"]
-              example:
-                voices:
-                  - voiceId: avery
-                    displayName: Avery
-                    tags:
-                      language: ["english"]
-                      accent: american
-                      gender: female
-                      age: young
-                      emotions: []
-                      usecases: ["conversational"]
-                  - voiceId: liam
-                    displayName: Liam
-                    tags:
-                      language: ["english"]
-                      accent: british
-                      gender: male
-                      age: young
-                      emotions: []
-                      usecases: ["conversational"]
-                  - voiceId: devansh
-                    displayName: Devansh
-                    tags:
-                      language: ["hindi", "english"]
-                      accent: indian
-                      gender: male
-                      age: young
-                      emotions: []
-                      usecases: ["conversational"]
+              examples:
+                standard:
+                  summary: Lightning v3.1 Standard pool (sample)
+                  value:
+                    voices:
+                      - voiceId: avery
+                        displayName: Avery
+                        tags:
+                          language: ["english"]
+                          accent: american
+                          gender: female
+                          age: young
+                          emotions: []
+                          usecases: ["conversational"]
+                      - voiceId: liam
+                        displayName: Liam
+                        tags:
+                          language: ["english"]
+                          accent: british
+                          gender: male
+                          age: young
+                          emotions: []
+                          usecases: ["conversational"]
+                      - voiceId: devansh
+                        displayName: Devansh
+                        tags:
+                          language: ["hindi", "english"]
+                          accent: indian
+                          gender: male
+                          age: young
+                          emotions: []
+                          usecases: ["conversational"]
+                      - voiceId: mishka
+                        displayName: Mishka
+                        tags:
+                          language: ["hindi", "english", "marathi", "gujarati", "punjabi", "bengali", "odia", "tamil", "telugu"]
+                          accent: indian
+                          gender: female
+                          age: young
+                          emotions: []
+                          usecases: ["conversational"]
+                pro:
+                  summary: Lightning v3.1 Pro pool (sample)
+                  value:
+                    voices:
+                      - voiceId: meher
+                        displayName: Meher
+                        tags:
+                          language: ["hindi", "english"]
+                          accent: indian
+                          gender: female
+                          age: young
+                          emotions: []
+                          usecases: ["conversational"]
+                      - voiceId: raghav
+                        displayName: Raghav
+                        tags:
+                          language: ["hindi", "english"]
+                          accent: indian
+                          gender: male
+                          age: middle aged
+                          emotions: []
+                          usecases: ["conversational", "narration"]
         '400':
-          description: Bad request
+          description: Bad request. The most common cause is a `{model}` value outside the enum. Use `lightning-v3.1` or `lightning-v3.1-pro`.
           content:
             application/json:
               schema:
@@ -131,7 +173,7 @@ paths:
                     type: string
                     description: Error message
         '401':
-          description: Unauthorized
+          description: Missing or invalid API key.
           content:
             application/json:
               schema:
@@ -144,7 +186,7 @@ paths:
                     type: string
                     description: Error message
         '500':
-          description: Server error occurred
+          description: Server error.
           content:
             application/json:
               schema:
