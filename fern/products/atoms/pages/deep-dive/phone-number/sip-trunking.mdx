@@ -26,7 +26,7 @@ You need:
    - the outbound (termination) SIP host you will send outbound calls to (a hostname or IP, optional port)
    - which transports it accepts for inbound INVITEs from us (UDP, TCP, TLS)
    - whether it wants credential auth or IP-based auth
-4. **Numbers in E.164 format** with the leading `+` (`+919240923803`, not `919240923803`). Our ingress requires the `+` on the request URI. Without it, the call routes as if the destination were unmapped.
+4. **Numbers in E.164 format** with the leading `+` (`+91XXXXXXXXXX`, not `91XXXXXXXXXX`). Our ingress requires the `+` on the request URI. Without it, the call routes as if the destination were unmapped.
 
 ## Transport contract
 
@@ -51,8 +51,8 @@ sip:5rdbhjuwtlk.sip.livekit.cloud
 **Append a transport parameter and a `+`-prefixed number when your provider sends INVITEs.** Two shapes work:
 
 ```
-sip:+919240923803@5rdbhjuwtlk.sip.livekit.cloud;transport=tls   ← preferred, port 5061
-sip:+919240923803@5rdbhjuwtlk.sip.livekit.cloud;transport=tcp   ← fallback, port 5060
+sip:+91XXXXXXXXXX@5rdbhjuwtlk.sip.livekit.cloud;transport=tls   ← preferred, port 5061
+sip:+91XXXXXXXXXX@5rdbhjuwtlk.sip.livekit.cloud;transport=tcp   ← fallback, port 5060
 ```
 
 If your provider only lets you paste the hostname, configure the transport in the trunk's SIP settings instead of in the URI.
@@ -166,7 +166,7 @@ You should see `SIP/2.0 200 OK` from the ingress. If OPTIONS times out on both T
 
 Check the `To:` header on the INVITE against the number you imported. Two common mismatches:
 
-- **Missing `+` prefix.** Our ingress requires the leading `+` on the request URI. A `To: sip:919240923803@...` INVITE reaches us but does not match a mapped number, so the ingress does not route it to an agent. Rewrite your SBC to always send `sip:+919240923803@...`.
+- **Missing `+` prefix.** Our ingress requires the leading `+` on the request URI. A `To: sip:91XXXXXXXXXX@...` INVITE reaches us but does not match a mapped number, so the ingress does not route it to an agent. Rewrite your SBC to always send `sip:+91XXXXXXXXXX@...`.
 - **Wrong country code.** The number you typed at import time must match the number in the INVITE exactly, digit for digit, including the country code.
 
 ### One-way audio
