@@ -297,6 +297,55 @@ Not a public dataset. Hindi audio sliced by perturbation type to isolate model w
 | **Repetition** | 11.38% | **11.27%** | 20.40% |
 
 </Accordion>
+
+<Accordion title="Diarization - accuracy and speed">
+
+Pulse ships speaker diarization on both batch and streaming through the same API — no separate diarization vendor to stitch in. See the [Diarization](/models/documentation/speech-to-text-pulse/features/diarization) page for the response shape and enable flag.
+
+**Metric.** DER (Diarization Error Rate) = percent of speech time handled wrong (wrong speaker + missed speech + falsely detected speech). Scored with no collar, overlapping speech counted, permutation-optimal speaker matching, duration-pooled via `pyannote.metrics`. Lower is better.
+
+#### Batch DER vs other STT APIs (6 public datasets, 493 files, whole-file inference)
+
+Macro-averaged across all six datasets. Lower is better.
+
+| System | DER | Miss | Speaker-confusion |
+| :--- | :---: | :---: | :---: |
+| **Pulse** | **21.1** | **13.2** | **2.7** |
+| ElevenLabs Scribe v2 | 29.0 | 21.7 | 3.7 |
+| Deepgram Nova-3 | 33.3 | 23.7 | 4.8 |
+
+Per-dataset (lower is better):
+
+| Dataset | Pulse | ElevenLabs | Deepgram |
+| :--- | :---: | :---: | :---: |
+| ami_ihm (headset meeting) | **21.1** | 33.6 | 29.0 |
+| ami_sdm (far-field meeting) | **30.7** | 37.6 | 37.9 |
+| callhome_eng (English phone) | **14.5** | 23.0 | 27.7 |
+| callhome_deu (German phone) | **14.9** | 23.9 | 25.8 |
+| callhome_spa (Spanish phone) | **31.0** | 39.6 | 41.4 |
+| simsamu (French emergency 911) | **14.2** | 16.3 | 38.1 |
+
+Extended benchmark against the specialist API pyannoteAI (diarization-only, not an STT API): pyannoteAI wins on some meeting-room datasets (`ami_ihm` 12.8 vs 18.5, `voxconverse` 7.7 vs 20.8) where speaker-count is high. Pulse remains competitive and wins on French emergency dispatch (`simsamu` 13.4 vs 14.7).
+
+#### Streaming DER on Indic languages
+
+Streaming diarization measured end-to-end through the WebSocket API at concurrency 1. Lower is better. Pulse macro-average across all 22 Indic language codes is 23.2 DER; Pyannote Live-1 is 37.1; Deepgram Live is 77.6 (Deepgram Live does not have a first-class Indic pipeline).
+
+#### Speed (real-time factor)
+
+RTF = processing time / audio length. Lower is faster. `1/RTF` is "times faster than real-time." Measured **through each vendor's API at concurrency 1 with diarization enabled** — the round-trip a customer actually sees, not local compute.
+
+| Vendor | RTF (median) | Times real-time |
+| :--- | :---: | :---: |
+| **Pulse** | **~0.004** | **~240×** |
+| Deepgram | ~0.007 | ~140× |
+| pyannoteAI | ~0.022 | ~45× |
+| AssemblyAI | ~0.028 | ~36× |
+| ElevenLabs | ~0.059 | ~17× |
+
+Streaming diarization emits speaker labels on `is_final: true` transcription events with roughly the same latency as transcription itself (~1 s tail from utterance end to final event on typical connectivity).
+
+</Accordion>
 </AccordionGroup>
 
 ---
