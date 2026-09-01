@@ -1,0 +1,178 @@
+---
+title: "Audio Formats"
+sidebarTitle: "Audio Formats"
+description: "How to declare the audio you send the Realtime Agent WebSocket API and the audio it sends back, including Opus framing and the rules that are easy to get wrong."
+---
+
+
+import { CodingAgentCallout } from "@/components/CodingAgentCallout";
+
+Every format decision happens once, when you register the call. The full list of
+accepted tokens lives in the
+[Register Call](/voice-agents/api-reference/realtime-agent/register-call) and
+[Realtime Agent WebSocket](/voice-agents/api-reference/realtime-agent/realtime-agent)
+references. This page covers the rules those enums cannot express.
+
+A token is `<encoding>_<rate>`, one per direction: `input_audio_format` for what
+you send, `output_audio_format` for what you get back. Not every encoding
+supports every rate. The tables below list every valid token.
+
+This page is about the WebSocket API only. On phone calls the carrier fixes the
+sample rate both ways, so `input_audio_format` does not apply.
+
+<Warning>
+  **Declare the rate of the audio that you send.** The server does not compare
+  the rate to the audio. A wrong rate does not cause an error.
+
+  If the rate is wrong, the recogniser returns incorrect text. For example, you
+  send 8 kHz audio and you declare `pcm_16000`. The audio then plays two times
+  too fast. "hello there can you hear me clearly" becomes "how old are they very".
+
+  In a browser, open the audio context first. Then read
+  `audioContext.sampleRate` and declare that value. Do not assume 44100 or
+  48000. The value changes with the device and the operating system.
+</Warning>
+
+## What you can send
+
+| Encoding | Rates | Notes |
+|---|---|---|
+| `pcm` | 8000, 16000, 22050, 24000, 44100, 48000 | Signed 16-bit little-endian, mono |
+| `mulaw` | 8000 | G.711 mu-law. G.711 exists only at 8 kHz |
+| `alaw` | 8000 | G.711 A-law. Same |
+| `opus` | 8000, 16000, 24000, 48000 | The rate Opus decodes *to*, which is yours to pick |
+
+Input and output support different rates. Input rates are limited by what speech
+recognition accepts; output rates by what the agent's voice can produce. That is
+why you can send `pcm_48000` even though no voice speaks at 48 kHz.
+
+`opus_12000` is not supported: Opus can encode at 12 kHz, but speech recognition
+does not accept 12 kHz input.
+
+An unsupported token is refused before any session exists, and the error names
+the accepted values: `input_audio_format '<token>' is not supported. Supported:
+...` from register-call, or `Unsupported input_audio_format '<token>'. Supported:
+...` if you pass it on the connect URL instead.
+
+## What a request looks like
+
+```json
+{
+  "agent_id": "agent_123",
+  "input_audio_format": "pcm_16000",
+  "output_audio_format": "pcm_24000"
+}
+```
+
+Both fields are optional. Leave them out and you get `pcm_24000` both ways.
+A full request and response is in the [worked example](#worked-example) below.
+
+## Output rate depends on the voice
+
+`pcm_8000`, `pcm_16000` and `pcm_24000` work with every voice. `pcm_24000` is
+the default.
+
+`pcm_44100` works only with the `lightning-v3.1` and `lightning-v3.1-pro`
+voices. Any other voice rejects it at register-call with HTTP 400 and
+`output_audio_format '<token>' is not supported by this agent's voice.
+Supported: ...`, listing what that voice does render. No session is created.
+
+## Sending Opus
+
+<Info>
+  **Send one Opus packet in each WebSocket message.** Opus is a framed codec.
+  The message boundary shows the decoder where a packet ends. Do not put two
+  packets in one message. Do not divide one packet across two messages. Each of
+  these errors makes noise.
+
+  Send raw Opus packets. Do not send Ogg pages. If your source makes an Ogg
+  stream, remove the container first. The server discards a message that starts
+  with the bytes `OggS`, and writes a log entry.
+</Info>
+
+Opus is roughly 30 times smaller than the same audio as PCM: 9,359 bytes against
+288,000 for the same 6 second utterance, with the same transcript. The saving is
+on upload bandwidth, which is usually the constrained direction for callers.
+
+A WebRTC or Janus source already carries Opus, so `opus_*` avoids decoding it
+just to re-encode it as PCM.
+
+## Migrating from `sample_rate`
+
+The integer `sample_rate` field is deprecated. It set the output rate only and
+had no way to describe your input, which is why input silently defaulted to
+matching the output.
+
+```json
+// Before
+{ "agent_id": "agent_123", "sample_rate": 24000 }
+
+// After
+{ "agent_id": "agent_123", "input_audio_format": "pcm_16000", "output_audio_format": "pcm_24000" }
+```
+
+`sample_rate` still works and still returns in the response. Sending both is
+fine when they agree; if they disagree the call is refused with HTTP 400
+rather than one silently winning.
+
+You can set `output_audio_format` in the register-call body or as a query
+parameter on the connect URL. If you connect directly with an API key and never
+call register-call, use the connect URL. `sample_rate` is deprecated in both
+places.
+
+Which connect-URL parameters are read depends on how you authenticate:
+
+- **Register-call token (`wct_`)**: `output_audio_format` and `sample_rate` on
+  the URL are ignored. The output format was already chosen and validated at
+  register-call, and the token carries it.
+- **Raw API key**: set `output_audio_format` on the connect URL.
+- **`input_audio_format` is read from the URL in both cases.** A browser only
+  knows its real microphone rate after it opens an `AudioContext`, which usually
+  happens after register-call.
+
+## Worked example
+
+<CodeBlocks>
+```bash title="Register the call (India region; US is api.us.smallest.ai)"
+curl -X POST https://api.smallest.ai/atoms/v1/conversation/register-call \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent_id": "agent_123",
+    "input_audio_format": "opus_24000",
+    "output_audio_format": "pcm_24000"
+  }'
+```
+
+```json title="Response (HTTP 201)"
+{
+  "status": true,
+  "data": {
+    "access_token": "eyJhbGciOi...",
+    "expires_in": 30,
+    "sample_rate": 24000,
+    "input_audio_format": "opus_24000",
+    "output_audio_format": "pcm_24000"
+  }
+}
+```
+
+```json title="Connect, then send audio"
+// wss://api.smallest.ai/atoms/v1/agent/connect?token=eyJhbGciOi...
+{
+  "type": "input_audio_buffer.append",
+  "audio": "<base64 of one raw Opus packet>"
+}
+```
+</CodeBlocks>
+
+<Tip>
+  The response contains the formats that the server resolved. Read these values
+  and make sure that they agree with your request. This is the easiest way to
+  find a wrong declaration before you send audio.
+</Tip>
+
+
+<CodingAgentCallout />
+
+{/* coding-agent-callout-injected */}

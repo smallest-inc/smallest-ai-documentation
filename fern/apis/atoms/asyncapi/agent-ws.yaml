@@ -83,14 +83,20 @@ servers:
                   prompt testing.
             sample_rate:
               type: integer
-              enum: [8000, 16000, 24000, 48000]
+              enum: [8000, 16000, 24000, 44100]
               default: 24000
+              deprecated: true
               description: |
-                Requested audio sample rate (Hz). Honored when authenticating
-                with a raw `sk_` API key. With a `wct_` token the rate is fixed
-                at 24000 and this param is ignored. The negotiated rate is
-                always echoed in the `session.created` event. Use 8000 for
-                telephony-quality audio.
+                Deprecated, use `output_audio_format`, which this URL also
+                accepts. Still accepted. Sample rate (Hz) of the audio the agent sends back. Honored when
+                authenticating with a raw `sk_` API key. With a `wct_` token this
+                param is ignored, because the rate was already resolved when the
+                call was registered - from that request's `sample_rate` or
+                `output_audio_format`, defaulting to 24000 rather than being
+                fixed at it. `44100` is rendered only by the `lightning-v3.1` and
+                `lightning-v3.1-pro` voices. The negotiated rate is always echoed
+                in the `session.created` event. Use 8000 for telephony-quality
+                audio.
 
 channels:
   agentSession:
@@ -141,7 +147,9 @@ channels:
       | `agent_id` | Yes | string | — | The Atoms agent to connect to. |
       | `variables` | No | string | — | URL-encoded JSON object of per-call prompt variables. Overrides the agent's `defaultVariables` for this session only. Values must be `string`, `number`, or `boolean`. Reserved system-variable keys are stripped server-side (they are populated by the server): `call_id`, `conversation_type`, `agent_number`, `user_number`, `current_date`, `current_time`, `current_day`, `agent_gender`, `default_language`, `supported_languages`, `timezone`. |
       | `mode` | No | `webcall` \| `chat` | `webcall` | Session mode. `webcall` = full voice pipeline (audio in + audio out). `chat` = text-only pipeline. Invalid values are rejected with a connection error. |
-      | `sample_rate` | No | integer | `24000` | Requested audio sample rate in Hz for both input and output audio. Valid values: `8000`, `16000`, `24000`, `48000`. The negotiated rate is echoed in `session.created.sample_rate`. Set to `8000` for telephony-quality audio streams. (With a `wct_` token the rate is fixed at 24000.) |
+      | `sample_rate` | No | integer | `24000` | **Deprecated, use `output_audio_format`.** Still accepted. Sample rate in Hz of the audio the agent sends **back**. Valid values: `8000`, `16000`, `24000`, and `44100` on the `lightning-v3.1` and `lightning-v3.1-pro` voices only. A rate the agent's voice cannot render is refused. This does **not** set the rate of the audio you send: use `input_audio_format` below. Echoed in `session.created.sample_rate`. Set to `8000` for telephony-quality audio streams. (With a `wct_` token this parameter is ignored: the rate was already resolved on register-call and travels in the token.) |
+      | `input_audio_format` | No | `<encoding>_<rate>` token | matches the output rate | The format you are **sending**, as one token naming both encoding and rate: `pcm_{8000,16000,22050,24000,44100,48000}`, `mulaw_8000`, `alaw_8000`, or `opus_{8000,16000,24000,48000}`. An unsupported value is refused at upgrade with `Unsupported input_audio_format '<value>'. Supported: …`. Declared here rather than in the token because a browser only learns what rate its `AudioContext` actually gave it after opening one, which is after the token was minted. The recogniser is configured at this rate and your audio is not resampled, so it must match the bytes you send. Full contract in [Audio Formats](/voice-agents/platform/agent-sdk/audio-formats). |
+      | `output_audio_format` | No | `pcm_<rate>` token | `pcm_24000` | The format the agent sends **back**, as one token. `pcm_8000`, `pcm_16000` and `pcm_24000` work with every voice; `pcm_44100` only with the `lightning-v3.1` and `lightning-v3.1-pro` voices. A rate the agent's voice cannot render is refused before a session exists. The newer spelling of `sample_rate`: send one, not both, because two that disagree are refused. (With a `wct_` token this parameter is ignored: register-call already resolved the output format and it travels in the token.) |
 
       \* `token` or `Authorization: Bearer <key>` — not both.
 
@@ -166,11 +174,17 @@ channels:
           body: JSON.stringify({
             agent_id: agentId,
             mode: "webcall",
+            // One token per direction. `input_audio_format` is what you send,
+            // `output_audio_format` is what the agent sends back. The older
+            // `sample_rate` field still works but sets the output only.
+            input_audio_format: "pcm_24000",
+            output_audio_format: "pcm_24000",
             variables: { customer_name: "Tanay", account_tier: "gold" },
           }),
         }
       );
-      const { data } = await res.json(); // { access_token, expires_in, sample_rate }
+      // { access_token, expires_in, sample_rate, input_audio_format, output_audio_format }
+      const { data } = await res.json();
 
       // 2. Open the WebSocket with the token (e.g. in the browser)
       const ws = new WebSocket(
@@ -463,10 +477,23 @@ components:
             description: Call-log identifier; matches the `call_id` in conversation logs.
           sample_rate:
             type: integer
-            description: Negotiated audio sample rate in Hz for both input and output audio.
+            description: |
+              Negotiated sample rate in Hz of the audio the agent sends back.
+              Same value as `output_audio_format`'s rate.
           channels:
             type: integer
             description: Number of audio channels (typically 1).
+          input_audio_format:
+            type: string
+            description: |
+              The input format resolved for this session, as an
+              `<encoding>_<rate>` token. Read it back to confirm the server
+              understood what you are sending before you send audio.
+            example: pcm_24000
+          output_audio_format:
+            type: string
+            description: The output format resolved for this session.
+            example: pcm_24000
         examples:
           - value:
               type: session.created
@@ -497,10 +524,13 @@ components:
               - `websocket_closed` — the WebSocket dropped.
               - `ended` — the agent pipeline ended the session (e.g. the agent
                 hung up or the conversation completed).
+              - `setup_failed` — the session opened but the agent worker could
+                not be queued.
 
-              Fatal setup/auth failures do **not** produce `session.closed` —
-              the server emits an `error` and closes the socket with code 4000
-              instead.
+              A failure *before* the session opens produces no `session.closed`:
+              the server emits an `error` and closes with code 4000. The
+              `setup_failed` path above fails *after* the session is open, so it
+              sends `session.closed` and then the `error` and the 4000 close.
         examples:
           - value:
               type: session.closed
@@ -715,9 +745,13 @@ components:
             description: |
               Machine-readable error code. Values emitted by the gateway:
               `invalid_event` (a client message failed validation),
+              `invalid_json` (the frame was not JSON at all),
               `no_session` (message received before the session was ready),
-              `internal_error`, or the HTTP status code of a setup failure as a
-              string (e.g. `401`, `400`, `503`).
+              `too_many_updates`, `worker_not_ready`, `internal_error`, or the
+              HTTP status code of a setup failure as a string (e.g. `401`, `400`,
+              `503`). A setup failure after the handshake arrives this way rather
+              than as an HTTP status - an unknown `agent_id`, for example, is
+              `code: "404"` followed by close code 4000.
           message:
             type: string
             description: Human-readable error message.
