@@ -51,7 +51,6 @@ paths:
         curl -X POST "https://api.smallest.ai/waves/v1/tts" \
           -H "Authorization: Bearer $SMALLEST_API_KEY" \
           -H "Content-Type: application/json" \
-          -H "Accept: audio/wav" \
           -d '{
             "text": "Hello from Waves TTS.",
             "voice_id": "magnus",
@@ -65,7 +64,6 @@ paths:
         curl -X POST "https://api.smallest.ai/waves/v1/tts" \
           -H "Authorization: Bearer $SMALLEST_API_KEY" \
           -H "Content-Type: application/json" \
-          -H "Accept: audio/wav" \
           -d '{
             "text": "Hello from the Lightning v3.1 Pro pool.",
             "voice_id": "meher",
@@ -80,7 +78,6 @@ paths:
         curl -X POST "https://api.smallest.ai/waves/v1/tts" \
           -H "Authorization: Bearer $SMALLEST_API_KEY" \
           -H "Content-Type: application/json" \
-          -H "Accept: audio/wav" \
           -d '{
             "text": "Good morning, this is a Pro voice speaking.",
             "voice_id": "meher",
@@ -96,7 +93,6 @@ paths:
         curl -X POST "https://api.smallest.ai/waves/v1/tts" \
           -H "Authorization: Bearer $SMALLEST_API_KEY" \
           -H "Content-Type: application/json" \
-          -H "Accept: audio/wav" \
           -d '{
             "text": "Namaste, this is an Indian-accented Pro voice.",
             "voice_id": "meher",
@@ -109,20 +105,18 @@ paths:
 
         ## Common gotchas
 
-        - **Set `Accept: audio/wav`.** Omitting it can return an empty or unplayable response.
+        - **The `Accept` request header is ignored.** Only the `output_format` body field controls what is returned. No content negotiation is performed. The response `Content-Type` header is set per format automatically (see the 200 response for the exact mapping).
         - **Pair voice IDs with the right model.** Voice catalogs differ between `lightning_v3.1` and `lightning_v3.1_pro`. The API does not reject mismatched pairings, but using a Pro-only `voice_id` with `model=lightning_v3.1` (or omitting `model`) can return wrong or hallucinated audio. Pair Pro voices with `model=lightning_v3.1_pro`; standard catalog voices with `model=lightning_v3.1` (the default).
         - **Cloned voices** (`voice_*`) work with the pool they were cloned onto. The voice-cloning API accepts `model: lightning-v3.1` (default) or `lightning-v3.1-pro`; pair the resulting `voice_id` with the matching TTS `model` (`lightning_v3.1` or `lightning_v3.1_pro`). Check the clone's `modelIds` if unsure.
         - **44.1 kHz output** is supported but most playback environments are happy with 24 kHz — drop the sample rate if bandwidth matters.
       parameters:
       - name: Accept
         in: header
-        required: true
+        required: false
         schema:
           type: string
-          enum:
-          - audio/wav
-          default: audio/wav
-        description: Must be `audio/wav` to receive binary audio. Required for proper playback.
+        description: |
+          **Ignored.** Content negotiation is not implemented on this endpoint. Only the `output_format` body field controls what is returned. The response `Content-Type` is set per format automatically (see 200 response).
       - name: x-expire-content
         in: header
         required: false
@@ -188,8 +182,22 @@ paths:
                   speed: 1.0
       responses:
         '200':
-          description: Synthesized speech retrieved successfully.
+          description: |
+            Synthesized speech. The response body is raw audio in the format requested via the `output_format` body field. The response `Content-Type` header maps to the requested format:
+
+            | `output_format` | Content-Type |
+            |---|---|
+            | `wav` | `audio/wav` |
+            | `mp3` | `audio/mpeg` |
+            | `ulaw`, `alaw` | `audio/basic` |
+            | `pcm` | `application/octet-stream` |
           headers:
+            Content-Type:
+              schema:
+                type: string
+                enum: [audio/wav, audio/mpeg, audio/basic, application/octet-stream]
+              description: |
+                Set per `output_format`: `wav` -> `audio/wav`; `mp3` -> `audio/mpeg`; `ulaw`/`alaw` -> `audio/basic`; `pcm` -> `application/octet-stream`.
             X-Session-Id:
               schema:
                 type: string
@@ -211,7 +219,13 @@ paths:
               schema:
                 type: string
                 format: binary
-                description: A PCM int16 WAV file at the specified sample rate.
+                description: |
+                  Audio bytes in the format requested via `output_format`:
+
+                  - `wav`: RIFF/WAVE container, PCM int16 at the requested `sample_rate`
+                  - `mp3`: MPEG-1 Layer III (128 kbps, mono, at the requested `sample_rate`)
+                  - `pcm`: raw signed 16-bit little-endian samples, no container
+                  - `ulaw` / `alaw`: raw G.711 samples, no container
         '400':
           description: Bad request.
           content:
@@ -582,6 +596,22 @@ components:
             playable in browsers and most media players. The server default
             is `pcm` when the field is omitted — the API playground uses
             `mp3` so the generated audio is directly playable.
+
+            **The response `Content-Type` header is always `audio/wav`, even
+            when `output_format` is `mp3`, `pcm`, `ulaw`, or `alaw`.** The
+            bytes in the body match the requested format (a `mp3` request
+            returns MPEG audio: `file(1)` reports `MPEG ADTS, layer III`,
+            and the payload starts with the `ID3` tag or a `0xFF Fx`
+            frame-sync byte). Consumers that MIME-sniff — WhatsApp Cloud
+            API media upload, some browser `<audio>` implementations,
+            certain S3 uploaders — need to override the MIME on their side:
+            for `mp3` use `audio/mpeg`, for `wav` use `audio/wav`, for
+            `ulaw` / `alaw` use `audio/basic`, for `pcm` there is no
+            registered MIME (treat as raw signed 16-bit little-endian PCM
+            at the requested `sample_rate`).
+
+            The request `Accept` header is not honored on this endpoint;
+            only `output_format` in the body controls what is returned.
           default: pcm
           example: mp3
           enum:

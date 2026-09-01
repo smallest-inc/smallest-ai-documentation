@@ -1,0 +1,16 @@
+---
+title: "TTS API-ref: response `Content-Type` is now set per `output_format`"
+---
+
+The synchronous TTS endpoint (`POST /waves/v1/tts`) now returns a `Content-Type` header that matches the requested `output_format`:
+
+| `output_format` | `Content-Type` |
+|---|---|
+| `wav` | `audio/wav` |
+| `mp3` | `audio/mpeg` |
+| `ulaw`, `alaw` | `audio/basic` |
+| `pcm` | `application/octet-stream` |
+
+Consumers that MIME-sniffed the response header (WhatsApp Cloud API media upload, some browsers, some S3 uploaders) no longer need a client-side override; the header is correct on the wire.
+
+The API reference now documents the mapping on the `200` response block and on the `Content-Type` response header. The request `Accept` header is still ignored; only the `output_format` body field controls what is returned.
