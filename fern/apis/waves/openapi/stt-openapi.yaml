@@ -104,7 +104,6 @@ paths:
         - **`model` is required.** Missing or invalid values return `400` with an enum-validation error.
         - **Pulse Pro is English only.** Pass `language=en`. Other language codes are accepted at the wire level but produce unpredictable output.
         - **Pulse Pro does not support audio-by-URL.** Send raw bytes or use `?model=pulse` for the URL flow.
-        - **Async (webhook) mode is Pulse Pro only.** Pulse runs sync only on this endpoint.
         - **Max payload 250 MB.** Larger requests return `413`. Compress to mono 16 kHz PCM if you are close to the limit; quality is unaffected.
       operationId: transcribe
       security:
@@ -201,7 +200,7 @@ paths:
           type: string
           format: uri
         description: |
-          Pulse Pro only. If set, the response is `200` with `{"status": "processing", "request_id": "..."}` immediately, and the full transcription is delivered to this URL when ready. Use for long files where you do not want to hold an HTTP connection open.
+          If set, the response is `200` with `{"status": "processing", "request_id": "..."}` immediately, and the full transcription is delivered to this URL when ready. Use for long files where you do not want to hold an HTTP connection open.
       - name: webhook_method
         in: query
         required: false
@@ -209,13 +208,13 @@ paths:
           type: string
           enum: [GET, POST]
           default: POST
-        description: HTTP method to use when calling the webhook. Pulse Pro only.
+        description: HTTP method to use when calling the webhook.
       - name: webhook_extra
         in: query
         required: false
         schema:
           type: string
-        description: Arbitrary metadata returned to the webhook in addition to the transcription payload. Pulse Pro only.
+        description: Arbitrary metadata returned to the webhook in addition to the transcription payload.
       - name: redact_pii
         in: query
         required: false
