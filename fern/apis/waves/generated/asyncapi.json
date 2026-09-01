@@ -1,0 +1,543 @@
+{
+  "asyncapi": "3.0.0",
+  "info": {
+    "title": "Waves TTS WebSocket API",
+    "version": "1.0.0",
+    "description": "Engineering-owned WebSocket contract generated from the same Zod schema used by the runtime controller."
+  },
+  "defaultContentType": "application/json",
+  "servers": {
+    "production": {
+      "host": "api.smallest.ai",
+      "pathname": "/waves/v1/tts/live",
+      "protocol": "wss",
+      "security": [
+        {
+          "$ref": "#/components/securitySchemes/bearerAuth"
+        }
+      ]
+    }
+  },
+  "channels": {
+    "ttsStream": {
+      "address": "/waves/v1/tts/live",
+      "servers": [
+        {
+          "$ref": "#/servers/production"
+        }
+      ],
+      "messages": {
+        "ttsRequest.message": {
+          "name": "TtsRequest",
+          "payload": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TtsRequest"
+              },
+              {
+                "$ref": "#/components/schemas/TtsKeepAlive"
+              }
+            ]
+          }
+        },
+        "ttsResponse.message": {
+          "name": "TtsResponse",
+          "payload": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TtsChunk"
+              },
+              {
+                "$ref": "#/components/schemas/TtsComplete"
+              },
+              {
+                "$ref": "#/components/schemas/TtsWordTimestamp"
+              },
+              {
+                "$ref": "#/components/schemas/TtsError"
+              },
+              {
+                "$ref": "#/components/schemas/TtsPong"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "operations": {
+    "TtsRequest": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/ttsStream"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ttsStream/messages/ttsRequest.message"
+        }
+      ]
+    },
+    "TtsResponse": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ttsStream"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ttsStream/messages/ttsResponse.message"
+        }
+      ]
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API key"
+      }
+    },
+    "schemas": {
+      "TtsRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 8000
+          },
+          "voice_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "lightning_v3.1",
+              "lightning_v3.1_pro",
+              "lightning_v3.1_pro_07_26"
+            ]
+          },
+          "speed": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 2,
+            "default": 1,
+            "description": "Speaking-speed multiplier."
+          },
+          "sample_rate": {
+            "type": "number",
+            "default": 44100,
+            "description": "Output sample rate in Hz: 8000, 16000, 24000, or 44100.",
+            "enum": [
+              8000,
+              16000,
+              24000,
+              44100
+            ]
+          },
+          "save_history": {
+            "type": "boolean",
+            "default": false,
+            "description": "Save this synthesis in history."
+          },
+          "language": {
+            "type": "string",
+            "default": "auto",
+            "description": "Synthesis language or auto detection.",
+            "enum": [
+              "en",
+              "hi",
+              "mr",
+              "kn",
+              "ta",
+              "bn",
+              "gu",
+              "de",
+              "fr",
+              "es",
+              "it",
+              "pl",
+              "nl",
+              "ru",
+              "ar",
+              "he",
+              "sv",
+              "ml",
+              "te",
+              "pt",
+              "pa",
+              "or",
+              "auto",
+              "el",
+              "fi",
+              "no",
+              "zh",
+              "id",
+              "ja",
+              "ko",
+              "ms",
+              "tr",
+              "vi"
+            ]
+          },
+          "number_pronunciation_language": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "math_notation": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false
+          },
+          "output_format": {
+            "type": "string",
+            "enum": [
+              "wav",
+              "ulaw",
+              "alaw",
+              "pcm",
+              "mp3"
+            ],
+            "default": "pcm",
+            "description": "Audio encoding for each returned chunk."
+          },
+          "add_wav_header": {
+            "type": "boolean",
+            "default": false,
+            "description": "Prepend a WAV header when returning compatible audio."
+          },
+          "pronunciation_dicts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            },
+            "description": "Pronunciation dictionary IDs to apply."
+          },
+          "enhancement": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "enum": [
+              0,
+              1,
+              2
+            ]
+          },
+          "similarity": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "word_timestamps": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false
+          },
+          "request_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_\\-.]+$",
+            "description": "Client request ID, echoed as external_request_id."
+          },
+          "session_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_\\-.]+$",
+            "description": "Client session ID, echoed as external_session_id."
+          },
+          "max_buffer_flush_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1000,
+            "default": 0,
+            "description": "Flush the legacy text buffer after this delay."
+          },
+          "flush": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false,
+            "description": "Flush buffered text now."
+          },
+          "continue": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false,
+            "description": "Signals that more text is coming for this request or context."
+          },
+          "cancel_request": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false,
+            "description": "Cancel the active synthesis request."
+          },
+          "complete_backoff_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 10000,
+            "default": 4000,
+            "description": "Delay before emitting a completion frame."
+          },
+          "internal_voice_id": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false
+          },
+          "context_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_\\-.]+$",
+            "description": "Groups streamed text fragments into one prosodically continuous context."
+          },
+          "max_buffer_delay_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 5000,
+            "default": 3000,
+            "description": "Maximum time to hold a continuation fragment for a sentence boundary."
+          },
+          "context_close": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false,
+            "description": "Flush and release a continuation context."
+          }
+        }
+      },
+      "TtsChunk": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "external_session_id": {
+            "type": "string"
+          },
+          "external_request_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "chunk"
+            ]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "audio": {
+                "type": "string",
+                "description": "Base64-encoded audio bytes."
+              }
+            },
+            "required": [
+              "audio"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "data"
+        ]
+      },
+      "TtsComplete": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "external_session_id": {
+            "type": "string"
+          },
+          "external_request_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "TtsWordTimestamp": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "external_session_id": {
+            "type": "string"
+          },
+          "external_request_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "word_timestamp"
+            ]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number"
+              },
+              "word": {
+                "type": "string"
+              },
+              "start": {
+                "type": "number"
+              },
+              "end": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "word",
+              "start",
+              "end"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "data"
+        ]
+      },
+      "TtsError": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "external_session_id": {
+            "type": "string"
+          },
+          "external_request_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "error"
+            ]
+          },
+          "error_code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "message"
+        ]
+      },
+      "TtsPong": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "pong"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "TtsKeepAlive": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "ping",
+              "keepalive",
+              "keep_alive",
+              "keep-alive"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
+      }
+    }
+  },
+  "x-smallest-source": {
+    "repository": "waves-platform",
+    "hash": "0208d63fd3bfbf05",
+    "files": [
+      "src/contracts/tts.contract.ts",
+      "src/routes/pii/pii.audio.schema.ts",
+      "src/routes/pii/pii.route.ts",
+      "src/routes/pii/pii.schema.ts",
+      "src/routes/speech/tts/lightning-v3/speech/tts.routes.ts",
+      "src/services/websocket.ts"
+    ]
+  }
+}
