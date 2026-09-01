@@ -4806,11 +4806,14 @@ paths:
                 cpsLimit:
                   type: number
                   minimum: 1
+                  maximum: 50
                   default: 1
                   description: |
                     Calls-per-second cap for this imported trunk. Defaults to 1 CPS (the
-                    safe floor for an unknown trunk). Capped server-side at the
-                    `CUSTOM_NUMBER_CPS_CEILING`. Every imported number is always paced.
+                    safe floor for an unknown trunk). Values above 50 are rejected with
+                    `"CPS limit cannot exceed 50"`; values below 1 are rejected with
+                    `"CPS limit must be at least 1"`. Every imported number is always
+                    paced at this rate.
                   example: 1
             example:
               phoneNumber: "+14155551234"
@@ -14308,7 +14311,7 @@ components:
       description: |
         The type of workflow configuration.
         - `single_prompt` — simple prompt-based agent (default).
-        - `workflow_graph` — node-based visual workflow.
+        - `workflow_graph` — node-based visual workflow. **Restricted:** requires the `conversational-agents` org flag. Requests without that flag receive HTTP 403 `"Conversational Flow agents are no longer available for your organization."` The Zod validator still accepts this enum value on any org, but the authorization middleware gates it.
         - `multi_agents` — multi-agent orchestration (restricted; requires `slmModel` to be one of `[electron, gpt-5.2-azure]`).
 
     WorkflowGraphData:
