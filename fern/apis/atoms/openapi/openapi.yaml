@@ -11246,9 +11246,9 @@ paths:
         - Web Call
       summary: Start a web chat session
       description: |
-        Mints a short-lived LiveKit access token and creates a room the browser client can
+        Mints a short-lived session access token and creates a room the browser client can
         join to have a text-first chat with the agent. The response includes the room name,
-        the LiveKit host to connect to, a `conversationId` for correlation, and a `callId`
+        the WebSocket host to connect to, a `conversationId` for correlation, and a `callId`
         that shows up in call logs. Pair with the [Web SDK](/voice-agents/developer-guide/client-libraries)
         to render the session in-browser.
       operationId: startWebChatConversation
@@ -11274,13 +11274,13 @@ paths:
                 $ref: '#/components/schemas/WebSessionResponse'
               examples:
                 success:
-                  summary: LiveKit session ready for the browser client
+                  summary: Session ready for the browser client
                   value:
                     status: true
                     data:
                       token: "eyJhbGciOiJIUzI1NiJ9.eyJtZXRhZGF0YSI6IntcIm9yZ2FuaXphdGlvbklkXCI6XCI2OTU2MTg5NmEzN2ZkMjE0YjlhOGQzM2NcIn0iLCJ2aWRlbyI6eyJyb29tSm9pbiI6dHJ1ZSwicm9vbSI6ImRlZTkyMjNhLTQ3NTEtNDlhOS1iY2JjLWNiMzVjNWE4MzcxZCJ9LCJleHAiOjE3ODYxNTk1NjR9.Tn9KCxhnmnjAFQPRWP6XMkjKYnhBiISI6VqUOIqOsRQ"
                       roomName: "dee9223a-4751-49a9-bcbc-cb35c5a8371d"
-                      host: "wss://atoms-prod-evcaw70g.livekit.cloud"
+                      host: "wss://rtc.example-provider.com"
                       conversationId: "IyF-GCRiprATI5rx4lIdvg"
                       callId: "CALL-1786159503332-8387f2"
         '400':
@@ -11302,7 +11302,7 @@ paths:
         - Web Call
       summary: Start a web call session
       description: |
-        Mints a short-lived LiveKit access token and creates a room the browser client can
+        Mints a short-lived session access token and creates a room the browser client can
         join to have a voice-first call with the agent. Same response shape as `/conversation/chat`;
         the difference is the audio track defaults on the client side. Pair with the
         [Web SDK](/voice-agents/developer-guide/client-libraries) to open the room in-browser.
@@ -11329,13 +11329,13 @@ paths:
                 $ref: '#/components/schemas/WebSessionResponse'
               examples:
                 success:
-                  summary: LiveKit session ready for the browser client
+                  summary: Session ready for the browser client
                   value:
                     status: true
                     data:
                       token: "eyJhbGciOiJIUzI1NiJ9.eyJtZXRhZGF0YSI6IntcIm9yZ2FuaXphdGlvbklkXCI6XCI2OTU2MTg5NmEzN2ZkMjE0YjlhOGQzM2NcIn0iLCJ2aWRlbyI6eyJyb29tSm9pbiI6dHJ1ZSwicm9vbSI6IjIwOWNkOGM3LTdmZjQtNGFmYy1iNWQ1LWY3MDQ0OGI1Y2UwNyJ9LCJleHAiOjE3ODYxNTk1ODl9.jf5NM4fH79_d6iBb2xTvX5JIo_PmVpjeXWOugoDLQVc"
                       roomName: "209cd8c7-7ff4-4afc-b5d5-f70448b5ce07"
-                      host: "wss://atoms-prod-evcaw70g.livekit.cloud"
+                      host: "wss://rtc.example-provider.com"
                       conversationId: "w3fmaal3fKnzNQJ_CHfosw"
                       callId: "CALL-1786159527700-838803"
         '400':
@@ -11562,16 +11562,16 @@ components:
           properties:
             token:
               type: string
-              description: Short-lived LiveKit access token. Pass on the browser client when connecting to `host`.
+              description: Short-lived session access token. Pass on the browser client when connecting to `host`.
               example: "eyJhbGciOiJIUzI1NiJ9..."
             roomName:
               type: string
-              description: LiveKit room UUID. Pre-created for this session.
+              description: Session room ID. Pre-created for this session.
               example: "dee9223a-4751-49a9-bcbc-cb35c5a8371d"
             host:
               type: string
-              description: LiveKit WebSocket URL to connect to.
-              example: "wss://atoms-prod-evcaw70g.livekit.cloud"
+              description: WebSocket URL to connect to.
+              example: "wss://rtc.example-provider.com"
             conversationId:
               type: string
               description: Correlates browser events, transcripts, and post-call analytics.
@@ -13550,7 +13550,7 @@ components:
           type: string
         token:
           type: string
-          description: LiveKit access token. Returned for `webcall` and `chat` modes only.
+          description: Session access token. Returned for `webcall` and `chat` modes only.
         roomName:
           type: string
           description: Returned for `webcall` and `chat` modes only.
@@ -15111,7 +15111,7 @@ tags:
       organization scoped by the API key. Owner role required for the rename.
   - name: Web Call
     description: |
-      Mint a short-lived LiveKit access token and pre-provision a room the browser client can
+      Mint a short-lived session access token and pre-provision a room the browser client can
       join to have a chat or a voice call with an agent. Pair with the Web SDK to render the
       session in-browser. `/conversation/chat` and `/conversation/webcall` share the same
       request and response shapes; they differ in the default media track on the client.
