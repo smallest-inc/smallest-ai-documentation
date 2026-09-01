@@ -1,0 +1,305 @@
+---
+title: "CLI Reference"
+sidebarTitle: "CLI Reference"
+description: "Every smallestai command group: auth, agents, agent-crew, calls, campaigns, phone-numbers, models, mcp, and version."
+---
+
+
+import { CodingAgentCallout } from "@/components/CodingAgentCallout";
+
+`smallestai` is the command-line interface to the Smallest AI platform. It ships with the Python SDK, dogfoods the same published client the SDK exposes, and covers the whole workflow: log in, build and deploy crew code, place calls, manage campaigns and phone numbers, and run text-to-speech and speech-to-text.
+
+## Install
+
+```bash
+pip install smallestai
+```
+
+The entry point is `smallestai`. Run it with no arguments to see the grouped command list; run any group with `--help` for its subcommands.
+
+```bash
+smallestai                 # grouped welcome + command list
+smallestai --help          # full help
+smallestai <group> --help  # e.g. smallestai calls --help
+```
+
+## Version
+
+```bash
+smallestai version    # prints the installed version
+smallestai --version  # same, as a flag (-V also works)
+```
+
+Both print the installed `smallestai` version. Include it in any support request.
+
+## Authentication
+
+Every command resolves credentials the same way, in this order:
+
+1. **`SMALLEST_API_KEY`** environment variable. Takes precedence. This is the CI / non-interactive path.
+2. **`~/.smallestai/credentials.json`**, written by `smallestai auth login`.
+
+If neither is present, a command that needs auth exits with an error before making any request.
+
+**Base URL.** Set `SMALLEST_BASE_URL` to target a non-production environment (self-hosted, staging). It defaults to `https://api.smallest.ai`.
+
+<Note>
+Live-streaming commands (`calls events`, `calls transcript --follow`, `agent-crew logs`) use the session token stored by `auth login`. Set up interactive login for those, even if `SMALLEST_API_KEY` is set for the rest.
+</Note>
+
+```bash
+# Interactive
+smallestai auth login
+
+# Non-interactive (CI): pipe the key, or set the env var
+echo "$SMALLEST_API_KEY" | smallestai auth login
+# or skip login entirely and let SMALLEST_API_KEY resolve per-command
+```
+
+## Machine-readable output
+
+Read commands support `--json` for raw JSON you can pipe into `jq` or consume from a script. Where it applies it is called out per command below.
+
+```bash
+smallestai calls list --json | jq '.[].call_id'
+```
+
+## Command groups
+
+The top-level help groups commands by what they do:
+
+| Group | What it does |
+|---|---|
+| `agent-crew` | Init, deploy, and manage crew (custom-LLM) voice agents |
+| `agents` | Create, inspect, and call voice agents |
+| `calls` | Inspect call logs, transcripts, and recordings |
+| `campaigns` | Manage outbound calling campaigns |
+| `phone-numbers` | Search, rent, and manage phone numbers |
+| `models` | Text-to-speech, speech-to-text, and voices |
+| `mcp` | Set up the Smallest AI MCP server |
+| `auth` | Log in and manage credentials |
+
+---
+
+## auth
+
+Manage credentials for every other command.
+
+```bash
+smallestai auth login    # store an API key (env var, prompt, or piped stdin)
+smallestai auth logout   # clear stored credentials
+```
+
+`login` prefers `SMALLEST_API_KEY` if set (fully non-interactive), then a piped stdin key, then an interactive prompt. It validates the key against your account before storing it.
+
+---
+
+## agents
+
+Create, inspect, and place calls from your agents. See the full walkthrough in the [Agents CLI guide](/voice-agents/developer-guide/get-started/agents-cli).
+
+| Command | Description |
+|---|---|
+| `agents list` | List agents in your org. Supports `--json`. |
+| `agents get <agent_id>` | Show one agent's config. Supports `--json`. |
+| `agents dashboard <agent_id>` | Print the dashboard URL for the agent. |
+| `agents phone-status <agent_id>` | Show whether a phone number is attached. Supports `--json`. |
+| `agents create <name>` | Create an agent. |
+| `agents call <agent_id> --to <e164>` | Place an outbound call from the agent. |
+
+```bash
+smallestai agents list --json
+smallestai agents get <agent_id>
+smallestai agents call <agent_id> --to +14155550100
+```
+
+`agents create` takes `--first-message`, `--prompt`, `--description`, and `--allow-inbound`. `agents call` takes `--to` (required, E.164) and optional `--from-product-id` to dial from a specific rented number.
+
+---
+
+## agent-crew
+
+Build, deploy, and manage crew (custom-LLM) agents. A crew is your Python code that takes over the LLM turn for an agent. See the [Quickstart](/voice-agents/developer-guide/get-started/quickstart) and [Overview](/voice-agents/developer-guide/get-started/overview) for the full lifecycle.
+
+| Command | Description |
+|---|---|
+| `agent-crew init` | Link a crew agent to this directory (writes `.smallestai/config.toml`). |
+| `agent-crew deploy` | Package the code and deploy it as a new build. |
+| `agent-crew builds` | List builds; make live, take down, or manage one. Supports `--json`. |
+| `agent-crew logs` | Stream a build's compile + deploy logs live. |
+| `agent-crew doctor` | Check a crew agent's config for common gotchas. Supports `--json`. |
+| `agent-crew chat` | Chat with a locally running or deployed crew over WebSocket. |
+
+**`--agent-id`.** `init`, `deploy`, `builds`, `logs`, and `doctor` accept `--agent-id <id>` to target an agent directly instead of reading the one linked in the current directory. This is what makes the crew commands usable from CI or outside a project folder. Precedence is explicit `--agent-id` first, then the linked project agent.
+
+```bash
+# Inside a linked project directory
+smallestai agent-crew init                 # interactive picker
+smallestai agent-crew init --agent-id <id> # non-interactive (required in CI)
+smallestai agent-crew deploy               # zip + upload; polls to a terminal state
+smallestai agent-crew builds               # list, then Make Live / Take Down
+smallestai agent-crew logs                 # stream the latest build's logs
+smallestai agent-crew doctor               # config lint
+
+# From anywhere, targeting an agent directly
+smallestai agent-crew builds --agent-id <id> --json
+smallestai agent-crew deploy --agent-id <id> --entry-point app.py
+```
+
+**init** links an agent to the project. Without `--agent-id` it shows an interactive picker, so it needs a real terminal; in CI, pass `--agent-id`.
+
+**deploy** zips the project (`server.py` + `requirements.txt` at the root is the best-tested layout; `src/` + `pyproject.toml` also works), uploads it, and polls the build to a terminal state instead of returning at "queued". It scans your code for referenced environment variables and warns about ones the pod will not have; ship them in a `.env` at the project root and `load_dotenv()` at startup. Use `--entry-point` / `-e` to override the default `server.py`.
+
+**builds** lists builds and lets you make one live, take one down, or manage a specific build by ID. `--json` emits the build list and skips the interactive picker (JSON implies non-interactive). Making a live build not-live takes the agent offline, so that action confirms first.
+
+**logs** streams a build's compile and deploy logs in real time. With no build ID it streams the most recent build for the agent. Use it to debug a failed deploy or watch one in progress. You need at least one build for this to have anything to stream.
+
+**doctor** inspects the agent's live config and flags the mistakes that most often stop a crew from working: no live build, a non-`single_prompt` workflow type, PII redaction left on, or `transfer_call` toggled in the dashboard Tools panel (ignored for crews). See [Config Ownership](/voice-agents/developer-guide/build/agent-crews/config-ownership) for what a crew controls versus the platform.
+
+---
+
+## calls
+
+Read-only inspection of call logs, details, transcripts, and recordings. To place a call use `agents call`.
+
+| Command | Description |
+|---|---|
+| `calls list` | List recent calls, most recent first. Supports `--json`. |
+| `calls get <call_id>` | Show one call's details (status, duration, cost, recording). Supports `--json`. |
+| `calls transcript <call_id>` | Print the transcript, one turn per line. `--follow`/`-f` streams live. Supports `--json`. |
+| `calls events <call_id>` | Stream a live call's events as they happen. Supports `--json`. |
+| `calls recording <call_id>` | Print the call's recording URL(s). |
+
+```bash
+smallestai calls list --limit 20 --json
+smallestai calls get <call_id>
+smallestai calls transcript <call_id>
+smallestai calls transcript <call_id> --follow   # live, call must be in progress
+smallestai calls events <call_id>                # live turns, latency, node hops, tool calls
+smallestai calls recording <call_id>
+```
+
+`calls list` filters with `--agent-id`, `--type` (`telephony_inbound` / `telephony_outbound` / `webcall`), `--status`, and `--limit`.
+
+**Live vs finished.** `calls events` and `calls transcript --follow` need a call that is currently in progress; they stream over the session token from `auth login`. For a finished call, use `calls transcript` (no `--follow`) or `calls get`. Streaming a finished call returns a clear "not live" message pointing you at the final transcript.
+
+---
+
+## campaigns
+
+Manage outbound calling campaigns.
+
+| Command | Description |
+|---|---|
+| `campaigns list` | List campaigns. Filter with `--status`, `--search`, `--page`. Supports `--json`. |
+| `campaigns get <id>` | Show one campaign's details. Supports `--json`. |
+| `campaigns create` | Create a campaign. |
+| `campaigns pause <id>` | Pause a running campaign. |
+| `campaigns resume <id>` | Start or resume a campaign. |
+| `campaigns delete <id>` | Delete a campaign (confirms unless `--yes`). |
+
+```bash
+smallestai campaigns list --status running --json
+smallestai campaigns create \
+  --name "Q3 outreach" \
+  --audience-id <id> \
+  --agent-id <id> \
+  --scheduled-at 2026-08-10T15:30:00
+smallestai campaigns delete <id> --yes
+```
+
+`create` requires `--name`, `--audience-id`, and `--agent-id`. Optional flags: `--description`, `--phone-number-ids` (comma-separated), `--scheduled-at` (ISO 8601), `--max-retries`, `--retry-delay`. An invalid `--scheduled-at` exits with a clear error.
+
+---
+
+## phone-numbers
+
+Search for, rent, release, and import phone numbers.
+
+| Command | Description |
+|---|---|
+| `phone-numbers list` | List your phone numbers. Supports `--json`. |
+| `phone-numbers search` | Search rentable numbers by country. Supports `--json`. |
+| `phone-numbers rent` | Rent a number (billable; confirms unless `--yes`). |
+| `phone-numbers release` | Release a rented number (confirms unless `--yes`). |
+| `phone-numbers import-sip` | Import an external SIP number. |
+
+```bash
+smallestai phone-numbers search --country-code US --provider twilio --json
+smallestai phone-numbers rent --phone-number +14155550100 --provider twilio --yes
+smallestai phone-numbers release --product-id <id>
+```
+
+`search` requires `--country-code` and takes `--provider` (`plivo` / `twilio`, default `twilio`) and `--area-code`. `rent` and `release` are stateful, so they prompt for confirmation unless you pass `--yes`/`-y` (which doubles as the CI non-interactive flag).
+
+---
+
+## models
+
+Text-to-speech, speech-to-text, and voices.
+
+| Command | Description |
+|---|---|
+| `models voices` | List available voices for a model. Supports `--json`. |
+| `models clones` | List your cloned voices. Supports `--json`. |
+| `models tts <text>` | Synthesize speech and write it to a file. |
+| `models stt <file>` | Transcribe an audio file. Supports `--json`. |
+
+```bash
+smallestai models voices --model lightning-v3.1 --json
+smallestai models tts "Hello there" --voice-id <id> --out hello.wav
+smallestai models stt recording.wav --language en --diarize
+```
+
+<Note>
+The get-voices endpoint uses the hyphen form (`lightning-v3.1`); the TTS endpoint uses the underscore form (`lightning_v3.1` / `lightning_v3.1_pro`). These are distinct API enums, not a typo, so each command defaults to its own.
+</Note>
+
+`tts` writes to `--out` (default `out.wav`) and takes `--voice-id` (required), `--model`, `--format` (`wav` / `mp3` / `pcm` / `ulaw` / `alaw`), `--sample-rate`, and `--speed`. `stt` takes `--model` (`pulse` / `pulse-pro`), `--language`, and `--diarize`.
+
+<Note>
+`models` was previously named `waves`. The old `smallestai waves …` name still works as a hidden alias, so existing scripts keep running.
+</Note>
+
+---
+
+## mcp
+
+Set up or run the Smallest AI MCP server, which gives Cursor, Claude, and other MCP clients native access to the platform.
+
+| Command | Description |
+|---|---|
+| `mcp` | Print setup instructions and the client config snippet. |
+| `mcp run` | Run the MCP server locally via `npx` (Node.js 18+). |
+| `mcp config` | Print the `mcp.json` config snippet. |
+
+```bash
+smallestai mcp          # setup instructions
+smallestai mcp config   # print the mcp.json snippet
+smallestai mcp run      # launch the server via npx
+```
+
+The MCP server reads `ATOMS_API_KEY`. `mcp run` bridges from `SMALLEST_API_KEY` if `ATOMS_API_KEY` is not set, so a single key works across the CLI and the MCP server.
+
+---
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Agents CLI" href="/voice-agents/developer-guide/get-started/agents-cli">
+    Deep-dive on the `agents` group with worked examples.
+  </Card>
+  <Card title="Quickstart Crew CLI" href="/voice-agents/developer-guide/get-started/quickstart">
+    Build, test, and deploy a crew from the terminal.
+  </Card>
+  <Card title="Config ownership: crew vs platform" href="/voice-agents/developer-guide/build/agent-crews/config-ownership">
+    What a crew build controls, and what stays on the platform.
+  </Card>
+  <Card title="Error handling" href="/voice-agents/developer-guide/get-started/error-handling">
+    Pre-deploy validation and the errors the CLI surfaces.
+  </Card>
+</CardGroup>
+
+<CodingAgentCallout />
+
+{/* coding-agent-callout-injected */}
