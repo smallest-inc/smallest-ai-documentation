@@ -1,0 +1,145 @@
+---
+title: "Google Calendar"
+description: "Give your voice agent live calendar scheduling through Google Calendar — check availability, book, reschedule, cancel, and list upcoming meetings during a call."
+icon: "calendar-check"
+---
+
+
+import { CodingAgentCallout } from "@/components/CodingAgentCallout";
+
+[Google Calendar](https://calendar.google.com/) is Google's scheduling and calendar management tool. Connect it to a Smallest AI agent so callers can check availability, book, reschedule, or cancel meetings, and your agent can look up what's coming up next — all on your primary calendar, without leaving the call.
+
+---
+
+## What your agent can do
+
+| Tool | What it does |
+|------|---------------|
+| **Check availability** | Looks up open slots on your primary calendar |
+| **Book meeting** | Creates a new event for a caller |
+| **Reschedule meeting** | Moves an existing event to a new time |
+| **Cancel meeting** | Cancels an existing event |
+| **List upcoming events** | Looks up what's already on the calendar |
+
+These are granted per agent from the Tools tab after you connect — you don't have to enable all five. Google Calendar is the only scheduling integration with a "what's on my calendar" tool.
+
+---
+
+## Connecting Google Calendar
+
+Unlike Cal.com and Calendly, Google Calendar connects via **OAuth** — no API key or token to generate or paste.
+
+<Steps>
+  <Step title="Click Connect">
+    Find Google Calendar on the Integrations page and click **Connect**.
+  </Step>
+  <Step title="Sign in with Google">
+    You'll be redirected to Google's sign-in screen.
+  </Step>
+  <Step title="Grant permissions">
+    Authorize Smallest AI to view and manage events on your calendar.
+  </Step>
+  <Step title="Verify the connection">
+    You should see "Connected" status with your Google account.
+  </Step>
+</Steps>
+
+---
+
+## Using Google Calendar in your agent's prompt
+
+```
+CALENDAR TOOLS (Google Calendar):
+Your agent can check availability, book, reschedule, or cancel
+meetings, and look up what's already scheduled.
+
+When the caller wants to schedule:
+1. Ask what they'd like to book.
+2. Ask for their preferred date.
+3. Check availability and offer 2-3 time slots.
+4. Confirm their selection before booking.
+5. Book the meeting and confirm the details out loud.
+```
+
+```
+Caller: "Can you move my meeting to Thursday afternoon?"
+
+Agent: "Sure — let me check what's on the calendar first."
+
+Agent calls: list_events
+Response: existing meeting found on Tuesday at 2:00 PM
+
+Agent: "I see your meeting Tuesday at 2 PM. What time Thursday works?"
+
+Caller: "3 PM."
+
+Agent calls: reschedule_meeting
+Response: reschedule confirmed
+
+Agent: "Done — you're now set for Thursday at 3 PM instead. Anything
+        else I can help with?"
+```
+
+---
+
+## Good to know
+
+<AccordionGroup>
+  <Accordion title="Operates on your primary calendar" icon="calendar">
+    Google Calendar tools check, book, reschedule, cancel, and list events on the connected account's **primary calendar** — not secondary or shared calendars.
+  </Accordion>
+  <Accordion title="Full reschedule support" icon="clock-rotate-left">
+    Unlike Calendly, Google Calendar has a real reschedule endpoint, so moving an existing meeting is a single action — no need to cancel and rebook.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Connection failed" icon="xmark">
+    **Possible causes:**
+    - Google sign-in was cancelled or denied
+    - OAuth token expired or was revoked
+
+    **Solutions:**
+    1. Reconnect the integration and complete the Google sign-in flow
+    2. Check that access hasn't been revoked under your Google Account's third-party access settings
+  </Accordion>
+  <Accordion title="No availability showing" icon="calendar-xmark">
+    **Possible causes:**
+    - No open slots on the primary calendar in the requested range
+    - Wrong Google account connected
+
+    **Solutions:**
+    1. Check availability directly in Google Calendar
+    2. Reconnect with the correct Google account
+  </Accordion>
+  <Accordion title="Event not created or updated" icon="plus">
+    **Possible causes:**
+    - Permissions were only partially granted
+    - API error
+
+    **Solutions:**
+    1. Reconnect Google Calendar and re-grant permissions
+    2. Check logs for the specific error
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Other Scheduling Integrations
+
+<CardGroup cols={2}>
+  <Card title="Cal.com" icon="calendar-check" href="/voice-agents/integrations/scheduling/cal-com">
+    Compare with the Cal.com integration
+  </Card>
+  <Card title="Calendly" icon="calendar-check" href="/voice-agents/integrations/scheduling/calendly">
+    Compare with the Calendly integration
+  </Card>
+</CardGroup>
+
+<CodingAgentCallout />
+
+{/* coding-agent-callout-injected */}
