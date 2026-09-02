@@ -11529,8 +11529,14 @@ paths:
       security:
         - BearerAuth: []
       description: |
-        Create a reusable tool in the org Tools library. Reference it from an agent
-        by adding its returned `toolId` to `toolRefs` on the agent config.
+        Create a reusable tool in the org Tools library. Two types are supported:
+        `api_call` and `client_tool` (system tools like transfer/end-call are
+        configured per-agent, not here). Reference it from an agent by adding its
+        returned `toolId` to `toolRefs` on the agent config.
+
+        Referencing a tool makes it available; it does not force use. The agent only
+        calls a tool when its prompt tells it to, so describe the tool's purpose and
+        when to trigger it in the agent's prompt.
       requestBody:
         required: true
         content:
@@ -14641,13 +14647,191 @@ components:
             type: object
             description: Tool configuration object
 
+    RegistryToolDefinition:
+      type: object
+      description: |
+        A reusable tool definition for the org Tools registry. Only two types are
+        registry tools: `api_call` (calls your API) and `client_tool` (runs in your
+        app over the websocket). The built-in/system tools — `transfer_call`,
+        `end_call`, `knowledge_base_search`, and the like — are configured per-agent
+        in the agent's Tools tab, not created here.
+      required: [type, name, description]
+      properties:
+        type:
+          type: string
+          enum: [api_call, client_tool]
+          description: The registry tool type.
+        name:
+          type: string
+          description: Unique name for the function (no spaces)
+          example: "end_call"
+        description:
+          type: string
+          description: Description of what the function does
+          example: "End the conversation when the user is satisfied"
+        enabled:
+          type: boolean
+          default: true
+          description: Whether the tool is enabled
+        url:
+          type: string
+          format: uri
+          description: "Required for api_call type. The URL to make the HTTP request to."
+          example: "https://api.example.com/orders"
+        method:
+          type: string
+          enum: [GET, POST, PUT, DELETE, PATCH]
+          description: "Required for api_call type. HTTP method to use."
+          example: "GET"
+        timeout:
+          type: integer
+          minimum: 1000
+          maximum: 30000
+          default: 5000
+          description: "Optional for api_call type. Request timeout in milliseconds (1000–30000)."
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: "Optional for api_call type. Static HTTP headers as a key/value map."
+          example:
+            Authorization: "Bearer TOKEN"
+            Content-Type: "application/json"
+        headersArray:
+          type: array
+          description: "Optional for api_call type. Headers as an array of key/value objects (alternative to `headers` map)."
+          items:
+            type: object
+            required: [key, value]
+            properties:
+              key:
+                type: string
+                example: "Authorization"
+              value:
+                type: string
+                example: "Bearer TOKEN"
+        queryParams:
+          type: array
+          description: "Optional for api_call type. Query parameters to include in the request URL. Values support variable templating like `{{order_id}}`."
+          items:
+            type: object
+            required: [key, value]
+            properties:
+              key:
+                type: string
+                example: "id"
+              value:
+                type: string
+                example: "{{order_id}}"
+        requestBody:
+          type: string
+          description: "Optional for api_call type. Raw request body as a JSON string. Supports variable templating."
+          example: '{"customer_id": "{{customer_id}}"}'
+        llmParameters:
+          type: array
+          description: "Optional for api_call type. Parameters the LLM can supply dynamically at runtime."
+          items:
+            type: object
+            required: [name, description, type]
+            properties:
+              name:
+                type: string
+                description: Parameter name
+              description:
+                type: string
+                description: What the parameter represents
+              type:
+                type: string
+                enum: [text, number, boolean, enum]
+              values:
+                type: array
+                items:
+                  type: string
+                description: "Required when type is `enum`. Allowed values."
+              required:
+                type: boolean
+                default: false
+        responseVariables:
+          type: array
+          description: "Optional for api_call type. Variables to extract from the API response into the agent's variable store."
+          items:
+            type: object
+            required: [variableName, jsonPath]
+            properties:
+              variableName:
+                type: string
+                description: Name to store the extracted value under
+                example: "orderStatus"
+              jsonPath:
+                type: string
+                description: JSON path to extract the value from the response
+                example: "$.data.status"
+          default: []
+        auth:
+          type: object
+          description: |
+            Optional for `api_call` type. Authentication for the outbound request.
+            Credentials are referenced **by secret name** (from the org Secrets vault,
+            see `POST /secret`), never inline. At call time the platform decrypts the
+            secret, injects it into the request, and strips the `auth` block before the
+            config reaches the runtime, cache, or webhooks. `token`, `value`, and
+            `password` below are secret names, not literal values.
+          required: [type]
+          properties:
+            type:
+              type: string
+              enum: [none, bearer, api_key, basic]
+              description: |
+                Auth scheme. `bearer` sends `Authorization: Bearer <secret>`; `api_key`
+                sends the secret in a header or query param you name; `basic` sends
+                `Authorization: Basic <base64(username:secret)>`.
+            token:
+              type: string
+              description: "For `bearer`: the name of the secret holding the token."
+              example: "ORDER_API_TOKEN"
+            name:
+              type: string
+              description: "For `api_key`: the header or query-param name to send the key under."
+              example: "X-API-Key"
+            location:
+              type: string
+              enum: [header, query]
+              description: "For `api_key`: whether the key is sent as a header or a query parameter."
+            value:
+              type: string
+              description: "For `api_key`: the name of the secret holding the key."
+              example: "SEARCH_API_KEY"
+            username:
+              type: string
+              description: "For `basic`: the name of the secret holding the username."
+            password:
+              type: string
+              description: "For `basic`: the name of the secret holding the password."
+        timeoutMs:
+          type: integer
+          minimum: 1000
+          maximum: 60000
+          default: 1000
+          description: "Optional for client_tool type. How long the agent waits for `function_call.result` before recovering verbally."
+        expectsResponse:
+          type: boolean
+          default: true
+          description: "Optional for client_tool type. When false, fire-and-forget — the app acts on the event and the agent does not wait for a result."
+        fillerPhrases:
+          type: array
+          description: "Optional for knowledge_base_search and client_tool types. Phrases spoken while the tool runs so the pause is not silent."
+          items:
+            type: string
+          default: []
+          example: ["Let me check that for you", "One moment please"]
+
     CreateToolRequest:
       type: object
       required: [definition]
       properties:
         definition:
           allOf:
-            - $ref: "#/components/schemas/Tool"
+            - $ref: "#/components/schemas/RegistryToolDefinition"
           description: |
             The tool body — the same shape used inside an agent's `tools[]`
             (discriminated on `type`). `api_call` is the most common; `client_tool`
