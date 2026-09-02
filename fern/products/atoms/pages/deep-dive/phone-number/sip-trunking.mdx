@@ -42,17 +42,17 @@ Media is separate and stays RTP over UDP regardless of signalling transport. Not
 
 ### Origination URL: what to send
 
-The URL your dashboard shows is a bare SIP URI:
+Copy the **SIP origination URL** from your dashboard under **Add phone number → SIP Trunking**. It is a bare SIP URI. Use whatever value the field shows; the exact host prefix in your account may differ from the example:
 
 ```
-sip:5rdbhjuwtlk.sip.livekit.cloud
+sip:YOUR_SIP_INGRESS.sip.smallest.ai
 ```
 
 **Append a transport parameter and a `+`-prefixed number when your provider sends INVITEs.** Two shapes work:
 
 ```
-sip:+91XXXXXXXXXX@5rdbhjuwtlk.sip.livekit.cloud;transport=tls   ← preferred, port 5061
-sip:+91XXXXXXXXXX@5rdbhjuwtlk.sip.livekit.cloud;transport=tcp   ← fallback, port 5060
+sip:+91XXXXXXXXXX@YOUR_SIP_INGRESS.sip.smallest.ai;transport=tls   ← preferred, port 5061
+sip:+91XXXXXXXXXX@YOUR_SIP_INGRESS.sip.smallest.ai;transport=tcp   ← fallback, port 5060
 ```
 
 If your provider only lets you paste the hostname, configure the transport in the trunk's SIP settings instead of in the URI.
@@ -69,7 +69,7 @@ Point inbound calls to your number at Smallest's SIP ingress using **TLS on 5061
 
 At a minimum:
 
-- **Destination URI**: `sip:+E164@5rdbhjuwtlk.sip.livekit.cloud;transport=tls`
+- **Destination URI**: `sip:+E164@YOUR_SIP_INGRESS.sip.smallest.ai;transport=tls`
 - **Transport**: TLS (or TCP)
 - **Codecs**: G.711 (PCMU / PCMA) and Opus are both accepted. Send whichever your provider prefers.
 - **DTMF**: RFC 2833 or SIP INFO. Both are read.
@@ -120,10 +120,10 @@ Once the number is imported and the agent is assigned:
 
 ### SIP Origination URL (inbound to us)
 
-The host your provider sends INVITEs to for calls arriving on **your** numbers. The URL from your dashboard (`sip:5rdbhjuwtlk.sip.livekit.cloud`) needs `;transport=tls` or `;transport=tcp` and the `+`-prefixed number:
+The host your provider sends INVITEs to for calls arriving on **your** numbers. The URL from your dashboard (`sip:YOUR_SIP_INGRESS.sip.smallest.ai`) needs `;transport=tls` or `;transport=tcp` and the `+`-prefixed number:
 
 ```
-sip:+E164@5rdbhjuwtlk.sip.livekit.cloud;transport=tls
+sip:+E164@YOUR_SIP_INGRESS.sip.smallest.ai;transport=tls
 ```
 
 ### SIP Termination URL (outbound from us)
@@ -154,10 +154,10 @@ Confirm with a `sipsak` OPTIONS ping after the change. Quote the URI, otherwise 
 
 ```bash
 # TCP
-sipsak -vv -s 'sip:5rdbhjuwtlk.sip.livekit.cloud;transport=tcp'
+sipsak -vv -s 'sip:YOUR_SIP_INGRESS.sip.smallest.ai;transport=tcp'
 
 # TLS
-sipsak -vv -s 'sips:5rdbhjuwtlk.sip.livekit.cloud'
+sipsak -vv -s 'sips:YOUR_SIP_INGRESS.sip.smallest.ai'
 ```
 
 You should see `SIP/2.0 200 OK` from the ingress. If OPTIONS times out on both TCP and TLS, the reachability problem is between your egress and our ingress (firewall, security group, routing), not on our side.
@@ -189,7 +189,7 @@ TCP and TLS carry SIP signalling reliably; there is no need for the RFC 3261 UDP
     listen=tcp:YOUR_IP:5060
     ```
 
-    Open port 5060 TCP inbound in your security group. Reload Kamailio and re-send INVITEs to `sip:+E164@5rdbhjuwtlk.sip.livekit.cloud;transport=tcp`.
+    Open port 5060 TCP inbound in your security group. Reload Kamailio and re-send INVITEs to `sip:+E164@YOUR_SIP_INGRESS.sip.smallest.ai;transport=tcp`.
 
   </Accordion>
   <Accordion title="Adding TLS transport" icon="lock">
@@ -205,7 +205,7 @@ TCP and TLS carry SIP signalling reliably; there is no need for the RFC 3261 UDP
     listen=tls:YOUR_IP:5061
     ```
 
-    Configure `tls.cfg` with your certificate chain and re-send INVITEs to `sip:+E164@5rdbhjuwtlk.sip.livekit.cloud;transport=tls`.
+    Configure `tls.cfg` with your certificate chain and re-send INVITEs to `sip:+E164@YOUR_SIP_INGRESS.sip.smallest.ai;transport=tls`.
 
   </Accordion>
 </AccordionGroup>
@@ -234,7 +234,7 @@ Reproduce the failing call, then stop the capture. Email `support@smallest.ai` w
     **Quick setup**:
 
     1. Create an Elastic SIP Trunk in Twilio Console.
-    2. On the trunk's **Origination** tab, add the SIP URI `sip:5rdbhjuwtlk.sip.livekit.cloud;transport=tls`. Twilio uses TLS on 5061 by default when you specify `transport=tls`.
+    2. On the trunk's **Origination** tab, add the SIP URI `sip:YOUR_SIP_INGRESS.sip.smallest.ai;transport=tls`. Twilio uses TLS on 5061 by default when you specify `transport=tls`.
     3. On the **Termination** tab, note the termination URI (a hostname ending `.pstn.twilio.com`). That is your **SIP Termination URL** at Step 2 above.
     4. Assign your numbers to the trunk.
     5. Import the number on Smallest AI with the Twilio termination host.
@@ -251,7 +251,7 @@ Reproduce the failing call, then stop the capture. Email `support@smallest.ai` w
     **Quick setup**:
 
     1. Create a SIP Connection in the Telnyx Portal.
-    2. On **Inbound**, add the Smallest destination as an inbound SIP URI: `sip:5rdbhjuwtlk.sip.livekit.cloud;transport=tls`.
+    2. On **Inbound**, add the Smallest destination as an inbound SIP URI: `sip:YOUR_SIP_INGRESS.sip.smallest.ai;transport=tls`.
     3. On **Outbound**, note the outbound SIP URI Telnyx assigns. That is your **SIP Termination URL** for Step 2.
     4. Assign numbers to the connection.
     5. Import each number on Smallest AI with the Telnyx termination host.
@@ -267,7 +267,7 @@ Reproduce the failing call, then stop the capture. Email `support@smallest.ai` w
     **Quick setup**:
 
     1. Create a Voice API application in Vonage Dashboard.
-    2. In the answer URL webhook, use the `connect` NCCO to send the call to `sip:5rdbhjuwtlk.sip.livekit.cloud;transport=tls`.
+    2. In the answer URL webhook, use the `connect` NCCO to send the call to `sip:YOUR_SIP_INGRESS.sip.smallest.ai;transport=tls`.
     3. Note the outbound SIP endpoint Vonage assigns to your app. That is your **SIP Termination URL** for Step 2.
     4. Link your numbers to the application.
     5. Import each number on Smallest AI with the Vonage termination host.
@@ -278,7 +278,7 @@ Reproduce the failing call, then stop the capture. Email `support@smallest.ai` w
 
   </Accordion>
   <Accordion title="Own SBC (Asterisk, FreeSWITCH, Kamailio)" icon="server">
-    Configure your outbound trunk to `5rdbhjuwtlk.sip.livekit.cloud` with `transport=tls` on 5061 (or `transport=tcp` on 5060 as a fallback). Do not use UDP. Set the request URI to `sip:+E164@5rdbhjuwtlk.sip.livekit.cloud;transport=tls`.
+    Configure your outbound trunk to `YOUR_SIP_INGRESS.sip.smallest.ai` with `transport=tls` on 5061 (or `transport=tcp` on 5060 as a fallback). Do not use UDP. Set the request URI to `sip:+E164@YOUR_SIP_INGRESS.sip.smallest.ai;transport=tls`.
 
     For Kamailio-specific `listen=` / TLS module setup, see the [Kamailio](#kamailio) accordion under Troubleshooting.
 
