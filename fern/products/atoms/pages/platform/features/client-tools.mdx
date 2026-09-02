@@ -1,0 +1,91 @@
+---
+title: "Client tools"
+sidebarTitle: "Client tools"
+subtitle: "Let the agent call a function in your own app over the websocket, and return the result."
+description: "Client tools run in your app over the websocket: the agent sends a function_call event, your app executes it and replies with function_call.result."
+slug: /voice-agents/platform/create-agent/client-tools
+---
+
+import { CodingAgentCallout } from "@/components/CodingAgentCallout";
+
+A **client tool** doesn't call an API — the platform hands the call to **your app over the websocket**, your app runs the function, and returns the result. Use it when the "tool" is really a function in your frontend: update a cart, navigate a screen, or look up data that must not leave your side.
+
+<Warning>
+Client tools only run on **websocket sessions** (webcall, widget). On phone calls the definition is dropped — a phone agent can't reach your app. Use an [API tool](/voice-agents/platform/create-agent/api-tool) for anything that must work over telephony.
+</Warning>
+
+## Configuration
+
+A client tool has:
+
+- **Name / Description** — the model reads the description to decide when to call it.
+- **Parameters** — typed arguments the model fills from the conversation (name, type, description, required), same shape as an API tool's LLM parameters.
+- **Wait for response** — if on, the agent pauses until your app returns a result, and a **timeout** applies (1–60s, default 1s). If off, it's fire-and-forget: your app acts on the event and the agent doesn't wait.
+- **Filler phrases** — spoken while the tool runs so the pause isn't silent.
+
+## The protocol
+
+Your app is the other end of the websocket and is responsible for executing the function. Two messages:
+
+**Agent → your app** — the agent wants the tool run:
+
+```json
+{
+  "type": "function_call",
+  "call_id": "<unique id>",
+  "name": "<tool name>",
+  "arguments": "<JSON-encoded string>"
+}
+```
+
+**Your app → agent** — you return the result:
+
+```json
+{
+  "type": "function_call.result",
+  "call_id": "<same id>",
+  "output": "<JSON-encoded string>"
+}
+```
+
+Rules:
+
+- Echo the **`call_id`** back on the result so the agent can match it.
+- Reply within the tool's timeout. If you don't, the agent stops waiting and recovers verbally.
+- `arguments` and `output` are JSON **strings** — parse the arguments, and JSON-encode your result into `output`.
+- If **Wait for response** is off, don't reply — just act on the event.
+
+## Minimal handler
+
+```js
+socket.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  if (msg.type !== "function_call") return;
+
+  const args = JSON.parse(msg.arguments);
+  const output = handlers[msg.name](args); // your function, returns a value
+
+  socket.send(JSON.stringify({
+    type: "function_call.result",
+    call_id: msg.call_id,
+    output: JSON.stringify(output),
+  }));
+};
+```
+
+Open the websocket with a short-lived token (mint one, then connect to the agent websocket) and keep this handler running for the length of the session.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="API tool" href="/voice-agents/platform/create-agent/api-tool">
+    For calls the platform makes to your API
+  </Card>
+  <Card title="Tools library" href="/voice-agents/platform/create-agent/tools">
+    Reusable tools across every agent
+  </Card>
+</CardGroup>
+
+<CodingAgentCallout />
+
+{/* coding-agent-callout-injected */}
