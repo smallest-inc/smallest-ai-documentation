@@ -100,8 +100,8 @@ curl -X POST .../v1/sip-trunk/outbound \
 Field notes:
 
 - **Numbers**: E.164 with the `+`. Inbound numbers must match what your provider sends in the `To:` header exactly. Outbound `numbers` are the caller IDs the trunk may present.
-- **Termination address** (outbound): your provider's SIP host, bare host or host:port (`sip.yourprovider.com:5060`, `203.0.113.10:5081`). Full `sip:` URIs are normalized to the bare host. Immutable after creation, like `transport` — changing carriers means delete and recreate.
-- **Auth**: digest username/password (both or neither), or leave blank for IP-based auth. For inbound, `allowedAddresses` restricts which hosts may send you calls — and an inbound trunk with allowed addresses and **no numbers** answers any extension from those peers (direct SIP-to-SIP).
+- **Termination address** (outbound): your provider's SIP host, bare host or host:port (`sip.yourprovider.com:5060`, `203.0.113.10:5081`). Full `sip:` URIs are normalized to the bare host. Immutable after creation, like `transport`. Changing carriers means delete and recreate.
+- **Auth**: digest username/password (both or neither), or leave blank for IP-based auth. For inbound, `allowedAddresses` restricts which hosts may send you calls. An inbound trunk with allowed addresses and **no numbers** answers any extension from those peers (direct SIP-to-SIP).
 - Copy the **SIP Origination URL** shown on the trunk. That is the host your provider sends inbound INVITEs to; remember to append `;transport=tls` (or `;transport=tcp`) and the `+`-prefixed E.164 number when you configure your provider.
 
 <Note>
@@ -321,7 +321,7 @@ Every call that reaches us has a full capture on our side too; with the `SCL_` c
 
 ## VPN-only and IP-whitelisting providers
 
-Some carriers cannot send SIP to cloud endpoints at all: they require a VPN, private IP addressing, or a fixed IP to whitelist. We support this class of provider through a managed SIP gateway that bridges them into the platform; once connected, the calls behave exactly like any other SIP trunk here. This setup is provisioned by our team per provider — contact `support@smallest.ai` with your provider's connectivity requirements.
+Some carriers cannot send SIP to cloud endpoints at all: they require a VPN, private IP addressing, or a fixed IP to whitelist. We support this class of provider through a managed SIP gateway that bridges them into the platform; once connected, the calls behave exactly like any other SIP trunk here. This setup is provisioned by our team per provider. Contact `support@smallest.ai` with your provider's connectivity requirements.
 
 ## Best practices
 
