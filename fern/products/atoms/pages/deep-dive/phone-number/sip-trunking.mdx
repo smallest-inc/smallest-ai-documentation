@@ -20,7 +20,7 @@ We handle the conversation and media. Your provider handles the PSTN side.
 
 You need:
 
-1. **A telephony provider that supports SIP trunking.** Twilio, Telnyx, Vonage, Bandwidth, Plivo, an Asterisk / FreeSWITCH / Kamailio SBC of your own, and most enterprise carriers all work. If it can send and receive SIP over TCP or TLS, it will work here.
+1. **A telephony provider that supports SIP trunking.** Twilio, Telnyx, Vonage, Bandwidth, Plivo, an Asterisk / FreeSWITCH / Kamailio SBC of your own, and most enterprise carriers all work. If it can send and receive SIP (ideally over TCP or TLS), it will work here.
 2. **Phone numbers configured to route to a SIP trunk** in your provider's settings.
 3. **From your provider, know**:
    - the outbound (termination) SIP host you will send outbound calls to (a hostname or IP, optional port)
@@ -30,13 +30,13 @@ You need:
 
 ## Transport contract
 
-Our SIP ingress accepts SIP signalling on TCP and TLS only. UDP INVITEs are dropped without a response and every retransmission times out.
+Our SIP ingress accepts SIP signalling on UDP, TCP, and TLS. Use TCP or TLS anyway. A production INVITE carries a full SDP body and can cross the size where a UDP datagram fragments on the path; many networks and firewalls silently discard fragments, so the INVITE never arrives and you get no response of any kind. Small requests (an OPTIONS ping) go through UDP fine, which is exactly what makes the failure confusing: the trunk looks reachable, but calls vanish.
 
 | Transport | Port | Status |
 |---|---|---|
 | **TLS** | 5061 | **Preferred.** Signalling is encrypted end to end. |
-| **TCP** | 5060 | Supported. Use this if your build lacks a TLS module. |
-| UDP | 5060 | **Not accepted.** INVITEs are dropped with no response. |
+| **TCP** | 5060 | Recommended fallback. Reliable delivery, no fragmentation risk. |
+| UDP | 5060 | Accepted, **not recommended**: large INVITEs can fragment and be lost silently. |
 
 Media is separate and stays RTP over UDP regardless of signalling transport. Nothing about audio quality or jitter changes when you move signalling to TCP or TLS.
 
@@ -71,9 +71,10 @@ At a minimum:
 
 - **Destination URI**: `sip:+E164@YOUR_SIP_INGRESS.sip.smallest.ai;transport=tls`
 - **Transport**: TLS (or TCP)
-- **Codecs**: G.711 (PCMU / PCMA) and Opus are both accepted. Send whichever your provider prefers.
-- **DTMF**: RFC 2833 or SIP INFO. Both are read.
+- **Codecs**: G.722, G.711 (PCMU / PCMA). The answer picks the first codec both sides share; G.711 is the safe baseline.
+- **DTMF**: RFC 2833/4733 (`telephone-event` in RTP). SIP INFO is not used.
 - **Media encryption**: SRTP is accepted; not required.
+- **RTP during silence**: keep RTP (or comfort noise) flowing. A call with no RTP for 15 seconds mid-call (30 seconds at setup) is torn down.
 
 If you run a Kamailio SBC, see the [Kamailio configuration](#kamailio) accordion below for the specific `listen=` and `tls` module lines.
 
@@ -111,12 +112,19 @@ Once the number is imported and the agent is assigned:
 
 | Feature | Support |
 |---|---|
-| Signalling transport (inbound to us) | **TLS on 5061** (preferred), **TCP on 5060**. UDP is not accepted. |
+| Signalling transport (inbound to us) | **TLS on 5061** (preferred), **TCP on 5060**, UDP on 5060 (accepted, not recommended: fragmentation risk on large INVITEs) |
 | Media | RTP over UDP. SRTP optional. |
-| Codecs | G.711 (PCMU / PCMA), Opus |
-| DTMF | RFC 2833, SIP INFO |
+| Codecs | G.722, G.711 (PCMU / PCMA) |
+| DTMF | RFC 2833/4733 (`telephone-event` in RTP) |
+| Custom headers | Any `X-*` header on an inbound INVITE is delivered to your agent as a variable (see below) |
+| RTP keepalive | Calls end after 15 s without RTP mid-call (30 s at setup); send comfort noise during silence |
 | Authentication (inbound to us) | Credential or IP-based, whichever your provider prefers |
 | E.164 formatting | Required, with the leading `+` on the request URI |
+| Call transfers | Agent-initiated transfers are placed as a second outbound call on your trunk (no SIP REFER needed). A transferred call occupies two channels for its full duration. |
+
+### Passing context with custom headers (inbound)
+
+Any `X-*` header your provider adds to the inbound INVITE reaches your agent as a prompt variable. The header name is lowercased and runs of non-alphanumerics become underscores: `X-Customer-ID: 4821` becomes `x_customer_id`. The reserved names `call_id`, `user_number`, `agent_number`, and `conversation_type` are ignored. Use this to pass your own call ID, campaign ID, or CRM context into the conversation.
 
 ### SIP Origination URL (inbound to us)
 
@@ -142,13 +150,13 @@ Smallest does not require you to allowlist a specific inbound IP range on your p
 
 ### Silence, no SIP response
 
-The single most common cause: your INVITE is going over UDP. Our ingress accepts TCP and TLS only; UDP INVITEs are dropped with no reply, no ICMP, no rejection. Symptoms:
+The single most common cause: your INVITE is going over UDP and fragmenting. A full INVITE (SDP body, several codecs, your custom headers) can exceed the size a UDP datagram survives on the path; fragments get silently discarded by intermediate networks and firewalls, so nothing ever reaches us and nothing comes back. No reply, no ICMP, no rejection. Symptoms:
 
 - Your SBC sends INVITE, retransmits per RFC 3261 (T1 backoff), all time out.
 - Packet capture on your side shows outbound INVITE frames with no reply frames of any kind.
-- An `OPTIONS` request to the ingress over UDP also gets nothing back.
+- An `OPTIONS` request over UDP **succeeds** (it is small enough not to fragment), which falsely suggests the trunk is healthy.
 
-**Fix**: add `;transport=tcp` (port 5060) or `;transport=tls` (port 5061) to the request URI, or configure the transport in your trunk's SIP settings.
+**Fix**: add `;transport=tcp` (port 5060) or `;transport=tls` (port 5061) to the request URI, or configure the transport in your trunk's SIP settings. TCP and TLS segment data and are immune to this failure mode.
 
 Confirm with a `sipsak` OPTIONS ping after the change. Quote the URI, otherwise the shell splits at `;` and sipsak falls back to UDP on port 5060.
 
@@ -160,7 +168,7 @@ sipsak -vv -s 'sip:YOUR_SIP_INGRESS.sip.smallest.ai;transport=tcp'
 sipsak -vv -s 'sips:YOUR_SIP_INGRESS.sip.smallest.ai'
 ```
 
-You should see `SIP/2.0 200 OK` from the ingress. If OPTIONS times out on both TCP and TLS, the reachability problem is between your egress and our ingress (firewall, security group, routing), not on our side.
+You should see `SIP/2.0 200 OK` from the ingress. If OPTIONS times out on both TCP and TLS, the reachability problem is between your egress and our ingress (firewall, security group, routing), not on our side. If OPTIONS succeeds over UDP but your INVITEs still get no response, that is the fragmentation signature described above: switch the trunk to TCP or TLS.
 
 ### Call rings but the agent never picks up (or vice versa)
 
@@ -177,7 +185,7 @@ Check the `To:` header on the INVITE against the number you imported. Two common
 
 ### Retransmission or duplicate INVITEs
 
-TCP and TLS carry SIP signalling reliably; there is no need for the RFC 3261 UDP-style retransmit ladder. If you see duplicate INVITEs from your SBC, check that your transport is actually TCP or TLS on the wire, not falling back to UDP because of a config typo.
+TCP and TLS carry SIP signalling reliably; there is no need for the RFC 3261 UDP-style retransmit ladder. If you see duplicate INVITEs from your SBC, your transport is UDP on the wire (possibly a fallback from a config typo) and the retransmissions mean no response is arriving. Move signalling to TCP or TLS.
 
 ### Kamailio
 
@@ -278,7 +286,7 @@ Reproduce the failing call, then stop the capture. Email `support@smallest.ai` w
 
   </Accordion>
   <Accordion title="Own SBC (Asterisk, FreeSWITCH, Kamailio)" icon="server">
-    Configure your outbound trunk to `YOUR_SIP_INGRESS.sip.smallest.ai` with `transport=tls` on 5061 (or `transport=tcp` on 5060 as a fallback). Do not use UDP. Set the request URI to `sip:+E164@YOUR_SIP_INGRESS.sip.smallest.ai;transport=tls`.
+    Configure your outbound trunk to `YOUR_SIP_INGRESS.sip.smallest.ai` with `transport=tls` on 5061 (or `transport=tcp` on 5060 as a fallback). UDP is accepted but not recommended: full-size INVITEs can fragment and be lost silently. Set the request URI to `sip:+E164@YOUR_SIP_INGRESS.sip.smallest.ai;transport=tls`.
 
     For Kamailio-specific `listen=` / TLS module setup, see the [Kamailio](#kamailio) accordion under Troubleshooting.
 
@@ -296,7 +304,8 @@ Reproduce the failing call, then stop the capture. Email `support@smallest.ai` w
 
 ## Limitations
 
-- Signalling over UDP is not accepted. TCP or TLS only.
+- Signalling over UDP, while accepted, is not recommended: full-size INVITEs can fragment and be lost silently. Use TCP or TLS.
+- SDP must be an early offer (included in the initial INVITE). Delayed offer is not supported.
 - SRTP is optional, not required. If you require SRTP end to end, negotiate it in your SDP.
 - No fixed inbound IP range is published for provider allowlisting. Contact support if your setup needs it.
 
