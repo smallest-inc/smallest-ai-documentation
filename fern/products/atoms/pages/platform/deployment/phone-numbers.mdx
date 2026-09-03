@@ -61,27 +61,21 @@ Click **Add Number** in the top right. You have two options:
     </Frame>
   </Tab>
   
-  <Tab title="Import SIP">
-    <Frame caption="Import SIP Number modal">
-      ![Import SIP number](../building-agents/images/import-sip.png)
-    </Frame>
-    
-    Bring your own number via SIP trunking.
-    
-    | Field | Required | Description |
-    |-------|----------|-------------|
-    | **Phone Number** | Yes | Your existing number |
-    | **SIP Termination URL** | Yes | Your provider's SIP host where outbound calls are sent. a hostname or IP, optionally with a port (e.g. `sip.yourprovider.com:5060`) |
-    | **Display Name** | No | Friendly name for the number |
-    | **Username** | No | For SIP authentication |
-    | **Password** | No | For SIP authentication |
-    | **SIP Origination URL** | - | Provided by the platform (copy to your provider). Append `;transport=tls` (preferred) or `;transport=tcp` before pasting; UDP is accepted but not recommended (large INVITEs can fragment and be lost silently). See [SIP Trunking → Transport contract](/voice-agents/platform/deploy/phone-numbers/sip-trunking#transport-contract). |
-    
+  <Tab title="Bring your own (SIP)">
+    Your own numbers connect through SIP trunks, managed on the dedicated **SIP Trunks** page (sidebar, under Phone Numbers): one trunk per direction — an inbound trunk to receive calls, an outbound trunk to place them.
+
+    | Field | Where | Description |
+    |-------|-------|-------------|
+    | **Numbers** | Both trunks | E.164 with the `+`. On the inbound trunk: what your provider dials in with. On the outbound trunk: the caller IDs it may present. |
+    | **Termination address** | Outbound trunk | Your provider's SIP host, a hostname or IP, optionally with a port (e.g. `sip.yourprovider.com:5060`). Full SIP URIs are normalized to the bare host. |
+    | **Username / Password** | Either | For SIP digest auth; leave blank for IP-based auth |
+    | **SIP Origination URL** | Inbound trunk | Provided by the platform (copy to your provider). Append `;transport=tls` (preferred) or `;transport=tcp` before pasting; UDP is accepted but not recommended (large INVITEs can fragment and be lost silently). See [SIP Trunking → Transport contract](/voice-agents/platform/deploy/phone-numbers/sip-trunking#transport-contract). |
+
+    Then make an agent answer on the trunk from the agent's **Telephony** tab. The full walkthrough, including the API, is on the [SIP Trunking page](/voice-agents/platform/deploy/phone-numbers/sip-trunking).
+
     <Note>
-    The SIP Termination URL must point to your **SIP provider's** server (not a website URL). Full SIP URIs like `sip:sip.yourprovider.com:5060` are accepted and automatically normalized.
+    The old **Import SIP** tab in this dialog (and `POST /product/import-phone-number`) is deprecated: it still works and creates both trunks for you, but new setups should use the SIP Trunks page. See the [Telephony API migration guide](/voice-agents/deprecations/telephony-migration).
     </Note>
-    
-    Click **Add Custom Number** when done.
   </Tab>
 </Tabs>
 
