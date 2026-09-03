@@ -1,0 +1,198 @@
+---
+title: "Cookbook: TTS from a Lambda webhook"
+description: "Wire a Lambda function to your Lightning v3.1 SageMaker endpoint and return synthesized audio to a caller."
+icon: "bolt"
+---
+
+Use this when you want a low-ops HTTP interface in front of your Lightning v3.1 SageMaker endpoint, without standing up an application server. The Lambda invokes the endpoint and returns the raw audio.
+
+## What this cookbook builds
+
+- A Lambda function that accepts `{ text, voice_id }` on POST.
+- Lambda signs the SageMaker invocation with its execution role.
+- The response is streamed back to the caller as `audio/wav`.
+
+## Architecture
+
+```
+API Gateway / Function URL
+        │
+        ▼
+   Lambda (Python 3.12)
+        │  sagemaker:InvokeEndpoint (SigV4)
+        ▼
+SageMaker Real-time endpoint (Lightning v3.1)
+        │
+        ▼
+   audio/wav bytes back through Lambda
+```
+
+## Step 1: Lambda execution role
+
+Create an IAM role with:
+
+- Trust policy allowing `lambda.amazonaws.com` to assume.
+- Managed policy `AWSLambdaBasicExecutionRole` (for CloudWatch logs).
+- Inline policy granting `sagemaker:InvokeEndpoint` on the endpoint ARN:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": "sagemaker:InvokeEndpoint",
+    "Resource": "arn:aws:sagemaker:us-east-1:XXXXXXXXXXXX:endpoint/smallest-lightning-v31-prod"
+  }]
+}
+```
+
+## Step 2: Lambda function code
+
+```python
+# lambda_function.py
+import base64
+import json
+import os
+
+import boto3
+from botocore.config import Config
+
+_runtime = boto3.client(
+    "sagemaker-runtime",
+    config=Config(
+        # Endpoint invocations are already retried by SageMaker on transient
+        # failures; a client-side retry would double-charge.
+        retries={"max_attempts": 1},
+        connect_timeout=5,
+        read_timeout=30,
+    ),
+)
+
+ENDPOINT_NAME = os.environ["ENDPOINT_NAME"]
+DEFAULT_VOICE = os.environ.get("DEFAULT_VOICE", "avery")
+
+
+def lambda_handler(event, _context):
+    try:
+        body = json.loads(event.get("body") or "{}")
+    except json.JSONDecodeError:
+        return _error(400, "Request body is not valid JSON")
+
+    text = (body.get("text") or "").strip()
+    if not text:
+        return _error(400, "Field `text` is required")
+    if len(text) > 5000:
+        return _error(400, "Field `text` cannot exceed 5000 characters")
+
+    voice_id = body.get("voice_id") or DEFAULT_VOICE
+
+    try:
+        response = _runtime.invoke_endpoint(
+            EndpointName=ENDPOINT_NAME,
+            ContentType="application/json",
+            Accept="audio/wav",
+            Body=json.dumps({
+                "text": text,
+                "voice_id": voice_id,
+                "language": body.get("language", "en"),
+                "sample_rate": body.get("sample_rate", 24000),
+            }),
+        )
+    except _runtime.exceptions.ModelError as exc:
+        return _error(502, f"Upstream model error: {exc}")
+    except Exception as exc:  # noqa: BLE001; Lambda has no better catch here
+        return _error(500, f"Endpoint invocation failed: {exc}")
+
+    audio = response["Body"].read()
+
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": "audio/wav"},
+        "isBase64Encoded": True,
+        "body": base64.b64encode(audio).decode("utf-8"),
+    }
+
+
+def _error(status: int, message: str) -> dict:
+    return {
+        "statusCode": status,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps({"error": message}),
+    }
+```
+
+Key points that matter in prod:
+
+- **`retries={"max_attempts": 1}`.** The default boto3 retry policy will resubmit a `ModelError`, which for TTS re-synthesizes and doubles the software charge for that request.
+- **Base64 encoding.** API Gateway and Lambda Function URLs require binary responses to be base64-encoded with `isBase64Encoded: true`.
+- **`read_timeout=30`.** Lightning v3.1 responds in under 400 ms for a 100-char utterance, but SageMaker cold-start after autoscale-out can add 5-15 s. Anything above 30 s means the endpoint is unhealthy.
+
+## Step 3: Deploy
+
+Package as a Lambda deployment:
+
+```bash
+zip lambda.zip lambda_function.py
+
+aws lambda create-function \
+  --function-name smallest-tts-gateway \
+  --runtime python3.12 \
+  --role arn:aws:iam::XXXXXXXXXXXX:role/lambda-sagemaker-invoke \
+  --handler lambda_function.lambda_handler \
+  --timeout 30 \
+  --memory-size 512 \
+  --environment "Variables={ENDPOINT_NAME=smallest-lightning-v31-prod,DEFAULT_VOICE=avery}" \
+  --zip-file fileb://lambda.zip
+```
+
+Then expose it via a Function URL (fastest) or API Gateway (if you need auth, custom domains, or WAF).
+
+```bash
+aws lambda create-function-url-config \
+  --function-name smallest-tts-gateway \
+  --auth-type NONE \
+  --cors '{"AllowOrigins":["*"],"AllowMethods":["POST"]}'
+```
+
+<Warning>
+`--auth-type NONE` exposes the URL to the public internet. For anything beyond a demo, use `AWS_IAM` and sign requests, or front it with API Gateway + a Cognito authorizer.
+</Warning>
+
+## Step 4: Test
+
+```bash
+URL=$(aws lambda get-function-url-config \
+  --function-name smallest-tts-gateway \
+  --query FunctionUrl --output text)
+
+curl -X POST "$URL" \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "Hello from Lambda.", "voice_id": "avery"}' \
+  --output out.wav
+
+file out.wav
+```
+
+Expected output: `RIFF (little-endian) data, WAVE audio, ...`.
+
+## Cold-start behaviour
+
+Lambda cold starts add 1-3 seconds on first invocation after idle. For a public webhook that gets sporadic traffic, this is fine. If you serve real-time voice UIs where every millisecond matters, use **Provisioned Concurrency** on the Lambda to pin warm workers. The SageMaker endpoint itself has no cold start once `InService`.
+
+## Cost model
+
+Lambda charges are per-request and per-GB-second; both are typically noise compared to the SageMaker endpoint bill. A rough monthly estimate for 1M invocations at 512 MB / 400 ms average:
+
+- Lambda: 1M × (0.0000002083 × 512 / 1024 × 0.4) ≈ **$0.04** in compute
+- Lambda: 1M × 0.0000002 = **$0.20** in request charges
+- SageMaker endpoint: dominant cost, see [Pricing](/models/self-host/amazon-sagemaker/pricing)
+
+## Locking down `AllowOrigins`
+
+The CORS wildcard above is convenient for local testing, but production should list your own domains:
+
+```bash
+aws lambda update-function-url-config \
+  --function-name smallest-tts-gateway \
+  --cors '{"AllowOrigins":["https://your-app.example.com"],"AllowMethods":["POST"],"AllowHeaders":["Content-Type"]}'
+```

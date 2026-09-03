@@ -1,0 +1,146 @@
+---
+title: "Cookbook: batch transcription"
+description: "Transcribe a large audio archive from S3 through the Pulse SageMaker endpoint using Batch Transform."
+icon: "file-audio"
+---
+
+Use this when you have hundreds or thousands of audio files sitting in S3 and want them all transcribed against your own Pulse endpoint, without wiring up your own job orchestration.
+
+## What this cookbook builds
+
+- An S3 input prefix holding audio files.
+- A **SageMaker Batch Transform job** that fans each file into the Pulse endpoint.
+- An S3 output prefix holding one JSON transcript per input file.
+
+Batch Transform bypasses the 25 MB Real-time payload cap and is the right tool for anything above ~20 minutes of audio per file.
+
+## Prerequisites
+
+- Pulse Model resource from [Deploy from AWS Console](/models/self-host/amazon-sagemaker/deploy-console#step-3-create-the-sagemaker-model) or the [Terraform module](/models/self-host/amazon-sagemaker/deploy-terraform). You do **not** need a live Real-time endpoint for Batch Transform: the model resource alone is enough.
+- S3 bucket the SageMaker execution role can read from and write to.
+- Audio files in the bucket. Supported: `audio/wav` (16-bit PCM), `audio/mpeg`.
+
+## Step 1: Upload audio to S3
+
+```bash
+aws s3 sync ./calls/ s3://my-bucket/pulse-input/
+```
+
+Every file under `s3://my-bucket/pulse-input/` becomes one transform record.
+
+## Step 2: Kick off the Batch Transform job
+
+```python
+import boto3
+from datetime import datetime
+
+client = boto3.client("sagemaker", region_name="us-east-1")
+
+job_name = f"pulse-batch-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
+
+client.create_transform_job(
+    TransformJobName=job_name,
+    ModelName="smallest-pulse-model",
+    TransformInput={
+        "DataSource": {
+            "S3DataSource": {
+                "S3DataType": "S3Prefix",
+                "S3Uri": "s3://my-bucket/pulse-input/",
+            }
+        },
+        "ContentType": "audio/wav",
+        "CompressionType": "None",
+        "SplitType": "None",
+    },
+    TransformOutput={
+        "S3OutputPath": "s3://my-bucket/pulse-output/",
+        "Accept": "application/json",
+        "AssembleWith": "None",
+    },
+    TransformResources={
+        "InstanceType": "ml.g5.2xlarge",
+        "InstanceCount": 2,
+    },
+    Environment={
+        "SAGEMAKER_MODEL_SERVER_TIMEOUT": "600",
+    },
+    DataProcessing={
+        "InputFilter": "$",
+        "OutputFilter": "$",
+        "JoinSource": "None",
+    },
+)
+
+print(f"Started {job_name}")
+```
+
+`InstanceCount=2` fans out across two GPU workers. Raise it for larger archives; SageMaker parallelizes automatically.
+
+## Step 3: Wait for completion
+
+```python
+waiter = client.get_waiter("transform_job_completed_or_stopped")
+waiter.wait(TransformJobName=job_name)
+
+status = client.describe_transform_job(TransformJobName=job_name)["TransformJobStatus"]
+print(f"Job {status}")
+```
+
+Transform-job monitoring is also visible in the SageMaker Console → **Batch transform jobs**.
+
+## Step 4: Read transcripts back
+
+Each input file gets one output object with the same key under the output prefix, plus a `.out` suffix.
+
+```python
+s3 = boto3.client("s3")
+
+response = s3.list_objects_v2(
+    Bucket="my-bucket",
+    Prefix="pulse-output/",
+)
+
+for obj in response.get("Contents", []):
+    if obj["Key"].endswith(".out"):
+        body = s3.get_object(Bucket="my-bucket", Key=obj["Key"])["Body"].read()
+        print(obj["Key"], "→", body.decode("utf-8")[:120], "...")
+```
+
+Each `.out` file contains the JSON response from Pulse: `transcript`, `language`, `duration`, and per-word timestamps if configured.
+
+## Passing per-file options
+
+Batch Transform sends every record with the model's default settings; there is no per-record `CustomAttributes` hook. To vary Pulse options per file (diarize on some, not others), set them as environment defaults on the model resource:
+
+```python
+client.create_model(
+    ModelName="smallest-pulse-batch-diarized",
+    PrimaryContainer={
+        "ModelPackageName": "arn:aws:sagemaker:us-east-1:XXXXXXXXXXXX:model-package/smallest-pulse/1",
+        "Environment": {
+            "PULSE_DIARIZE": "true",
+            "PULSE_PUNCTUATE": "true",
+            "PULSE_WORD_TIMESTAMPS": "true",
+        },
+    },
+    ExecutionRoleArn="arn:aws:iam::XXXXXXXXXXXX:role/sagemaker-execution",
+)
+```
+
+Then reference this dedicated model in your transform job. Maintain one model per option combination you need.
+
+## Cost model
+
+Batch Transform bills instance-hours from job start to job finish. A 2× `ml.g5.2xlarge` job that runs 45 minutes costs:
+
+- Software: _[TODO: pulse rate]_ × 2 instances × 0.75 hours
+- Infrastructure: $1.69 × 2 × 0.75 = **$2.54**
+- **Total:** _[TODO once software rate known]_
+
+Throughput is roughly 30-50× real-time per instance for typical call audio, so a 24-hour archive of 4 kHz mono PCM transcribes in about an hour on `ml.g5.2xlarge` × 2.
+
+## When Batch Transform is the wrong tool
+
+- **You need transcripts within seconds of upload.** Wire an S3 → Lambda → `InvokeEndpoint` flow instead.
+- **Files are all under 25 MB and inbound rate is bursty.** Real-time invoke is cheaper for sporadic small-file workloads.
+- **You want speaker turn events during transcription.** Real-time streaming is required for that; SageMaker Real-time is request/response only. Use Docker or Kubernetes.

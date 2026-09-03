@@ -1,0 +1,125 @@
+---
+title: "Deploy from AWS Console"
+description: "Step-by-step: subscribe to the Marketplace listing and stand up a SageMaker Real-time endpoint in the AWS Console."
+icon: "browser"
+---
+
+This walkthrough takes about 15 minutes. You'll subscribe to the Marketplace listing, create a SageMaker model + endpoint config + endpoint, and confirm the endpoint is `InService`.
+
+## Prerequisites
+
+- **AWS account** with permission to subscribe to Marketplace products and create SageMaker resources. The `AmazonSageMakerFullAccess` managed policy plus `aws-marketplace:Subscribe` on the target account is enough.
+- **A SageMaker execution role** (IAM role trusted by `sagemaker.amazonaws.com`) with the `AmazonSageMakerFullAccess` policy attached. If you do not have one yet, create it in the [IAM console](https://console.aws.amazon.com/iam) before starting.
+- **A VPC subnet** to place the endpoint in (optional but recommended for private-only endpoints).
+
+## Step 1: Subscribe to the Marketplace listing
+
+1. Open the [Smallest AI SageMaker listing](https://aws.amazon.com/marketplace/pp/prodview-tf5i65efzgtco).
+2. Click **Continue to Subscribe**.
+3. Review the **End User License Agreement** and the pricing page (see [Pricing](/models/self-host/amazon-sagemaker/pricing) for how per-hour rates work).
+4. Click **Accept Terms**. Subscription usually completes in under a minute; AWS emails you when it's live.
+
+<Frame caption="AWS Marketplace listing page">
+  ![Marketplace listing placeholder](./images/marketplace-listing.png)
+</Frame>
+
+<Note>
+Subscription is a **one-time** step per AWS account. You can create as many SageMaker endpoints from the listing as you want; each endpoint bills separately.
+</Note>
+
+## Step 2: Configure the product
+
+1. After subscription completes, click **Continue to Configuration**.
+2. Pick a **Software version**. Newer versions are additive by default; the container digest is pinned so an upgrade never lands automatically.
+3. Pick a **Region** where you'll run the endpoint. Only regions where the `ml.g5.*` instance family is available are shown.
+4. Copy the **Product ARN** that appears at the bottom of the page. You'll paste it into the SageMaker model definition in the next step.
+
+<Frame caption="Product configuration page">
+  ![Product configuration placeholder](./images/product-configuration.png)
+</Frame>
+
+## Step 3: Create the SageMaker model
+
+1. Click **Continue to Launch**, then choose **Launch through SageMaker**.
+2. In the SageMaker console, click **Create model**.
+3. Fill in:
+   - **Model name**: something like `smallest-lightning-v31` (letters, digits, hyphens; up to 63 chars).
+   - **IAM role**: the SageMaker execution role from prerequisites.
+   - **Container input options**: choose "Use an existing model artifact".
+   - **Model package**: paste the **Product ARN** from Step 2, or pick it from the Marketplace dropdown.
+4. Leave VPC config empty for a public endpoint, or attach subnets + a security group for a VPC-only endpoint.
+5. Click **Create model**.
+
+<Frame caption="Create model form">
+  ![Create model placeholder](./images/create-model.png)
+</Frame>
+
+## Step 4: Create an endpoint configuration
+
+An endpoint configuration ties the model to an instance type and initial fleet size.
+
+1. In the SageMaker console: **Inference → Endpoint configurations → Create**.
+2. Give it a name, e.g. `smallest-lightning-v31-config-v1`.
+3. Add a **production variant**:
+   - **Model**: the one you created in Step 3.
+   - **Instance type**: `ml.g5.xlarge` for Lightning; `ml.g5.2xlarge` for Pulse. See [instance sizing](/models/self-host/amazon-sagemaker/overview#supported-instance-types).
+   - **Initial instance count**: 1 is fine to start; scale later.
+   - **Model data download timeout** and **container startup timeout**: keep the defaults (600 s) unless you know you need more.
+4. Click **Create endpoint configuration**.
+
+## Step 5: Create the endpoint
+
+1. **Inference → Endpoints → Create**.
+2. Endpoint name, e.g. `smallest-lightning-v31-prod`.
+3. Pick the endpoint configuration from Step 4.
+4. Click **Create endpoint**.
+
+Endpoint creation takes **8–12 minutes** for the first deployment (the container has to pull from Marketplace and warm the GPU). Watch the status column until it flips to `InService`.
+
+<Frame caption="Endpoint InService">
+  ![Endpoint InService placeholder](./images/endpoint-inservice.png)
+</Frame>
+
+## Step 6: Send a test request
+
+Once the endpoint is `InService`, invoke it with the AWS CLI:
+
+```bash
+aws sagemaker-runtime invoke-endpoint \
+  --endpoint-name smallest-lightning-v31-prod \
+  --content-type application/json \
+  --body '{"text": "Hello from SageMaker.", "voice_id": "avery"}' \
+  --cli-binary-format raw-in-base64-out \
+  /tmp/response.wav
+
+file /tmp/response.wav
+```
+
+You should get a `RIFF (little-endian) data, WAVE audio` file. For the full API surface (STT + TTS request/response shapes), see [Invoke the endpoint](/models/self-host/amazon-sagemaker/invoke).
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Invoke the endpoint" icon="terminal" href="/models/self-host/amazon-sagemaker/invoke">
+    boto3, AWS CLI, and Python SDK examples.
+  </Card>
+  <Card title="Autoscaling" icon="chart-line" href="/models/self-host/amazon-sagemaker/troubleshooting#autoscaling">
+    Configure Application Auto Scaling on the endpoint.
+  </Card>
+  <Card title="Batch transcription" icon="file-audio" href="/models/self-host/amazon-sagemaker/cookbooks/batch-transcription">
+    Transcribe large audio archives via Batch Transform.
+  </Card>
+  <Card title="Terraform version" icon="code" href="/models/self-host/amazon-sagemaker/deploy-terraform">
+    Repeat the same setup as IaC.
+  </Card>
+</CardGroup>
+
+## Cleaning up
+
+To stop charges: delete the **endpoint** first, then the **endpoint configuration**, then the **model**. The Marketplace subscription itself has no charge when there is no active endpoint.
+
+```bash
+aws sagemaker delete-endpoint --endpoint-name smallest-lightning-v31-prod
+aws sagemaker delete-endpoint-config --endpoint-config-name smallest-lightning-v31-config-v1
+aws sagemaker delete-model --model-name smallest-lightning-v31
+```

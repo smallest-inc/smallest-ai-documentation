@@ -1,0 +1,195 @@
+---
+title: "Invoke the endpoint"
+description: "Call your SageMaker endpoint from Python (boto3), the AWS CLI, and the Smallest AI Python SDK."
+icon: "terminal"
+---
+
+Once the endpoint is `InService`, invoke it like any other SageMaker Real-time endpoint. The request and response shapes match the Smallest AI cloud API, so most cloud code ports over by swapping the transport.
+
+## Authentication
+
+SageMaker endpoints are authenticated with **AWS Signature Version 4** using your IAM credentials. There is no `SMALLEST_API_KEY` on this path. The caller needs `sagemaker:InvokeEndpoint` on the endpoint ARN.
+
+Minimal IAM policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": "sagemaker:InvokeEndpoint",
+    "Resource": "arn:aws:sagemaker:us-east-1:XXXXXXXXXXXX:endpoint/smallest-lightning-v31-prod"
+  }]
+}
+```
+
+## Text-to-Speech (Lightning v3.1)
+
+<CodeGroup>
+
+```python Python (boto3)
+import boto3
+import json
+
+runtime = boto3.client("sagemaker-runtime", region_name="us-east-1")
+
+response = runtime.invoke_endpoint(
+    EndpointName="smallest-lightning-v31-prod",
+    ContentType="application/json",
+    Accept="audio/wav",
+    Body=json.dumps({
+        "text": "Hello from SageMaker.",
+        "voice_id": "avery",
+        "language": "en",
+        "sample_rate": 24000,
+    }),
+)
+
+with open("out.wav", "wb") as f:
+    f.write(response["Body"].read())
+```
+
+```python Python (Smallest AI SDK)
+# The unified SDK works against SageMaker endpoints when you point it at the
+# SageMaker Runtime instead of api.smallest.ai. The SDK signs with SigV4 when
+# the base URL is a SageMaker endpoint.
+from smallestai import SmallestAI
+
+client = SmallestAI(
+    transport="sagemaker",
+    endpoint_name="smallest-lightning-v31-prod",
+    region="us-east-1",
+)
+
+audio = client.tts.synthesize(
+    text="Hello from SageMaker.",
+    voice_id="avery",
+    model="lightning_v3.1",
+)
+
+with open("out.wav", "wb") as f:
+    f.write(audio)
+```
+
+```bash AWS CLI
+aws sagemaker-runtime invoke-endpoint \
+  --endpoint-name smallest-lightning-v31-prod \
+  --content-type application/json \
+  --accept audio/wav \
+  --body '{"text":"Hello from SageMaker.","voice_id":"avery","language":"en","sample_rate":24000}' \
+  --cli-binary-format raw-in-base64-out \
+  out.wav
+```
+
+</CodeGroup>
+
+### Request fields
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `text` | string | Yes | Up to 5000 characters per request. |
+| `voice_id` | string | Yes | Any voice from the [Lightning v3.1 catalog](/models/model-cards/text-to-speech/lightning-v-3-1). |
+| `language` | string | No | ISO 639-1 code. Defaults to English. |
+| `sample_rate` | integer | No | One of 8000, 16000, 24000, 48000. Defaults to 24000. |
+| `speed` | float | No | `0.5` to `2.0`. Defaults to `1.0`. |
+
+Response is raw audio in the container specified by `Accept` (`audio/wav`, `audio/mpeg`, or `application/octet-stream` for PCM). Latency for a 100-character utterance on `ml.g5.xlarge` is typically under 400 ms end-to-end.
+
+## Speech-to-Text (Pulse)
+
+Pulse accepts audio up to the SageMaker Real-time payload cap (25 MB, roughly 20 minutes at 16 kHz mono PCM). For longer files, use the [batch transcription cookbook](/models/self-host/amazon-sagemaker/cookbooks/batch-transcription).
+
+<CodeGroup>
+
+```python Python (boto3)
+import boto3
+
+runtime = boto3.client("sagemaker-runtime", region_name="us-east-1")
+
+with open("call.wav", "rb") as f:
+    audio_bytes = f.read()
+
+response = runtime.invoke_endpoint(
+    EndpointName="smallest-pulse-prod",
+    ContentType="audio/wav",
+    Accept="application/json",
+    Body=audio_bytes,
+    CustomAttributes="language=en&diarize=true&punctuate=true",
+)
+
+transcript = response["Body"].read().decode("utf-8")
+print(transcript)
+```
+
+```bash AWS CLI
+aws sagemaker-runtime invoke-endpoint \
+  --endpoint-name smallest-pulse-prod \
+  --content-type audio/wav \
+  --accept application/json \
+  --custom-attributes 'language=en&diarize=true&punctuate=true' \
+  --body fileb://call.wav \
+  transcript.json
+
+cat transcript.json | jq .
+```
+
+</CodeGroup>
+
+### Query parameters (via `CustomAttributes`)
+
+SageMaker Real-time does not accept URL query params, so Pulse reads request-level options from the `X-Amzn-SageMaker-Custom-Attributes` header. Pass them as a URL-encoded query string via `CustomAttributes`.
+
+| Attribute | Notes |
+|---|---|
+| `language` | Two-letter code, or `multi-eu` / `multi-indic` for multilingual. |
+| `diarize` | `true` to include speaker labels. |
+| `punctuate` | `true` for punctuation and casing. |
+| `word_timestamps` | `true` to include per-word timestamps. |
+| `utterances` | `true` to include utterance segmentation. |
+| `redact_pii` | `true` to redact detected PII. |
+| `redact_pci` | `true` to redact detected payment data. |
+
+See the [Pulse feature reference](/models/documentation/speech-to-text-pulse/features/word-timestamps) for the full option list. Every option supported on the cloud API is supported on SageMaker unless flagged otherwise in the [Feature parity table](/models/self-host/amazon-sagemaker/overview#feature-parity-with-the-cloud-api).
+
+### Response shape
+
+```json
+{
+  "transcript": "Hello, this is a test call.",
+  "language": "en",
+  "duration": 3.42,
+  "words": [
+    { "word": "Hello", "start": 0.02, "end": 0.31, "confidence": 0.98 },
+    { "word": "this",  "start": 0.42, "end": 0.55, "confidence": 0.97 }
+  ]
+}
+```
+
+Fields present depend on the `CustomAttributes` you passed. Missing options produce a lean response; see the [cloud Pulse reference](/models/api-reference/speech-to-text/streaming) for the full schema.
+
+## Error handling
+
+SageMaker Runtime returns errors as HTTP status codes on the invocation, with details in `response["ResponseMetadata"]["HTTPHeaders"]["x-amzn-errortype"]`.
+
+| Status | Cause | Fix |
+|---|---|---|
+| `400 ValidationException` | Malformed JSON, missing required field, or invalid `voice_id` / `language`. | Log the request body; check schema against the tables above. |
+| `413 PayloadTooLargeException` | Request body exceeded 25 MB. | Chunk the audio or use Batch Transform. |
+| `424 ModelError` | Model container returned a non-2xx to SageMaker. | Look in CloudWatch logs `/aws/sagemaker/Endpoints/<endpoint-name>` for the container stderr. |
+| `429 ThrottlingException` | Endpoint saturated at current instance count. | Autoscale (see [Terraform autoscaling](/models/self-host/amazon-sagemaker/deploy-terraform#optional-application-auto-scaling)) or raise `InitialInstanceCount`. |
+| `500 InternalServerError` | Container crashed or health check failing. | Check CloudWatch metrics `HealthyHostCount`; if 0, endpoint needs redeployment. |
+
+## Observability
+
+The endpoint automatically publishes these CloudWatch metrics:
+
+| Metric | Namespace | Meaning |
+|---|---|---|
+| `Invocations` | `AWS/SageMaker` | Requests per minute |
+| `ModelLatency` | `AWS/SageMaker` | Time inside the container (excludes network) |
+| `OverheadLatency` | `AWS/SageMaker` | SageMaker overhead per request |
+| `CPUUtilization` | `/aws/sagemaker/Endpoints` | Container CPU |
+| `GPUUtilization` | `/aws/sagemaker/Endpoints` | Container GPU |
+| `MemoryUtilization` | `/aws/sagemaker/Endpoints` | Container RAM |
+
+Container stderr and stdout land in CloudWatch Logs under `/aws/sagemaker/Endpoints/<endpoint-name>`.

@@ -1,0 +1,206 @@
+---
+title: "Deploy with Terraform"
+description: "Reproducible SageMaker endpoint from the Marketplace listing, in Terraform."
+icon: "code"
+---
+
+The console flow is fine for the first endpoint. For anything you want to reproduce across accounts, regions, or CI environments, Terraform is the right tool. This page gives you a complete, working module.
+
+## Prerequisites
+
+- **Terraform ≥ 1.5** and the AWS provider `>= 5.0`.
+- **AWS Marketplace subscription** already accepted for the listing. Terraform cannot accept EULAs on your behalf, so this is a one-time manual step: open the [listing](https://aws.amazon.com/marketplace/pp/prodview-tf5i65efzgtco) and click **Accept Terms** on the target AWS account before running `terraform apply`.
+- **Product ARN** for the model version you want. It's on the **Continue to Configuration** page after subscribing.
+
+## The module
+
+```hcl
+# main.tf
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.region
+}
+
+# ----------------------------------------------------------------------------
+# Execution role
+# ----------------------------------------------------------------------------
+resource "aws_iam_role" "sagemaker_execution" {
+  name = "${var.name_prefix}-sagemaker-execution"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = { Service = "sagemaker.amazonaws.com" }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "sagemaker_full" {
+  role       = aws_iam_role.sagemaker_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
+}
+
+# ----------------------------------------------------------------------------
+# Model
+# ----------------------------------------------------------------------------
+resource "aws_sagemaker_model" "smallest" {
+  name               = "${var.name_prefix}-model"
+  execution_role_arn = aws_iam_role.sagemaker_execution.arn
+
+  primary_container {
+    model_package_name = var.product_arn
+  }
+
+  enable_network_isolation = true
+}
+
+# ----------------------------------------------------------------------------
+# Endpoint configuration
+# ----------------------------------------------------------------------------
+resource "aws_sagemaker_endpoint_configuration" "smallest" {
+  name = "${var.name_prefix}-endpoint-config"
+
+  production_variants {
+    variant_name           = "primary"
+    model_name             = aws_sagemaker_model.smallest.name
+    initial_instance_count = var.initial_instance_count
+    instance_type          = var.instance_type
+    initial_variant_weight = 1
+  }
+}
+
+# ----------------------------------------------------------------------------
+# Endpoint
+# ----------------------------------------------------------------------------
+resource "aws_sagemaker_endpoint" "smallest" {
+  name                 = "${var.name_prefix}-endpoint"
+  endpoint_config_name = aws_sagemaker_endpoint_configuration.smallest.name
+}
+```
+
+```hcl
+# variables.tf
+variable "region" {
+  type    = string
+  default = "us-east-1"
+}
+
+variable "name_prefix" {
+  type    = string
+  default = "smallest"
+}
+
+variable "product_arn" {
+  type        = string
+  description = "Marketplace product ARN from the listing configuration page"
+}
+
+variable "instance_type" {
+  type    = string
+  default = "ml.g5.xlarge"
+}
+
+variable "initial_instance_count" {
+  type    = number
+  default = 1
+}
+```
+
+```hcl
+# outputs.tf
+output "endpoint_name" {
+  value = aws_sagemaker_endpoint.smallest.name
+}
+
+output "endpoint_arn" {
+  value = aws_sagemaker_endpoint.smallest.arn
+}
+```
+
+## Applying it
+
+```bash
+terraform init
+
+terraform apply \
+  -var 'product_arn=arn:aws:sagemaker:us-east-1:XXXXXXXXXXXX:model-package/smallest-lightning-v31/1' \
+  -var 'region=us-east-1'
+```
+
+Endpoint creation takes 8–12 minutes on the first run. Terraform blocks until the endpoint reaches `InService` or fails.
+
+## Optional: private VPC endpoint
+
+To keep traffic inside your VPC, add subnets and a security group to the model:
+
+```hcl
+resource "aws_sagemaker_model" "smallest" {
+  name               = "${var.name_prefix}-model"
+  execution_role_arn = aws_iam_role.sagemaker_execution.arn
+
+  primary_container {
+    model_package_name = var.product_arn
+  }
+
+  vpc_config {
+    subnets            = var.subnet_ids
+    security_group_ids = [aws_security_group.sagemaker.id]
+  }
+
+  enable_network_isolation = true
+}
+```
+
+`enable_network_isolation = true` stops the container from making outbound calls (even to the model artifact store) after the endpoint is up.
+
+## Optional: Application Auto Scaling
+
+Add a scaling target on `SageMakerVariantInvocationsPerInstance` so the endpoint scales with load:
+
+```hcl
+resource "aws_appautoscaling_target" "smallest" {
+  min_capacity       = 1
+  max_capacity       = 8
+  resource_id        = "endpoint/${aws_sagemaker_endpoint.smallest.name}/variant/primary"
+  scalable_dimension = "sagemaker:variant:DesiredInstanceCount"
+  service_namespace  = "sagemaker"
+}
+
+resource "aws_appautoscaling_policy" "smallest" {
+  name               = "smallest-invocations-per-instance"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.smallest.resource_id
+  scalable_dimension = aws_appautoscaling_target.smallest.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.smallest.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    target_value = 100
+    predefined_metric_specification {
+      predefined_metric_type = "SageMakerVariantInvocationsPerInstance"
+    }
+    scale_in_cooldown  = 600
+    scale_out_cooldown = 60
+  }
+}
+```
+
+Tune `target_value` against your observed p95 latency in CloudWatch. Start conservative (100 invocations per instance) and lower it if `ModelLatency` climbs under load.
+
+## Cleaning up
+
+```bash
+terraform destroy \
+  -var 'product_arn=arn:aws:sagemaker:us-east-1:XXXXXXXXXXXX:model-package/smallest-lightning-v31/1'
+```
+
+Marketplace subscription itself has no cost when no endpoint is running, so you can leave it subscribed.
