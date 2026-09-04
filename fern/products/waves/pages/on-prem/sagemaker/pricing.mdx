@@ -1,43 +1,47 @@
 ---
 title: "Pricing"
-description: "How the Marketplace software rate and the AWS SageMaker infrastructure rate combine on your bill."
+description: "How the Marketplace software rate and the AWS instance-hour rate combine on your bill."
 icon: "dollar-sign"
 ---
 
-Your bill has two components: **software** (Smallest AI, via AWS Marketplace) and **infrastructure** (SageMaker instance-hours). Both land on your normal AWS invoice.
+<Warning>
+**Draft pending live verification against listing version `20260902-14`.** The software rate below is a placeholder until captured directly from the listing's Pricing tab. AWS instance-hour rates are quoted from published AWS pricing and should be re-verified on the [AWS SageMaker pricing page](https://aws.amazon.com/sagemaker/pricing/) before you plan capacity.
+</Warning>
+
+Your bill has two components:
+
+1. **Software.** Smallest AI's per-hour rate per running instance, charged via AWS Marketplace.
+2. **Infrastructure.** AWS's per-hour SageMaker Real-time inference rate, based on instance type.
+
+Both land on your normal AWS invoice.
 
 ## Software rate
 
-The listing charges a **per-hour software rate per running instance**. It bills for the wall-clock time an endpoint stays `InService`, not for the number of requests served.
+Per-hour, per running instance. Bills for wall-clock time the endpoint stays `InService`, not per request.
 
-| Model family | Software rate | Notes |
+| Instance | Software rate | Verified |
 |---|---|---|
-| Lightning v3.1 | _[TODO: capture from live listing]_ | Per instance-hour |
-| Pulse | _[TODO: capture from live listing]_ | Per instance-hour |
+| _All allowed instance types_ | _Placeholder until captured from the listing's Pricing tab_ | |
 
-<Note>
-The Marketplace listing page is the source of truth for the current rate. Prices there can change on version bumps; a pinned software version keeps its published price.
-</Note>
+The Marketplace listing page is the source of truth. Prices there can change on version bumps; a pinned software version keeps its published price.
 
 ## Infrastructure rate
 
-AWS bills you separately for the SageMaker Real-time inference instance. Rates are set by AWS, published on the [SageMaker pricing page](https://aws.amazon.com/sagemaker/pricing/), and vary by region.
+AWS sets these rates, publishes them on the [SageMaker pricing page](https://aws.amazon.com/sagemaker/pricing/), and varies them by region.
 
-Typical instance rates in `us-east-1` for reference (verify on the AWS pricing page before quoting):
+Reference rates in `us-east-1` (verify on the AWS page before quoting):
 
-| Instance | On-demand rate | Notes |
-|---|---|---|
-| `ml.g5.xlarge` | ~$1.41/hour | Lightning v3.1 recommended baseline. |
-| `ml.g5.2xlarge` | ~$1.69/hour | Pulse recommended baseline. |
-| `ml.g5.4xlarge` | ~$2.72/hour | Higher throughput per instance. |
+| Instance | On-demand rate |
+|---|---|
+| `ml.g5.xlarge` | ~$1.41/hour |
+| `ml.g5.2xlarge` | ~$1.69/hour |
+| `ml.g5.4xlarge` | ~$2.72/hour |
 
-**Savings Plans** and **Reserved Instances** apply the same way as any other SageMaker workload; a 1-year no-upfront commitment usually knocks 30-40% off the on-demand rate.
+**Savings Plans** and **Reserved Instances** apply the same way as any other SageMaker workload; a 1-year no-upfront commitment typically knocks 30 to 40 percent off the on-demand rate.
 
 ## Free trial
 
-The listing includes a **14-day free software trial**. During the trial, the Smallest AI portion is $0. **AWS infrastructure charges still apply.** An endpoint left running for the full trial on `ml.g5.xlarge` costs roughly $475 in AWS instance-hours alone.
-
-The trial starts when you accept the EULA, not when you first create an endpoint. Delete endpoints you're not using between trial and paid periods to keep the infrastructure bill honest.
+_Placeholder until confirmed on the listing._ If the listing includes a Marketplace free trial, the Smallest AI portion is $0 during the trial period. AWS infrastructure charges still apply during a trial; an endpoint left running for a full 14-day trial on `ml.g5.xlarge` runs roughly $475 in AWS instance-hours alone.
 
 ## Private offers
 
@@ -47,23 +51,21 @@ For volume, longer commit terms, or non-standard EULA edits, contact `support@sm
 - Preferred commit length (1 or 3 years)
 - AWS account IDs to grant the private offer to
 
-Private offers land in the [AWS Marketplace Private Offers](https://console.aws.amazon.com/marketplace/home?#/private-offers) console; accept there and Terraform / the console handle the rest transparently.
+Private offers land in the [AWS Marketplace Private Offers](https://console.aws.amazon.com/marketplace/home?#/private-offers) console. Accept there and Terraform or the console handle the rest transparently.
 
 ## Estimating a month
-
-The formula:
 
 ```
 monthly_cost = (software_rate + instance_rate) × 24 × 30 × instance_count
 ```
 
-Worked example, one always-on Lightning v3.1 endpoint at 1 instance on `ml.g5.xlarge` in `us-east-1`:
+Worked example, one always-on endpoint at 1 instance on `ml.g5.xlarge` in `us-east-1`:
 
-- Software: _[TODO: rate]_ × 720 hours
+- Software: _placeholder rate_ × 720 hours
 - Infrastructure: $1.41 × 720 = **$1,015.20/month**
-- **Total (once software rate is filled in):** _[TODO]_
+- **Total:** filled in once the software rate is captured from the listing
 
-Autoscaling changes `instance_count` over time, so the accurate way to model a variable workload is to look at CloudWatch `Invocations` × average duration, then convert to instance-hours.
+Autoscaling changes `instance_count` over time, so the accurate way to model a variable workload is to look at CloudWatch `Invocations` over a representative window, convert to instance-hours, and multiply.
 
 ## Version upgrades
 
@@ -71,12 +73,12 @@ Each pinned software version has its own published rate. Upgrading in place (cre
 
 ## What you are NOT billed for
 
-- **Marketplace subscription itself:** zero cost when no endpoint is running.
-- **`sagemaker:InvokeEndpoint` calls:** counted against the software + instance rate above, not billed per call.
-- **CloudWatch metrics:** free at default granularity; custom metrics or detailed monitoring bill separately per AWS's normal CloudWatch rates.
+- **Marketplace subscription itself.** Zero cost when no endpoint is running.
+- **`sagemaker:InvokeEndpoint` calls.** Counted against the software plus instance rate above, not billed per call.
+- **CloudWatch metrics at default granularity.** Custom metrics or detailed monitoring bill separately per AWS's normal CloudWatch rates.
 
 ## See also
 
 - [AWS SageMaker pricing](https://aws.amazon.com/sagemaker/pricing/)
-- [AWS Marketplace listing](https://aws.amazon.com/marketplace/pp/prodview-tf5i65efzgtco)
+- [Marketplace listing](https://aws.amazon.com/marketplace/pp/prodview-tf5i65efzgtco)
 - [Overview → When SageMaker is the right fit](/models/self-host/amazon-sagemaker/overview#when-sagemaker-is-the-right-fit)

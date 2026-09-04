@@ -1,95 +1,92 @@
 ---
 title: "Amazon SageMaker overview"
-description: "Deploy Smallest AI models on Amazon SageMaker for VPC-isolated, per-hour inference. No data leaves your AWS account."
+description: "Pulse Speech-to-Text on Amazon SageMaker. Same model behaviour as the cloud API, inside your own VPC."
 icon: "aws"
 ---
 
-Smallest AI ships model containers to the [AWS Marketplace](https://aws.amazon.com/marketplace/pp/prodview-tf5i65efzgtco) so you can deploy them as **SageMaker Real-time inference endpoints** inside your own VPC. Requests never leave your AWS account, and AWS bills you directly for both the software and the underlying compute.
+Pulse Speech-to-Text is available as an Amazon SageMaker model package on AWS Marketplace. Once subscribed, you deploy an endpoint inside your own VPC; transcription traffic stays in your AWS account, and AWS bills you directly for the software (per instance-hour) and the underlying compute.
 
-## When SageMaker is the right fit
+**Marketplace listing:** [Smallest AI Pulse Speech-to-Text Streaming (English)](https://aws.amazon.com/marketplace/pp/prodview-tf5i65efzgtco). Current version: `20260902-14`.
 
-- **Regulated workloads.** Endpoints run inside your VPC and inherit your existing AWS compliance posture (HIPAA-eligible, SOC, ISO, PCI, FedRAMP where the AWS region supports it).
-- **You already run on AWS.** Native integration with CloudWatch, IAM, VPC endpoints, PrivateLink, KMS, CloudTrail, and Application Auto Scaling.
-- **Consolidated billing.** Software charges land on your AWS Marketplace bill; no separate Smallest AI invoice.
-- **Minimal operational overhead.** AWS owns the container runtime, autoscaling, patching, and health checks. You own the endpoint config.
+## What the model does
 
-## When Docker or Kubernetes is a better fit
+Same Pulse behaviour as the cloud API, hosted inside your account:
 
-- **Non-AWS deployments.** Bare-metal, on-prem, or another cloud → see the [Docker](/models/self-host/docker-setup/stt-deployment/quick-start) or [Kubernetes](/models/self-host/kubernetes-setup/quick-start) guides.
-- **Streaming with long-lived connections.** SageMaker Real-time Inference caps a single invocation at **60 seconds** of processing time and a **25 MB** request payload. If you need multi-minute WebSocket streams (long-form transcription, long-running voice-agent sessions), Docker or Kubernetes is the fit.
-- **Custom container internals.** SageMaker locks you to the container image published to Marketplace. If you want to swap tokenizers, patch models, or add custom middleware inside the runtime, self-host with Docker.
+- Real-time streaming transcription with sub-100 ms time-to-first-token on a warm endpoint.
+- Pre-recorded batch transcription for offline audio.
+- Automatic language detection and mid-stream code-switching.
+- Speaker diarization, sentence-level timestamps, keyword boosting.
+- Noise-robust transcription for call-center and conversational audio.
+- PII and PCI redaction, punctuation, inverse text normalisation on by default.
 
-## What's in the listing
+For the option surface (every request-level flag Pulse accepts), see the [Pulse feature reference](/models/documentation/speech-to-text-pulse/features/word-timestamps). Languages match the [Pulse model card](/models/model-cards/speech-to-text/pulse) exactly.
 
-The AWS Marketplace listing bundles Smallest AI's production speech models:
+## Deployment-mode support matrix
 
-| Model family | Task | Container tag |
+AWS SageMaker offers several inference modes. Marketplace model packages can support any subset. This matrix lists only modes that have been verified end-to-end against the current listing (version `20260902-14`).
+
+| Mode | Status | Verified against |
 |---|---|---|
-| **Lightning v3.1** | Text-to-Speech (real-time synthesis) | _[TODO: capture from live listing]_ |
-| **Pulse** | Speech-to-Text (streaming + batch transcription) | _[TODO: capture from live listing]_ |
+| Real-time inference (request/response) | _Pending live verification_ | |
+| Real-time inference (streaming) | _Pending live verification. See note on transport below._ | |
+| Batch transform | _Pending live verification_ | |
+| Asynchronous inference | _Pending live verification_ | |
+| Serverless inference | Not supported by AWS for Marketplace model packages | AWS SageMaker feature matrix |
 
 <Note>
-The listing is versioned. Each Marketplace subscription pins to a specific container digest so an upgrade never lands in your VPC without your action. See [Pricing](/models/self-host/amazon-sagemaker/pricing) for the version-selection UI and upgrade path.
+"Streaming" on SageMaker means different things depending on the container. The exact AWS API operation used to invoke this listing in streaming mode (for example `InvokeEndpointWithResponseStream` versus a container-hosted WebSocket upgrade) is documented once verified against the live endpoint. Until then, treat streaming details in the [Invoke the endpoint](/models/self-host/amazon-sagemaker/invoke) page as pending.
 </Note>
-
-## Supported endpoint types
-
-| Endpoint type | Supported | Notes |
-|---|---|---|
-| **Real-time inference** | Yes | Primary path. Sub-second latency; per-request billing. |
-| **Serverless inference** | No | Cold-start latency incompatible with real-time speech. |
-| **Batch transform** | Yes | For bulk STT transcription. See the [batch transcription cookbook](/models/self-host/amazon-sagemaker/cookbooks/batch-transcription). |
-| **Asynchronous inference** | Roadmap | Not exposed in the initial listing. |
 
 ## Supported instance types
 
-Instance sizing depends on which model family the endpoint hosts. Start with the smaller instance and step up if `ModelLatency` in CloudWatch drifts past your SLO.
+_Placeholder until confirmed on the Configuration page of the live listing. The listing's Configuration screen lists exact allowed instance types; that list is the authoritative source and takes precedence over anything on this page._
 
-| Model | Recommended | Minimum | Notes |
-|---|---|---|---|
-| Lightning v3.1 (TTS) | `ml.g5.xlarge` | `ml.g5.xlarge` | 1× A10G, 24 GB. |
-| Pulse (STT) | `ml.g5.2xlarge` | `ml.g5.xlarge` | Scales with concurrent streams. |
+Common baselines to expect:
+
+| Instance | Notes |
+|---|---|
+| `ml.g5.xlarge` | Baseline. |
+| `ml.g5.2xlarge` | Higher throughput. |
 
 <Warning>
-CPU-only instances are not supported. Both model families require an NVIDIA GPU on the endpoint.
+CPU-only instances are not supported. Pulse requires an NVIDIA GPU on the endpoint.
 </Warning>
 
-## Feature parity with the cloud API
+## When SageMaker is the right fit
 
-| Feature | Cloud API | SageMaker | Notes |
-|---|---|---|---|
-| Real-time TTS synthesis | Yes | Yes | Same voice catalog. |
-| Streaming TTS (WebSocket) | Yes | Partial | Chunked HTTP streaming works; SageMaker does not expose WebSocket. |
-| Pre-recorded STT (up to 25 MB) | Yes | Yes | 25 MB is the SageMaker Real-time payload cap. |
-| Pre-recorded STT (> 25 MB) | Yes | Use Batch Transform | Split files into 25 MB chunks or use the batch cookbook. |
-| Streaming STT (WebSocket) | Yes | No | SageMaker Real-time is request/response only. Use Docker or Kubernetes. |
-| Voice cloning | Yes | Roadmap | Not exposed in the initial listing. |
-| Webhooks / async callbacks | Yes | No | Handle callbacks in your own application layer. |
-| Voice agents (STT + LLM + TTS orchestration) | Yes | No | Compose the individual models yourself. |
+- **Regulated workloads.** Endpoints run inside your VPC and inherit your existing AWS compliance posture (HIPAA-eligible, SOC, ISO, PCI, FedRAMP where the region supports it).
+- **You already run on AWS.** Native integration with CloudWatch, IAM, VPC endpoints, PrivateLink, KMS, CloudTrail, and Application Auto Scaling.
+- **Consolidated billing.** Software charges land on your AWS Marketplace bill; no separate Smallest AI invoice.
+- **Minimal operational overhead.** AWS owns the container runtime, patching, and health checks. You own the endpoint config.
+
+## When Docker or Kubernetes is a better fit
+
+- **Non-AWS deployments.** Bare-metal, on-prem, or another cloud. See the [Docker](/models/self-host/docker-setup/stt-deployment/quick-start) or [Kubernetes](/models/self-host/kubernetes-setup/quick-start) guides.
+- **You need to swap tokenizers, patch models, or add middleware inside the runtime.** SageMaker locks you to the container image published to Marketplace. Docker is the fit for custom internals.
 
 ## Regions
 
-The listing is available in every AWS region that supports the `ml.g5.*` instance family. Confirm availability on the [SageMaker instance-type pricing page](https://aws.amazon.com/sagemaker/pricing/) before you subscribe.
+Available in every AWS region that supports the `ml.g5.*` instance family. Confirm on the [SageMaker instance-type pricing page](https://aws.amazon.com/sagemaker/pricing/) before you subscribe.
 
 ## Getting started
 
 <CardGroup cols={2}>
   <Card title="Deploy from AWS Console" icon="aws" href="/models/self-host/amazon-sagemaker/deploy-console">
-    Marketplace subscription → SageMaker endpoint in about 15 minutes.
+    Subscribe on Marketplace and stand up an endpoint. Primary path for a first deployment.
   </Card>
   <Card title="Deploy with Terraform" icon="code" href="/models/self-host/amazon-sagemaker/deploy-terraform">
-    IaC-first flow with reproducible endpoint config.
+    Reproducible IaC once you have verified the Console flow.
   </Card>
   <Card title="Invoke the endpoint" icon="terminal" href="/models/self-host/amazon-sagemaker/invoke">
-    boto3, AWS CLI, and Python SDK examples.
+    Python and AWS CLI examples for each verified inference mode.
   </Card>
   <Card title="Pricing" icon="dollar-sign" href="/models/self-host/amazon-sagemaker/pricing">
-    Marketplace software rate + AWS infrastructure rate.
+    Marketplace software rate plus AWS instance-hour rate.
   </Card>
 </CardGroup>
 
 ## Support
 
-- **AWS Marketplace subscription and billing:** contact AWS Support through the AWS Console.
-- **Model behavior, latency, or output quality:** email `support@smallest.ai` with your endpoint name, region, and a request/response sample. Do not paste keys or PII.
-- **Discord:** [join the community](https://discord.gg/9WtSXv26WE) for informal help.
+- **Marketplace subscription and billing.** Contact AWS Support through the AWS Console.
+- **Model behaviour, latency, or output quality.** Email `support@smallest.ai` with your endpoint name, region, and a request/response sample. Do not paste keys or PII.
+- **Discord.** [Join the community](https://discord.gg/9WtSXv26WE) for informal help.
