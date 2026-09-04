@@ -24,7 +24,7 @@ Splitting the trunk into two resources is also what enables direct SIP-to-SIP: a
 
 ## What still works during the migration window
 
-The old API keeps working, translated to the new model underneath. Responses on deprecated paths carry a `Deprecation: true` header. **A removal date has not been announced yet**; it will be published on this page and in the changelog with notice.
+The old API keeps working, translated to the new model underneath, for **45 days after the rework's release** — then everything in the deprecated list is removed in one change. The concrete sunset date is published at release on the [Deprecation Notices](/voice-agents/deprecations/notices) page and in the changelog. Responses on deprecated paths carry a `Deprecation: true` header, so the affected code paths in your integration are discoverable from your own logs.
 
 | You are still doing this | Status |
 |---|---|
@@ -53,6 +53,17 @@ The old API keeps working, translated to the new model underneath. Responses on 
 - `cpsLimit` (1-50, default 1) paces outbound calls per carrier address, shared by every trunk on that address.
 - Deleting or releasing telephony resources is guarded: you get a `409` naming the agent, campaign, or transfer configuration still using them, instead of a silent breakage.
 - `GET /agent/{agentId}` keeps `phoneNumber` as `string[]`, now meaning *what the agent answers on*. An agent answering on an extension-only trunk returns `[]` and is still reachable.
+
+## After the window: what gets removed
+
+Everything below exists only to keep old integrations running and is deleted together when the window closes.
+
+- **Endpoint**: `POST /product/import-phone-number` (returns `404` after removal).
+- **Request fields**: `telephonyProductId` and `allowInboundCall` on agent writes, `fromProductId` on outbound calls, `phoneNumberIds` on campaigns. After removal they are ignored or refused; `fromNumber` becomes required on outbound calls and `fromNumbers` on campaign creation.
+- **Response fields**: `agentId` on number reads (use the `agent` object), `customProducts` on `GET /product/all-numbers` (use the `/sip-trunk` lists).
+- **Internals**: the `productType: "custom"` pointer records.
+
+Campaigns are the one change that forces API integrators to ship code: after the window, `fromNumbers` is required at creation. If your release cycle is slow, start there.
 
 ## Dashboard equivalents
 
