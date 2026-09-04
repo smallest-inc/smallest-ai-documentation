@@ -1,0 +1,102 @@
+---
+title: "Deploy from AWS Console"
+description: "Subscribe to the Marketplace listing and stand up a SageMaker endpoint from the AWS Console."
+icon: "browser"
+---
+
+<Warning>
+**Draft pending live verification against listing version `20260902-14`.** Steps below outline the general SageMaker Marketplace flow. Screenshots and exact allowed instance types will be captured during a live deployment on account `AdministratorAccess-979023696888`, then this page will pin every value.
+</Warning>
+
+## Prerequisites
+
+- **AWS account** with permission to subscribe to Marketplace products and create SageMaker resources. `AmazonSageMakerFullAccess` on the caller plus `aws-marketplace:Subscribe` is enough.
+- **A SageMaker execution role** (IAM role trusted by `sagemaker.amazonaws.com`) with `AmazonSageMakerFullAccess` attached. Create one in the [IAM console](https://console.aws.amazon.com/iam) before you start if you do not already have one.
+- **A VPC subnet** if you need a private-only endpoint (recommended for regulated workloads).
+
+## Step 1: Subscribe on Marketplace
+
+1. Open the [Smallest AI Pulse Speech-to-Text Streaming (English) listing](https://aws.amazon.com/marketplace/pp/prodview-tf5i65efzgtco).
+2. Click **View purchase options** → **Accept Terms**.
+3. Subscription usually completes in under a minute. Wait for the page to show **Effective date … Subscribed** before continuing.
+
+<Note>
+Subscription is a one-time step per AWS account. You can create as many endpoints from the listing as you want; each endpoint bills separately.
+</Note>
+
+## Step 2: Continue to Configuration
+
+1. Click **Continue to Configuration**.
+2. Pick the **Software version**. Pin to `20260902-14` if you want to match what this page was written against.
+3. Pick the **Region** where the endpoint will run.
+4. Copy the **Product ARN** at the bottom of the page. You will paste it into the SageMaker model definition in Step 3.
+
+<Frame caption="Configuration page: version and region selection. Screenshot pending live capture; account ID will be redacted.">
+  ![Marketplace configuration page](./images/marketplace-configuration.png)
+</Frame>
+
+## Step 3: Create the SageMaker model
+
+1. Click **Continue to Launch** → **Launch through SageMaker**.
+2. In the SageMaker Console, click **Create model**.
+3. Fill in:
+   - **Model name**, letters, digits, hyphens, up to 63 characters. For example `smallest-pulse-stt`.
+   - **IAM role**, the SageMaker execution role from prerequisites.
+   - **Container input options**, "Use an existing model artifact".
+   - **Model package**, paste the Product ARN from Step 2 (or pick it from the Marketplace dropdown).
+4. Leave VPC config empty for a public endpoint, or attach subnets and a security group for a VPC-only endpoint.
+5. Click **Create model**.
+
+<Frame caption="Create model form showing IAM role and Marketplace model package selection. Screenshot pending live capture.">
+  ![Create model form](./images/create-model.png)
+</Frame>
+
+## Step 4: Create an endpoint configuration
+
+1. **Inference → Endpoint configurations → Create**.
+2. Name it, e.g. `smallest-pulse-stt-config-v1`.
+3. Add a **production variant**:
+   - **Model**, the one from Step 3.
+   - **Instance type**, one of the types the Marketplace Configuration page listed. _Placeholder until live verification._
+   - **Initial instance count**, 1 to start.
+4. Click **Create endpoint configuration**.
+
+## Step 5: Create the endpoint
+
+1. **Inference → Endpoints → Create**.
+2. Endpoint name, e.g. `smallest-pulse-stt-prod`.
+3. Pick the endpoint configuration from Step 4.
+4. Click **Create endpoint**.
+
+Endpoint creation takes 8 to 12 minutes on the first deployment. Watch the status until it flips to `InService`.
+
+<Frame caption="Endpoint status showing InService. Screenshot pending live capture; account ID and full ARN will be redacted.">
+  ![Endpoint InService](./images/endpoint-inservice.png)
+</Frame>
+
+## Step 6: Send a test request
+
+_Content pending live verification._ Once the endpoint is `InService`, the exact invoke command lands on the [Invoke the endpoint](/models/self-host/amazon-sagemaker/invoke) page along with request/response content types, payload shape, and sample outputs.
+
+## Cleaning up
+
+Delete resources in this order to stop charges immediately:
+
+```bash
+aws sagemaker delete-endpoint --endpoint-name smallest-pulse-stt-prod
+aws sagemaker delete-endpoint-config --endpoint-config-name smallest-pulse-stt-config-v1
+aws sagemaker delete-model --model-name smallest-pulse-stt
+```
+
+Only the endpoint delete stops instance-hour charges. Endpoint config and model deletes are cosmetic. The Marketplace subscription itself has no cost when no endpoint is running.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Invoke the endpoint" icon="terminal" href="/models/self-host/amazon-sagemaker/invoke">
+    Python and CLI examples per verified inference mode.
+  </Card>
+  <Card title="Terraform version" icon="code" href="/models/self-host/amazon-sagemaker/deploy-terraform">
+    Reproduce the same setup as IaC.
+  </Card>
+</CardGroup>
