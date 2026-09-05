@@ -89,7 +89,7 @@ export const CodingAgentCallout: React.FC = () => (
       </CalloutLink>
       , or paste a prompt from{" "}
       <CalloutLink
-        href="/voice-agents/developer-guide/get-started/build-with-a-coding-agent"
+        href="/overview/developer-tools/build-with-a-coding-agent"
         kind="build-page"
       >
         Build with a coding agent

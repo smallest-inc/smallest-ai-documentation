@@ -1,0 +1,102 @@
+---
+title: "Models API overview"
+sidebarTitle: "Overview"
+subtitle: "One API key, one base URL, four capabilities: text to speech, speech to text, speech to speech, and an LLM. Pick the model with a body field or a query parameter."
+description: "Getting started with the Smallest AI Models API: authentication, base URL, which endpoint serves each model, the SDKs, and where each quickstart lives."
+---
+
+
+import { CodingAgentCallout } from "@/components/CodingAgentCallout";
+
+## Before you start
+
+<Steps>
+  <Step title="Create an API key">
+    Create a key on the [API Keys](https://app.smallest.ai/dashboard/api-keys?utm_source=documentation&utm_medium=models-overview) page and export it:
+
+    ```bash
+    export SMALLEST_API_KEY="your-api-key-here"
+    ```
+
+    The same key works for every model and for the Voice Agents API. See [Authentication](/api-reference/authentication) for rotation and security guidance.
+  </Step>
+  <Step title="Send one request">
+    Text to speech is the fastest way to confirm the key works. No install required:
+
+    ```bash
+    curl -X POST "https://api.smallest.ai/waves/v1/tts" \
+      -H "Authorization: Bearer $SMALLEST_API_KEY" \
+      -H "Content-Type: application/json" \
+      -H "Accept: audio/wav" \
+      -d '{"text": "Hello from Smallest AI.", "voice_id": "meher", "model": "lightning_v3.1_pro", "sample_rate": 24000, "output_format": "wav"}' \
+      --output hello.wav
+    ```
+
+    Play `hello.wav`. If you hear speech, you are set up.
+  </Step>
+  <Step title="Pick a capability">
+    Each capability below has its own quickstart with Python, JavaScript, and cURL samples.
+  </Step>
+</Steps>
+
+## Endpoints at a glance
+
+Every endpoint lives under `https://api.smallest.ai/waves/v1` and authenticates with `Authorization: Bearer <key>`.
+
+| Capability | Model | Endpoint | How to select |
+|---|---|---|---|
+| Text to speech (sync) | Lightning v3.1, Lightning v3.1 Pro | `POST /waves/v1/tts` | `"model": "lightning_v3.1"` or `"lightning_v3.1_pro"` in the body |
+| Text to speech (streaming) | Lightning v3.1, Lightning v3.1 Pro | `POST /waves/v1/tts/live` (SSE) or `WSS /waves/v1/tts/live` (WebSocket) | Same `model` body field |
+| Speech to text (pre-recorded) | Pulse, Pulse Pro | `POST /waves/v1/stt/` | `?model=pulse` or `?model=pulse-pro` |
+| Speech to text (realtime) | Pulse | `WSS /waves/v1/stt/live` | `?model=pulse` |
+| Speech to speech | Hydra | `WSS /waves/v1/s2s` | `?model=hydra` |
+| LLM | Electron | `POST /waves/v1/chat/completions` | `"model": "electron"` in the body |
+| Voice cloning | Lightning v3.1 | `POST /waves/v1/voice-cloning` | Upload a sample, get a `voice_id` |
+
+Read [HTTP vs Streaming vs WebSockets](/models/http-vs-streaming-vs-web-sockets) to choose a transport, and the [Models](/overview/models) page to compare models.
+
+## Quickstarts
+
+<CardGroup cols={2}>
+  <Card title="Text to Speech" icon="volume-high" href="/models/text-to-speech/quickstart">
+    Synthesize speech in 30 seconds, then stream it.
+  </Card>
+  <Card title="Speech to Text" icon="microphone-lines" href="/models/speech-to-text/quickstart">
+    Transcribe a file, then a live microphone stream.
+  </Card>
+  <Card title="Speech to Speech" icon="wave-pulse" href="/models/speech-to-speech/quickstart">
+    Open a Hydra session and hold a conversation.
+  </Card>
+  <Card title="LLM" icon="brain" href="/models/llm/quickstart">
+    Chat completions with the OpenAI SDK pointed at Electron.
+  </Card>
+  <Card title="Voice Cloning" icon="clone" href="/models/voice-cloning/instant-clone-api">
+    Create a clone in one HTTP call and use it in text to speech.
+  </Card>
+  <Card title="Voice agent from parts" icon="robot" href="/models/cookbooks/voice-agent-electron-pulse-lightning">
+    Wire Pulse, Electron, and Lightning into your own agent loop.
+  </Card>
+</CardGroup>
+
+## SDKs
+
+<CardGroup cols={2}>
+  <Card title="Python" icon="fa-brands fa-python" href="https://github.com/smallest-inc/smallest-python-sdk">
+    `pip install smallestai`. Typed clients for every endpoint, including the WebSocket streams.
+  </Card>
+  <Card title="Node.js" icon="fa-brands fa-node-js" href="https://github.com/smallest-inc/smallest-node-sdk">
+    The official Node.js client for the Smallest AI API.
+  </Card>
+</CardGroup>
+
+Using an agent framework? [LiveKit](/integrations/agent-framework/live-kit), [Pipecat](/integrations/agent-framework/pipecat), and the [Vercel AI SDK](/integrations/sdks-libraries/vercel-ai-sdk) have first party plugins. The full list is on the [Integrations](/integrations/agent-framework/live-kit) tab.
+
+## Limits, errors, and regions
+
+- [Concurrency and Limits](/api-reference/concurrency-and-limits) covers per plan concurrency and rate limits.
+- [Error reference](/models/troubleshooting/error-reference) lists every status code the model endpoints return.
+- East Asian streaming languages on Pulse are served from the US region at `wss://api.us.smallest.ai`. See the [Pulse model card](/models/model-cards/speech-to-text/pulse).
+
+<CodingAgentCallout />
+
+{/* coding-agent-callout-injected */}

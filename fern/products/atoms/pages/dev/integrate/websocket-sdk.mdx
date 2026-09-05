@@ -7,7 +7,7 @@ description: "JavaScript SDK for connecting to a Smallest agent from a web page.
 
 import { CodingAgentCallout } from "@/components/CodingAgentCallout";
 
-A JavaScript library that opens a live voice conversation with a Smallest agent from a web page. Published on npm as [`@smallest-ai/agent-sdk`](https://www.npmjs.com/package/@smallest-ai/agent-sdk). Wraps the [Realtime Agent WebSocket API](/voice-agents/api-reference/realtime-agent/realtime-agent), plus microphone capture, PCM playback, and an event API.
+A JavaScript library that opens a live voice conversation with a Smallest agent from a web page. Published on npm as [`@smallest-ai/agent-sdk`](https://www.npmjs.com/package/@smallest-ai/agent-sdk). Wraps the [Realtime Agent WebSocket API](/api-reference/voice-agents/realtime-agent/realtime-agent), plus microphone capture, PCM playback, and an event API.
 
 ## When to use it
 
@@ -20,8 +20,8 @@ A JavaScript library that opens a live voice conversation with a Smallest agent 
 
 | Runtime | Use |
 |---|---|
-| React Native, iOS, Android, Flutter | Talk to the [Realtime Agent WebSocket API](/voice-agents/api-reference/realtime-agent/realtime-agent) directly. The SDK calls `navigator.mediaDevices.getUserMedia` and `AudioContext`, neither of which exists in those runtimes. |
-| Python, Go, Node, any server-side process | Same. Use the raw WebSocket API with the platform's native WebSocket and audio libraries, and declare your audio with [Audio Formats](/voice-agents/platform/agent-sdk/audio-formats). |
+| React Native, iOS, Android, Flutter | Talk to the [Realtime Agent WebSocket API](/api-reference/voice-agents/realtime-agent/realtime-agent) directly. The SDK calls `navigator.mediaDevices.getUserMedia` and `AudioContext`, neither of which exists in those runtimes. |
+| Python, Go, Node, any server-side process | Same. Use the raw WebSocket API with the platform's native WebSocket and audio libraries, and declare your audio with [Audio Formats](/voice-agents/integrate/audio-formats). |
 | Outbound phone calls | Use [Campaigns](/voice-agents/developer-guide/build/campaigns/creating-campaigns). |
 
 <Info>
@@ -73,7 +73,7 @@ await agent.connect();
   `POST /conversation/register-call` to get a short-lived, single-use access
   token. See the **Register Call** endpoint under **Realtime Agent** in the API
   reference. Then pass that token as `apiKey`. For the full three-step flow, see
-  the [Browser Voice Cookbook](/voice-agents/platform/agent-sdk/browser-voice-cookbook).
+  the [Browser Voice Cookbook](/voice-agents/integrate/browser-voice-cookbook).
 
   A raw `sk_` key also works. Use it only on a server or on a trusted client.
 </Tip>
@@ -109,7 +109,7 @@ interface AtomsAgentConfig {
 }
 ```
 
-**You do not declare your input format.** The SDK reads the rate the browser actually gave its `AudioContext` and sends that as `input_audio_format` at connect, on both auth paths. Declaring one on `/register-call` has no effect when you use this SDK, because the measured value replaces it. The SDK resamples automatically, so the format it declares always matches the audio it sends. See [Audio Formats](/voice-agents/platform/agent-sdk/audio-formats).
+**You do not declare your input format.** The SDK reads the rate the browser actually gave its `AudioContext` and sends that as `input_audio_format` at connect, on both auth paths. Declaring one on `/register-call` has no effect when you use this SDK, because the measured value replaces it. The SDK resamples automatically, so the format it declares always matches the audio it sends. See [Audio Formats](/voice-agents/integrate/audio-formats).
 
 **Output depends on how you authenticate.** With a `/register-call` token the backend already chose the format and `outputAudioFormat` is ignored. With a raw API key nothing has chosen it, so set `outputAudioFormat`; leave it unset for `pcm_24000`. `pcm_44100` needs a `lightning-v3.1` voice, and a rate the agent's voice cannot render is refused at connect.
 
@@ -270,12 +270,12 @@ Expected console output, in order: `session_started` with `session_id` and `call
 | Transport | WebSocket only (no WebRTC). |
 | Caption timing | `transcript_delta` is word-level and audio-paced, not per-character. Fine for live captions; not frame-accurate lip-sync. |
 
-For non-browser runtimes, connect to the [Realtime Agent WebSocket API](/voice-agents/api-reference/realtime-agent/realtime-agent) directly. A raw-protocol guide with tested reference clients for Python, React Native, Swift, and Kotlin is in progress.
+For non-browser runtimes, connect to the [Realtime Agent WebSocket API](/api-reference/voice-agents/realtime-agent/realtime-agent) directly. A raw-protocol guide with tested reference clients for Python, React Native, Swift, and Kotlin is in progress.
 
 ## Next steps
 
 <CardGroup cols={3}>
-  <Card title="Realtime Agent WebSocket API" icon="plug" href="/voice-agents/api-reference/realtime-agent/realtime-agent">
+  <Card title="Realtime Agent WebSocket API" icon="plug" href="/api-reference/voice-agents/realtime-agent/realtime-agent">
     Wire protocol: message types, payload shapes, error codes.
   </Card>
   <Card title="Post-Call Analytics" icon="chart-bar" href="/voice-agents/developer-guide/operate/analytics/post-call-analytics">
