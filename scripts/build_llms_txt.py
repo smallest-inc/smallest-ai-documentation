@@ -65,6 +65,8 @@ def slugify(label: str) -> str:
       'iOS Swift' → 'i-os-swift'
       'Lightning v3.1 Pro' → 'lightning-v-3-1-pro'
       'Testing & Debugging' → 'testing-debugging'
+      'Concurrency and Limits' → 'concurrency-and-limits' ('and' is KEPT)
+      'Parallelism and Latency' → 'parallelism-and-latency'
     """
     s = label
     # Insert space at camelCase boundaries before lowercasing.
@@ -73,8 +75,8 @@ def slugify(label: str) -> str:
     s = re.sub(r"([A-Za-z])([0-9])", r"\1 \2", s)
     s = re.sub(r"([0-9])([A-Za-z])", r"\1 \2", s)
     s = s.lower()
-    # Drop 'and' / '&' connectors.
-    s = re.sub(r"\s*&\s*|\s+and\s+", " ", s)
+    # Drop '&' connectors only. 'and' is preserved (matches Fern).
+    s = re.sub(r"\s*&\s*", " ", s)
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = re.sub(r"-+", "-", s).strip("-")
     return s
