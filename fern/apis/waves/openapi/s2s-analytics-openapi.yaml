@@ -1,0 +1,103 @@
+openapi: 3.0.1
+info:
+  title: Waves Speech-to-Speech Analytics
+  description: |
+    Analytics for the Speech-to-Speech (S2S) pipeline. Same shape as TTS/ASR analytics — use these
+    when you have S2S usage split across your organization and want it separately trended.
+  version: 1.0.0
+servers:
+  - url: https://api.smallest.ai
+    x-fern-server-name: waves
+paths:
+  /waves/v1/analytics/s2s/usage/timeseries:
+    get:
+      tags: [Analytics]
+      operationId: getS2sUsageTimeseries
+      summary: S2S usage over time
+      description: Usage counts and duration for S2S calls, grouped by time bucket.
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/StartTime'
+        - $ref: '#/components/parameters/EndTime'
+        - $ref: '#/components/parameters/Granularity'
+      responses:
+        '200':
+          description: |
+            Time-aligned usage series. `timestamps[i]` corresponds to `values[i]`; the two arrays always have equal length.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [timestamps, values, totalRequestCount]
+                properties:
+                  timestamps:
+                    type: array
+                    items: { type: string, format: date-time }
+                    description: Bucket start times, ordered ascending.
+                  values:
+                    type: array
+                    items: { type: number }
+                    description: Request count in each bucket, aligned with `timestamps`.
+                  totalRequestCount:
+                    type: integer
+                    description: Sum of `values`.
+
+  /waves/v1/analytics/s2s/logs:
+    get:
+      tags: [Analytics]
+      operationId: getS2sLogs
+      summary: S2S request logs
+      description: Recent per-request logs for the S2S pipeline (session id, model, duration, latency, cost).
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/StartTime'
+        - $ref: '#/components/parameters/EndTime'
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+          description: Page size. Backend currently does not enforce an upper bound.
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+          description: 1-indexed page number.
+      responses:
+        '200':
+          description: Paginated log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, data, page, pageSize, totalCount, totalPages]
+                properties:
+                  status: { type: string, enum: [success] }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: Per-request S2S log entry. Field shape is model-dependent — inspect the payload for the fields that apply to your workload.
+                  page: { type: integer }
+                  pageSize: { type: integer }
+                  totalCount: { type: integer }
+                  totalPages: { type: integer }
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    StartTime:
+      name: start_time
+      in: query
+      schema: { type: string, format: date-time }
+      description: Inclusive lower bound. Defaults to 24 h ago.
+    EndTime:
+      name: end_time
+      in: query
+      schema: { type: string, format: date-time }
+      description: Exclusive upper bound. Defaults to now.
+    Granularity:
+      name: granularity
+      in: query
+      schema: { type: string, enum: [minute, hour, day], default: hour }
+      description: Bucket size for time series aggregation.

@@ -1,0 +1,70 @@
+openapi: 3.0.1
+info:
+  title: Waves Voice Library API
+  description: |
+    Personal-library and community-signal actions on the voice catalog. These endpoints affect the
+    `isSaved` / `isUpvoted` fields returned by `GET /voice/get-all-models` when the caller is authenticated.
+  version: 1.0.0
+servers:
+  - url: https://api.smallest.ai
+    x-fern-server-name: waves
+paths:
+  /waves/v1/voice/{voiceId}/save:
+    post:
+      tags: [Voice Library]
+      operationId: saveVoice
+      summary: Add voice to personal library
+      description: |
+        Adds the voice to the calling user's personal library. Subsequent `get-all-models` calls
+        return `isSaved: true` for this voice. No billing side effects.
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/VoiceId'
+      responses:
+        '200': { description: Saved }
+        '404': { description: Voice not found }
+    delete:
+      tags: [Voice Library]
+      operationId: unsaveVoice
+      summary: Remove voice from personal library
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/VoiceId'
+      responses:
+        '200': { description: Unsaved }
+        '404': { description: Voice not found or not in library }
+
+  /waves/v1/voice/{voiceId}/upvote:
+    post:
+      tags: [Voice Library]
+      operationId: upvoteVoice
+      summary: Upvote a voice
+      description: Community ranking signal. Rate-limited server-side. Idempotent per user.
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/VoiceId'
+      responses:
+        '200': { description: Upvoted }
+        '429': { description: Rate limited }
+    delete:
+      tags: [Voice Library]
+      operationId: removeUpvote
+      summary: Remove upvote
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/VoiceId'
+      responses:
+        '200': { description: Upvote removed }
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    VoiceId:
+      name: voiceId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Voice ID from `/voice/get-all-models`.
