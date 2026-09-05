@@ -1,0 +1,75 @@
+---
+title: "Telephony API Migration (trunks & caller IDs)"
+description: "SIP trunks become first-class resources, an agent answers on a number, and every call names its own caller ID. What changed, what still works, and how to move."
+icon: "phone-arrow-right"
+---
+
+## The model change in one paragraph
+
+Previously, one attachment did two jobs: a number attached to an agent decided both *who answers it* and *what the agent dials from*. These are now separate. **Who answers a number is durable configuration.** Attach a number or inbound trunk to the agent that answers it. **What a call dials from is a property of the call.** The request, campaign, or transfer names its caller ID at call time. There is no outbound number configuration on the agent.
+
+## The new surface
+
+| Task | Endpoint |
+|---|---|
+| Bring your own trunk (receive) | `POST /sip-trunk/inbound` |
+| Bring your own trunk (dial out) | `POST /sip-trunk/outbound` |
+| Make an agent answer a number or trunk | `POST /agent/{agentId}/answers` |
+| Stop it answering | `DELETE /agent/{agentId}/answers/{sourceId}` |
+| Pick a call's caller ID | `fromNumber` on `POST /conversation/outbound` |
+| Pick a campaign's caller IDs | `fromNumbers` on `POST /campaign` |
+| Set the number transfers dial from | `PUT /agent/{agentId}/transfer-source` |
+
+Splitting the trunk into two resources is also what enables direct SIP-to-SIP. An inbound trunk comes in two shapes:
+
+- **Dedicated (`trunkKind: phoneNumber`).** Send `numbers` or `allowedNumbers`; the trunk gets its own credentials, media-encryption policy, Krisp toggle, and ringing timeout.
+- **IP-address (`trunkKind: ipAddress`).** Send just `name` and `allowedAddresses`. The response includes a minted `sipIdentity` (an `+8835`-range E.164 number) and a `sipHost`. Configure your SBC to dial `sipIdentity@sipHost`. Trunk-level fields (auth, encryption, Krisp, timeout) are refused on this shape because it rides the shared platform trunk and has no per-tenant settings.
+
+Both shapes were impossible with the old single import, which required a phone number.
+
+## What still works during the migration window
+
+The old API keeps working, translated to the new model underneath, for **45 days after the rework's release**. After that, everything in the deprecated list is removed in one change. The concrete sunset date is published at release on the [Deprecation Notices](/voice-agents/deprecations/notices) page and in the changelog. Responses on deprecated paths carry a `Deprecation: true` header, so the affected code paths in your integration are discoverable from your own logs.
+
+| You are still doing this | Status |
+|---|---|
+| `POST /product/import-phone-number` | Works. Creates an inbound and an outbound trunk, returns the same product id shape |
+| `telephonyProductId` on agent create/update | Works. Applied as the agent's answer sources (replace semantics; ids you do not own are refused) |
+| `allowInboundCall: false` on an agent | Works. Honoured as a kill switch at call routing |
+| `allowInboundCall: true` | No effect (as before) |
+| `fromProductId` on `POST /conversation/outbound` | Works. Legacy alias, resolved to its number |
+| Omitting the from-number on an outbound call | Works when the agent answers on exactly one number; otherwise `400` listing your options |
+| `phoneNumberIds` on `POST /campaign` | Works. Resolved to numbers at creation (numbers are no longer reassigned between agents) |
+| Reading `agentId` on a number | Works. Now means only "the agent that answers this number" |
+| Reading `customProducts` on `GET /product/all-numbers` | Works. Derived live from your trunks |
+
+## What to change in your integration
+
+1. **Creating trunks**: replace one `import-phone-number` call with the two `sip-trunk` calls (one per direction, and skip the direction you do not need).
+2. **Attaching to an agent**: replace `telephonyProductId` with `POST /agent/{agentId}/answers` (`{ "sourceKind": "phoneNumber" | "sipTrunk", "sourceId": "..." }`), one call per source. An agent can answer on any number of numbers and trunks; a source is answered by exactly one agent, and attaching a taken one returns `409` naming the current agent.
+3. **Outbound calls**: send `fromNumber` (E.164, exact match against numbers you own; no normalization is applied). Calls without it only succeed when the agent answers on exactly one number. There is no fallback to a platform number.
+4. **Campaigns**: send `fromNumbers`. Several numbers rotate; retries reuse the number the recipient already saw; the list freezes at creation. Effectively required already: a campaign that resolves to zero numbers is refused.
+5. **Transfers**: if an agent transfers calls, set its transfer caller ID once via `PUT /agent/{agentId}/transfer-source`. Migrated setups get this backfilled automatically. When unset, transfers on outbound calls use the call's own line; transfers on inbound calls are refused.
+
+## Behavior changes worth knowing
+
+- Inbound phone numbers are unique across the platform; outbound caller IDs are unique within your organization, and one outbound trunk exists per carrier address.
+- An outbound trunk's `address` and `transport` are immutable. Changing carriers means delete and recreate.
+- `cpsLimit` (1-50, default 1) paces outbound calls per carrier address, shared by every trunk on that address.
+- Deleting or releasing telephony resources is guarded: you get a `409` naming the agent, campaign, or transfer configuration still using them, instead of a silent breakage.
+- `GET /agent/{agentId}` keeps `phoneNumber` as `string[]`, now meaning *what the agent answers on*. An agent answering on an extension-only trunk returns `[]` and is still reachable.
+
+## After the window: what gets removed
+
+Everything below exists only to keep old integrations running and is deleted together when the window closes.
+
+- **Endpoint**: `POST /product/import-phone-number` (returns `404` after removal).
+- **Request fields**: `telephonyProductId` and `allowInboundCall` on agent writes, `fromProductId` on outbound calls, `phoneNumberIds` on campaigns. After removal they are ignored or refused; `fromNumber` becomes required on outbound calls and `fromNumbers` on campaign creation.
+- **Response fields**: `agentId` on number reads (use the `agent` object), `customProducts` on `GET /product/all-numbers` (use the `/sip-trunk` lists).
+- **Internals**: the `productType: "custom"` pointer records.
+
+Campaigns are the one change that forces API integrators to ship code: after the window, `fromNumbers` is required at creation. If your release cycle is slow, start there.
+
+## Dashboard equivalents
+
+SIP trunks moved from the Add Number dialog's "Import SIP" tab to a dedicated **SIP Trunks** page (sidebar, under Phone Numbers). An agent's answering sources and transfer number live on the agent's **Telephony** tab. Campaign creation has a **Call from** selector. Test calls have a **Call from** picker with a shared platform test number as the labelled default.

@@ -2545,16 +2545,20 @@ paths:
 
         ## Caller-ID resolution
 
-        When `fromProductId` is omitted **and** the agent has no telephony
-        product attached, the call dispatches from a Smallest-managed Plivo
-        trunk using a default caller-ID number (chosen by destination
-        country). The call still places and the response is still
-        `200 + conversationId`, but the recipient sees the default Smallest
-        number rather than your own. For production traffic, either:
+        Every call names the number it dials from:
 
-        - pass `fromProductId` explicitly (look up your owned numbers via
-          `GET /product/phone-numbers`), or
-        - attach a phone-number product to the agent.
+        1. `fromNumber` present: resolved against the numbers your organization owns
+           (rented numbers and outbound SIP trunk caller IDs). Must match **exactly** as
+           stored, E.164 with the leading `+` and no spaces (`+14155552671`). An unowned
+           or unmatched number returns `400` ("... is not one of your outbound numbers").
+        2. `fromNumber` omitted: if the agent answers on exactly one number, that number
+           is used. If it answers on several, the call is refused with `400` listing the
+           numbers to pick from. If it answers on none, `400` ("No caller ID for this
+           call — pass a number to dial from, or attach one to the agent").
+
+        There is no silent fallback to a platform-owned number (dashboard test calls are
+        the only exception). `fromProductId` is still accepted as a legacy alias and is
+        resolved to its phone number first.
 
         ## Resolved-config check
 
@@ -2624,9 +2628,18 @@ paths:
                       - type: number
                       - type: boolean
                   example: { "name": "John", "age": 30, "vip": true }
+                fromNumber:
+                  type: string
+                  description: |
+                    The caller ID to dial from, E.164 with the leading `+`, matched exactly
+                    against your rented numbers and outbound SIP trunk caller IDs (no
+                    normalization is applied; `+1 415 555 2671` or `14155552671` will not
+                    resolve). See "Caller-ID resolution" above for what happens when omitted.
+                  example: "+14155552671"
                 fromProductId:
                   type: string
-                  description: ID of the telephony product (phone number) to call from. Get this from `GET /product/phone-numbers`.
+                  deprecated: true
+                  description: Legacy alias for `fromNumber`. The ID of a telephony product (phone number) to call from, resolved to its number before dialing. Prefer `fromNumber`.
                   example: "60d0fe4f5311236168a109ca"
                 versionId:
                   type: string
@@ -3333,12 +3346,25 @@ paths:
                   type: string
                   description: The ID of the agent
                   example: "60d0fe4f5311236168a109ca"
-                phoneNumberIds:
+                fromNumbers:
                   type: array
                   description: |
-                    Optional list of caller-ID phone number IDs to rotate across
-                    when placing outbound calls for this campaign. If omitted,
-                    the agent's default phone number is used.
+                    The caller IDs this campaign presents, E.164 with the leading `+`, each
+                    matched against numbers your organization owns. Several numbers rotate
+                    positionally across calls; retries reuse the number the recipient already
+                    saw. The list is frozen on the campaign at creation. A campaign cannot be
+                    created without at least one resolvable number (`400` "Choose at least one
+                    number to call from"); one bad number fails the whole request.
+                  items:
+                    type: string
+                  example: ["+14155552671", "+14155552672"]
+                phoneNumberIds:
+                  type: array
+                  deprecated: true
+                  description: |
+                    Legacy alias for `fromNumbers`: caller-ID phone number IDs, resolved to
+                    their numbers at creation. Ignored when `fromNumbers` is present. Prefer
+                    `fromNumbers`.
                   items:
                     type: string
                   example: ["60d0fe4f5311236168a109cb"]
@@ -4829,12 +4855,472 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
 
+  /sip-trunk/inbound:
+    get:
+      summary: List inbound SIP trunks
+      operationId: listInboundSipTrunks
+      x-fern-sdk-group-name: sip_trunks
+      x-fern-sdk-method-name: list_inbound
+      description: |
+        Lists your organization's inbound SIP trunks. Each row includes an `agent`
+        object (`{ id, name }` or `null`) naming the agent that answers on it. An
+        inbound trunk no agent answers on rejects calls until one is attached via
+        [`POST /agent/{agentId}/answers`](#operation/attachAgentAnswerSource).
+      tags:
+        - SIP Trunks
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: The organization's inbound trunks
+    post:
+      summary: Create an inbound SIP trunk
+      operationId: createInboundSipTrunk
+      x-fern-sdk-group-name: sip_trunks
+      x-fern-sdk-method-name: create_inbound
+      description: |
+        Creates an inbound trunk: the resource that receives calls from your carrier.
+        Requires an admin-role key. Two shapes are supported and the request body
+        selects between them.
+
+        **Dedicated shape (`trunkKind: phoneNumber`).** Send at least one phone number
+        or one allowed caller number. This provisions a per-tenant trunk with its own
+        credentials, media-encryption policy, Krisp toggle, and ringing timeout.
+        Phone numbers are unique across the platform: a number already answering
+        elsewhere returns `409` ("Already in use and cannot be added to this trunk: ...").
+        Wildcard peer addresses (`0.0.0.0`, `::`, `*`, any `/0`) are refused: the
+        allow-list IS the security boundary.
+
+        **IP-address shape (`trunkKind: ipAddress`).** Send only `name` and
+        `allowedAddresses` (both `numbers` and `allowedNumbers` empty or omitted).
+        The response includes a minted `sipIdentity` (an `+8835`-range E.164 number
+        that identifies the trunk on the shared platform ingress) and a `sipHost`.
+        Configure your SBC to dial `sipIdentity@sipHost` and calls route to the
+        agent that answers on this trunk. Trunk-level fields (`authUsername`,
+        `authPassword`, `mediaEncryption`, `krispEnabled`, `ringingTimeoutSeconds`)
+        are refused on this shape with a 400 explaining why. The shape rides
+        the shared platform trunk and has no per-tenant settings.
+      tags:
+        - SIP Trunks
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  maxLength: 120
+                  description: Display name for the trunk
+                  example: "Acme carrier (inbound)"
+                numbers:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 50
+                  description: E.164 numbers (with leading `+`) this trunk answers. Deduplicated. Leave empty (with `allowedNumbers` also empty) to get the IP-address shape.
+                  example: ["+14155552671"]
+                allowedAddresses:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 20
+                  description: Hostnames, IPs, or CIDR ranges allowed to send calls to this trunk. Wildcards refused.
+                  example: ["sip.acme.com"]
+                allowedNumbers:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 50
+                  description: Restrict accepted caller numbers to this list (optional). If set, the trunk is dedicated even without `numbers`.
+                mediaEncryption:
+                  type: string
+                  enum: [disable, allow, require]
+                  description: Defaults to `allow` on a dedicated trunk. Refused on the IP-address shape.
+                krispEnabled:
+                  type: boolean
+                  description: Noise cancellation for callers arriving on this trunk. Defaults to `true` on a dedicated trunk. Refused on the IP-address shape.
+                ringingTimeoutSeconds:
+                  type: integer
+                  minimum: 1
+                  maximum: 600
+                  description: Only accepted on a dedicated trunk.
+                authUsername:
+                  type: string
+                  description: SIP digest username. Provide both credentials or neither. Only accepted on a dedicated trunk.
+                authPassword:
+                  type: string
+                  description: SIP digest password. Stored with the SIP infrastructure, never returned. Only accepted on a dedicated trunk.
+      responses:
+        "201":
+          description: |
+            Trunk created. Response includes `trunkKind` (`phoneNumber` or `ipAddress`).
+            When `trunkKind` is `ipAddress`, `sipIdentity` (e.g. `+883512345678901`)
+            and `sipHost` are also returned. Configure your SBC to dial
+            `sipIdentity@sipHost`.
+        "400":
+          description: Validation failure (missing name, no number or address, wildcard address, half a credential pair, or a trunk-level field on an IP-address shape).
+        "409":
+          description: A number is already in use on another trunk.
+  /sip-trunk/inbound/{trunkId}:
+    patch:
+      summary: Update an inbound SIP trunk
+      operationId: updateInboundSipTrunk
+      x-fern-sdk-group-name: sip_trunks
+      x-fern-sdk-method-name: update_inbound
+      description: |
+        Partial update; same fields and rules as create. Requires an admin-role key. The
+        merged result must still have at least one number or one allowed address. An empty
+        body returns `400` ("Nothing to update").
+      tags:
+        - SIP Trunks
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: trunkId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Updated trunk
+        "404":
+          description: SIP trunk not found
+        "409":
+          description: A number being added is already in use elsewhere
+    delete:
+      summary: Delete an inbound SIP trunk
+      operationId: deleteInboundSipTrunk
+      x-fern-sdk-group-name: sip_trunks
+      x-fern-sdk-method-name: delete_inbound
+      description: |
+        Requires an admin-role key. Refused with `409` while an agent answers on the trunk
+        (the error names the agent); detach it from the agent's Telephony tab first.
+        Deletion is immediate: in-flight calls on the trunk stop working.
+      tags:
+        - SIP Trunks
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: trunkId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "`{ deleted: true }`"
+        "404":
+          description: SIP trunk not found
+        "409":
+          description: An agent still answers on this trunk
+  /sip-trunk/outbound:
+    get:
+      summary: List outbound SIP trunks
+      operationId: listOutboundSipTrunks
+      x-fern-sdk-group-name: sip_trunks
+      x-fern-sdk-method-name: list_outbound
+      tags:
+        - SIP Trunks
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: The organization's outbound trunks
+    post:
+      summary: Create an outbound SIP trunk
+      operationId: createOutboundSipTrunk
+      x-fern-sdk-group-name: sip_trunks
+      x-fern-sdk-method-name: create_outbound
+      description: |
+        Creates an outbound trunk: the resource calls are placed through. Requires an
+        admin-role key. `numbers` are the caller IDs the trunk may present; a call or
+        campaign chooses among them per call via `fromNumber` / `fromNumbers`.
+
+        One trunk per carrier address per organization (`409` naming the existing trunk),
+        and a caller ID can live on only one of your outbound trunks (`409` naming it).
+        `address` and `transport` are immutable after creation: to change carriers, delete
+        the trunk and create a new one.
+      tags:
+        - SIP Trunks
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - address
+                - numbers
+              properties:
+                name:
+                  type: string
+                  maxLength: 120
+                  example: "Acme carrier (outbound)"
+                address:
+                  type: string
+                  description: |
+                    Your carrier's SIP termination host: a hostname or IP, optionally with a
+                    port. Full `sip:`/`sips:` URIs are normalized to the bare host.
+                  example: "sip.acme.com:5060"
+                transport:
+                  type: string
+                  enum: [auto, udp, tcp, tls]
+                  default: auto
+                numbers:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 1
+                  maxItems: 50
+                  description: Caller IDs this trunk may present, E.164 with leading `+`.
+                  example: ["+14155552671"]
+                mediaEncryption:
+                  type: string
+                  enum: [disable, allow, require]
+                  default: disable
+                destinationCountry:
+                  type: string
+                  minLength: 2
+                  maxLength: 2
+                  description: ISO 3166-1 alpha-2 country code for region-pinned routing (optional).
+                cpsLimit:
+                  type: integer
+                  minimum: 1
+                  maximum: 50
+                  default: 1
+                  description: |
+                    Calls per second placed through this carrier address. Shared by every trunk
+                    on the same address in your organization.
+                authUsername:
+                  type: string
+                authPassword:
+                  type: string
+      responses:
+        "201":
+          description: Trunk created
+        "400":
+          description: Validation failure (invalid termination URI, missing caller IDs, half a credential pair)
+        "409":
+          description: A trunk already exists for this address, or a caller ID is already on another trunk
+  /sip-trunk/outbound/{trunkId}:
+    patch:
+      summary: Update an outbound SIP trunk
+      operationId: updateOutboundSipTrunk
+      x-fern-sdk-group-name: sip_trunks
+      x-fern-sdk-method-name: update_outbound
+      description: |
+        Partial update; `address` and `transport` cannot be changed (delete and recreate
+        instead). Removing a caller ID still used by a live campaign or as an agent's
+        transfer source returns `409` naming what uses it. Updating `cpsLimit` applies to
+        every trunk on the same carrier address.
+      tags:
+        - SIP Trunks
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: trunkId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Updated trunk
+        "404":
+          description: SIP trunk not found
+        "409":
+          description: A caller ID being removed is still in use
+    delete:
+      summary: Delete an outbound SIP trunk
+      operationId: deleteOutboundSipTrunk
+      x-fern-sdk-group-name: sip_trunks
+      x-fern-sdk-method-name: delete_outbound
+      description: |
+        Requires an admin-role key. Refused with `409` while the trunk's numbers are used
+        by a live campaign or as an agent's transfer source.
+      tags:
+        - SIP Trunks
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: trunkId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "`{ deleted: true }`"
+        "404":
+          description: SIP trunk not found
+        "409":
+          description: The trunk's numbers are still in use
+  /agent/{agentId}/answers:
+    get:
+      summary: List what an agent answers on
+      operationId: listAgentAnswerSources
+      x-fern-sdk-group-name: agent_telephony
+      x-fern-sdk-method-name: list_answers
+      description: |
+        Lists the inbound sources (rented numbers and inbound SIP trunks) this agent
+        answers. Each entry is `{ bindingId, sourceKind, sourceId, label }` where `label`
+        is the phone number or the trunk's name.
+      tags:
+        - Agent Telephony
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: agentId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "`{ answers: [...] }`"
+        "404":
+          description: Agent not found
+    post:
+      summary: Attach an inbound source to an agent
+      operationId: attachAgentAnswerSource
+      x-fern-sdk-group-name: agent_telephony
+      x-fern-sdk-method-name: attach_answer
+      description: |
+        Makes the agent answer calls arriving on a rented number or inbound SIP trunk you
+        own. Requires an admin-role key. A source is answered by exactly one agent: if
+        another agent already answers it, `409` names that agent. This replaces the legacy
+        `telephonyProductId` field on agent writes.
+      tags:
+        - Agent Telephony
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: agentId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sourceKind
+                - sourceId
+              properties:
+                sourceKind:
+                  type: string
+                  enum: [phoneNumber, sipTrunk]
+                sourceId:
+                  type: string
+                  description: The phone number product ID, or the inbound SIP trunk ID.
+                  example: "60d0fe4f5311236168a109ca"
+      responses:
+        "201":
+          description: Binding created
+        "404":
+          description: Agent, phone number, or inbound trunk not found in your organization
+        "409":
+          description: Another agent already answers on this source
+  /agent/{agentId}/answers/{sourceId}:
+    delete:
+      summary: Detach an inbound source from an agent
+      operationId: detachAgentAnswerSource
+      x-fern-sdk-group-name: agent_telephony
+      x-fern-sdk-method-name: detach_answer
+      description: |
+        Stops the agent answering on the source. `sourceId` is the phone number product ID
+        or inbound trunk ID (not the binding ID). Requires an admin-role key.
+      tags:
+        - Agent Telephony
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: agentId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: sourceId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "`{ detached: true }`"
+        "404":
+          description: This source is not attached to this agent
+  /agent/{agentId}/transfer-source:
+    put:
+      summary: Set an agent's transfer caller ID
+      operationId: setAgentTransferSource
+      x-fern-sdk-group-name: agent_telephony
+      x-fern-sdk-method-name: set_transfer_source
+      description: |
+        Sets the number the agent's call transfers dial out from. Must be a number your
+        organization owns (rented, or a caller ID on an outbound trunk); `null` clears it.
+        When unset, transfers on outbound calls fall back to the call's own caller ID, and
+        transfers on inbound calls are refused. Not part of versioned agent config:
+        changing it never requires an agent release.
+      tags:
+        - Agent Telephony
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: agentId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - transferFromNumber
+              properties:
+                transferFromNumber:
+                  type: string
+                  nullable: true
+                  description: E.164 with leading `+`, or `null` to clear.
+                  example: "+14155552671"
+      responses:
+        "200":
+          description: "`{ transferFromNumber: string | null }`"
+        "400":
+          description: The number is not one of your outbound numbers
+        "404":
+          description: Agent not found
   /product/import-phone-number:
     post:
       summary: Import a SIP phone number
+      deprecated: true
       x-fern-sdk-group-name: phone_numbers
       x-fern-sdk-method-name: import_sip
       description: |
+        **Deprecated.** Use [`POST /sip-trunk/inbound`](#operation/createInboundSipTrunk) and
+        [`POST /sip-trunk/outbound`](#operation/createOutboundSipTrunk) instead. One resource per
+        direction, and the only way to configure a trunk that answers extensions without a phone
+        number. This endpoint keeps working for 45 days after the trunks rework's release
+        (responses carry a `Deprecation: true` header), then returns 404; the concrete sunset date
+        is published on the Deprecation Notices page and in the changelog. See the
+        [Telephony API migration guide](/voice-agents/deprecations/telephony-migration).
+
         Bring your own SIP trunk by importing an existing phone number with its SIP termination URL.
         Atoms creates both inbound and outbound SIP trunks so your number works for making and receiving calls through the platform.
 

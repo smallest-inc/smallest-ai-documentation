@@ -1,0 +1,21 @@
+---
+title: "Telephony rework: SIP trunks as resources, agents answer, calls choose their caller ID"
+---
+
+The telephony model is reorganized around one idea: *who answers a number* is durable configuration, *what a call dials from* is a property of the call. Full details and migration steps: [Telephony API migration guide](/voice-agents/deprecations/telephony-migration).
+
+**New**
+
+- SIP trunks are first-class resources, one per direction: [`POST /sip-trunk/inbound`](/voice-agents/api-reference) and [`POST /sip-trunk/outbound`](/voice-agents/api-reference), with a dedicated **SIP Trunks** dashboard page. This also enables direct SIP-to-SIP: an inbound trunk with allowed peer addresses and no phone numbers answers any extension.
+- An agent answers on a number or trunk via `POST /agent/{agentId}/answers`; a source is answered by exactly one agent, and conflicts name the agent holding it.
+- Every call names its caller ID: `fromNumber` on outbound calls, `fromNumbers` (rotating, frozen at creation, retry-stable) on campaigns, and a per-agent transfer caller ID via `PUT /agent/{agentId}/transfer-source`.
+- Guarded deletions everywhere: removing a trunk, number, or caller ID still in use returns `409` naming the agent, campaign, or transfer configuration that uses it.
+
+**Changed**
+
+- No more silent fallback to a platform-owned caller ID: a call that cannot resolve its from-number is refused with a `400` naming your options (dashboard test calls keep a labelled shared test number).
+- The dashboard's "Import SIP" tab is replaced by the SIP Trunks page; the Phone Numbers page shows the **Answering agent** per number and blocks releasing a number an agent still answers on.
+
+**Deprecated (still working for 45 days from this release)**
+
+- `POST /product/import-phone-number`, `telephonyProductId` and `allowInboundCall` on agent writes, `fromProductId` on outbound calls, `phoneNumberIds` on campaigns, and the `agentId` / `customProducts` read shapes. Deprecated paths respond with a `Deprecation: true` header. The full list and the concrete sunset date live on the [Deprecation Notices](/voice-agents/deprecations/notices) page.

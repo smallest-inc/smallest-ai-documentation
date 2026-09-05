@@ -81,6 +81,23 @@ The `widgetConfig` field on the agent DTO is unchanged and safe to ignore for AP
 
 Full migration walkthrough with worked examples: [v1 → v2 migration guide](/voice-agents/deprecations/agent-versioning-migration).
 
+### Telephony (trunks & caller IDs rework)
+
+**Deprecated at the release of the trunks rework.** Everything below keeps working for **45 days after release**, then is removed in one change; the concrete sunset date is published here and in the changelog at release. Deprecated endpoint responses carry `Deprecation: true`. Full walkthrough: [Telephony migration guide](/voice-agents/deprecations/telephony-migration).
+
+| Endpoint / field | Status | Migrate to |
+|---|---|---|
+| `POST /product/import-phone-number` | Deprecated (still works; creates both trunks) | `POST /sip-trunk/inbound` + `POST /sip-trunk/outbound` |
+| `telephonyProductId` on `POST`/`PATCH /agent` | Deprecated (still works) | `POST /agent/{agentId}/answers` |
+| `allowInboundCall` on `POST`/`PATCH /agent` | Deprecated (`false` still works as a kill switch; `true` has no effect) | Detach the number via `DELETE /agent/{agentId}/answers/{sourceId}` |
+| `fromProductId` on `POST /conversation/outbound` | Deprecated (still works as an alias) | `fromNumber` |
+| Omitting the from-number on `POST /conversation/outbound` | Works only while the agent answers on exactly one number | Always send `fromNumber` |
+| `phoneNumberIds` on `POST /campaign` | Deprecated (still works; resolved to numbers) | `fromNumbers` |
+| Omitting `fromNumbers` on `POST /campaign` | Works via the legacy fallback during the window | `fromNumbers` becomes required |
+| `agentId` on number reads | Present during the window (now means "the agent that answers") | The `agent` object on `GET /product/phone-numbers` and `GET /sip-trunk/inbound` rows |
+| `customProducts` on `GET /product/all-numbers` | Present during the window (derived live from your trunks) | `GET /sip-trunk/inbound` and `GET /sip-trunk/outbound` |
+| `productType: "custom"` records | Present during the window (pointer records) | Trunk resources |
+
 ## Recently removed
 
 Endpoints that returned `404` after removal.

@@ -63,7 +63,7 @@ If your provider only lets you paste the hostname, configure the transport in th
 
 ### Origination URL: how it appears in your dashboard
 
-The **Import SIP Number** dialog shows the bare origination URL for copy-paste convenience. Adding the transport parameter and the `+` prefix is on your side, because those depend on where you paste it (some provider UIs have a separate transport field, others accept the URI parameter).
+The **SIP Trunks** page shows the bare origination URL for copy-paste convenience. Adding the transport parameter and the `+` prefix is on your side, because those depend on where you paste it (some provider UIs have a separate transport field, others accept the URI parameter).
 
 ## Setting up SIP Trunking
 
@@ -82,29 +82,74 @@ At a minimum:
 
 If you run a Kamailio SBC, see the [Kamailio configuration](#kamailio) accordion below for the specific `listen=` and `tls` module lines.
 
-### Step 2: Import the number on Smallest AI
+### Step 2: Create the trunks on Smallest AI
 
-1. Open the [Phone Numbers](https://app.smallest.ai/dashboard/phone-numbers/rent-numbers) tab in your dashboard.
-2. Click **Buy Numbers** in the top-right, then the **Import SIP Number** tab.
-3. Fill in:
-   - **Phone Number**. E.164 with the `+`, e.g. `+12025551234`.
-   - **SIP Termination URL**. Where **we** send outbound calls (your provider's SIP host). Just the host, or host with port. Not a full URI.
-     - `sip.yourprovider.com`
-     - `sip.yourprovider.com:5060`
-     - `203.0.113.10:5081`
-     If you paste a full URI, only the host is kept (scheme, `;transport=` parameter, and any userinfo are stripped). Values that cannot be normalised to a valid host are refused with a clear error.
-   - **Display Name**. Free-text label (optional).
-   - **Username / Password**. For credential auth. Leave blank if your provider does IP-based auth.
-4. Copy the **SIP Origination URL** shown in the dialog. That is the host your provider sends inbound INVITEs to; remember to append `;transport=tls` (or `;transport=tcp`) and the `+`-prefixed E.164 number when you configure your provider.
-5. Click **Add Custom Number**.
+A trunk is one resource per direction: an **inbound trunk** receives your calls, an **outbound trunk** places them. Create only the direction you need.
 
-<Tip>
-The phone number you type here must match the number your provider is sending in the `To:` header, including the country code and the `+`.
-</Tip>
+On the dashboard, open the **SIP Trunks** page (sidebar, under Deploy) and click **New inbound trunk** or **New outbound trunk**:
 
-### Step 3: Test
+<Frame caption="SIP Trunks page with the empty state. Inbound and outbound are separate resources.">
+  ![SIP Trunks empty state](./images/sip-trunks-empty.png)
+</Frame>
 
-Once the number is imported and the agent is assigned:
+The inbound-trunk dialog has two shapes selected by a **Phone numbers / IP address** tab:
+
+<Frame caption="Inbound trunk, Phone numbers shape. Dedicated trunk with its own credentials, media encryption, and Krisp toggle.">
+  ![Inbound trunk, Phone numbers tab](./images/inbound-trunk-phone-numbers-tab.png)
+</Frame>
+
+<Frame caption="Inbound trunk, IP address shape. Only the allow-list is settable; the response returns the number your SBC dials.">
+  ![Inbound trunk, IP address tab](./images/inbound-trunk-ip-address-tab.png)
+</Frame>
+
+The outbound-trunk dialog:
+
+<Frame caption="Outbound trunk. Caller IDs the trunk may present, transport, media encryption, and per-carrier CPS ceiling.">
+  ![Outbound trunk dialog](./images/outbound-trunk-dialog.png)
+</Frame>
+
+Via the API:
+
+```bash
+curl -X POST .../v1/sip-trunk/inbound \
+  -d '{ "name": "Acme (inbound)", "numbers": ["+14155552671"] }'
+
+curl -X POST .../v1/sip-trunk/outbound \
+  -d '{ "name": "Acme (outbound)", "address": "sip.acme.com:5060",
+        "numbers": ["+14155552671"], "cpsLimit": 2 }'
+```
+
+Field notes:
+
+- **Numbers**: E.164 with the `+`. Inbound numbers must match what your provider sends in the `To:` header exactly. Outbound `numbers` are the caller IDs the trunk may present.
+- **Termination address** (outbound): your provider's SIP host, bare host or host:port (`sip.yourprovider.com:5060`, `203.0.113.10:5081`). Full `sip:` URIs are normalized to the bare host. Immutable after creation, like `transport`. Changing carriers means delete and recreate.
+- **Auth**: digest username/password (both or neither), or leave blank for IP-based auth. For inbound, `allowedAddresses` restricts which hosts may send you calls. An inbound trunk on the **IP address** shape (no numbers, no allowed caller numbers) answers any extension from those peers and returns a `sipIdentity` + `sipHost` in the response; see [Direct SIP-to-SIP (IP-address trunks)](#direct-sip-to-sip-ip-address-trunks) below.
+- Copy the **SIP Origination URL** shown on the trunk. That is the host your provider sends inbound INVITEs to; remember to append `;transport=tls` (or `;transport=tcp`) and the `+`-prefixed E.164 number when you configure your provider.
+
+<Note>
+The previous single-call import (`POST /product/import-phone-number` and the dashboard's "Import SIP" tab) is deprecated but still works during the migration window: it creates both trunks for you. Responses carry a `Deprecation: true` header. See the [Telephony API migration guide](/voice-agents/deprecations/telephony-migration).
+</Note>
+
+### Step 3: Attach the trunk to an agent
+
+Inbound calls route to the agent that answers on the trunk. On the agent's **Telephony** tab (the phone icon in the agent's left sidebar), attach the trunk (or number) under **Answers on**, pick a caller ID under **Dials from**, and set the number transfers dial from under **Transfer from**:
+
+<Frame caption="Agent Telephony tab: Answers on, Dials from, Transfer from. Each section maps directly to one API resource.">
+  ![Agent Telephony tab](./images/agent-phone-numbers-tab.png)
+</Frame>
+
+Via the API:
+
+```bash
+curl -X POST .../v1/agent/AGENT_ID/answers \
+  -d '{ "sourceKind": "sipTrunk", "sourceId": "INBOUND_TRUNK_ID" }'
+```
+
+The relationship is one-to-many: an agent can answer on any number of numbers and trunks, but each number or trunk is answered by exactly one agent. Until an agent answers on an inbound trunk, calls arriving on it are rejected. If the agent will transfer calls, also set its transfer caller ID (`PUT /agent/AGENT_ID/transfer-source`, or the Transfer source picker on the same tab). Transfers on inbound calls are refused without one.
+
+### Step 4: Test
+
+Once the trunks exist and the agent answers on the inbound one:
 
 1. Make an **inbound** test call from a real phone. If the agent picks up and audio flows both ways, you are done. If you hear silence or the call never connects, jump to [Troubleshooting](#troubleshooting).
 2. Make an **outbound** test call from the agent (via the dashboard, or [POST /conversation/outbound](/voice-agents/api-reference/calls/start-outbound-call)) to your own phone. Check that your provider bills the call to your termination trunk.
@@ -301,6 +346,30 @@ Every call that reaches us has a full capture on our side too; with the `SCL_` c
 
   </Accordion>
 </AccordionGroup>
+
+## Direct SIP-to-SIP (IP-address trunks)
+
+If your carrier or SBC does not present phone numbers on the wire (a direct SIP endpoint, an internal PBX, or a carrier that only knows how to dial a URI), create an inbound trunk with **no numbers and no allowed caller numbers**. The response returns a minted `sipIdentity` (an `+8835`-range E.164 number) and a `sipHost`.
+
+```bash
+curl -X POST .../v1/sip-trunk/inbound \
+  -d '{ "name": "Acme direct SIP", "allowedAddresses": ["203.0.113.10"] }'
+# 201:
+# {
+#   "trunkKind": "ipAddress",
+#   "sipIdentity": "+883512345678901",
+#   "sipHost": "your-project.sip.livekit.cloud",
+#   ...
+# }
+```
+
+Configure your SBC to dial `sipIdentity@sipHost` (append `;transport=tls` on 5061 or `;transport=tcp` on 5060 as usual). Calls route to whichever agent answers on this trunk.
+
+Because the shape rides the shared platform ingress, trunk-level fields (`authUsername`, `authPassword`, `mediaEncryption`, `krispEnabled`, `ringingTimeoutSeconds`) are refused with a 400 explaining why. Add a phone number or an `allowedNumbers` entry if you need a dedicated trunk with those settings.
+
+## VPN-only providers
+
+Some carriers cannot send SIP to cloud endpoints at all: they require a VPN, private IP addressing, or a fixed IP to whitelist. That case still needs the managed SIP gateway. Contact `support@smallest.ai` with your provider's connectivity requirements.
 
 ## Best practices
 
