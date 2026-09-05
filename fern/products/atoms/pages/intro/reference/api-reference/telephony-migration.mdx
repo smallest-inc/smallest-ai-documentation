@@ -41,7 +41,7 @@ The old API keeps working, translated to the new model underneath, for **45 days
 ## What to change in your integration
 
 1. **Creating trunks**: replace one `import-phone-number` call with the two `sip-trunk` calls (one per direction, and skip the direction you do not need).
-2. **Attaching to an agent**: replace `telephonyProductId` with `POST /agent/{agentId}/answers` (`{ "sourceKind": "phoneNumber" | "sipTrunk", "sourceId": "..." }`). A source is answered by exactly one agent; attaching a taken one returns `409` naming the current agent.
+2. **Attaching to an agent**: replace `telephonyProductId` with `POST /agent/{agentId}/answers` (`{ "sourceKind": "phoneNumber" | "sipTrunk", "sourceId": "..." }`), one call per source. An agent can answer on any number of numbers and trunks; a source is answered by exactly one agent, and attaching a taken one returns `409` naming the current agent.
 3. **Outbound calls**: send `fromNumber` (E.164, exact match against numbers you own; no normalization is applied). Calls without it only succeed when the agent answers on exactly one number. There is no fallback to a platform number.
 4. **Campaigns**: send `fromNumbers`. Several numbers rotate; retries reuse the number the recipient already saw; the list freezes at creation. Effectively required already: a campaign that resolves to zero numbers is refused.
 5. **Transfers**: if an agent transfers calls, set its transfer caller ID once via `PUT /agent/{agentId}/transfer-source`. Migrated setups get this backfilled automatically. When unset, transfers on outbound calls use the call's own line; transfers on inbound calls are refused.
