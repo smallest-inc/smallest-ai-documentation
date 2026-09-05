@@ -17,6 +17,8 @@ on:
     branches: [main]
     paths:
       - 'fern/products/**/*.mdx'
+      - 'fern/pages/**/*.mdx'
+      - 'fern/ai-tools/*.mdx'
       - 'fern/components/CodingAgentCallout.tsx'
       - 'scripts/inject_agent_callout.py'
       - '.github/workflows/agent-callout-present.yml'
@@ -40,7 +42,7 @@ jobs:
         run: |
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
-          git diff --name-only --diff-filter=AM "$BASE" "$HEAD" -- 'fern/products/**/*.mdx' > touched.txt || true
+          git diff --name-only --diff-filter=AM "$BASE" "$HEAD" -- 'fern/products/**/*.mdx' 'fern/pages/**/*.mdx' 'fern/ai-tools/*.mdx' > touched.txt || true
           echo "Touched MDX files:"
           cat touched.txt || true
           echo "count=$(wc -l < touched.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"

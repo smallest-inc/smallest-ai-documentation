@@ -27,6 +27,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCAN_PATHS = [
     REPO_ROOT / "fern" / "products" / "atoms" / "pages",
     REPO_ROOT / "fern" / "products" / "waves" / "pages",
+    REPO_ROOT / "fern" / "pages",
+    REPO_ROOT / "fern" / "ai-tools",
 ]
 
 # Skip categories that don't benefit from a description (auto-rendered

@@ -28,10 +28,10 @@ except ImportError:
 REPO_ROOT = Path(__file__).resolve().parent.parent
 NAV_IGNORE_FILE = REPO_ROOT / "scripts" / ".nav-ignore"
 
-# Nav YAML files to scan. Ordered — the first file defines its own search root.
+# Nav config to scan. Since the single-site restructure, tabs + navigation
+# live inline in fern/docs.yml (no per-product nav files).
 NAV_CONFIGS = [
-    REPO_ROOT / "fern" / "products" / "atoms.yml",
-    REPO_ROOT / "fern" / "products" / "waves.yml",
+    REPO_ROOT / "fern" / "docs.yml",
 ]
 
 # Directories that contain customer-facing pages. Every .mdx in here must be
@@ -39,6 +39,8 @@ NAV_CONFIGS = [
 PAGE_ROOTS = [
     REPO_ROOT / "fern" / "products" / "atoms" / "pages",
     REPO_ROOT / "fern" / "products" / "waves" / "pages",
+    REPO_ROOT / "fern" / "pages",
+    REPO_ROOT / "fern" / "ai-tools",
 ]
 
 

@@ -7,7 +7,7 @@ leading-slash paths are Fern CDN assets, others are Mintlify-era page links).
 Actual HTTP-test is the only reliable signal.
 
 USAGE
-    python3 scripts/check_links.py                       # scan every MDX under fern/products/
+    python3 scripts/check_links.py                       # scan every MDX registered in fern/docs.yml
     python3 scripts/check_links.py path/to/one.mdx ...   # scan specific files (used by CI on changed files)
     python3 scripts/check_links.py --base https://smallest-ai.docs.buildwithfern.com  # override target (for preview URLs)
 
@@ -52,8 +52,7 @@ MAX_WORKERS = 16
 # Anything NOT referenced from one of these is either an orphan or belongs
 # to a frozen older version — its broken links don't hurt live users.
 NAV_CONFIGS = [
-    REPO_ROOT / "fern" / "products" / "atoms.yml",
-    REPO_ROOT / "fern" / "products" / "waves.yml",
+    REPO_ROOT / "fern" / "docs.yml",
 ]
 
 # Root-relative internal paths — [text](/path), href="/path", etc.
@@ -190,12 +189,12 @@ def nav_derived_urls() -> set[str]:
                 if node.get("skip-slug"):
                     walk(node["contents"], tab_slug, breadcrumb, url_prefix)
                 else:
-                    walk(node["contents"], tab_slug, breadcrumb + [node["section"]], url_prefix)
+                    walk(node["contents"], tab_slug, breadcrumb + [node.get("slug") or node["section"]], url_prefix)
                 return
             if "api" in node and "layout" in node:
                 # `- api:` block: recurse into its layout with the api-name
                 # as breadcrumb, unless skip-slug: true
-                api_name = node["api"]
+                api_name = node.get("slug") or node["api"]
                 sub_bc = breadcrumb if node.get("skip-slug") else breadcrumb + [api_name]
                 walk(node["layout"], tab_slug, sub_bc, url_prefix)
                 return
@@ -217,22 +216,7 @@ def nav_derived_urls() -> set[str]:
                 urls.add(f"{url_prefix.rstrip('/')}/{tab_slug}/{subdir_slug}")
                 return
 
-    for prod in products:
-        if not isinstance(prod, dict):
-            continue
-        product_slug = prod.get("slug") or _slugify(prod.get("display-name", ""))
-        product_path = prod.get("path", "")
-        if not product_slug or not product_path:
-            continue
-        # `path:` is relative to fern/docs.yml, but products_root is fern/products;
-        # normalize by joining fern/ + product_path
-        nav_yaml = (REPO_ROOT / "fern" / product_path.lstrip("./")).resolve()
-        if not nav_yaml.exists():
-            continue
-        try:
-            data = yaml.safe_load(nav_yaml.read_text())
-        except Exception:
-            continue
+    def walk_nav_config(data, url_prefix: str):
         tabs_meta = data.get("tabs", {}) or {}
         for tab in data.get("navigation", []) or []:
             if not isinstance(tab, dict) or "tab" not in tab:
@@ -240,8 +224,31 @@ def nav_derived_urls() -> set[str]:
             tab_key = tab["tab"]
             tab_meta = tabs_meta.get(tab_key) or {}
             display = tab_meta.get("display-name") or tab_key
-            tab_slug = tab_meta.get("slug") or _slugify(display)
-            walk(tab.get("layout", []), tab_slug, [], f"/{product_slug}")
+            tab_slug = "" if tab_meta.get("skip-slug") else (tab_meta.get("slug") or _slugify(display))
+            walk(tab.get("layout", []), tab_slug, [], url_prefix)
+
+    # Single-site shape (current): tabs + navigation live inline in docs.yml
+    # and there is no product prefix.
+    if docs_data.get("navigation"):
+        walk_nav_config(docs_data, "")
+
+    # Multi-product shape (legacy): each product has its own nav YAML and a
+    # URL prefix equal to the product slug.
+    for prod in products:
+        if not isinstance(prod, dict):
+            continue
+        product_slug = prod.get("slug") or _slugify(prod.get("display-name", ""))
+        product_path = prod.get("path", "")
+        if not product_slug or not product_path:
+            continue
+        nav_yaml = (REPO_ROOT / "fern" / product_path.lstrip("./")).resolve()
+        if not nav_yaml.exists():
+            continue
+        try:
+            data = yaml.safe_load(nav_yaml.read_text())
+        except Exception:
+            continue
+        walk_nav_config(data, f"/{product_slug}")
     return urls
 
 
@@ -412,7 +419,8 @@ def main() -> int:
                 last_segment = url.rstrip('/').rsplit('/', 1)[-1]
                 url_bare = url.split('#')[0].split('?')[0].rstrip('/')
                 # Fern renders API-ref endpoints from OpenAPI specs at
-                # /<product>/api-reference/api-reference/<tag>/<op-slug>.
+                # /api-reference/<voice-agents|models>/<tag>/<op-slug> (current)
+                # or /<product>/api-reference/<tag>/<op-slug> (legacy).
                 # The nav yaml doesn't contain these — they're computed
                 # from the spec at build time. Tolerate the URL shape as
                 # pending-deploy when the product-slug matches a real
@@ -421,7 +429,8 @@ def main() -> int:
                 # The optional /api-reference/ layer accepts pre-skip-slug and
                 # post-skip-slug shapes so tolerance doesn't break during the
                 # migration between the two.
-                is_auto_apiref = bool(re.match(r'^/[a-z0-9-]+/api-reference/(?:api-reference/)?[^/]+/[^/]+$', url_bare))
+                is_auto_apiref = bool(re.match(r'^/[a-z0-9-]+/api-reference/(?:api-reference/)?[^/]+/[^/]+$', url_bare)) \
+                    or bool(re.match(r'^/api-reference/(?:voice-agents|models)/[^/]+/[^/]+$', url_bare))
                 if last_segment in pending_stems or url_bare in pending_full_urls or is_auto_apiref:
                     pending.append((url, code, url_sources[url]))
                 else:

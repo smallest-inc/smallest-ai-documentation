@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Append <CodingAgentCallout /> to every eligible page MDX under
-`fern/products/{atoms,waves}/pages/`.
+`fern/products/{atoms,waves}/pages/`, `fern/pages/`, and `fern/ai-tools/`.
 
 Idempotent: each injected page carries a `{/* coding-agent-callout-injected */}`
 sentinel, and this script only touches files without it. Re-running is safe.
@@ -27,6 +27,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PAGES_ROOTS = [
     REPO_ROOT / "fern" / "products" / "atoms" / "pages",
     REPO_ROOT / "fern" / "products" / "waves" / "pages",
+    REPO_ROOT / "fern" / "pages",
+    REPO_ROOT / "fern" / "ai-tools",
 ]
 
 EXCLUDE_PATTERNS = (

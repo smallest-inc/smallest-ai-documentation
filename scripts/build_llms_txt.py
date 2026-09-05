@@ -33,21 +33,20 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SITE_URL = "https://docs.smallest.ai"
 OUTPUT_FILE = REPO_ROOT / "fern" / "llms.txt"
 
-# Nav files paired with the (a) URL prefix that Fern serves their pages under
-# and (b) the *display* of the product in the output. Order here is the order
-# sections appear in the output.
+# Nav config. Since the single-site restructure, tabs + navigation live inline
+# in fern/docs.yml and every page URL is /<tab-slug>/<section-slugs>/<page-slug>
+# with no product prefix. Output is grouped by tab (in sidebar order), then by
+# top-level section.
 NAV_SOURCES: list[tuple[Path, str, str]] = [
-    (REPO_ROOT / "fern" / "products" / "atoms.yml", "/voice-agents", "Voice Agents"),
-    (REPO_ROOT / "fern" / "products" / "waves.yml", "/models", "Models"),
+    (REPO_ROOT / "fern" / "docs.yml", "", ""),
 ]
 
 # Tabs whose pages are *not* surfaced in llms.txt. Reasons:
-#   - api-reference: rendered from OpenAPI/AsyncAPI, no .mdx page = no description.
 #   - changelog: dated entries are noisy in an index; deep-link from llms-full.txt instead.
-#   - ai-tools: 2 thin index pages (Overview, Context7).
-# mcp (6 pages) and integrations (10 partner pages) are kept — they have
-# real content that AI agents may want to recommend.
-SKIP_TABS = {"api-reference", "changelog", "ai-tools"}
+# api-reference is kept because it now carries hand-written intro pages
+# (Introduction, Authentication, Concurrency and Limits, Deprecations); the
+# auto-generated endpoint pages have no MDX and are skipped implicitly.
+SKIP_TABS = {"changelog"}
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
@@ -118,21 +117,29 @@ def walk_nav(node, url_prefix: str, tab_slug: str, breadcrumb: list[str]) -> Ite
                 url = "/" + fm_slug.strip("/")
             else:
                 page_slug = fm_slug or node.get("slug") or slugify(title)
-                parts = [url_prefix.rstrip("/"), tab_slug] + [slugify(s) for s in breadcrumb] + [page_slug]
-                url = "/".join(parts)
+                parts = [url_prefix.rstrip("/"), tab_slug] + list(breadcrumb) + [page_slug]
+                url = "/" + "/".join(p.strip("/") for p in parts if p)
             yield {
                 "title": title,
                 "description": (fm.get("description") or "").strip(),
                 "url": url,
                 "tab": tab_slug,
-                "breadcrumb": list(breadcrumb),
+                "tab_label": node.get("_tab_label") or tab_slug,
+                "breadcrumb": node.get("_labels") or [],
             }
             return
         if "section" in node and "contents" in node:
-            new_crumb = breadcrumb + [node["section"]]
+            # skip-slug drops the section from the URL; an explicit slug wins
+            # over the slugified display name.
+            if node.get("skip-slug"):
+                new_crumb = breadcrumb
+            else:
+                new_crumb = breadcrumb + [str(node.get("slug") or slugify(node["section"]))]
             for item in node["contents"]:
                 if isinstance(item, dict):
                     item["_base"] = node.get("_base")
+                    item["_labels"] = (node.get("_labels") or []) + [node["section"]]
+                    item["_tab_label"] = node.get("_tab_label")
                 yield from walk_nav(item, url_prefix, tab_slug, new_crumb)
             return
     elif isinstance(node, list):
@@ -160,10 +167,11 @@ def collect_pages_for_nav(nav_file: Path, url_prefix: str) -> list[dict]:
             continue
         tab_meta = tabs_meta.get(tab_key) or {}
         display = tab_meta.get("display-name") or tab_key
-        tab_slug = tab_meta.get("slug") or slugify(display)
+        tab_slug = "" if tab_meta.get("skip-slug") else (tab_meta.get("slug") or slugify(display))
         for item in tab.get("layout", []) or []:
             if isinstance(item, dict):
                 item["_base"] = base
+                item["_tab_label"] = display
             pages.extend(walk_nav(item, url_prefix, tab_slug, breadcrumb=[]))
     return pages
 
@@ -190,8 +198,9 @@ def build_output() -> str:
         pages = collect_pages_for_nav(nav_file, url_prefix)
         if not pages:
             continue
-        out.append(f"## {product_label}")
-        out.append("")
+        if product_label:
+            out.append(f"## {product_label}")
+            out.append("")
         # Group pages by tab, then by first breadcrumb (top-level section).
         # Preserves the order Fern shows them in the sidebar.
         seen_tabs: list[str] = []
@@ -204,17 +213,22 @@ def build_output() -> str:
             by_tab[t].append(p)
         for tab_slug in seen_tabs:
             tab_pages = by_tab[tab_slug]
+            out.append(f"## {tab_pages[0]['tab_label']}")
+            out.append("")
             seen_sections: list[str] = []
             sections: dict[str, list[dict]] = {}
             for p in tab_pages:
-                section = p["breadcrumb"][0] if p["breadcrumb"] else "Other"
+                # Pages directly under a tab (no section) are listed right
+                # below the tab heading, without a subheading.
+                section = p["breadcrumb"][0] if p["breadcrumb"] else ""
                 if section not in sections:
                     sections[section] = []
                     seen_sections.append(section)
                 sections[section].append(p)
             for section in seen_sections:
-                out.append(f"### {section}")
-                out.append("")
+                if section:
+                    out.append(f"### {section}")
+                    out.append("")
                 for p in sections[section]:
                     out.append(format_line(p))
                 out.append("")

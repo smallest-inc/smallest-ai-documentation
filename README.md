@@ -7,7 +7,7 @@
 
   <h1>Smallest AI Documentation</h1>
 
-  <p>Source for <a href="https://docs.smallest.ai"><strong>docs.smallest.ai</strong></a> — the unified documentation site for Smallest AI's Voice Agents (Atoms) and Models (Waves) products.</p>
+  <p>Source for <a href="https://docs.smallest.ai"><strong>docs.smallest.ai</strong></a>, the unified documentation site for Smallest AI's Voice Agents (Atoms) and Models (Waves) products.</p>
 
   <a href="https://docs.smallest.ai">
     <img src="https://img.shields.io/badge/Docs-docs.smallest.ai-2A9D8F?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Documentation">
@@ -37,21 +37,23 @@
 
 ## About
 
-This repository contains the source files for the Smallest AI documentation site at [docs.smallest.ai](https://docs.smallest.ai). The docs are built with [Fern](https://buildwithfern.com) and cover two products:
+This repository contains the source files for the Smallest AI documentation site at [docs.smallest.ai](https://docs.smallest.ai). The docs are built with [Fern](https://buildwithfern.com) as one site with header tabs (Overview, Voice Agents, Models, API Reference, Integrations, Self Host, Changelog). Content comes from two product lines:
 
 | Product | Internal Name | Description | Docs URL |
 |---|---|---|---|
 | **Voice Agents** | Atoms | End-to-end voice AI agents for telephony, web, and mobile | [docs.smallest.ai/voice-agents](https://docs.smallest.ai/voice-agents) |
-| **Models** | Waves | Text-to-Speech (Lightning) and Speech-to-Text (Pulse) APIs | [docs.smallest.ai/models](https://docs.smallest.ai/models) |
+| **Models** | Waves | Lightning TTS, Pulse STT, Hydra speech to speech, Electron LLM | [docs.smallest.ai/models](https://docs.smallest.ai/models) |
 
-> **Note on naming:** the rendered URL space and product display names are `voice-agents` and `models`. The internal folder + spec names in this repo are still `atoms/` and `waves/` — that's intentional so SDK generation and internal tooling don't break. When editing content, work in `atoms/` and `waves/` folders; when writing an internal link or redirect, target `/voice-agents/*` and `/models/*`.
+Both API references render under one tab: [docs.smallest.ai/api-reference](https://docs.smallest.ai/api-reference) (`/api-reference/voice-agents/*` for the Atoms spec, `/api-reference/models/*` for the Waves spec).
+
+> **Note on naming:** the rendered URL space uses `voice-agents`, `models`, `api-reference`, `integrations`, `self-host`, `overview`, and `changelog` as tab slugs. The internal folder + spec names in this repo are still `atoms/` and `waves/`. That is intentional so SDK generation and internal tooling don't break. When editing content, work in `atoms/` and `waves/` folders; when writing an internal link or redirect, target the rendered URL (for example `/voice-agents/build/prompt`, `/models/text-to-speech/quickstart`, `/api-reference/models/text-to-speech/synthesize-speech`). Since the 2026-09 restructure there is no product switcher: `fern/docs.yml` holds the tabs, the navigation, and the redirects.
 
 ## Repository Structure
 
 ```
 .
 ├── fern/
-│   ├── docs.yml                          # Main docs config (products, theme, layout)
+│   ├── docs.yml                          # Main docs config (tabs, navigation, redirects, theme)
 │   ├── fern.config.json                  # Fern org + version
 │   ├── docs/
 │   │   ├── assets/                       # Logos, favicon, CSS, images, videos
@@ -61,10 +63,10 @@ This repository contains the source files for the Smallest AI documentation site
 │   │   ├── waves/                        # Waves OpenAPI + AsyncAPI specs (SDK generation)
 │   │   ├── waves-v4/overrides/           # Waves v4 API reference overrides (docs rendering)
 │   │   └── unified/                      # Unified SDK generator config
+│   ├── pages/                            # Cross-product pages (landing, tab overviews, API-ref intro)
+│   ├── ai-tools/                         # Developer Tools pages (Context7, Agent Skills)
 │   ├── products/
-│   │   ├── atoms.yml                     # Voice Agents navigation config
 │   │   ├── atoms/pages/                  # Voice Agents documentation pages (MDX)
-│   │   ├── waves.yml                     # Models navigation config
 │   │   └── waves/pages/                  # Models documentation pages (MDX)
 │   └── snippets/                         # Shared MDX snippets
 ├── .github/workflows/
@@ -84,7 +86,7 @@ This repository contains the source files for the Smallest AI documentation site
 | What you're changing | Where to edit |
 |---|---|
 | Waves docs content (pages, guides) | `fern/products/waves/pages/*.mdx` |
-| Waves sidebar navigation | `fern/products/waves.yml` |
+| Models tab navigation | `fern/docs.yml` (`navigation:` → `tab: models`) |
 | Waves API spec (REST/HTTP endpoints) | `fern/apis/waves/openapi/*.yaml` |
 | Waves API spec (WebSocket endpoints) | `fern/apis/waves/asyncapi/*.yaml` |
 | Waves API ref page rendering (what shows on docs site) | `fern/apis/waves-v4/overrides/*.yml` |
@@ -95,7 +97,7 @@ This repository contains the source files for the Smallest AI documentation site
 | What you're changing | Where to edit |
 |---|---|
 | Atoms docs content | `fern/products/atoms/pages/**/*.mdx` |
-| Atoms sidebar navigation | `fern/products/atoms.yml` |
+| Voice Agents tab navigation | `fern/docs.yml` (`navigation:` → `tab: voice-agents`) |
 | Atoms API spec | `fern/apis/atoms/openapi/openapi.yaml` |
 | Atoms images | `fern/products/atoms/pages/images/` |
 
@@ -103,19 +105,20 @@ This repository contains the source files for the Smallest AI documentation site
 
 | What you're changing | Where to edit |
 |---|---|
-| Product toggle, global config | `fern/docs.yml` |
+| Tabs, navigation, redirects, global config | `fern/docs.yml` |
+| Landing page and tab overview pages | `fern/pages/` |
 | CSS / styling | `fern/docs/assets/styles/global-styling.css` |
 | Logos, favicon | `fern/docs/assets/` |
 | Shared MDX snippets | `fern/snippets/` |
 
-> **Important — three spec layers for waves**:
-> 1. **Base spec** at `fern/apis/waves/{openapi,asyncapi}/*.yaml` — source of truth for structure.
-> 2. **SDK overrides** at `fern/apis/waves/{openapi,asyncapi}/*-overrides.yaml` (siblings of base) — drive SDK method names, examples, and deprecations via `fern/apis/unified/generators.yml`.
-> 3. **v4 docs overrides** at `fern/apis/waves-v4/overrides/*.yaml` — drive what renders on the `docs.smallest.ai/models/api-reference/*` pages via `fern/apis/waves-v4/generators.yml`. The `-v4` directory name is a historical carry-over from an earlier version-selector setup; the folder name stays because SDK-gen configs reference it by path.
+> **Important: three spec layers for waves**
+> 1. **Base spec** at `fern/apis/waves/{openapi,asyncapi}/*.yaml`. Source of truth for structure.
+> 2. **SDK overrides** at `fern/apis/waves/{openapi,asyncapi}/*-overrides.yaml` (siblings of base). Drive SDK method names, examples, and deprecations via `fern/apis/unified/generators.yml`.
+> 3. **v4 docs overrides** at `fern/apis/waves-v4/overrides/*.yaml`. Drive what renders on the `docs.smallest.ai/api-reference/models/*` pages via `fern/apis/waves-v4/generators.yml`. The `-v4` directory name is a historical carry-over from an earlier version-selector setup; the folder name stays because SDK-gen configs reference it by path.
 >
-> A `description`, `default`, `enum`, or `example` set in the v4 docs override **wins** on docs render. Editing the same field in the base spec alone is invisible. Always update both layers in lockstep, and run `python3 scripts/spec-live-tests/spec_drift_check.py` before pushing — CI runs it on every PR that touches `fern/apis/waves/**` or `fern/apis/waves-v4/overrides/**`.
+> A `description`, `default`, `enum`, or `example` set in the v4 docs override **wins** on docs render. Editing the same field in the base spec alone is invisible. Always update both layers in lockstep, and run `python3 scripts/spec-live-tests/spec_drift_check.py` before pushing. CI runs it on every PR that touches `fern/apis/waves/**` or `fern/apis/waves-v4/overrides/**`.
 >
-> **Atoms has its own base + override pairs** (REST under `fern/apis/atoms/openapi/` and WS under `fern/apis/atoms/asyncapi/`). The atoms WebSocket endpoint at `WSS /atoms/v1/agent/connect` lives in `agent-ws.yaml` and renders at `/voice-agents/api-reference/api-reference/realtime-agent/realtime-agent` — easy to miss if you only audit `openapi/`. The drift check script auto-discovers all atoms and waves layers.
+> **Atoms has its own base + override pairs** (REST under `fern/apis/atoms/openapi/` and WS under `fern/apis/atoms/asyncapi/`). The atoms WebSocket endpoint at `WSS /atoms/v1/agent/connect` lives in `agent-ws.yaml` and renders at `/api-reference/voice-agents/realtime-agent/realtime-agent`, easy to miss if you only audit `openapi/`. The drift check script auto-discovers all atoms and waves layers.
 
 ## Setup
 
@@ -186,7 +189,7 @@ git checkout -b docs/your-change-description
 ### 3. Make Your Changes
 
 - **Content changes**: Edit MDX files in the relevant `pages/` directory (see [Which Files to Edit](#which-files-to-edit))
-- **Navigation changes**: Edit the YAML config (`atoms.yml` or `waves.yml`)
+- **Navigation changes**: Edit the `navigation:` block in `fern/docs.yml`
 - **API spec changes**: Edit OpenAPI/AsyncAPI files in `fern/apis/`
 - **Style changes**: Edit `fern/docs.yml` or `fern/docs/assets/styles/global-styling.css`
 
