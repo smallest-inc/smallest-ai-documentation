@@ -92,7 +92,7 @@ Pair each voice with its language code, e.g. `"language": "ta"` with a Tamil voi
 
 </Accordion>
 
-<Accordion title="European languages (61 voices - 10 languages)">
+<Accordion title="European languages (75 voices - 12 languages)">
 
 | Language | Code | Female voices | Male voices |
 |---|---|---|---|
@@ -100,6 +100,8 @@ Pair each voice with its language code, e.g. `"language": "ta"` with a Tamil voi
 | Spanish | `es` | `martina`, `ines`, `paula` | `sebastian`, `mateo`, `gabriel` |
 | French | `fr` | `manon`, `juliette`, `lucie`, `elise`, `amelie` | `louis`, `nicolas`, `maxime`, `raphael` |
 | Italian | `it` | `silvia`, `concetta`, `arianna` | `davide`, `luca`, `leonardo` |
+| Dutch | `nl` | `sanne`, `femke`, `fenna` | `daan`, `lars`, `bram`, `stijn` |
+| Swedish | `sv` | `astrid`, `ebba`, `saga`, `alva` | `erik`, `anton`, `nils` |
 | Portuguese (Brazilian) | `pt` | `juliana`, `leticia` | `gustavo`, `thiago`, `bruno` |
 | Portuguese (European) | `pt` | `catarina` | `francisco` |
 | Russian | `ru` | `anastasia`, `ekaterina`, `olga`, `irina` | `andrei`, `nikolai`, `maksim` |
@@ -218,12 +220,21 @@ See the [Pro model card voice catalog](/models/model-cards/text-to-speech/lightn
 
 ## Fetch the full catalog programmatically
 
-For filtering by language / accent / gender / use case across the full 217 voices, query the live catalog. The response includes both standard Lightning v3.1 voices and Pro voices, distinguished by their tags.
+The endpoint is **pool-scoped**: `/waves/v1/lightning-v3.1/get_voices` returns Standard voices, `/waves/v1/lightning-v3.1-pro/get_voices` returns Pro voices. Call one or both depending on which pool you plan to use.
+
+<Note>
+**Hyphen vs underscore.** The path uses hyphens (`lightning-v3.1`, `lightning-v3.1-pro`); the `POST /waves/v1/tts` body uses underscores (`lightning_v3.1`, `lightning_v3.1_pro`). Passing the underscored form on the path returns 404.
+</Note>
 
 <CodeGroup>
 
 ```bash cURL
+# Standard pool
 curl "https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices" \
+  -H "Authorization: Bearer $SMALLEST_API_KEY"
+
+# Pro pool
+curl "https://api.smallest.ai/waves/v1/lightning-v3.1-pro/get_voices" \
   -H "Authorization: Bearer $SMALLEST_API_KEY"
 ```
 
@@ -231,43 +242,47 @@ curl "https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices" \
 import os
 import requests
 
-response = requests.get(
-    "https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices",
-    headers={"Authorization": f"Bearer {os.environ['SMALLEST_API_KEY']}"},
-)
-response.raise_for_status()
-voices = response.json()["voices"]
+def fetch_voices(pool: str):
+    response = requests.get(
+        f"https://api.smallest.ai/waves/v1/{pool}/get_voices",
+        headers={"Authorization": f"Bearer {os.environ['SMALLEST_API_KEY']}"},
+    )
+    response.raise_for_status()
+    return response.json()["voices"]
 
-# Filter by language
-english_voices = [v for v in voices if "english" in v["tags"]["language"]]
-print(f"{len(english_voices)} English voices")
+standard = fetch_voices("lightning-v3.1")
+pro      = fetch_voices("lightning-v3.1-pro")
+
+# Filter by language (works on either pool)
+english_pro = [v for v in pro if "english" in v["tags"]["language"]]
+print(f"{len(english_pro)} English voices in the Pro pool")
 
 # Filter by accent
-indian_voices = [v for v in voices if v["tags"].get("accent") == "indian"]
-print(f"{len(indian_voices)} Indian-accent voices")
+indian_pro = [v for v in pro if v["tags"].get("accent") == "indian"]
+print(f"{len(indian_pro)} Indian-accent Pro voices")
 
-# Filter by gender
-female_voices = [v for v in voices if v["tags"].get("gender") == "female"]
-print(f"{len(female_voices)} female voices")
-
-# Use a voice
-voice_id = english_voices[0]["voiceId"]   # e.g. "kaitlyn"
-print(f"Selected: {voice_id}")
+# Dedicated per-language voices carry `recommendedLanguages`
+dutch = [v for v in pro if "dutch" in v["tags"].get("recommendedLanguages", [])]
+print(f"{len(dutch)} Pro voices dedicated to Dutch: {[v['voiceId'] for v in dutch]}")
 ```
 
 ```javascript JavaScript
-const response = await fetch(
-  "https://api.smallest.ai/waves/v1/lightning-v3.1/get_voices",
-  { headers: { Authorization: `Bearer ${process.env.SMALLEST_API_KEY}` } }
-);
-if (!response.ok) throw new Error(`HTTP ${response.status}`);
-const { voices } = await response.json();
+async function fetchVoices(pool) {
+  const response = await fetch(
+    `https://api.smallest.ai/waves/v1/${pool}/get_voices`,
+    { headers: { Authorization: `Bearer ${process.env.SMALLEST_API_KEY}` } }
+  );
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return (await response.json()).voices;
+}
 
-const english = voices.filter((v) => v.tags.language.includes("english"));
-const indian  = voices.filter((v) => v.tags.accent === "indian");
-const female  = voices.filter((v) => v.tags.gender === "female");
+const standard = await fetchVoices("lightning-v3.1");
+const pro      = await fetchVoices("lightning-v3.1-pro");
 
-console.log(`${english.length} English, ${indian.length} Indian-accent, ${female.length} female`);
+const englishPro = pro.filter((v) => v.tags.language.includes("english"));
+const dutch      = pro.filter((v) => (v.tags.recommendedLanguages || []).includes("dutch"));
+
+console.log(`${englishPro.length} English Pro voices, ${dutch.length} dedicated Dutch Pro voices`);
 ```
 
 </CodeGroup>
@@ -320,7 +335,7 @@ Each entry in the `voices` array has:
 | Turkish | `tr` | - | 2 |
 | Vietnamese | `vi` | - | 1 |
 
-For per-language voice counts that always reflect the live catalog, query `GET /waves/v1/lightning-v3.1/get_voices` and group by `tags.language`. For the canonical per-voice metadata, see the [Lightning v3.1 model card voice catalog](/models/model-cards/text-to-speech/lightning-v-3-1#voice-catalog) and [Lightning v3.1 Pro voice catalog](/models/model-cards/text-to-speech/lightning-v-3-1-pro#voice-catalog).
+For per-language voice counts that always reflect the live catalog, query both `GET /waves/v1/lightning-v3.1/get_voices` and `GET /waves/v1/lightning-v3.1-pro/get_voices`, then group by `tags.language`. For the canonical per-voice metadata, see the [Lightning v3.1 model card voice catalog](/models/model-cards/text-to-speech/lightning-v-3-1#voice-catalog) and [Lightning v3.1 Pro voice catalog](/models/model-cards/text-to-speech/lightning-v-3-1-pro#voice-catalog).
 
 ## Need help?
 
