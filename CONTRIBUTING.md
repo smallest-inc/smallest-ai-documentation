@@ -90,6 +90,67 @@ Any PR that modifies a file under `fern/apis/**/*.yaml` (OpenAPI or AsyncAPI spe
 
 If the spec change is not customer-visible (description-only edit, internal refactor, comment fix), add the `skip-changelog` label to the PR and re-run the check.
 
+## Run the docs locally
+
+```bash
+npm install -g fern-api          # once
+cd fern
+fern check                       # validates docs.yml, nav paths, and every API spec
+fern docs dev --port 3210        # live preview at http://localhost:3210 with hot reload
+```
+
+`fern docs dev` picks up MDX, `docs.yml`, and spec edits without a restart. Kill it when you are done (`pkill -f "fern docs dev"`); orphaned servers pile up.
+
+Checks that CI runs, all runnable locally:
+
+```bash
+python3 scripts/check_nav.py                                   # every MDX is in the nav, every nav path exists
+python3 scripts/check_links.py --base http://localhost:3210     # every internal link resolves on the local preview
+python3 scripts/build_llms_txt.py                              # regenerate fern/llms.txt after nav or description changes
+python3 scripts/inject_agent_callout.py                        # add the coding-agent callout to new pages
+python3 scripts/spec-live-tests/spec_drift_check.py            # base spec vs docs override parity (waves)
+```
+
+Redirects can be tested against the local preview too: `curl -sI http://localhost:3210/<old-url>` should return a 308 with the new location. The Fern preview URL (buildwithfern.com) appears as a PR comment once a PR is open.
+
+## Spec files
+
+The Voice Agents (Atoms) OpenAPI spec is one file per domain under `fern/apis/atoms/openapi/`:
+
+| File | Tags |
+|---|---|
+| `account.yaml` | User, Account, Billing, Concurrency |
+| `agents.yaml` | Agents, Agent Templates, Widget, Web Call, Realtime Agent, Prompt Scoring |
+| `calls.yaml` | Calls, Conversations, Logs, Call Actions, Live Transcripts, Post-Call Analytics, Disposition Metric Templates |
+| `campaigns.yaml` | Campaigns, Audience, DNC |
+| `knowledge-base.yaml` | Knowledge Base |
+| `phone-numbers.yaml` | Phone Numbers, Compliance |
+| `webhooks.yaml` | Webhooks |
+| `agent-versioning.yaml` | Agent Versioning (Branches, Revisions, Drafts, Versions) |
+| `analytics.yaml` | Analytics |
+| `tools.yaml` | Tools, Secrets, Integrations |
+| `components.yaml` | Shared schemas, parameters, responses. Referenced from the files above through `$ref: ./components.yaml#/components/...` |
+
+Rules:
+
+- Add a new endpoint to the file whose tags it carries. A new domain gets a new file plus an entry in **both** `fern/apis/atoms/generators.yml` and `fern/apis/unified/generators.yml`.
+- New shared schemas go in `components.yaml`. Endpoint-local inline schemas can stay inline.
+- Keep the file order in the two generators files identical. Fern resolves shared error bodies and their examples "first seen wins" across files, so order changes shuffle docstrings on the generated error types.
+- Fern merges every file into one API. SDK grouping comes from `tags` / `x-fern-sdk-group-name`, not from files, so moving an endpoint between files does not change the SDK.
+
+Proving a refactor is behaviour-neutral for the SDK:
+
+```bash
+cd fern
+git stash                                   # or check out main
+fern ir /tmp/before.json --api unified
+git stash pop
+fern ir /tmp/after.json --api unified
+python3 ../scripts/spec-live-tests/ir_equivalence.py /tmp/before.json /tmp/after.json
+```
+
+The checker exits 0 only when endpoints, types, and error shapes are identical. Docstring and example-order differences are listed separately and are expected after a file reorder.
+
 ## Spec layers (Waves TTS + STT)
 
 Every TTS/STT endpoint in the Waves product is described across **three** YAML files. Editing only one is the most common cause of "I changed the spec but the docs still show the old text." Know which layer feeds which surface before you start.

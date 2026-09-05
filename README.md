@@ -2,7 +2,7 @@
 <div align="center">
 
   <a href="https://smallest.ai">
-    <img src="fern/docs/assets/logo_dark.png" alt="Smallest AI" height="50">
+    <img src="fern/docs/assets/brand-mark-light.svg" alt="Smallest AI" height="40">
   </a>
 
   <h1>Smallest AI Documentation</h1>
@@ -59,7 +59,7 @@ Both API references render under one tab: [docs.smallest.ai/api-reference](https
 │   │   ├── assets/                       # Logos, favicon, CSS, images, videos
 │   │   └── changelog/                    # Changelog entries
 │   ├── apis/
-│   │   ├── atoms/openapi/                # Atoms (Voice Agents) OpenAPI spec
+│   │   ├── atoms/openapi/                # Atoms (Voice Agents) OpenAPI spec, one file per domain + components.yaml
 │   │   ├── waves/                        # Waves OpenAPI + AsyncAPI specs (SDK generation)
 │   │   ├── waves-v4/overrides/           # Waves v4 API reference overrides (docs rendering)
 │   │   └── unified/                      # Unified SDK generator config
@@ -98,7 +98,7 @@ Both API references render under one tab: [docs.smallest.ai/api-reference](https
 |---|---|
 | Atoms docs content | `fern/products/atoms/pages/**/*.mdx` |
 | Voice Agents tab navigation | `fern/docs.yml` (`navigation:` → `tab: voice-agents`) |
-| Atoms API spec | `fern/apis/atoms/openapi/openapi.yaml` |
+| Atoms API spec | `fern/apis/atoms/openapi/*.yaml`, one file per domain (agents, calls, campaigns, ...); shared schemas in `components.yaml` |
 | Atoms images | `fern/products/atoms/pages/images/` |
 
 ### Global
