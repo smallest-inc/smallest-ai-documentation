@@ -319,9 +319,29 @@ Every call that reaches us has a full capture on our side too; with the `SCL_` c
   </Accordion>
 </AccordionGroup>
 
-## VPN-only and IP-whitelisting providers
+## Direct SIP-to-SIP (IP-address trunks)
 
-Some carriers cannot send SIP to cloud endpoints at all: they require a VPN, private IP addressing, or a fixed IP to whitelist. We support this class of provider through a managed SIP gateway that bridges them into the platform; once connected, the calls behave exactly like any other SIP trunk here. This setup is provisioned by our team per provider. Contact `support@smallest.ai` with your provider's connectivity requirements.
+If your carrier or SBC does not present phone numbers on the wire (a direct SIP endpoint, an internal PBX, or a carrier that only knows how to dial a URI), create an inbound trunk with **no numbers and no allowed caller numbers**. The response returns a minted `sipIdentity` (an `+8835`-range E.164 number) and a `sipHost`.
+
+```bash
+curl -X POST .../v1/sip-trunk/inbound \
+  -d '{ "name": "Acme direct SIP", "allowedAddresses": ["203.0.113.10"] }'
+# 201:
+# {
+#   "trunkKind": "ipAddress",
+#   "sipIdentity": "+883512345678901",
+#   "sipHost": "your-project.sip.livekit.cloud",
+#   ...
+# }
+```
+
+Configure your SBC to dial `sipIdentity@sipHost` (append `;transport=tls` on 5061 or `;transport=tcp` on 5060 as usual). Calls route to whichever agent answers on this trunk.
+
+Because the shape rides the shared platform ingress, trunk-level fields (`authUsername`, `authPassword`, `mediaEncryption`, `krispEnabled`, `ringingTimeoutSeconds`) are refused with a 400 explaining why. Add a phone number or an `allowedNumbers` entry if you need a dedicated trunk with those settings.
+
+## VPN-only providers
+
+Some carriers cannot send SIP to cloud endpoints at all: they require a VPN, private IP addressing, or a fixed IP to whitelist. That case still needs the managed SIP gateway. Contact `support@smallest.ai` with your provider's connectivity requirements.
 
 ## Best practices
 

@@ -4880,13 +4880,26 @@ paths:
       x-fern-sdk-method-name: create_inbound
       description: |
         Creates an inbound trunk: the resource that receives calls from your carrier.
-        Requires an admin-role key. Provide at least one phone number **or** one allowed
-        peer address (an address-only trunk answers any extension from those peers,
-        direct SIP-to-SIP). Wildcard addresses (`0.0.0.0`, `::`, `*`, any `/0`) are refused:
-        for a direct SIP endpoint the address list is the security boundary.
+        Requires an admin-role key. Two shapes are supported and the request body
+        selects between them.
 
-        Phone numbers must be unique across the whole platform: a number already answering
+        **Dedicated shape (`trunkKind: phoneNumber`).** Send at least one phone number
+        or one allowed caller number. This provisions a per-tenant trunk with its own
+        credentials, media-encryption policy, Krisp toggle, and ringing timeout.
+        Phone numbers are unique across the platform: a number already answering
         elsewhere returns `409` ("Already in use and cannot be added to this trunk: ...").
+        Wildcard peer addresses (`0.0.0.0`, `::`, `*`, any `/0`) are refused: the
+        allow-list IS the security boundary.
+
+        **IP-address shape (`trunkKind: ipAddress`).** Send only `name` and
+        `allowedAddresses` (both `numbers` and `allowedNumbers` empty or omitted).
+        The response includes a minted `sipIdentity` (an `+8835`-range E.164 number
+        that identifies the trunk on the shared platform ingress) and a `sipHost`.
+        Configure your SBC to dial `sipIdentity@sipHost` and calls route to the
+        agent that answers on this trunk. Trunk-level fields (`authUsername`,
+        `authPassword`, `mediaEncryption`, `krispEnabled`, `ringingTimeoutSeconds`)
+        are refused on this shape with a 400 explaining why. The shape rides
+        the shared platform trunk and has no per-tenant settings.
       tags:
         - SIP Trunks
       security:
@@ -4910,7 +4923,7 @@ paths:
                   items:
                     type: string
                   maxItems: 50
-                  description: E.164 numbers (with leading `+`) this trunk answers. Deduplicated.
+                  description: E.164 numbers (with leading `+`) this trunk answers. Deduplicated. Leave empty (with `allowedNumbers` also empty) to get the IP-address shape.
                   example: ["+14155552671"]
                 allowedAddresses:
                   type: array
@@ -4924,32 +4937,36 @@ paths:
                   items:
                     type: string
                   maxItems: 50
-                  description: Restrict accepted caller numbers to this list (optional).
+                  description: Restrict accepted caller numbers to this list (optional). If set, the trunk is dedicated even without `numbers`.
                 mediaEncryption:
                   type: string
                   enum: [disable, allow, require]
-                  default: allow
+                  description: Defaults to `allow` on a dedicated trunk. Refused on the IP-address shape.
                 krispEnabled:
                   type: boolean
-                  default: true
-                  description: Noise cancellation for callers arriving on this trunk.
+                  description: Noise cancellation for callers arriving on this trunk. Defaults to `true` on a dedicated trunk. Refused on the IP-address shape.
                 ringingTimeoutSeconds:
                   type: integer
                   minimum: 1
                   maximum: 600
+                  description: Only accepted on a dedicated trunk.
                 authUsername:
                   type: string
-                  description: SIP digest username. Provide both credentials or neither.
+                  description: SIP digest username. Provide both credentials or neither. Only accepted on a dedicated trunk.
                 authPassword:
                   type: string
-                  description: SIP digest password. Stored with the SIP infrastructure, never returned.
+                  description: SIP digest password. Stored with the SIP infrastructure, never returned. Only accepted on a dedicated trunk.
       responses:
         "201":
-          description: Trunk created
+          description: |
+            Trunk created. Response includes `trunkKind` (`phoneNumber` or `ipAddress`).
+            When `trunkKind` is `ipAddress`, `sipIdentity` (e.g. `+883512345678901`)
+            and `sipHost` are also returned. Configure your SBC to dial
+            `sipIdentity@sipHost`.
         "400":
-          description: Validation failure (missing name, no number or address, wildcard address, half a credential pair)
+          description: Validation failure (missing name, no number or address, wildcard address, half a credential pair, or a trunk-level field on an IP-address shape).
         "409":
-          description: A number is already in use on another trunk
+          description: A number is already in use on another trunk.
   /sip-trunk/inbound/{trunkId}:
     patch:
       summary: Update an inbound SIP trunk

@@ -20,7 +20,12 @@ Previously, one attachment did two jobs: a number attached to an agent decided b
 | Pick a campaign's caller IDs | `fromNumbers` on `POST /campaign` |
 | Set the number transfers dial from | `PUT /agent/{agentId}/transfer-source` |
 
-Splitting the trunk into two resources is also what enables direct SIP-to-SIP: an inbound trunk with `allowedAddresses` and no phone numbers answers any extension from those peers. That was impossible with the old single import, which required a phone number.
+Splitting the trunk into two resources is also what enables direct SIP-to-SIP. An inbound trunk comes in two shapes:
+
+- **Dedicated (`trunkKind: phoneNumber`).** Send `numbers` or `allowedNumbers`; the trunk gets its own credentials, media-encryption policy, Krisp toggle, and ringing timeout.
+- **IP-address (`trunkKind: ipAddress`).** Send just `name` and `allowedAddresses`. The response includes a minted `sipIdentity` (an `+8835`-range E.164 number) and a `sipHost`. Configure your SBC to dial `sipIdentity@sipHost`. Trunk-level fields (auth, encryption, Krisp, timeout) are refused on this shape because it rides the shared platform trunk and has no per-tenant settings.
+
+Both shapes were impossible with the old single import, which required a phone number.
 
 ## What still works during the migration window
 
