@@ -1,0 +1,1639 @@
+openapi: 3.0.0
+info:
+  title: "Voice Agents API: Campaigns and Audiences"
+  version: 1.0.0
+  description: "Part of the Voice Agents (Atoms) API. Shared schemas live in components.yaml."
+servers:
+  - url: https://api.smallest.ai/atoms/v1
+    description: Production server
+paths:
+  /campaign:
+    get:
+      summary: Retrieve all campaigns
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: list
+      description: Get all campaigns for the authenticated organization.
+      tags:
+        - Campaigns
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+        - in: query
+          name: offset
+          required: false
+          schema:
+            type: integer
+            default: 5
+          description: Number of campaigns per page
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [draft, scheduled, processing, running, paused, completed, failed]
+          description: Filter campaigns by status
+        - in: query
+          name: search
+          required: false
+          schema:
+            type: string
+          description: Search campaigns by name
+        - in: query
+          name: sortField
+          required: false
+          schema:
+            type: string
+            default: createdAt
+            enum: [createdAt, updatedAt]
+          description: Field to sort by
+        - in: query
+          name: sortOrder
+          required: false
+          schema:
+            type: string
+            default: desc
+            enum: [asc, desc]
+          description: Sort direction
+      responses:
+        "200":
+          description: A list of campaigns
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      campaigns:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                              description: The unique identifier for the campaign
+                            name:
+                              type: string
+                              description: The name of the campaign
+                            description:
+                              type: string
+                              description: The description of the campaign
+                            organization:
+                              type: string
+                              description: The ID of the organization
+                            agent:
+                              type: object
+                              description: The agent assigned to this campaign
+                              properties:
+                                _id:
+                                  type: string
+                                name:
+                                  type: string
+                                workflowType:
+                                  type: string
+                            audience:
+                              type: object
+                              description: The audience assigned to this campaign
+                              properties:
+                                _id:
+                                  type: string
+                                name:
+                                  type: string
+                            createdBy:
+                              type: string
+                              description: The ID of the user who created the campaign
+                            participantsCount:
+                              type: integer
+                              description: The number of participants in the campaign
+                            status:
+                              type: string
+                              enum: [draft, scheduled, processing, running, paused, completed, failed]
+                              description: Current status of the campaign
+                            maxRetries:
+                              type: integer
+                              description: Maximum retry attempts per failed call
+                            retryDelay:
+                              type: integer
+                              description: Delay in minutes between retry attempts
+                            retryAttempts:
+                              type: integer
+                              description: Total retry attempts made so far
+                            scheduledAt:
+                              type: string
+                              format: date-time
+                            pausedAt:
+                              type: string
+                              format: date-time
+                            cancelledCallsCount:
+                              type: integer
+                            createdAt:
+                              type: string
+                              format: date-time
+                              description: The date and time when the campaign was created
+                            updatedAt:
+                              type: string
+                              format: date-time
+                              description: The date and time when the campaign was last updated
+                      pagination:
+                        type: object
+                        properties:
+                          total:
+                            type: integer
+                          page:
+                            type: integer
+                          offset:
+                            type: integer
+                          hasMore:
+                            type: boolean
+                          totalPages:
+                            type: integer
+                      totalCampaignCount:
+                        type: integer
+                        description: Total number of campaigns in the organization (unfiltered)
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+    post:
+      summary: Create a campaign
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: create
+      description: Create a campaign
+      tags:
+        - Campaigns
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 40
+                  description: The name of the campaign
+                  example: "My Campaign"
+                description:
+                  type: string
+                  description: The description of the campaign
+                  example: "This is a campaign to test the API"
+                audienceId:
+                  type: string
+                  description: The ID of the audience
+                  example: "60d0fe4f5311236168a109ca"
+                agentId:
+                  type: string
+                  description: The ID of the agent
+                  example: "60d0fe4f5311236168a109ca"
+                phoneNumberIds:
+                  type: array
+                  description: |
+                    Optional list of caller-ID phone number IDs to rotate across
+                    when placing outbound calls for this campaign. If omitted,
+                    the agent's default phone number is used.
+                  items:
+                    type: string
+                  example: ["60d0fe4f5311236168a109cb"]
+                scheduledAt:
+                  type: string
+                  format: date-time
+                  description: |
+                    Optional ISO-8601 timestamp for when the campaign should
+                    start dialing. Must be in the future. If provided, the
+                    campaign is created in `scheduled` status; otherwise it
+                    starts in `draft` status and must be started manually.
+                  example: "2026-04-24T10:00:00.000Z"
+                maxRetries:
+                  type: integer
+                  minimum: 0
+                  maximum: 10
+                  default: 3
+                  description: |
+                    Maximum number of times a failed call is retried before the
+                    participant is marked as failed. `0` disables retries.
+                  example: 3
+                retryDelay:
+                  type: integer
+                  minimum: 1
+                  maximum: 1440
+                  default: 15
+                  description: |
+                    Delay in minutes between retry attempts for a failed call.
+                  example: 15
+              required:
+                - name
+                - audienceId
+                - agentId
+      responses:
+        "201":
+          description: |
+            Campaign created successfully. Note: the response is the raw Mongoose document — `agentId`
+            and `audienceId` are plain ObjectId strings here, not nested objects as returned by GET endpoints.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        description: The unique identifier for the campaign
+                      name:
+                        type: string
+                        description: The name of the campaign
+                      description:
+                        type: string
+                        description: The description of the campaign
+                      organization:
+                        type: string
+                        description: The ID of the organization
+                      agentId:
+                        type: string
+                        description: Raw ObjectId of the agent (not a nested object)
+                      createdBy:
+                        type: string
+                        description: The ID of the user who created the campaign
+                      audienceId:
+                        type: string
+                        description: Raw ObjectId of the audience (not a nested object)
+                      participantsCount:
+                        type: integer
+                        description: The number of participants in the campaign
+                      scheduledAt:
+                        type: string
+                        format: date-time
+                        description: The scheduled start time, if provided at creation.
+                      maxRetries:
+                        type: integer
+                        description: Maximum retries per failed call (echoes request).
+                      retryDelay:
+                        type: integer
+                        description: Delay in minutes between retry attempts (echoes request).
+                      retryAttempts:
+                        type: integer
+                        description: Number of retries attempted so far across the campaign.
+                      status:
+                        type: string
+                        enum: [draft, scheduled, processing, running, paused, completed, failed]
+                        description: Current campaign status.
+                      createdAt:
+                        type: string
+                        format: date-time
+                        description: The date and time when the campaign was created
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        description: The date and time when the campaign was last updated
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "./components.yaml#/components/responses/ForbiddenError"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /campaign/{id}:
+    get:
+      summary: Get a campaign
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: get
+      description: Get a campaign with detailed metrics
+      tags:
+        - Campaigns
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: The ID of the campaign
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Campaign details with metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      campaign:
+                        type: object
+                        properties:
+                          _id:
+                            type: string
+                            description: The unique identifier for the campaign
+                          name:
+                            type: string
+                            description: The name of the campaign
+                          description:
+                            type: string
+                            description: The description of the campaign
+                          organization:
+                            type: string
+                            description: The ID of the organization
+                          agent:
+                            type: object
+                            description: The agent assigned to this campaign
+                            properties:
+                              _id:
+                                type: string
+                              name:
+                                type: string
+                              workflowType:
+                                type: string
+                          audience:
+                            type: object
+                            description: The audience assigned to this campaign
+                            properties:
+                              _id:
+                                type: string
+                              name:
+                                type: string
+                          createdBy:
+                            type: string
+                            description: The ID of the user who created the campaign
+                          participantsCount:
+                            type: integer
+                            description: The number of participants in the campaign
+                          status:
+                            type: string
+                            enum: [draft, scheduled, processing, running, paused, completed, failed]
+                            description: The current status of the campaign
+                          maxRetries:
+                            type: integer
+                            description: Maximum number of retry attempts
+                            example: 3
+                          retryDelay:
+                            type: integer
+                            description: Delay between retries in minutes
+                            example: 15
+                          retryAttempts:
+                            type: integer
+                            description: Total retry attempts made so far
+                          scheduledAt:
+                            type: string
+                            format: date-time
+                            description: Scheduled start time for the campaign
+                          pausedAt:
+                            type: string
+                            format: date-time
+                            description: When the campaign was paused
+                          cancelledCallsCount:
+                            type: integer
+                            description: Number of calls cancelled (e.g. when campaign was paused)
+                          error:
+                            type: string
+                            description: Error message if the campaign failed
+                          failedAt:
+                            type: string
+                            format: date-time
+                            description: When the campaign entered failed state
+                          createdAt:
+                            type: string
+                            format: date-time
+                            description: The date and time when the campaign was created
+                          updatedAt:
+                            type: string
+                            format: date-time
+                            description: The date and time when the campaign was last updated
+                      events:
+                        type: array
+                        description: Campaign events history
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                            triggerSource:
+                              type: string
+                            eventAction:
+                              type: string
+                            createdAt:
+                              type: string
+                              format: date-time
+                            updatedAt:
+                              type: string
+                              format: date-time
+                      metrics:
+                        type: object
+                        description: Campaign performance metrics
+                        properties:
+                          total_participants:
+                            type: integer
+                            description: Total number of contacts in the campaign audience
+                            example: 500
+                          contacts_called:
+                            type: integer
+                            description: Number of unique contacts where a call was attempted (statuses ACTIVE, COMPLETED, FAILED, NO_ANSWER)
+                            example: 247
+                          contacts_connected:
+                            type: integer
+                            description: Number of unique contacts who answered and had a conversation (status COMPLETED)
+                            example: 150
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+    delete:
+      summary: Delete a campaign
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: delete
+      description: Delete a campaign
+      tags:
+        - Campaigns
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: The ID of the campaign
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Campaign deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Campaign not found
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /campaign/{id}/start:
+    post:
+      summary: Start or resume a campaign
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: start_or_resume
+      description: |
+        Queues the campaign for processing and returns immediately — the campaign is **not** yet
+        running when the 202 is returned. Poll `GET /campaign/{id}` and watch for `status: "running"`.
+
+        This endpoint also acts as a **resume** endpoint: if the campaign is currently paused,
+        calling this endpoint resumes it (`status` transitions from `paused` → `running`).
+      tags:
+        - Campaigns
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: The ID of the campaign
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Campaign queued for processing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Campaign is being processed"
+                      taskId:
+                        type: string
+                        description: Internal task identifier for the queued job
+                      campaignId:
+                        type: string
+                        description: The ID of the campaign
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Campaign not found
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /campaign/{id}/pause:
+    post:
+      summary: Pause a campaign
+      x-fern-sdk-group-name: campaigns
+      x-fern-sdk-method-name: pause
+      description: |
+        Queues a pause task and returns immediately — the campaign is **not** immediately paused.
+        Poll `GET /campaign/{id}` and watch for `status: "paused"`.
+      tags:
+        - Campaigns
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: The ID of the campaign
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pause task queued successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /audience:
+    get:
+      summary: Get all audiences
+      x-fern-sdk-group-name: audience
+      x-fern-sdk-method-name: list
+      description: Retrieve all audiences created by the authenticated user. Users can only access audiences they have created.
+      tags:
+        - Audience
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Successfully retrieved audiences
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                          description: The unique identifier for the audience
+                          example: "60d0fe4f5311236168a109ca"
+                        name:
+                          type: string
+                          description: The name of the audience
+                          example: "My Customer List"
+                        description:
+                          type: string
+                          description: The description of the audience
+                          example: "List of customers for marketing campaign"
+                        phoneNumberColumnName:
+                          type: string
+                          description: The name of the column in the CSV that contains phone numbers
+                          example: "phoneNumber"
+                        organization:
+                          type: string
+                          description: The organization ID
+                          example: "60d0fe4f5311236168a109cb"
+                        createdBy:
+                          type: string
+                          description: The user ID who created the audience
+                          example: "60d0fe4f5311236168a109cc"
+                        createdAt:
+                          type: string
+                          format: date-time
+                          description: The date and time when the audience was created
+                          example: "2025-01-15T10:30:00.000Z"
+                        updatedAt:
+                          type: string
+                          format: date-time
+                          description: The date and time when the audience was last updated
+                          example: "2025-01-15T10:30:00.000Z"
+                        memberCount:
+                          type: number
+                          description: Current number of members in the audience
+                        hasCampaigns:
+                          type: boolean
+                          description: Whether any campaigns are currently using this audience
+                        campaigns:
+                          type: array
+                          description: Active campaigns using this audience
+                          items:
+                            type: object
+                            properties:
+                              _id:
+                                type: string
+                              name:
+                                type: string
+                              status:
+                                type: string
+                              createdAt:
+                                type: string
+                                format: date-time
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+
+    post:
+      summary: Create audience with CSV upload
+      description: |
+        Create a new audience by uploading a CSV file containing phone numbers.
+        Only CSV text files are accepted — binary files will produce malformed data.
+
+        **Additional 400 cases:**
+        - Duplicate phone numbers in the CSV: `"Some phone numbers in your CSV already exist in this audience. Please remove duplicate entries and try again."`
+        - Member limit exceeded: `"Audience cannot exceed X members"`
+      tags:
+        - Audience
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+                  description: The name of the audience
+                  example: "test_audience"
+                description:
+                  type: string
+                  description: Optional description of the audience
+                  example: "List of customers for marketing campaign"
+                phoneNumberColumnName:
+                  type: string
+                  description: The name of the column in the CSV that contains phone numbers
+                  example: "phoneNumber"
+                identifierColumnName:
+                  type: string
+                  description: The name of the column in the CSV that contains identifiers (e.g., names)
+                  example: "Name"
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file containing phone numbers and identifiers (max 5MB)
+                  example: "audience_template.csv"
+              required:
+                - name
+                - phoneNumberColumnName
+                - file
+
+      responses:
+        "200":
+          description: Audience created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        description: The unique identifier for the audience
+                        example: "60d0fe4f5311236168a109ca"
+                      name:
+                        type: string
+                        description: The name of the audience
+                        example: "My Customer List"
+                      description:
+                        type: string
+                        description: The description of the audience
+                        example: "List of customers for marketing campaign"
+                      phoneNumberColumnName:
+                        type: string
+                        description: The name of the column in the CSV that contains phone numbers
+                        example: "phoneNumber"
+                      identifierColumnName:
+                        type: string
+                        description: The name of the column in the CSV that contains identifiers
+                        example: "Name"
+                      organization:
+                        type: string
+                        description: The organization ID
+                        example: "60d0fe4f5311236168a109cb"
+                      createdBy:
+                        type: string
+                        description: The user ID who created the audience
+                        example: "60d0fe4f5311236168a109cc"
+                      createdAt:
+                        type: string
+                        format: date-time
+                        description: The date and time when the audience was created
+                        example: "2025-01-15T10:30:00.000Z"
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        description: The date and time when the audience was last updated
+                        example: "2025-01-15T10:30:00.000Z"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      [
+                        "CSV file is required",
+                        "Some phone numbers in your CSV already exist in this audience. Please remove duplicate entries and try again.",
+                      ]
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /audience/{id}:
+    get:
+      summary: Get audience by ID
+      x-fern-sdk-group-name: audience
+      x-fern-sdk-method-name: get
+      description: |
+        Retrieve a specific audience by its ID.
+        Note: if the audience belongs to a different organization, the API returns 404 (not 403) — ownership is deliberately obscured.
+      tags:
+        - Audience
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The unique identifier of the audience
+          schema:
+            type: string
+            example: "60d0fe4f5311236168a109ca"
+      responses:
+        "200":
+          description: Successfully retrieved audience
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        description: The unique identifier for the audience
+                        example: "60d0fe4f5311236168a109ca"
+                      name:
+                        type: string
+                        description: The name of the audience
+                        example: "My Customer List"
+                      description:
+                        type: string
+                        description: The description of the audience
+                        example: "List of customers for marketing campaign"
+                      phoneNumberColumnName:
+                        type: string
+                        description: The name of the column in the CSV that contains phone numbers
+                        example: "phoneNumber"
+                      organization:
+                        type: string
+                        description: The organization ID
+                        example: "60d0fe4f5311236168a109cb"
+                      createdBy:
+                        type: string
+                        description: The user ID who created the audience
+                        example: "60d0fe4f5311236168a109cc"
+                      createdAt:
+                        type: string
+                        format: date-time
+                        description: The date and time when the audience was created
+                        example: "2025-01-15T10:30:00.000Z"
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        description: The date and time when the audience was last updated
+                        example: "2025-01-15T10:30:00.000Z"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Audience ID missing"]
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Audience not found (also returned when audience belongs to a different organization)
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+
+    delete:
+      summary: Delete audience
+      description: |
+        Delete a specific audience by its ID. Users can only delete audiences they created.
+
+        **400 is returned if the audience is used by an active campaign:**
+        `"can't delete audience, campaign with this audience <id> exists"`
+        Remove the campaign first, then retry deletion.
+
+        On success, `data` is always an empty array `[]`.
+      tags:
+        - Audience
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The unique identifier of the audience to delete
+          schema:
+            type: string
+            example: "60d0fe4f5311236168a109ca"
+      responses:
+        "200":
+          description: Audience deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    example: []
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      ["can't delete audience, campaign with this audience 60d0fe4f5311236168a109ca exists"]
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Audience not found
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /audience/{id}/members:
+    get:
+      summary: Get audience members
+      description: Retrieve members of a specific audience with pagination support. Users can only access members of audiences they created.
+      tags:
+        - Audience
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The unique identifier of the audience
+          schema:
+            type: string
+            example: "60d0fe4f5311236168a109ca"
+        - name: page
+          in: query
+          required: false
+          description: Page number for pagination (default is 1)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - name: offset
+          in: query
+          required: false
+          description: |
+            Number of items per page (default is 5).
+            Note: this parameter is named "offset", not "limit" — sending ?limit=N is silently ignored.
+          schema:
+            type: integer
+            minimum: 1
+            default: 5
+            example: 10
+      responses:
+        "200":
+          description: Successfully retrieved audience members
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      members:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                              description: The unique identifier for the audience member
+                              example: "60d0fe4f5311236168a109cd"
+                            data:
+                              type: object
+                              description: Dynamic data from CSV, structure depends on uploaded file
+                              example:
+                                phoneNumber: "+1234567890"
+                                name: "John Doe"
+                                email: "john@example.com"
+                      totalCount:
+                        type: integer
+                        description: Total number of members in the audience
+                        example: 150
+                      totalPages:
+                        type: integer
+                        description: Total number of pages available
+                        example: 15
+                      hasMore:
+                        type: boolean
+                        description: Whether there are more pages available
+                        example: true
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Audience ID is required"]
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Forbidden — audience belongs to a different organization
+        "404":
+          description: Audience not found
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Failed to fetch audience members"]
+
+    post:
+      summary: Add audience members
+      description: |
+        Add new members to an existing audience.
+
+        Each member object must include a key matching the audience's `phoneNumberColumnName`.
+        If it's missing, the API returns 400: `"Each member must have a <phoneNumberColumnName> field"`.
+        Adding members that would exceed the audience limit also returns 400.
+
+        Note: if the audience belongs to a different organization, the API returns 404 (not 403).
+      tags:
+        - Audience
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The unique identifier of the audience
+          schema:
+            type: string
+            example: "60d0fe4f5311236168a109ca"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                members:
+                  type: array
+                  description: Array of member objects with dynamic structure based on audience configuration
+                  items:
+                    type: object
+                    description: Member data with keys matching the audience's CSV structure. Must include the phone number column.
+                    example:
+                      phoneNumber: "+1234567890"
+                      name: "John Doe"
+                      email: "john@example.com"
+              required:
+                - members
+      responses:
+        "200":
+          description: Members added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        message:
+                          type: string
+                          example: "5 members added successfully"
+                        data:
+                          type: object
+                          properties:
+                            added:
+                              type: integer
+                              description: Number of members successfully added
+                              example: 5
+                            skipped:
+                              type: integer
+                              description: Number of members skipped (e.g., duplicates)
+                              example: 2
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      [
+                        "Each member must have a phoneNumber field",
+                        "Cannot add 15 members. You currently have 9990 members in this audience. The maximum limit is 10000 members. You can add up to 10 more members.",
+                      ]
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Audience not found (also returned when audience belongs to a different organization)
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+
+    delete:
+      summary: Delete audience members
+      description: Remove specific members from an audience by their member IDs. Users can only delete members from audiences they created.
+      tags:
+        - Audience
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The unique identifier of the audience
+          schema:
+            type: string
+            example: "60d0fe4f5311236168a109ca"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memberIds:
+                  type: array
+                  description: Array of member IDs to delete
+                  items:
+                    type: string
+                    example: "60d0fe4f5311236168a109cd"
+              required:
+                - memberIds
+      responses:
+        "200":
+          description: Members deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      deletedCount:
+                        type: integer
+                        description: Number of members successfully deleted
+                        example: 3
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Audience ID missing"]
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Audience not found (also returned when audience belongs to a different organization)
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /audience/{id}/members/search:
+    get:
+      summary: Search audience members
+      description: |
+        Search for members within a specific audience using flexible search parameters. Users can only search members of audiences they created.
+
+        **Search Types:**
+        - **General Search** (`query`): Searches across all fields in the audience member data
+        - **Field-Specific Search**: Use any field name as a parameter (e.g., `firstName=john`, `phoneNumber=123456`, `email=test@example.com`)
+
+        **Examples:**
+        - `?query=john` - General search across all fields
+        - `?firstName=john` - Search specifically in firstName field
+        - `?phoneNumber=555-1234` - Search specifically in phoneNumber field
+        - `?firstName=john&lastName=doe` - Search for members matching both criteria
+
+        **Note:** When using phoneNumber field, do not use quotes around the phone number. You can use either a general search OR field-specific searches, but not both simultaneously.
+      tags:
+        - Audience
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The unique identifier of the audience
+          schema:
+            type: string
+            example: "60d0fe4f5311236168a109ca"
+        - name: query
+          in: query
+          required: false
+          description: General search term that searches across all fields in audience member data
+          schema:
+            type: string
+            example: "john"
+        - name: "*"
+          in: query
+          required: false
+          description: |
+            Any field name can be used as a query parameter for field-specific searches.
+            Examples: firstName, lastName, phoneNumber, email, etc.
+            The parameter name becomes the field to search in, and the value is the search term.
+            When using phoneNumber field, do not use quotes around the phone number.
+          schema:
+            type: string
+            example: "field_value"
+      responses:
+        "200":
+          description: Search results returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      members:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                              description: The unique identifier for the audience member
+                              example: "60d0fe4f5311236168a109cd"
+                            data:
+                              type: object
+                              description: Dynamic data from CSV, structure depends on uploaded file
+                              example:
+                                phoneNumber: "+1234567890"
+                                name: "John Doe"
+                                email: "john@example.com"
+                      searchInfo:
+                        type: object
+                        description: Information about the search performed
+                        properties:
+                          searchType:
+                            type: string
+                            description: The type of search performed
+                            enum: ["general", "multiple"]
+                            example: "multiple"
+                          searchTerm:
+                            type: string
+                            description: The search term(s) used
+                            example: "john"
+                          searchFields:
+                            type: array
+                            items:
+                              type: string
+                            description: The specific fields searched (for field-specific searches)
+                            example: ["firstName", "lastName"]
+                          totalResults:
+                            type: integer
+                            description: The number of results returned
+                            example: 5
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      [
+                        "At least one search parameter is required. Use 'query' for general search across all fields, or use field-specific searches like 'firstName=john' or 'phoneNumber=123456'.",
+                      ]
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Audience not found
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Failed to search audience members"]
+
+  # ── Agent Versioning: Drafts ───────────────────────────────────────────
+  /dnc:
+    get:
+      summary: List DNC entries for the organization
+      x-fern-sdk-group-name: dnc
+      x-fern-sdk-method-name: list
+      description: |
+        Lists Do-Not-Call entries for the caller's organization with pagination, search,
+        and sort. Optionally scope to a single agent via `agentId`.
+
+        Each entry records a phone number that was flagged (via call outcome or manual
+        upload) as not-to-be-called for either the org or a specific agent.
+      tags:
+        - DNC
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Optional 24-character hex agent ID. When present, restricts results to entries
+            for this agent. Returns 400/404 if the ID isn't valid or doesn't belong to
+            the caller's org.
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Free-text search across phone numbers.
+        - name: sortField
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [createdAt, phoneNumber]
+            default: createdAt
+        - name: sortOrder
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "1"
+          description: Page number (string-encoded positive integer, ≥ 1).
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "50"
+          description: Page size (string-encoded; server clamps to 1–500).
+      responses:
+        "200":
+          description: Paginated DNC entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      entries:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            agentId:
+                              type: string
+                            orgId:
+                              type: string
+                            phoneNumber:
+                              type: string
+                            source:
+                              type: string
+                            detectedInCallId:
+                              type: string
+                              nullable: true
+                            createdAt:
+                              type: string
+                              format: date-time
+                            updatedAt:
+                              type: string
+                              format: date-time
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                          offset:
+                            type: integer
+                          total:
+                            type: integer
+                          totalPages:
+                            type: integer
+                          hasMore:
+                            type: boolean
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestErrorResponse"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          $ref: "./components.yaml#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /campaign/{id}/export/by-audience-member:
+    get:
+      tags:
+        - Campaigns
+      summary: Export campaign results grouped by audience member
+      description: |
+        Returns one row per contact in the campaign audience with the outcome of every call
+        attempt for that contact (status, disposition, duration, cost, call ID). Use this to
+        reconcile a campaign run against a CRM, or to identify contacts that never connected.
+        The response streams as CSV.
+      operationId: exportCampaignResultsByAudienceMember
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The campaign ID.
+          example: "6a75935452c6e5eceaa16edf"
+          schema:
+            type: string
+            pattern: "^[a-f\\d]{24}$"
+        - name: format
+          in: query
+          required: false
+          description: Output format. Defaults to `json`.
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        '200':
+          description: |
+            The grouped export. The default `json` returns the structured object below;
+            `format=csv` streams `text/csv` with one row per audience-member contact. The
+            CSV column set matches your dashboard's campaign export for this campaign.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  campaign:
+                    type: string
+                    description: The campaign name.
+                  exportedAt:
+                    type: string
+                    format: date-time
+                  totalAudienceMembers:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        audienceMemberId:
+                          type: string
+                        audienceMemberData:
+                          type: object
+                          description: The audience member's custom fields.
+                          additionalProperties: true
+                        phoneNumber:
+                          type: string
+                        originalCall:
+                          type: object
+                          nullable: true
+                          description: The first call attempt for this member.
+                        retryAttempts:
+                          type: array
+                          items:
+                            type: object
+                        totalAttempts:
+                          type: integer
+                        finalStatus:
+                          type: string
+                        totalCallDuration:
+                          type: number
+                        totalCallCost:
+                          type: number
+        '404':
+          description: Campaign not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Campaign not found"]
+  /campaign/{id}/logs/export:
+    get:
+      tags:
+        - Campaigns
+      summary: Export campaign call logs
+      description: |
+        Returns one row per call attempt in the campaign (timestamp, contact, agent, outcome,
+        duration, cost, recording URL, transcript URL). Use this for a flat call-level audit
+        trail of a campaign. The response streams as CSV.
+      operationId: exportCampaignLogs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The campaign ID.
+          example: "6a75935452c6e5eceaa16edf"
+          schema:
+            type: string
+            pattern: "^[a-f\\d]{24}$"
+      responses:
+        '200':
+          description: |
+            CSV export streamed successfully. One row per call attempt.
+            The exact column set matches what your dashboard's campaign export produces for this
+            campaign; check a live export against your own campaign to confirm the column list.
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Campaign not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["no campaign found for id 6a75935452c6e5eceaa16edf"]
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: API key from the console ApiKey collection, sent as Bearer token. Also accepts session cookies for browser-based auth.
+tags:
+  - name: Campaigns
+    description: |
+      Bulk outbound calling. A campaign attaches an agent to an audience CSV and drives one
+      call per contact through the retry policy. Read-only export routes stream results as
+      CSV (grouped by audience member, or flat call-level logs).
+  - name: Audience
+    description: Operations related to audience management and CSV uploads
+  - name: DNC
+    description: Do-Not-Call registry entries scoped to the organization (optionally further scoped to a single agent). Entries are added automatically from call outcomes or manually via CSV upload.

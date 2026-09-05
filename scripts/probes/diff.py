@@ -110,7 +110,7 @@ DOCS_TO_AUDIT_BY_SERVICE: dict[str, list[str]] = {
         "New changelog entry under `fern/products/waves/pages/changelog-entries/`",
     ],
     "atoms": [
-        "`fern/apis/atoms/openapi/openapi.yaml`",
+        "`fern/apis/atoms/openapi/<domain>.yaml` (agents, calls, campaigns, ...)",
         "`fern/products/atoms/pages/`",
         "New changelog entry under `fern/products/atoms/pages/intro/reference/changelog-entries/`",
     ],

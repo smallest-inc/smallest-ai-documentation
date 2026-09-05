@@ -2,7 +2,7 @@
 
 Extracts every (HTTP method, path) tuple actually exercised by
 `smallest-inc/testAutomation` (api-tests/) and compares it against the
-endpoint surface declared in `fern/apis/atoms/openapi/openapi.yaml`.
+endpoint surface declared in `fern/apis/atoms/openapi/*.yaml` (one file per domain).
 Endpoints in testAutomation but NOT in Fern OpenAPI are the canonical
 "docs gap" — undocumented endpoints customers may discover via SDK or
 trial-and-error. Endpoints in OpenAPI but NOT in testAutomation are
@@ -31,7 +31,7 @@ Tracked as a follow-up.
 Usage:
     python3 scripts/probes/atoms_spec_diff.py \\
         --testautomation /path/to/testAutomation \\
-        --openapi fern/apis/atoms/openapi/openapi.yaml \\
+        --openapi fern/apis/atoms/openapi/agents.yaml \\
         [--markdown] [--baseline scripts/probes/baseline-atoms-spec-diff.json]
 
 Exit code: 0 = no diff, 1 = drift detected, 2 = error.
@@ -95,12 +95,12 @@ def extract_testautomation_endpoints(repo_root: Path) -> set[tuple[str, str]]:
 def extract_openapi_endpoints(spec_path: Path) -> set[tuple[str, str]]:
     """Return {(METHOD, normalised_path)} from a Fern atoms OpenAPI surface.
 
-    Fern merges the main openapi.yaml with every override (`*-overrides.y*ml`,
-    `*_override.y*ml`) sitting next to it. This function unions the
-    `paths:` keys across all files in the same directory so a future
-    override that ADDS an endpoint is captured (overrides today only
-    tweak existing endpoints — SDK names, summaries, examples — but the
-    pattern needs to stay aligned with Fern's read order).
+    The atoms spec is one file per domain (agents.yaml, calls.yaml, ...)
+    plus components.yaml and the override files, all in the same directory.
+    Fern merges every registered file into one API. This function unions
+    the `paths:` keys across all YAML files in the directory, so any file
+    can be passed as `spec_path` and a future file that ADDS an endpoint is
+    captured.
     """
     found: set[tuple[str, str]] = set()
     spec_dir = spec_path.parent
@@ -160,8 +160,8 @@ def render_markdown(only_in_test: list, only_in_spec: list) -> str:
         lines.append("")
     lines.append("**Doc files to audit:**")
     lines.append("")
-    lines.append("- `fern/apis/atoms/openapi/openapi.yaml`")
-    lines.append("- `fern/apis/atoms/openapi/openapi-overrides.yaml`")
+    lines.append("- `fern/apis/atoms/openapi/<domain>.yaml` (agents, calls, campaigns, ...)")
+    lines.append("- `fern/apis/atoms/openapi/components.yaml` for shared schemas")
     lines.append("- `fern/products/atoms/pages/`")
     lines.append("- New changelog entry under `fern/products/atoms/pages/intro/reference/changelog-entries/`")
     return "\n".join(lines)
@@ -176,8 +176,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--openapi",
-        default="fern/apis/atoms/openapi/openapi.yaml",
-        help="path to the Fern atoms openapi.yaml",
+        default="fern/apis/atoms/openapi/agents.yaml",
+        help="any spec file in fern/apis/atoms/openapi/; every YAML in that directory is read",
     )
     parser.add_argument("--markdown", action="store_true")
     parser.add_argument(

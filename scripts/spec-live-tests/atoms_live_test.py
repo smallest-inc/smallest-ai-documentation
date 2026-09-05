@@ -104,7 +104,7 @@ def janitor_sweep() -> int:
 # documented in the OpenAPI — that way the diff endpoint will flag it.
 #
 # NOTE: this list must be kept in sync with the documented fields in
-# CreateAgentRequest in fern/apis/atoms/openapi/openapi.yaml. When you
+# CreateAgentRequest in fern/apis/atoms/openapi/components.yaml. When you
 # add a field to the spec, add a case here in the same PR or this test
 # is a paper tiger.
 CASES: list[tuple[str, object]] = [

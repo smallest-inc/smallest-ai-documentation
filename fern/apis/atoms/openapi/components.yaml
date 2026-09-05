@@ -1,0 +1,3886 @@
+openapi: 3.0.0
+info:
+  title: "Voice Agents API shared components"
+  version: 1.0.0
+  description: "Shared schemas, parameters, and responses referenced by every domain file in this folder."
+paths: {}
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: API key from the console ApiKey collection, sent as Bearer token. Also accepts session cookies for browser-based auth.
+
+  parameters:
+    AgentId:
+      name: id
+      in: path
+      required: true
+      description: The agent ID.
+      schema:
+        type: string
+        pattern: "^[a-f\\d]{24}$"
+    DraftId:
+      name: draftId
+      in: path
+      required: true
+      description: The draft ID
+      schema:
+        type: string
+    VersionId:
+      name: versionId
+      in: path
+      required: true
+      description: The published version ID
+      schema:
+        type: string
+        pattern: "^[a-f\\d]{24}$"
+    BranchId:
+      name: branchId
+      in: path
+      required: true
+      description: The branch ID.
+      schema:
+        type: string
+        pattern: "^[a-f\\d]{24}$"
+    RevisionId:
+      name: revisionId
+      in: path
+      required: true
+      description: The revision ID. Equal to the v1 `versionId` for revisions that were migrated from the v1 model.
+      schema:
+        type: string
+        pattern: "^[a-f\\d]{24}$"
+
+  schemas:
+    WebSessionRequest:
+      type: object
+      required:
+        - agentId
+      properties:
+        agentId:
+          type: string
+          description: The agent to attach the browser client to.
+          example: "6a75935452c6e5eceaa16edf"
+    WebSessionResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+              description: Short-lived LiveKit access token. Pass on the browser client when connecting to `host`.
+              example: "eyJhbGciOiJIUzI1NiJ9..."
+            roomName:
+              type: string
+              description: LiveKit room UUID. Pre-created for this session.
+              example: "dee9223a-4751-49a9-bcbc-cb35c5a8371d"
+            host:
+              type: string
+              description: LiveKit WebSocket URL to connect to.
+              example: "wss://rtc.example-provider.com"
+            conversationId:
+              type: string
+              description: Correlates browser events, transcripts, and post-call analytics.
+              example: "IyF-GCRiprATI5rx4lIdvg"
+            callId:
+              type: string
+              description: Call ID surfaced in call-logs and analytics endpoints.
+              example: "CALL-1786159503332-8387f2"
+    WebSessionErrorResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: false
+        errors:
+          type: array
+          items:
+            type: string
+          example: ["agentId: Required"]
+    WebEngageIntegrationSet:
+      type: object
+      description: A single WebEngage credential set
+      required: [licenseCode, environment, apiKey]
+      properties:
+        licenseCode:
+          type: string
+          description: WebEngage license code
+        environment:
+          type: string
+          description: WebEngage environment identifier
+        apiKey:
+          type: string
+          description: WebEngage API key
+
+    CallActionCondition:
+      type: object
+      description: A filter condition evaluated against provider record fields
+      required: [field, operator, value]
+      properties:
+        field:
+          type: string
+          description: Provider record field name
+        operator:
+          type: string
+          enum: [eq, neq, gt, gte, lt, lte, in, nin, contains, notContains, startsWith, endsWith]
+          description: Comparison operator
+        value:
+          type: string
+          description: Value to compare against
+
+    CallAction:
+      type: object
+      description: A call action that fires automatically at a specific point in the call lifecycle
+      properties:
+        _id:
+          type: string
+          description: MongoDB ObjectId
+        organization:
+          type: string
+          description: Organization ObjectId
+        agentId:
+          type: string
+          description: Agent ObjectId this action belongs to
+        category:
+          type: string
+          enum: [trigger, post-call]
+          description: When the action fires
+        provider:
+          type: string
+          description: "Integration provider (e.g. `hubspot`, `salesforce`)"
+        action_type:
+          type: string
+          enum: [create, update]
+          description: The operation performed on the provider object
+        object:
+          type: string
+          description: "Provider object type (e.g. `contact`, `deal`)"
+        config:
+          type: object
+          properties:
+            phoneNumberFieldName:
+              type: string
+              description: "Provider field that contains the phone number (required for `trigger` actions)"
+            conditions:
+              type: array
+              items:
+                $ref: "#/components/schemas/CallActionCondition"
+            body:
+              type: string
+              description: Request body template or payload for the provider action
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AnalyticsTrendMetric:
+      type: object
+      description: A metric value with current and previous period values and percent change
+      properties:
+        current:
+          type: number
+        previous:
+          type: number
+        percentChange:
+          type: number
+
+    AnalyticsDateRange:
+      type: object
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+
+    ApiResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+        data:
+          type: object
+    WidgetConfig:
+      type: object
+      description: |
+        Configuration for the embeddable web widget. Used by `GET /agent/{id}/widget-config`
+        (returned with `assistantId` injected) and `PATCH /agent/{id}/widget-config`
+        (merge-patched). Every field is optional. Only the fields present in a PATCH
+        request body are written, so partial updates are safe.
+      properties:
+        position:
+          type: string
+          enum: [bottom-right, bottom-left, top-right, top-left]
+        size:
+          type: string
+          enum: [tiny, compact, full]
+        borderRadius:
+          type: number
+          minimum: 0
+          maximum: 50
+        mode:
+          type: string
+          enum: [chat, voice]
+        theme:
+          type: string
+          enum: [light, dark]
+        baseColor:
+          type: string
+        accentColor:
+          type: string
+        agentBubbleColor:
+          type: string
+        textOnAccentColor:
+          type: string
+        secondaryTextColor:
+          type: string
+        primaryTextColor:
+          type: string
+        title:
+          type: string
+        startButtonText:
+          type: string
+          minLength: 1
+        endButtonText:
+          type: string
+          minLength: 1
+        ctaTitle:
+          type: string
+          nullable: true
+        ctaSubtitle:
+          type: string
+          nullable: true
+        ctaName:
+          type: string
+          nullable: true
+        widgetName:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+          description: |
+            Must start with the CDN distribution domain prefix configured for the
+            organization. Submit a non-CDN URL and the server returns 400.
+        voiceEmptyMessage:
+          type: string
+          nullable: true
+        voiceActiveEmptyMessage:
+          type: string
+          nullable: true
+        chatEmptyMessage:
+          type: string
+          nullable: true
+        chatFirstMessage:
+          type: string
+          nullable: true
+        chatPlaceholder:
+          type: string
+          minLength: 1
+        voiceShowTranscript:
+          type: boolean
+        consentRequired:
+          type: boolean
+        consentTitle:
+          type: string
+          minLength: 1
+        consentContent:
+          type: string
+          minLength: 1
+        consentStorageKey:
+          type: string
+          nullable: true
+        publicKey:
+          type: string
+        assistantId:
+          type: string
+          description: Injected by `GET /agent/{id}/widget-config` (equals the agent ID).
+        allowlist:
+          type: array
+          items:
+            type: string
+          description: List of origins (domains) authorized to embed this widget.
+    Product:
+      type: object
+      description: 'A phone-number product owned by the organization — either a platform-rented number (`productType: telephony`) or a SIP-imported number (`productType: custom-telephony`).'
+      properties:
+        _id:
+          type: string
+          description: 24-char MongoDB ObjectId. Use this as `productId` when releasing, or assign to an agent via `PATCH /agent/{agentId}`.
+          example: "6969109c84c74bed175f02a7"
+        productType:
+          type: string
+          enum: [telephony, custom-telephony]
+          description: |
+            - `telephony` — number rented via the Atoms platform (Plivo/Twilio).
+            - `custom-telephony` — number imported via `POST /product/import-phone-number` with the customer's own SIP trunk.
+          example: "telephony"
+        isActive:
+          type: boolean
+          description: Whether the number is currently billable / serving traffic.
+          example: true
+        attributes:
+          type: object
+          description: Provider-specific number metadata.
+          properties:
+            provider:
+              type: string
+              enum: [plivo, twilio]
+            phoneNumber:
+              type: string
+              description: E.164 format including `+`.
+              example: "+912268093636"
+        agentId:
+          type: string
+          nullable: true
+          description: 24-char MongoDB ObjectId of the agent this number is assigned to, if any. `null` when unassigned.
+          example: "69edad34780a67ce987d3f42"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    UnauthorizedErrorResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: false
+        errors:
+          type: array
+          items:
+            type: string
+          example: ["Unauthorized: User not found"]
+    InternalServerErrorResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: false
+        errors:
+          type: array
+          items:
+            type: string
+          example: ["Internal server error"]
+    BadRequestErrorResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: false
+        errors:
+          type: array
+          items:
+            type: string
+          example: ["Invalid input"]
+
+    CreateAgentFromTemplateRequest:
+      type: object
+      required:
+        - agentName
+        - templateId
+      properties:
+        agentName:
+          type: string
+          description: Name of the agent
+        agentDescription:
+          type: string
+          description: Description of the agent
+        templateId:
+          type: string
+          description: ID of the template to use. You can get the list of templates with their description and id from the /agent/template endpoint.
+    CreateAgentRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        backgroundSound:
+          type: string
+          enum: ["", "office", "cafe", "call_center", "static"]
+          default: ""
+          description: "Ambient background sound during calls. Options: '' (none), 'office', 'cafe', 'call_center', 'static'. Note: this value is currently overridden by the server default on creation; update via PATCH after creation."
+        # visibleToEveryone:
+        #   type: boolean
+        #   default: false
+        language:
+          type: object
+          description: |
+            Language configuration for the agent.
+            Cross-field rule: `default` must be one of the values in `supported`.
+            Tamil (`ta`) cannot be combined with other languages in `supported`.
+          properties:
+            default:
+              type: string
+              enum: [en, hi, mr, gu, ta, te, kn, ml, es, north_indic, bn, or, fr, de, it, nl, pt, ru]
+              description: "The default language of the agent. Note: `ta` cannot be combined with other languages in `supported`."
+              default: en
+            supported:
+              type: array
+              description: |
+                Languages the agent understands. `default` must be one of these values.
+                Tamil (`ta`) cannot be combined with other languages.
+              items:
+                type: string
+                enum: [en, hi, mr, gu, ta, te, kn, ml, es, north_indic, bn, or, fr, de, it, nl, pt, ru]
+            switching:
+              type: object
+              description: Language switching configuration for the agent. If enabled, the agent will be able to switch between languages based on the user's language.
+              properties:
+                isEnabled:
+                  type: boolean
+                  description: Whether to enable language switching for the agent
+                  default: false
+                minWordsForDetection:
+                  type: number
+                  minimum: 1
+                  maximum: 10
+                  description: Minimum number of words required for language detection
+                  default: 2
+                strongSignalThreshold:
+                  type: number
+                  minimum: 0.1
+                  maximum: 0.9
+                  description: Threshold for strong language signal detection (0.1 to 0.9)
+                  default: 0.7
+                weakSignalThreshold:
+                  type: number
+                  minimum: 0.1
+                  maximum: 0.9
+                  description: Threshold for weak language signal detection (0.1 to 0.9)
+                  default: 0.3
+                minConsecutiveForWeakThresholdSwitch:
+                  type: number
+                  minimum: 1
+                  maximum: 5
+                  description: Minimum consecutive detections required for weak threshold language switch
+                  default: 2
+        synthesizer:
+          type: object
+          description: |
+            Synthesizer (TTS) configuration for the agent. Model
+            `waves_lightning_v3_1` validates `voiceId` against the Waves
+            API. `gpt-realtime` and `gpt-realtime-mini` accept any voiceId.
+            Cloned voices are regular voiceIds. Use them with a compatible
+            Waves model.
+          properties:
+            voiceConfig:
+              type: object
+              description: Voice configuration for the synthesizer.
+              properties:
+                model:
+                  type: string
+                  enum:
+                    - waves_lightning_v3_1
+                    - gpt-realtime
+                    - gpt-realtime-mini
+                  default: waves_lightning_v3_1
+                  description: |
+                    The TTS model to use. Use `waves_lightning_v3_1` for the
+                    recommended Waves voice path (default), or `gpt-realtime` /
+                    `gpt-realtime-mini` for OpenAI realtime models (require
+                    `workflowType: single_prompt`).
+                voiceId:
+                  type: string
+                  default: nyah
+                  description: The voice ID to use. For cloned voices, pass the voiceId from the Waves platform with a compatible model.
+                gender:
+                  type: string
+                  enum:
+                    - male
+                    - female
+                  default: female
+                  description: The gender of the voice.
+              default:
+                model: waves_lightning_v3_1
+                voiceId: nyah
+            speed:
+              type: number
+              minimum: 0
+              maximum: 2
+              default: 1.2
+            consistency:
+              type: number
+              minimum: 0
+              maximum: 1
+              default: 0.5
+            similarity:
+              type: number
+              minimum: 0
+              maximum: 1
+              default: 0
+            enhancement:
+              type: number
+              enum: [0, 1, 2]
+              default: 1
+            sampleRate:
+              type: number
+              enum: [8000, 16000, 24000, 44100]
+              default: 16000
+              description: Output audio sample rate in Hz.
+        globalKnowledgeBaseId:
+          type: string
+          description: The global knowledge base ID of the agent. You can create a global knowledge base by using the /knowledgebase endpoint and assign it to the agent. The agent will use this knowledge base for its responses.
+        slmModel:
+          type: string
+          enum:
+            - electron
+            - electron-kogta
+            - electron-kogta-v2
+            - gpt-4o
+            - gpt-4.1
+            - gpt-5.2
+            - gpt-5.2-azure
+            - gpt-realtime
+            - gpt-realtime-mini
+          default: electron
+          description: |
+            The LLM model to use for the agent.
+            Note: `gpt-5.2`, `electron-kogta`, and `electron-kogta-v2` require org-level access and return 403 if not enabled.
+            `workflowType` must be `single_prompt` to use `gpt-realtime` or `gpt-realtime-mini`.
+        defaultVariables:
+          type: object
+          description: The default variables to use for the agent. These variables will be used if no variables are provided when initiating a conversation with the agent.
+        preCallAPI:
+          type: object
+          description: Configuration for an API call to be made before the call starts. The response variables can be injected into the agent's prompt.
+          properties:
+            isEnabled:
+              type: boolean
+              default: false
+              description: Whether the pre-call API is enabled.
+            url:
+              type: string
+              format: uri
+              description: The URL of the API endpoint to call.
+            method:
+              type: string
+              enum: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+              description: The HTTP method to use for the API call.
+            headers:
+              type: object
+              additionalProperties:
+                type: string
+              description: Optional HTTP headers to include in the request.
+            body:
+              type: object
+              description: Optional request body for POST/PUT/PATCH requests.
+            timeout:
+              type: integer
+              minimum: 1
+              maximum: 30
+              default: 5
+              description: Timeout in seconds for the API call.
+            queryParams:
+              type: object
+              description: Optional query parameters to include in the request URL.
+            responseVariables:
+              type: array
+              description: List of variables to extract from the API response using JSON path expressions.
+              items:
+                type: object
+                required:
+                  - variableName
+                  - jsonPath
+                properties:
+                  variableName:
+                    type: string
+                    description: The name of the variable to inject into the agent prompt.
+                  jsonPath:
+                    type: string
+                    description: JSON path expression to extract the value from the API response.
+          required:
+            - url
+            - method
+        globalPrompt:
+          type: string
+          maxLength: 4000
+          description: |
+            Set global instructions for your agent's personality, role, and behavior throughout conversations.
+            Note: Only used for workflow_graph agents. Maximum 4000 characters.
+        telephonyProductId:
+          type: array
+          items:
+            type: string
+          description: IDs of telephony products (phone numbers) to associate with the agent for inbound/outbound calls.
+        workflowType:
+          $ref: "#/components/schemas/WorkflowType"
+          default: single_prompt
+          description: The type of workflow to create for the agent. Defaults to `single_prompt` if not specified. Using `workflow_graph` requires conversational agent access (403 if not enabled).
+        firstMessage:
+          type: string
+          maxLength: 500
+          description: The first message the agent sends when a conversation starts.
+        muteUserUntilFirstBotResponse:
+          type: boolean
+          description: When true, the user's audio is muted until the agent has finished its first response.
+        allowInterruptions:
+          type: boolean
+          description: Whether the user can interrupt the agent while it is speaking.
+        waitForUserToSpeakFirst:
+          type: boolean
+          description: When true, the agent waits for the user to speak before sending the first message.
+        interruptionBackoffTimer:
+          type: number
+          minimum: 0
+          maximum: 10
+          description: Seconds the agent waits after being interrupted before resuming speech.
+        smartTurnConfig:
+          type: object
+          description: Smart turn-detection configuration. When enabled, the agent uses an additional model to decide whether the user has finished a turn.
+          properties:
+            isEnabled:
+              type: boolean
+            waitTimeInSecs:
+              type: number
+              minimum: 0
+              maximum: 10
+              description: How long to wait after the user stops speaking before responding.
+        voiceDetectionConfig:
+          type: object
+          description: Voice activity detection (VAD) configuration. Controls how the agent decides when speech is present.
+          properties:
+            confidence:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: Minimum VAD confidence threshold to register speech.
+            minVolume:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: Minimum input volume threshold to register speech.
+            triggerTimeInSecs:
+              type: number
+              minimum: 0
+              maximum: 10
+              description: How long sustained speech must be detected before turning the VAD on.
+            releaseTimeInSecs:
+              type: number
+              minimum: 0
+              maximum: 10
+              description: How long after silence before the VAD turns off.
+        voiceMailDetectionConfig:
+          type: object
+          description: Voicemail-detection configuration. When the call hits a voicemail tone, the agent plays `endText` and ends the call.
+          properties:
+            enabled:
+              type: boolean
+            endText:
+              type: string
+              maxLength: 200
+              description: Message played before hanging up when voicemail is detected.
+        denoisingConfig:
+          type: object
+          description: Background-noise denoising configuration for the agent's input audio.
+          properties:
+            isEnabled:
+              type: boolean
+        redactionConfig:
+          type: object
+          description: PII redaction configuration. When enabled, personally identifiable information is redacted from transcripts before storage.
+          properties:
+            isEnabled:
+              type: boolean
+        pronunciationDicts:
+          type: array
+          description: Pronunciation overrides — words the TTS engine should pronounce differently from its default.
+          items:
+            type: object
+            required:
+              - word
+              - pronunciation
+            properties:
+              word:
+                type: string
+                description: The word to override.
+              pronunciation:
+                type: string
+                description: How the word should be pronounced (phonetic spelling).
+        llmIdleTimeoutConfig:
+          type: object
+          description: Timeout configuration for the LLM stage of a conversation. Triggers a retry or call termination when the LLM does not respond within the configured window.
+          properties:
+            chatTimeoutTimeInSecs:
+              type: number
+              minimum: 1
+              maximum: 300
+              description: LLM idle timeout for chat conversations, in seconds.
+            webcallTimeoutTimeInSecs:
+              type: number
+              minimum: 1
+              maximum: 300
+              description: LLM idle timeout for web calls, in seconds.
+            telephonyTimeoutTimeInSecs:
+              type: number
+              minimum: 1
+              maximum: 300
+              description: LLM idle timeout for telephony calls, in seconds.
+            maxRetries:
+              type: number
+              description: Maximum number of LLM-idle retries before terminating the call. System-defined min/max.
+        sessionTimeoutConfig:
+          type: object
+          description: Maximum duration of a conversation session. The call ends after this elapsed time even if active.
+          properties:
+            timeoutTimeInSecs:
+              type: number
+              maximum: 3600
+              default: 1800
+              description: Maximum session duration in seconds (max 1 hour). Defaults to 1800 (30 minutes).
+        timezone:
+          type: object
+          description: Timezone applied to scheduled actions and timestamps the agent reports to the user.
+          properties:
+            label:
+              type: string
+              description: IANA timezone label (e.g. `America/New_York`).
+            offset:
+              type: number
+              description: UTC offset in minutes (e.g. -300 for EST).
+        callDispositionConfig:
+          type: string
+          description: Configuration string for call disposition tracking.
+        allowInboundCall:
+          type: boolean
+          default: true
+          description: Whether the agent accepts inbound calls.
+        enableStyleGuide:
+          type: boolean
+          default: true
+          description: Whether style guide enforcement is applied to agent responses.
+        speechFormatting:
+          type: boolean
+          description: Whether speech formatting is applied to the agent's responses.
+
+    UpdateAgentRequest:
+      type: object
+      description: |
+        Agent update payload. Behavior depends on whether the agent has versioning enabled:
+
+        **Versioned agents**: only the metadata fields below are accepted. Config-level
+        fields (language, synthesizer, slmModel, etc.) return 400.
+
+        **Non-versioned agents**: all configuration fields are accepted — the same full set
+        as `POST /agent` (see `CreateAgentRequest`).
+      properties:
+        name:
+          type: string
+          description: Name of the agent.
+        description:
+          type: string
+          description: Description of the agent.
+        avatarUrl:
+          type: string
+          description: URL of the agent's avatar image.
+        telephonyProductId:
+          type: array
+          items:
+            type: string
+          description: IDs of telephony products (phone numbers) to associate with the agent.
+        allowInboundCall:
+          type: boolean
+          description: Whether the agent accepts inbound calls.
+        visibleToEveryone:
+          type: boolean
+          description: Whether the agent is visible to all members of the organization.
+
+    DraftConfigRequest:
+      type: object
+      description: |
+        Config payload for editing a draft via `PATCH /agent/{id}/drafts/{draftId}/config`.
+        All fields are optional — only the fields provided are updated. A subset of
+        config fields from `CreateAgentRequest` is accepted, plus two versioning-era fields.
+
+        **Fields NOT accepted here** (use `PATCH /agent/{id}` instead):
+        - `name` — agent metadata, not a config field; sending it alone returns 400 "No recognized config fields"
+        - `telephonyProductId` — agent metadata, not a config field
+      properties:
+        singlePromptConfig:
+          $ref: "#/components/schemas/SinglePromptConfig"
+        postCallAnalyticsConfig:
+          $ref: "#/components/schemas/PostCallAnalyticsConfig"
+        language:
+          type: object
+          description: Language configuration. See CreateAgentRequest for full shape.
+        synthesizer:
+          type: object
+          description: Synthesizer (TTS) configuration. See CreateAgentRequest for full shape.
+        slmModel:
+          type: string
+          enum:
+            - electron
+            - electron-kogta
+            - electron-kogta-v2
+            - gpt-4o
+            - gpt-4.1
+            - gpt-5.2
+            - gpt-5.2-azure
+            - gpt-realtime
+            - gpt-realtime-mini
+          description: LLM model for this draft
+        transcriberType:
+          type: string
+          description: STT engine to use for this draft
+        customLLMWebSocketUrl:
+          type: string
+          description: Custom LLM WebSocket URL (overrides slmModel)
+        widgetConfig:
+          type: object
+          description: Widget configuration for chat-mode agents
+        defaultVariables:
+          type: object
+          description: Default prompt variables
+        preCallAPI:
+          type: object
+          description: Pre-call API configuration. See CreateAgentRequest for full shape.
+        globalPrompt:
+          type: string
+          maxLength: 4000
+          description: Global prompt for workflow_graph agents (max 4000 characters)
+        globalKnowledgeBaseId:
+          type: string
+          description: Knowledge base ID to attach to this draft
+        firstMessage:
+          type: string
+          description: Opening message for this draft
+        allowInterruptions:
+          type: boolean
+        waitForUserToSpeakFirst:
+          type: boolean
+        muteUserUntilFirstBotResponse:
+          type: boolean
+        interruptionBackoffTimer:
+          type: number
+          minimum: 0
+          maximum: 10
+        backgroundSound:
+          type: string
+          enum: ["", "office", "cafe", "call_center", "static"]
+        smartTurnConfig:
+          type: object
+        voiceDetectionConfig:
+          type: object
+        voiceMailDetectionConfig:
+          type: object
+        denoisingConfig:
+          type: object
+        redactionConfig:
+          type: object
+        pronunciationDicts:
+          type: array
+          items:
+            type: object
+        llmIdleTimeoutConfig:
+          type: object
+        sessionTimeoutConfig:
+          type: object
+        workflowType:
+          $ref: "#/components/schemas/WorkflowType"
+        timezone:
+          type: object
+        callDispositionConfig:
+          type: string
+        enableStyleGuide:
+          type: boolean
+        speechFormatting:
+          type: boolean
+
+    AgentDTO:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: The ID of the agent
+        name:
+          type: string
+          description: The name of the agent
+        description:
+          type: string
+          description: The description of the agent
+        backgroundSound:
+          type: string
+          enum: ["", "office", "cafe", "call_center", "static"]
+          description: "Ambient background sound during calls. Options: '' (none), 'office', 'cafe', 'call_center', 'static'."
+        organization:
+          type: string
+          description: The organization ID of the agent
+        workflowId:
+          type: string
+          description: The workflow ID of the agent
+        workflowType:
+          $ref: "#/components/schemas/WorkflowType"
+          default: workflow_graph
+          description: The type of workflow used by the agent
+        createdBy:
+          type: string
+          description: The user ID of the user who created the agent
+        globalKnowledgeBaseId:
+          type: string
+          description: The global knowledge base ID of the agent
+        language:
+          type: object
+          description: The language configuration of the agent
+          properties:
+            default:
+              type: string
+              description: The default language of the agent
+              enum: [en, hi, mr, gu, ta, te, kn, ml, es, north_indic, bn, or, fr, de, it, nl, pt, ru]
+            switching:
+              type: object
+              description: Language switching configuration for the agent
+              properties:
+                isEnabled:
+                  type: boolean
+                  description: Whether language switching is enabled for the agent
+                minWordsForDetection:
+                  type: number
+                  description: Minimum number of words required for language detection
+                strongSignalThreshold:
+                  type: number
+                  description: Threshold for strong language signal detection
+                weakSignalThreshold:
+                  type: number
+                  description: Threshold for weak language signal detection
+                minConsecutiveForWeakThresholdSwitch:
+                  type: number
+                  description: Minimum consecutive detections required for weak threshold language switch
+            supported:
+              type: array
+              items:
+                type: string
+              description: The supported languages of the agent
+        synthesizer:
+          type: object
+          description: The synthesizer (TTS) configuration of the agent
+          properties:
+            voiceConfig:
+              type: object
+              description: The voice configuration of the synthesizer
+              properties:
+                model:
+                  type: string
+                  description: |
+                    The TTS model of the synthesizer. Use `waves_lightning_v3_1`
+                    for the recommended Waves voice path (default), or
+                    `gpt-realtime` / `gpt-realtime-mini` for OpenAI realtime models.
+                  enum:
+                    - waves_lightning_v3_1
+                    - gpt-realtime
+                    - gpt-realtime-mini
+                  default: waves_lightning_v3_1
+                voiceId:
+                  type: string
+                  description: The voice ID of the synthesizer.
+                  default: nyah
+                gender:
+                  type: string
+                  enum:
+                    - male
+                    - female
+                  default: female
+            speed:
+              type: number
+              default: 1.2
+              description: The speed of the synthesizer
+            consistency:
+              type: number
+              default: 0.5
+              description: The consistency of the synthesizer
+            similarity:
+              type: number
+              default: 0
+              description: The similarity of the synthesizer
+            enhancement:
+              type: number
+              default: 1
+              description: The enhancement of the synthesizer
+            sampleRate:
+              type: number
+              description: The audio sample rate used by the synthesizer
+        slmModel:
+          type: string
+          enum:
+            - electron
+            - electron-kogta
+            - electron-kogta-v2
+            - gpt-4o
+            - gpt-4.1
+            - gpt-5.2
+            - gpt-5.2-azure
+            - gpt-realtime
+            - gpt-realtime-mini
+          description: The LLM model to use for the agent. LLM model will be used to generate the response and take decisions based on the user's query.
+        defaultVariables:
+          type: object
+          description: The default variables to use for the agent. These variables will be used if no variables are provided when initiating a conversation with the agent.
+        preCallAPI:
+          type: object
+          description: Configuration for an API call to be made before the call starts. The response variables can be injected into the agent's prompt.
+          properties:
+            isEnabled:
+              type: boolean
+              default: false
+              description: Whether the pre-call API is enabled.
+            url:
+              type: string
+              format: uri
+              description: The URL of the API endpoint to call.
+            method:
+              type: string
+              enum: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+              description: The HTTP method to use for the API call.
+            headers:
+              type: object
+              additionalProperties:
+                type: string
+              description: Optional HTTP headers to include in the request.
+            body:
+              type: object
+              description: Optional request body for POST/PUT/PATCH requests.
+            timeout:
+              type: integer
+              minimum: 1
+              maximum: 30
+              default: 5
+              description: Timeout in seconds for the API call.
+            queryParams:
+              type: object
+              description: Optional query parameters to include in the request URL.
+            responseVariables:
+              type: array
+              description: List of variables to extract from the API response using JSON path expressions.
+              items:
+                type: object
+                required:
+                  - variableName
+                  - jsonPath
+                properties:
+                  variableName:
+                    type: string
+                    description: The name of the variable to inject into the agent prompt.
+                  jsonPath:
+                    type: string
+                    description: JSON path expression to extract the value from the API response.
+          required:
+            - url
+            - method
+        createdAt:
+          type: string
+          format: date-time
+          description: The date and time when the agent was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: The date and time when the agent was last updated
+        avatarUrl:
+          type: string
+          description: URL of the agent's avatar image
+        firstMessage:
+          type: string
+          description: The opening message spoken by the agent at the start of a call
+        allowInterruptions:
+          type: boolean
+          description: Whether the agent can be interrupted mid-speech by the caller
+        waitForUserToSpeakFirst:
+          type: boolean
+          description: When true, the agent waits for the caller to speak before responding
+        totalCalls:
+          type: number
+          description: Total number of calls made with this agent
+        transcriberType:
+          type: string
+          description: The speech-to-text engine used for transcription
+        globalPrompt:
+          type: string
+          description: A global system prompt prepended to all agent interactions
+        archived:
+          type: boolean
+          description: Whether the agent has been archived. Archived agents are excluded from default listings.
+        archivedAt:
+          type: string
+          format: date-time
+          description: The date and time when the agent was archived
+        activeVersionId:
+          type: string
+          description: ID of the currently-active published version. Matches `versionId`.
+        versionId:
+          type: string
+          description: Alias for `activeVersionId`.
+        allowInboundCall:
+          type: boolean
+          default: true
+          description: Whether the agent accepts inbound calls.
+        phoneNumber:
+          type: array
+          items:
+            type: string
+          description: |
+            Phone numbers attached to this agent (E.164 strings). Only present when
+            the agent has been linked to one or more telephony products.
+        visibleToEveryone:
+          type: boolean
+          default: false
+          description: Whether the agent is visible to all members of the organization (vs. only the creator).
+        speechFormatting:
+          type: boolean
+          description: |
+            Apply LLM-side speech formatting (e.g. expanding "$100" to "one hundred dollars")
+            before passing text to the synthesizer. Boolean; no default — when unset the
+            platform applies the per-organization default.
+        muteUserUntilFirstBotResponse:
+          type: boolean
+          default: false
+          description: When true, the user microphone is muted until the agent has spoken its first response.
+        interruptionBackoffTimer:
+          type: number
+          description: Seconds to wait after an interruption before the agent resumes speaking.
+        enableStyleGuide:
+          type: boolean
+          default: true
+          description: Whether to apply the platform's style-guide post-processing on agent responses.
+        callDispositionConfig:
+          type: string
+          default: ""
+          description: Free-form prompt used for call disposition classification (separate from `postCallAnalyticsConfig.dispositionMetrics`).
+        voiceMailDetectionConfig:
+          type: object
+          description: Voicemail detection settings.
+          properties:
+            enabled:
+              type: boolean
+              default: false
+            endText:
+              type: string
+              default: "Terminating call, you can call us back anytime. Thank you for calling."
+              description: Text spoken before the call is terminated when voicemail is detected.
+        smartTurnConfig:
+          type: object
+          description: Smart end-of-turn detection settings.
+          properties:
+            isEnabled:
+              type: boolean
+            waitTimeInSecs:
+              type: number
+              minimum: 0
+              maximum: 10
+        voiceDetectionConfig:
+          type: object
+          description: VAD (voice activity detection) tuning.
+          properties:
+            confidence:
+              type: number
+              minimum: 0
+              maximum: 1
+            minVolume:
+              type: number
+              minimum: 0
+              maximum: 1
+            triggerTimeInSecs:
+              type: number
+              minimum: 0
+              maximum: 10
+            releaseTimeInSecs:
+              type: number
+              minimum: 0
+              maximum: 10
+        denoisingConfig:
+          type: object
+          description: Audio denoising settings.
+          properties:
+            isEnabled:
+              type: boolean
+        redactionConfig:
+          type: object
+          description: PII/PCI redaction settings applied to transcripts.
+          properties:
+            isEnabled:
+              type: boolean
+        pronunciationDicts:
+          type: array
+          description: Custom pronunciation dictionary applied before synthesis.
+          items:
+            type: object
+            required: [word, pronunciation]
+            properties:
+              word:
+                type: string
+              pronunciation:
+                type: string
+        llmIdleTimeoutConfig:
+          type: object
+          description: |
+            Per-channel idle timeouts (seconds) after which the LLM is nudged when the user
+            stops speaking. `maxRetries` bounds how many nudges before the call ends.
+          properties:
+            chatTimeoutTimeInSecs:
+              type: number
+            webcallTimeoutTimeInSecs:
+              type: number
+            telephonyTimeoutTimeInSecs:
+              type: number
+            maxRetries:
+              type: number
+        sessionTimeoutConfig:
+          type: object
+          description: Maximum session duration before the call is automatically ended.
+          properties:
+            timeoutTimeInSecs:
+              type: number
+        timezone:
+          type: object
+          description: Agent timezone — used for time-of-day-sensitive prompts and analytics bucketing.
+          properties:
+            label:
+              type: string
+              default: "(GMT+0:00) UTC"
+            offset:
+              type: number
+              default: 0
+        postCallAnalyticsConfig:
+          $ref: "#/components/schemas/PostCallAnalyticsConfig"
+        widgetConfig:
+          type: object
+          description: |
+            Chat-widget rendering configuration (theme, copy, consent prompt). Only relevant
+            when the agent is exposed via the embeddable widget; ignored by voice-only agents.
+          properties:
+            position:
+              type: string
+              enum: [bottom-right, bottom-left, top-right, top-left]
+              default: bottom-right
+            size:
+              type: string
+              enum: [tiny, compact, full]
+              default: full
+            mode:
+              type: string
+              enum: [chat, voice]
+              default: chat
+            theme:
+              type: string
+              enum: [light, dark]
+              default: light
+            baseColor:
+              type: string
+              default: "#ffffff"
+            accentColor:
+              type: string
+              default: "#2d9d9f"
+            agentBubbleColor:
+              type: string
+              default: "#f3f4f6"
+            textOnAccentColor:
+              type: string
+              default: "#FFFFFF"
+            secondaryTextColor:
+              type: string
+              default: "#6b7280"
+            primaryTextColor:
+              type: string
+              default: "#111827"
+            startButtonText:
+              type: string
+              default: Start
+            endButtonText:
+              type: string
+              default: End
+            ctaName:
+              type: string
+              default: Talk to Atoms
+            widgetName:
+              type: string
+              default: Atoms
+            avatarUrl:
+              type: string
+              nullable: true
+            chatPlaceholder:
+              type: string
+              default: "Type your message..."
+            consentRequired:
+              type: boolean
+              default: false
+            consentTitle:
+              type: string
+              default: "Privacy Agreement"
+            consentContent:
+              type: string
+              description: Long-form consent body shown before the user can interact.
+            assistantId:
+              type: string
+              nullable: true
+            allowlist:
+              type: array
+              items:
+                type: string
+              description: Allowed origin hostnames for widget embedding.
+        _resolvedConfig:
+          type: object
+          additionalProperties: true
+          description: |
+            The resolved config of the target version, merged into a flat shape. Not returned in
+            list responses (`GET /agent`). Only populated in single-agent responses
+            (`GET /agent/{id}`) when the agent has a published, activated version.
+            Can contain up to ~30 fields depending on which config sections are set.
+          properties:
+            prompt:
+              type: string
+              description: Active version's single-prompt text.
+            tools:
+              type: array
+              items:
+                $ref: "#/components/schemas/Tool"
+              description: Active version's configured tools.
+            postCallAnalyticsConfig:
+              $ref: "#/components/schemas/PostCallAnalyticsConfig"
+            callDispositionConfig:
+              type: string
+            modelName:
+              type: string
+              description: LLM model name on the resolved version.
+            transcriberType:
+              type: string
+              description: STT engine in use on the resolved version.
+            defaultLanguage:
+              type: string
+              enum: [en, hi, mr, gu, ta, te, kn, ml, es, north_indic, bn, or, fr, de, it, nl, pt, ru]
+              description: Default language set on the resolved version.
+            supportedLanguages:
+              type: array
+              items:
+                type: string
+              description: Supported languages on the resolved version.
+            languageSwitching:
+              type: object
+              description: Language-switching configuration on the resolved version.
+            firstMessage:
+              type: string
+              description: Opening message on the resolved version.
+            globalPrompt:
+              type: string
+              description: Global prompt on the resolved version (workflow_graph agents only).
+            preCallAPI:
+              type: object
+              description: Pre-call API configuration on the resolved version.
+            workflowGraph:
+              type: object
+              description: Full node graph for workflow_graph agents. Null for single_prompt agents.
+            muteUserUntilFirstBotResponse:
+              type: boolean
+            allowInterruptions:
+              type: boolean
+            voiceDetectionConfig:
+              type: object
+            smartTurnConfig:
+              type: object
+            backgroundSound:
+              type: string
+            denoisingConfig:
+              type: object
+            redactionConfig:
+              type: object
+            llmIdleTimeoutConfig:
+              type: object
+            sessionTimeoutConfig:
+              type: object
+        _configSource:
+          type: string
+          enum:
+            - active
+            - draft
+            - version
+          description: |
+            Only present when `?draftId` or `?versionId` query params are used.
+            Indicates which config source was resolved into `_resolvedConfig`.
+        _versionedWorkflow:
+          type: object
+          description: |
+            **Deprecated — internal use only.** Legacy field present whenever `_resolvedConfig` is populated.
+            Mirrors a subset of `_resolvedConfig` (`prompt`, `tools`, `workflowGraph`). Kept for backward
+            compatibility with existing frontend code. Ignore in new integrations.
+          properties:
+            prompt:
+              type: string
+            tools:
+              type: array
+              items:
+                $ref: "#/components/schemas/Tool"
+            workflowGraph:
+              type: object
+
+    # ── Agent Versioning Schemas ──────────────────────────────────────────
+
+    AgentVersion:
+      type: object
+      description: Represents either a draft revision or a published version of an agent's configuration.
+      properties:
+        _id:
+          type: string
+          description: Unique identifier
+        agent:
+          type: string
+          description: The agent this version belongs to
+        status:
+          type: string
+          enum: [published, draft, archived]
+          description: Current status of the version record
+        versionNumber:
+          type: integer
+          nullable: true
+          description: Auto-incremented version number (published versions only)
+        label:
+          type: string
+          nullable: true
+          description: Human-readable label for the version
+          maxLength: 200
+        description:
+          type: string
+          nullable: true
+          description: Description of what changed in this version
+          maxLength: 2000
+        isPinned:
+          type: boolean
+          default: false
+          description: Whether the version is pinned for quick access
+        publishedBy:
+          type: string
+          nullable: true
+          description: User ID of who published this version
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When this version was published
+        activatedBy:
+          type: string
+          nullable: true
+          description: User ID of who activated this version
+        activatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When this version was activated
+        draftId:
+          type: string
+          nullable: true
+          description: Unique draft identifier (drafts only)
+        draftName:
+          type: string
+          nullable: true
+          description: Human-readable draft name
+          maxLength: 100
+        draftRevision:
+          type: integer
+          nullable: true
+          description: Revision number within the draft (drafts only)
+        sourceVersionId:
+          type: string
+          nullable: true
+          description: The published version this draft was branched from
+        blocks:
+          type: object
+          description: References to the 13 config section blocks
+          properties:
+            workflow_prompt:
+              type: string
+            workflow_tools:
+              type: string
+            workflow_graph:
+              type: string
+            llm:
+              type: string
+            voice:
+              type: string
+            language:
+              type: string
+            call_handling:
+              type: string
+            detection:
+              type: string
+            analytics:
+              type: string
+            timeouts:
+              type: string
+            audio:
+              type: string
+            privacy:
+              type: string
+            widget:
+              type: string
+        workflowType:
+          $ref: "#/components/schemas/WorkflowType"
+        parentVersion:
+          type: string
+          nullable: true
+          description: The version this was derived from
+        isActive:
+          type: boolean
+          description: Whether this is the currently active version for the agent
+        createdBy:
+          type: string
+          description: User ID of who created this record
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AgentVersionDiff:
+      type: object
+      description: Section-by-section diff between two version or draft revision records.
+      properties:
+        unchangedSections:
+          type: array
+          description: Config sections that did not change.
+          items:
+            type: string
+        diffs:
+          type: array
+          description: Config sections with one or more changes.
+          items:
+            type: object
+            properties:
+              section:
+                type: string
+                description: Config section name.
+              changes:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    path:
+                      type: string
+                      description: Path to the changed value within the section.
+                    oldValue:
+                      nullable: true
+                      description: Previous value. Can be any JSON value or null.
+                      oneOf:
+                        - type: string
+                        - type: number
+                        - type: boolean
+                        - type: object
+                          additionalProperties: true
+                        - type: array
+                          items: {}
+                    newValue:
+                      nullable: true
+                      description: New value. Can be any JSON value or null.
+                      oneOf:
+                        - type: string
+                        - type: number
+                        - type: boolean
+                        - type: object
+                          additionalProperties: true
+                        - type: array
+                          items: {}
+
+    AgentVersionMetrics:
+      type: object
+      properties:
+        orgId:
+          type: string
+        agentId:
+          type: string
+        versionId:
+          type: string
+        totalCalls:
+          type: number
+        answeredCalls:
+          type: number
+        avgDurationMs:
+          type: number
+        completionRate:
+          type: number
+        totalCost:
+          type: number
+        hangupSourceDistribution:
+          type: object
+          additionalProperties:
+            type: number
+        period:
+          type: object
+          description: Date range used for the metric aggregation.
+          additionalProperties: true
+
+    AgentVersionMetricsComparison:
+      type: object
+      properties:
+        configDiff:
+          $ref: "#/components/schemas/AgentVersionDiff"
+        metrics:
+          type: object
+          properties:
+            versionA:
+              $ref: "#/components/schemas/AgentVersionMetrics"
+            versionB:
+              $ref: "#/components/schemas/AgentVersionMetrics"
+            deltas:
+              type: object
+              properties:
+                totalCalls:
+                  type: number
+                answeredCalls:
+                  type: number
+                avgDurationMs:
+                  type: number
+                completionRate:
+                  type: number
+                totalCost:
+                  type: number
+
+    DraftEditHistoryEntry:
+      type: object
+      properties:
+        revision:
+          type: integer
+          description: Draft revision number
+        changedSections:
+          type: array
+          items:
+            type: string
+          description: List of config sections that changed in this revision
+        editorName:
+          type: string
+          nullable: true
+          description: Display name of the editor
+        editorId:
+          type: string
+          nullable: true
+          description: User ID of the editor
+        timestamp:
+          type: string
+          format: date-time
+          description: When the edit was made
+
+    CreateDraftRequest:
+      type: object
+      properties:
+        sourceVersionId:
+          type: string
+          pattern: "^[a-f\\d]{24}$"
+          description: |
+            ID of a published version to branch from. Must be a valid MongoDB ObjectId (24-char hex).
+            Sending a non-ObjectId format returns 400.
+        sourceDraftId:
+          type: string
+          description: ID of an existing draft to branch from
+        draftName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Optional name for the draft (1–100 characters)
+
+    PublishDraftRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          nullable: true
+          maxLength: 200
+          description: Label for the published version
+        description:
+          type: string
+          nullable: true
+          maxLength: 2000
+          description: Description of the published version
+        activate:
+          type: boolean
+          description: Whether to immediately activate the version after publishing
+          default: false
+
+    UpdateVersionMetaRequest:
+      type: object
+      description: At least one of label, description, or isPinned must be provided.
+      properties:
+        label:
+          type: string
+          nullable: true
+          maxLength: 200
+          description: Version label
+        description:
+          type: string
+          nullable: true
+          maxLength: 2000
+          description: Version description
+        isPinned:
+          type: boolean
+          description: Pin or unpin the version
+
+    TestCallRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [webcall, chat, telephony]
+          default: webcall
+          description: Test call mode. Defaults to `webcall` when omitted.
+        toPhone:
+          type: string
+          description: |
+            Phone number to call. Required only when `mode` is `telephony`. Omit for `webcall` and `chat`.
+
+    # ── v2 branch model schemas ─────────────────────────────────────────
+    Branch:
+      type: object
+      description: An `AgentBranch` document. An editable copy of an agent with its own draft slot and revision chain.
+      properties:
+        _id:
+          type: string
+          description: Branch ID (24-character ObjectId).
+        agent:
+          type: string
+          description: ID of the agent this branch belongs to.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Branch name (unique per agent among active branches). `main` is reserved for the default branch.
+        isDefault:
+          type: boolean
+          description: "True for the seeded `main` branch. The default branch cannot be renamed or archived."
+        sourceBranchId:
+          type: string
+          nullable: true
+          description: Head of the source branch at fork time. `null` for `main`.
+        sourceRevisionId:
+          type: string
+          nullable: true
+          description: Revision the branch was forked from. `null` for `main`.
+        headRevisionId:
+          type: string
+          nullable: true
+          description: ID of the branch's latest committed revision. `null` until the first commit.
+        openDraftId:
+          type: string
+          nullable: true
+          description: ID of the branch's single open draft. `null` when no draft is open.
+        status:
+          type: string
+          enum: [active, archived]
+          description: Archived branches are hidden from list views and cannot receive draft edits or be made live.
+        createdBy:
+          type: string
+        updatedBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    BranchSummary:
+      type: object
+      description: Branch document plus derived fields used by list and detail views.
+      properties:
+        branch:
+          $ref: "#/components/schemas/Branch"
+        isLive:
+          type: boolean
+          description: True when the agent's live config points at this branch.
+        hasOpenDraft:
+          type: boolean
+        revisionsCount:
+          type: integer
+        headRevisionNumber:
+          type: integer
+          nullable: true
+
+    VersionBlocks:
+      type: object
+      description: ObjectId references to the `AgentConfigBlock` docs that make up a revision, one per config section.
+      properties:
+        workflow_prompt:
+          type: string
+        workflow_tools:
+          type: string
+        workflow_graph:
+          type: string
+        llm:
+          type: string
+        voice:
+          type: string
+        language:
+          type: string
+        call_handling:
+          type: string
+        detection:
+          type: string
+        analytics:
+          type: string
+        timeouts:
+          type: string
+        audio:
+          type: string
+        privacy:
+          type: string
+        widget:
+          type: string
+        playbooks:
+          type: string
+          description: Only present on revisions created after multi-agent playbooks shipped.
+
+    PromptScore:
+      type: object
+      nullable: true
+      description: Result of the prompt-scoring pass, if any.
+      properties:
+        overall_score:
+          type: number
+        overall_grade:
+          type: string
+        band:
+          type: string
+        estimated_ttft_overhead_ms:
+          type: number
+        scoredAt:
+          type: string
+          format: date-time
+        dimensions:
+          type: array
+          items:
+            type: object
+            properties:
+              tier:
+                type: integer
+              level:
+                type: string
+              evidence_span:
+                type: string
+              title:
+                type: string
+              description:
+                type: string
+
+    Revision:
+      type: object
+      description: |
+        An `AgentVersion` document. Represents either a committed revision (`status: published`, with `branch` + `revisionNumber`) or an in-progress draft revision (`status: draft`, with `draftId` + `draftRevision`). Fields that do not apply to a given row are `null`.
+      properties:
+        _id:
+          type: string
+        agent:
+          type: string
+        status:
+          type: string
+          enum: [published, draft, archived]
+        branch:
+          type: string
+          nullable: true
+          description: Owning branch (v2). `null` on legacy rows until backfilled.
+        revisionNumber:
+          type: integer
+          nullable: true
+          description: Monotonic per-branch commit number. Only set on committed rows.
+        versionNumber:
+          type: integer
+          nullable: true
+          description: Legacy v1 published-version number. `null` for branch revisions and drafts.
+        label:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        isPinned:
+          type: boolean
+        publishedBy:
+          type: string
+          nullable: true
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        publishedByName:
+          type: string
+          nullable: true
+          description: Display name of the publisher. `null` when unresolvable.
+        restoredFromLabel:
+          type: string
+          nullable: true
+          description: On a commit produced by restore, the label of the revision it copied.
+        draftId:
+          type: string
+          nullable: true
+        draftName:
+          type: string
+          nullable: true
+        draftRevision:
+          type: integer
+          nullable: true
+        sourceVersionId:
+          type: string
+          nullable: true
+        blocks:
+          $ref: "#/components/schemas/VersionBlocks"
+        workflowType:
+          type: string
+          description: The `WorkflowType` enum for this revision.
+        parentVersion:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        activatedBy:
+          type: string
+          nullable: true
+        activatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        securityCheck:
+          type: object
+          nullable: true
+          description: Populated after publish. `null` on pre-feature versions.
+          properties:
+            status:
+              type: string
+              description: The `SecurityCheckStatus` enum.
+            reason:
+              type: string
+              nullable: true
+            triggeredAt:
+              type: string
+              format: date-time
+              nullable: true
+            completedAt:
+              type: string
+              format: date-time
+              nullable: true
+        pendingPublish:
+          type: object
+          nullable: true
+          description: Set while a publish is armed against this draft revision.
+          properties:
+            state:
+              type: string
+              enum: [active, cancelled]
+            startedBy:
+              type: string
+            startedAt:
+              type: string
+              format: date-time
+        restoredFromRevisionId:
+          type: string
+          nullable: true
+          description: On a commit produced by restore, the revision it copied.
+        sourceDraftId:
+          type: string
+          nullable: true
+        promptScore:
+          $ref: "#/components/schemas/PromptScore"
+        promptScoreStale:
+          type: boolean
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DraftDetail:
+      type: object
+      description: Returned by `GET /agent/{id}/branches/{branchId}/draft`.
+      properties:
+        latest:
+          $ref: "#/components/schemas/Revision"
+        editCount:
+          type: integer
+        editHistory:
+          type: array
+          items:
+            type: object
+            properties:
+              revision:
+                $ref: "#/components/schemas/Revision"
+              changedSections:
+                type: array
+                items:
+                  type: string
+              editorName:
+                type: string
+                nullable: true
+                description: Display name of the editor who made this draft edit. `null` when the editor's display name is not resolvable.
+
+    DiffChange:
+      type: object
+      properties:
+        path:
+          type: string
+          description: Dot-path to the changed leaf field.
+        oldValue:
+          nullable: true
+        newValue:
+          nullable: true
+
+    DiffSection:
+      type: object
+      properties:
+        section:
+          type: string
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiffChange"
+
+    DiffResult:
+      type: object
+      description: Returned by `GET /agent/{id}/diff`.
+      properties:
+        unchangedSections:
+          type: array
+          items:
+            type: string
+        diffs:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiffSection"
+
+    TestCallResult:
+      type: object
+      description: Returned by `POST /agent/{id}/branches/{branchId}/test-call`.
+      required:
+        - conversationId
+        - callId
+      properties:
+        conversationId:
+          type: string
+        callId:
+          type: string
+        token:
+          type: string
+          description: LiveKit access token. Returned for `webcall` and `chat` modes only.
+        roomName:
+          type: string
+          description: Returned for `webcall` and `chat` modes only.
+        host:
+          type: string
+          description: Returned for `webcall` and `chat` modes only.
+
+    CreateBranchRequest:
+      type: object
+      required:
+        - sourceBranchId
+        - name
+      properties:
+        sourceBranchId:
+          type: string
+          pattern: "^[a-f\\d]{24}$"
+          description: Branch to fork from. Its head revision must exist.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: New branch name. Unique per agent among active branches. `main` is reserved.
+
+    RenameBranchRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    UpdateBranchDraftRequest:
+      type: object
+      description: |
+        Agent config partial. Send the same camelCase field names you see on the `GET /agent/{id}` response body. The server routes each field into the correct internal config-block section (`workflow_prompt`, `llm`, `voice`, `language`, `call_handling`, `detection`, `analytics`, `timeouts`, `audio`, `privacy`, `widget`, `playbooks`) for you. Sending an internal section name at the top level returns `400 "No recognized config fields in request body"`. The request must carry at least one recognized config field.
+
+        Every property below is optional. Send only the subset you want to change. For the exact shape of complex nested objects (`synthesizer`, `language`, `preCallAPI`, `smartTurnConfig`, etc.) see the matching field on `CreateAgentRequest` — the accepted shape is the same. `additionalProperties: true` remains on so callers can send new fields the platform adds later without a spec bump, but the typed fields below are the stable public surface for SDK method signatures.
+      additionalProperties: true
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 0
+          description: |
+            Optimistic-concurrency control. The `draftRevision` the client's edit was based on. When present, the server runs a field-level conflict check and rejects with `409 DraftConflictError` if the same field was changed by another edit since. Omit for last-write-wins semantics (which is also how a client force-overwrites after a `409`). Referencing a non-existent base revision returns `409 { errors: ["base_revision_unavailable"] }`.
+        globalPrompt:
+          type: string
+          description: Top-level system prompt shown to the agent every turn.
+        firstMessage:
+          type: string
+          description: The agent's opening line at call start.
+        slmModel:
+          type: string
+          enum: [electron, electron-kogta, electron-kogta-v2, gpt-4o, gpt-4.1, gpt-5.2, gpt-5.2-azure, gpt-realtime, gpt-realtime-mini]
+          description: LLM model powering the agent. See `CreateAgentRequest.slmModel` for org-level access notes.
+        backgroundSound:
+          type: string
+          enum: ["", office, cafe, call_center, static]
+          description: Ambient background sound during calls.
+        timezone:
+          type: object
+          description: |
+            Agent timezone applied to date/time interpretation in prompts, tool calls, and analytics bucketing. Object with a `label` (IANA-style label) and an `offset` (UTC offset in minutes). Sending a bare string is refused with `Invalid config: timezone: Expected object, received string`.
+          properties:
+            label:
+              type: string
+              description: Human-readable timezone label (e.g. `(GMT+5:30) Asia/Kolkata`).
+              example: "(GMT+5:30) Asia/Kolkata"
+            offset:
+              type: number
+              description: UTC offset in minutes (e.g. `330` for Asia/Kolkata, `-300` for EST).
+              example: 330
+        globalKnowledgeBaseId:
+          type: string
+          description: Knowledge base attached to the agent for retrieval-augmented responses.
+        muteUserUntilFirstBotResponse:
+          type: boolean
+        allowInterruptions:
+          type: boolean
+        waitForUserToSpeakFirst:
+          type: boolean
+        interruptionBackoffTimer:
+          type: number
+        enableStyleGuide:
+          type: boolean
+        synthesizer:
+          type: object
+          description: TTS (voice) configuration. Same shape as `CreateAgentRequest.synthesizer`.
+        language:
+          type: object
+          description: Language configuration. Same shape as `CreateAgentRequest.language`.
+        defaultVariables:
+          type: object
+          description: Default variables injected into prompts and tool calls.
+        preCallAPI:
+          type: object
+          description: Pre-call API webhook config. Same shape as `CreateAgentRequest.preCallAPI`.
+        smartTurnConfig:
+          type: object
+        voiceDetectionConfig:
+          type: object
+        voiceMailDetectionConfig:
+          type: object
+        denoisingConfig:
+          type: object
+        redactionConfig:
+          type: object
+        pronunciationDicts:
+          type: object
+        llmIdleTimeoutConfig:
+          type: object
+        sessionTimeoutConfig:
+          type: object
+        callDispositionConfig:
+          type: object
+        speechFormatting:
+          type: object
+
+    PublishBranchDraftRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          maxLength: 200
+          nullable: true
+          description: Optional label saved on the committed revision.
+
+    PublishResult:
+      type: object
+      description: |
+        Result of publish or restore.
+
+        - `state: "committed"` (HTTP `200`) is returned when the commit is synchronous. This happens for restore (the source revision has already been scanned) and for publishes whose content does not need a fresh scan. The response includes the new revision object under `revision`.
+        - `state: "scanning"` (HTTP `202`) is returned when a security scan is deferred. In this case the response body carries only `state`. `revision` is absent, and clients must list the branch's revisions newest-first (`GET /agent/{id}/branches/{branchId}/revisions?limit=1`) to obtain the new revision ID. Then poll `GET /agent/{id}/branches/{branchId}/revisions/{revisionId}` until `revision.status` flips from any transient value to `"published"`. On the revision doc the lifecycle field is `status` (not `state`), and the security-scan sub-lifecycle is on the nested `securityCheck.status`.
+      properties:
+        state:
+          type: string
+          enum: [scanning, committed]
+        revision:
+          nullable: true
+          description: "The newly committed revision. Populated when `state` is `committed`, absent when `state` is `scanning`."
+          allOf:
+            - $ref: "#/components/schemas/Revision"
+
+    TestCallV2Request:
+      type: object
+      description: |
+        Body for `POST /agent/{id}/branches/{branchId}/test-call`. When both `includeDraft` and `revisionId` are omitted, the branch's committed head is used.
+      properties:
+        includeDraft:
+          type: boolean
+          default: false
+          description: When `true`, the test call uses the branch's open draft. Mutually exclusive with `revisionId`.
+        revisionId:
+          type: string
+          pattern: "^[a-f\\d]{24}$"
+          description: "Test against a specific committed revision on the branch. Mutually exclusive with `includeDraft: true`."
+        mode:
+          type: string
+          enum: [webcall, chat, telephony]
+          default: webcall
+        toPhone:
+          type: string
+          description: E.164-formatted number. Required when `mode` is `telephony`. Omit for `webcall` and `chat`.
+
+    ConflictErrorResponse:
+      type: object
+      description: |
+        Generic conflict body. `error_type` is a stable machine-readable discriminator (for example `branch_name_exists`, `source_has_no_commit`, `source_scanning`, `publish_in_progress`, `no_committed_revision`).
+      properties:
+        status:
+          type: boolean
+          example: false
+        error_type:
+          type: string
+        errors:
+          type: array
+          items:
+            type: string
+
+    DraftConflictError:
+      type: object
+      description: |
+        Returned by `PUT /agent/{id}/branches/{branchId}/draft` when `expectedRevision` was sent and another edit changed one of the same leaf fields since. `errors` lists the conflicting leaf field paths. `data.conflict` carries the resolution context: the client's expected revision, the current draft revision, and per-field diffs.
+      required:
+        - status
+        - errors
+      properties:
+        status:
+          type: boolean
+          example: false
+        errors:
+          type: array
+          items:
+            type: string
+        data:
+          type: object
+          properties:
+            conflict:
+              type: object
+              properties:
+                expectedRevision:
+                  type: integer
+                latestRevision:
+                  type: integer
+                diffs:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+
+    LockedErrorResponse:
+      type: object
+      description: |
+        Config-freeze body. Returned on write endpoints during a maintenance window (`AGENT_CONFIG_FROZEN`). Reads and test-calls pass.
+      properties:
+        status:
+          type: boolean
+          example: false
+        error_type:
+          type: string
+          enum: [config_freeze_active]
+        errors:
+          type: array
+          items:
+            type: string
+
+    VersioningV2MigrationRequiredResponse:
+      type: object
+      description: |
+        Returned by deprecated v1 versioning writes and list reads when `ENABLE_BRANCH_MODEL` is on. Response header carries `Deprecation: true`. The `error_type` value is a stable discriminator.
+      properties:
+        status:
+          type: boolean
+          example: false
+        error_type:
+          type: string
+          enum: [versioning_v2_migration_required]
+        errors:
+          type: array
+          items:
+            type: string
+    # ── end v2 branch model schemas ─────────────────────────────────────
+
+    WebhookAgent:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: The ID of the agent
+        name:
+          type: string
+          description: The name of the agent
+        description:
+          type: string
+          description: The description of the agent
+
+    WebhookSubscriptionPopulated:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: The unique identifier for the subscription
+        webhookId:
+          type: string
+          description: The ID of the webhook
+        agentId:
+          $ref: "#/components/schemas/WebhookAgent"
+          nullable: true
+          description: The populated agent details, or null if not assigned
+        eventType:
+          type: string
+          enum: [pre-conversation, post-conversation, analytics-completed]
+          description: The type of event subscribed to
+        createdAt:
+          type: string
+          format: date-time
+          description: The date and time when the subscription was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: The date and time when the subscription was last updated
+
+    Webhook:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: The unique identifier for the webhook
+        url:
+          type: string
+          description: The webhook endpoint URL
+        description:
+          type: string
+          description: The description of the webhook
+        status:
+          type: string
+          enum: [enabled, disabled]
+          description: The status of the webhook
+        organizationId:
+          type: string
+          description: The organization ID
+        createdBy:
+          type: string
+          description: The user ID who created the webhook
+        subscriptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/WebhookSubscriptionPopulated"
+          description: A list of subscriptions for the webhook with populated agent details.
+        decryptedSecretKey:
+          type: string
+          description: |
+            The decrypted signing secret for the webhook. Returned by both `GET /webhook` (list) and `GET /webhook?webhookId=<id>` (single). Use as the HMAC-SHA256 key when verifying the `X-Signature` header on incoming webhook deliveries.
+        createdAt:
+          type: string
+          format: date-time
+          description: The date and time when the webhook was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: The date and time when the webhook was last updated
+
+    WebhookSubscription:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: The unique identifier for the subscription
+        webhookId:
+          type: string
+          description: The ID of the webhook
+        agentId:
+          type: string
+          description: The ID of the agent
+        eventType:
+          type: string
+          enum: [pre-conversation, post-conversation, analytics-completed]
+          description: The type of event subscribed to
+        createdAt:
+          type: string
+          format: date-time
+          description: The date and time when the subscription was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: The date and time when the subscription was last updated
+
+    WebhookEventEnvelope:
+      type: object
+      description: |
+        Common envelope shared by every webhook event Atoms delivers to your
+        endpoint. The `metadata` field's shape varies by event type — see the
+        per-event schemas (`WebhookEventPreConversation`,
+        `WebhookEventPostConversation`, `WebhookEventAnalyticsCompleted`).
+      properties:
+        url:
+          type: string
+          description: The webhook URL endpoint that received the event.
+          example: "https://example.com/webhook"
+        description:
+          type: string
+          description: Human-readable label configured on the webhook (e.g. "Debt Collection Agent's Endpoint").
+        event:
+          type: string
+          description: "Event identifier in the form `{agentId}.{eventType}`."
+          example: "69fc7dd072a0c1d28d948ace.post-conversation"
+        id:
+          type: string
+          description: Unique webhook delivery ID (separate from `metadata.callId`).
+          example: "69fd96118fd277fc807e4c23"
+      required:
+        - url
+        - description
+        - event
+        - id
+
+    WebhookEventPreConversation:
+      type: object
+      description: |
+        Fired **before** the agent begins speaking. Use this to enrich CRM data,
+        log call attempts, or gate outbound calls.
+
+        Does **not** contain `callData`, `transcript`, `variables`, `analytics`,
+        or `recordingUrl`. `callData` is on `post-conversation` and
+        `analytics-completed`; `transcript`, `variables`, and `recordingUrl`
+        are only on `post-conversation`; `analytics` is only on
+        `analytics-completed`.
+      allOf:
+        - $ref: "#/components/schemas/WebhookEventEnvelope"
+        - type: object
+          required: [metadata]
+          properties:
+            metadata:
+              type: object
+              required: [agentId, eventType, conversationType, toPhone, fromPhone, callId]
+              properties:
+                agentId:
+                  type: string
+                  description: The Atoms agent ID that handled the call.
+                  example: "69fc7dd072a0c1d28d948ace"
+                eventType:
+                  type: string
+                  enum: [pre-conversation]
+                  example: "pre-conversation"
+                conversationType:
+                  type: string
+                  description: "Channel type. Known values: `telephonyOutbound`, `telephonyInbound`."
+                  example: "telephonyOutbound"
+                toPhone:
+                  type: string
+                  description: Destination phone number in E.164 format.
+                  example: "+916296641821"
+                fromPhone:
+                  type: string
+                  description: Originating phone number in E.164 format.
+                  example: "+918035317096"
+                callId:
+                  type: string
+                  description: Unique call identifier.
+                  example: "CALL-1778226705739-7e4c17"
+
+    WebhookEventTranscriptTurn:
+      type: object
+      description: One speaking turn in a `post-conversation` transcript.
+      properties:
+        role:
+          type: string
+          enum: [agent, user]
+          description: Speaker role.
+        content:
+          type: string
+          description: The spoken text for this turn.
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of when this turn began (UTC).
+      required: [role, content, timestamp]
+
+    WebhookEventCallData:
+      type: object
+      description: |
+        Call-level metadata shared by `post-conversation` and
+        `analytics-completed` events. In `analytics-completed`, the
+        `callDirection` field may be absent.
+      properties:
+        fromNumber:
+          type: string
+          description: Originating phone number in E.164 format.
+          example: "+918035317096"
+        toNumber:
+          type: string
+          description: Destination phone number in E.164 format.
+          example: "+916296641821"
+        callDuration:
+          type: number
+          format: float
+          description: Total call duration in **seconds** (float).
+          example: 49.350622
+        callStatus:
+          type: string
+          enum: [completed, no_answer, failed, cancelled]
+          description: Terminal status.
+        callDirection:
+          type: string
+          enum: [telephony_outbound, telephony_inbound]
+          description: |
+            Call direction. Present on `post-conversation`; may be absent on
+            `analytics-completed`.
+        answerTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the call was answered (UTC).
+        endTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the call ended (UTC).
+      required: [fromNumber, toNumber, callDuration, callStatus, answerTime, endTime]
+
+    WebhookEventPostConversation:
+      type: object
+      description: |
+        Fired **after** the call ends. Contains the full transcript, call
+        metadata, recording URL, and all agent variables that were in scope
+        during the conversation.
+      allOf:
+        - $ref: "#/components/schemas/WebhookEventEnvelope"
+        - type: object
+          required: [metadata]
+          properties:
+            metadata:
+              type: object
+              required: [agentId, eventType, conversationType, callId, recordingUrl, callData, transcript, variables]
+              properties:
+                agentId:
+                  type: string
+                  example: "69fc7dd072a0c1d28d948ace"
+                eventType:
+                  type: string
+                  enum: [post-conversation]
+                  example: "post-conversation"
+                conversationType:
+                  type: string
+                  example: "telephonyOutbound"
+                callId:
+                  type: string
+                  example: "CALL-1778226705739-7e4c17"
+                recordingUrl:
+                  type: string
+                  format: uri
+                  description: URL to the composite call recording (`.wav`).
+                callData:
+                  $ref: "#/components/schemas/WebhookEventCallData"
+                transcript:
+                  type: array
+                  description: Ordered list of transcript turns.
+                  items:
+                    $ref: "#/components/schemas/WebhookEventTranscriptTurn"
+                variables:
+                  type: object
+                  additionalProperties: true
+                  description: |
+                    Flat key-value map of all agent variables in scope during the call.
+
+                    **This object is fully dynamic.** Keys and values are entirely determined by
+                    the agent's configuration; they are not fixed by the platform. New keys can
+                    appear at any time. Store as JSON and iterate keys — do not hard-code column
+                    mappings. Common platform keys include `agent_name`, `customer_name`,
+                    `current_date`, `default_language`; domain-specific keys (e.g. `due_amount`,
+                    `bank_name`) come from your agent's prompt configuration.
+                  example:
+                    agent_name: "Nisha"
+                    customer_name: "Rahul Sharma"
+                    due_amount: "29000"
+
+    WebhookEventAnalyticsMetric:
+      type: object
+      description: |
+        A single disposition or success metric computed by the
+        `analytics-completed` event. The set of metrics is configured
+        per-agent and can vary.
+      properties:
+        identifier:
+          type: string
+          description: "Machine-readable metric name (e.g. `turn_taking_balance`, `escalation_needed`)."
+          example: "turn_taking_balance"
+        value:
+          description: |
+            The evaluated result. Type depends on `dispositionMetricType`.
+          oneOf:
+            - type: integer
+            - type: string
+            - type: boolean
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Confidence score (0–1).
+          example: 1
+        reasoning:
+          type: string
+          description: LLM-generated explanation for the assigned value.
+        dispositionMetricPrompt:
+          type: string
+          description: The prompt/question that was used to evaluate this metric.
+        dispositionMetricType:
+          type: string
+          enum: [STRING, BOOLEAN, INTEGER, ENUM, DATETIME]
+          description: Data type of `value`.
+      required: [identifier, value, confidence, reasoning, dispositionMetricPrompt, dispositionMetricType]
+
+    WebhookEventAnalyticsCompleted:
+      type: object
+      description: |
+        Fired **after** Atoms finishes running the configured disposition and
+        success metrics on the transcript. Arrives some time after
+        `post-conversation`.
+      allOf:
+        - $ref: "#/components/schemas/WebhookEventEnvelope"
+        - type: object
+          required: [metadata]
+          properties:
+            metadata:
+              type: object
+              required: [agentId, eventType, conversationType, callId, analytics, callData]
+              properties:
+                agentId:
+                  type: string
+                eventType:
+                  type: string
+                  enum: [analytics-completed]
+                  example: "analytics-completed"
+                conversationType:
+                  type: string
+                callId:
+                  type: string
+                analytics:
+                  type: object
+                  required: [summary, dispositionMetrics, successMetrics]
+                  properties:
+                    summary:
+                      type: string
+                      description: LLM-generated plain-text summary of the call.
+                    dispositionMetrics:
+                      type: array
+                      items:
+                        $ref: "#/components/schemas/WebhookEventAnalyticsMetric"
+                    successMetrics:
+                      type: array
+                      description: Same schema as `dispositionMetrics`. May be empty.
+                      items:
+                        $ref: "#/components/schemas/WebhookEventAnalyticsMetric"
+                callData:
+                  $ref: "#/components/schemas/WebhookEventCallData"
+
+    KnowledgeBase:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: The unique identifier for the knowledge base
+        name:
+          type: string
+          description: The name of the knowledge base
+        description:
+          type: string
+          description: The description of the knowledge base
+        organization:
+          type: string
+          description: The organization ID
+        createdBy:
+          type: string
+          description: The user ID who created the knowledge base
+        processingStatus:
+          type: string
+          enum: [pending, processing, completed, failed]
+          description: The current processing status of the knowledge base
+        createdAt:
+          type: string
+          format: date-time
+          description: The date and time when the knowledge base was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: The date and time when the knowledge base was last updated
+      required:
+        - _id
+        - name
+        - organization
+        - createdBy
+
+    KnowledgeBaseItem:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: The unique identifier for the knowledge base item
+        itemType:
+          type: string
+          enum: [file, text]
+          description: The type of the knowledge base item
+        metadata:
+          type: object
+          description: Additional metadata for the item
+        knowledgeBaseId:
+          type: string
+          description: The ID of the knowledge base this item belongs to
+        processingStatus:
+          type: string
+          enum: [pending, processing, completed, failed]
+          description: The processing status of the item
+        fileName:
+          type: string
+          description: The name of the file (for file type items)
+        contentType:
+          type: string
+          description: The MIME type of the content
+        size:
+          type: number
+          description: The size of the file in bytes
+        key:
+          type: string
+          description: The storage key for the file
+        title:
+          type: string
+          description: The title of the item
+        content:
+          type: string
+          description: The content of the item (for text type items)
+        createdAt:
+          type: string
+          format: date-time
+          description: The date and time when the item was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: The date and time when the item was last updated
+      required:
+        - _id
+        - itemType
+        - knowledgeBaseId
+        - processingStatus
+        - createdAt
+        - updatedAt
+
+    WebhookEvent:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: The unique identifier for the event
+        webhookId:
+          type: string
+          description: The ID of the webhook
+        eventType:
+          type: string
+          description: The type of event
+        payload:
+          type: object
+          description: The event payload
+        status:
+          type: string
+          description: The status of the event
+        createdAt:
+          type: string
+          format: date-time
+          description: The date and time when the event was created
+
+    WorkflowType:
+      type: string
+      enum: [workflow_graph, single_prompt, multi_agents]
+      description: |
+        The type of workflow configuration.
+        - `single_prompt` — simple prompt-based agent (default).
+        - `workflow_graph` — node-based visual workflow. **Restricted:** requires the `conversational-agents` org flag. Requests without that flag receive HTTP 403 `"Conversational Flow agents are no longer available for your organization."` The Zod validator still accepts this enum value on any org, but the authorization middleware gates it.
+        - `multi_agents` — multi-agent orchestration (restricted; requires `slmModel` to be one of `[electron, gpt-5.2-azure]`).
+
+    WorkflowGraphData:
+      type: object
+      description: Workflow configuration using a node-based graph structure
+      properties:
+        nodes:
+          type: array
+          description: Array of workflow nodes
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                description: Unique identifier for the node
+              type:
+                type: string
+                description: Type of the node (e.g., default_node, end_call, pre_call_api)
+              position:
+                type: object
+                properties:
+                  x:
+                    type: number
+                  y:
+                    type: number
+              data:
+                type: object
+                description: Node-specific data and configuration
+        edges:
+          type: array
+          description: Array of workflow edges connecting nodes
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                description: Unique identifier for the edge
+              source:
+                type: string
+                description: ID of the source node
+              target:
+                type: string
+                description: ID of the target node
+              type:
+                type: string
+                description: Type of the edge
+
+    SinglePromptData:
+      type: object
+      description: Workflow configuration using a simple prompt-based approach
+      properties:
+        prompt:
+          type: string
+          description: The main prompt that defines the agent's behavior and responses
+        tools:
+          type: array
+          description: Array of tools/functions available to the agent
+          items:
+            type: object
+            description: Tool configuration object
+
+    RegistryToolDefinition:
+      type: object
+      description: |
+        A reusable tool definition for the org Tools registry. Only two types are
+        registry tools: `api_call` (calls your API) and `client_tool` (runs in your
+        app over the websocket). The built-in/system tools — `transfer_call`,
+        `end_call`, `knowledge_base_search`, and the like — are configured per-agent
+        in the agent's Tools tab, not created here.
+      required: [type, name, description]
+      properties:
+        type:
+          type: string
+          enum: [api_call, client_tool]
+          description: The registry tool type.
+        name:
+          type: string
+          description: Unique name for the tool (no spaces)
+          example: "get_order_status"
+        description:
+          type: string
+          description: What the tool does — the agent reads this to decide when to call it
+          example: "Look up a customer's order by id and read back its status."
+        enabled:
+          type: boolean
+          default: true
+          description: Whether the tool is enabled
+        url:
+          type: string
+          format: uri
+          description: "Required for api_call type. The URL to make the HTTP request to."
+          example: "https://api.example.com/orders"
+        method:
+          type: string
+          enum: [GET, POST, PUT, DELETE, PATCH]
+          description: "Required for api_call type. HTTP method to use."
+          example: "GET"
+        timeout:
+          type: integer
+          minimum: 1000
+          maximum: 30000
+          default: 5000
+          description: "Optional for api_call type. Request timeout in milliseconds (1000–30000)."
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: "Optional for api_call type. Static HTTP headers as a key/value map."
+          example:
+            Authorization: "Bearer TOKEN"
+            Content-Type: "application/json"
+        headersArray:
+          type: array
+          description: "Optional for api_call type. Headers as an array of key/value objects (alternative to `headers` map)."
+          items:
+            type: object
+            required: [key, value]
+            properties:
+              key:
+                type: string
+                example: "Authorization"
+              value:
+                type: string
+                example: "Bearer TOKEN"
+        queryParams:
+          type: array
+          description: "Optional for api_call type. Query parameters to include in the request URL. Values support variable templating like `{{order_id}}`."
+          items:
+            type: object
+            required: [key, value]
+            properties:
+              key:
+                type: string
+                example: "id"
+              value:
+                type: string
+                example: "{{order_id}}"
+        requestBody:
+          type: string
+          description: "Optional for api_call type. Raw request body as a JSON string. Supports variable templating."
+          example: '{"customer_id": "{{customer_id}}"}'
+        llmParameters:
+          type: array
+          description: "Optional for api_call type. Parameters the LLM can supply dynamically at runtime."
+          items:
+            type: object
+            required: [name, description, type]
+            properties:
+              name:
+                type: string
+                description: Parameter name
+              description:
+                type: string
+                description: What the parameter represents
+              type:
+                type: string
+                enum: [text, number, boolean, enum]
+              values:
+                type: array
+                items:
+                  type: string
+                description: "Required when type is `enum`. Allowed values."
+              required:
+                type: boolean
+                default: false
+        responseVariables:
+          type: array
+          description: "Optional for api_call type. Variables to extract from the API response into the agent's variable store."
+          items:
+            type: object
+            required: [variableName, jsonPath]
+            properties:
+              variableName:
+                type: string
+                description: Name to store the extracted value under
+                example: "orderStatus"
+              jsonPath:
+                type: string
+                description: JSON path to extract the value from the response
+                example: "$.data.status"
+          default: []
+        auth:
+          type: object
+          description: |
+            Optional for `api_call` type. Authentication for the outbound request.
+            Credentials are referenced **by secret name** (from the org Secrets vault,
+            see `POST /secret`), never inline. At call time the platform decrypts the
+            secret, injects it into the request, and strips the `auth` block before the
+            config reaches the runtime, cache, or webhooks. `token`, `value`, and
+            `password` below are secret names, not literal values.
+          required: [type]
+          properties:
+            type:
+              type: string
+              enum: [none, bearer, api_key, basic]
+              description: |
+                Auth scheme. `bearer` sends `Authorization: Bearer <secret>`; `api_key`
+                sends the secret in a header or query param you name; `basic` sends
+                `Authorization: Basic <base64(username:secret)>`.
+            token:
+              type: string
+              description: "For `bearer`: the name of the secret holding the token."
+              example: "ORDER_API_TOKEN"
+            name:
+              type: string
+              description: "For `api_key`: the header or query-param name to send the key under."
+              example: "X-API-Key"
+            location:
+              type: string
+              enum: [header, query]
+              description: "For `api_key`: whether the key is sent as a header or a query parameter."
+            value:
+              type: string
+              description: "For `api_key`: the name of the secret holding the key."
+              example: "SEARCH_API_KEY"
+            username:
+              type: string
+              description: "For `basic`: the name of the secret holding the username."
+            password:
+              type: string
+              description: "For `basic`: the name of the secret holding the password."
+        timeoutMs:
+          type: integer
+          minimum: 1000
+          maximum: 60000
+          default: 1000
+          description: "Optional for client_tool type. How long the agent waits for `function_call.result` before recovering verbally."
+        expectsResponse:
+          type: boolean
+          default: true
+          description: "Optional for client_tool type. When false, fire-and-forget — the app acts on the event and the agent does not wait for a result."
+        fillerPhrases:
+          type: array
+          description: "Optional for client_tool type. Phrases spoken while the tool runs so the pause is not silent."
+          items:
+            type: string
+          default: []
+          example: ["Let me check that for you", "One moment please"]
+
+    CreateToolRequest:
+      type: object
+      required: [definition]
+      properties:
+        definition:
+          allOf:
+            - $ref: "#/components/schemas/RegistryToolDefinition"
+          description: |
+            The tool body — the same shape used inside an agent's `tools[]`
+            (discriminated on `type`). `api_call` is the most common; `client_tool`
+            and the built-in types are also valid.
+
+    ToolResource:
+      type: object
+      description: |
+        A tool in the org-level Tools library. Referenced from agents by `toolId`
+        (see `toolRefs` on the agent config). Editing a library tool propagates to
+        every agent that references it.
+      properties:
+        _id:
+          type: string
+          description: MongoDB id.
+          example: "6a86c89eb3073ea15c328ce0"
+        toolId:
+          type: string
+          description: "Stable public id, format `tool_<24 lowercase alphanumerics>`. This is what agents reference."
+          example: "tool_ab12cd34ef56gh78ij90kl12"
+        organizationId:
+          type: string
+          example: "6a5f9c9fcf10167aad404c40"
+        type:
+          type: string
+          description: The tool type (mirrors `definition.type`).
+          example: "api_call"
+        definition:
+          $ref: "#/components/schemas/RegistryToolDefinition"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateSecretRequest:
+      type: object
+      required: [name, value]
+      properties:
+        name:
+          type: string
+          description: "Secret name (letters, numbers, and underscores). Referenced from a tool's `auth`."
+          example: "ORDER_API_TOKEN"
+        value:
+          type: string
+          description: "The secret value. Write-only — encrypted at rest and never returned."
+          example: "sk_live_xxxxxxxxxxxx"
+
+    Secret:
+      type: object
+      description: |
+        A secret in the org Secrets vault. **Write-only**: the plaintext value is never
+        returned by the API. Referenced by `name` from a tool's `auth` block; decrypted
+        and injected into the outbound request server-side at call time.
+      properties:
+        _id:
+          type: string
+          example: "6a85323f98ca88de9272bb70"
+        name:
+          type: string
+          example: "ORDER_API_TOKEN"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SinglePromptConfig:
+      type: object
+      description: Configuration for single prompt workflow type
+      properties:
+        prompt:
+          type: string
+          description: The main prompt that defines the agent's behavior and responses
+          example: "You are a helpful AI assistant that can help users with various tasks."
+        tools:
+          type: array
+          description: |
+            Array of tools/functions available to the agent during conversations.
+            Five tool types are supported: `end_call`, `transfer_call`, `api_call`,
+            `extract_dynamic_variables`, and `knowledge_base_search`. Each type has its
+            own required fields — see `Tool` schema.
+          items:
+            $ref: "#/components/schemas/Tool"
+          default: []
+        toolRefs:
+          type: array
+          description: |
+            Optional. References to reusable tools in the org Tools library (see
+            `POST /tool`), by their `toolId`. At serve time the referenced tools are
+            expanded inline and merged with `tools[]` (inline wins on a name conflict),
+            then `toolRefs` is stripped, so the runtime sees a normal `tools[]`.
+            Attach a tool by adding its id here; detach by removing it. Additive and
+            optional — omit for unchanged behavior.
+          items:
+            type: string
+            example: "tool_ab12cd34ef56gh78ij90kl12"
+          default: []
+      required: [prompt]
+
+    Tool:
+      type: object
+      description: |
+        Tool (function) available to the agent. The `type` field determines which
+        additional fields are required. Backend validation enforces per-type schemas.
+      required: [type, name, description]
+      properties:
+        type:
+          type: string
+          enum: [end_call, transfer_call, api_call, client_tool, extract_dynamic_variables, knowledge_base_search]
+          description: The type of function/tool
+        name:
+          type: string
+          description: Unique name for the function (no spaces)
+          example: "end_call"
+        description:
+          type: string
+          description: Description of what the function does
+          example: "End the conversation when the user is satisfied"
+        enabled:
+          type: boolean
+          default: true
+          description: Whether the tool is enabled
+        # ── Transfer Call specific fields ──
+        transferNumber:
+          type: string
+          description: "Required for transfer_call type. Phone number to transfer the call to (E.164 format)"
+          example: "+1234567890"
+        transferOption:
+          type: object
+          description: "Required for transfer_call type. Controls cold vs warm transfer behavior."
+          properties:
+            type:
+              type: string
+              enum: [cold_transfer, warm_transfer]
+              default: cold_transfer
+              description: Transfer mode. `cold_transfer` hands off immediately; `warm_transfer` briefs the receiving party first.
+            privateHandoffOption:
+              type: object
+              nullable: true
+              description: Private briefing delivered to the transfer target before the caller is connected. Only used when `type = warm_transfer`.
+              properties:
+                type:
+                  type: string
+                  enum: [prompt, static]
+                  description: "`prompt` generates briefing from the LLM; `static` plays fixed text."
+                prompt:
+                  type: string
+                  description: The prompt or static text for the private handoff.
+            publicHandoffOption:
+              type: object
+              nullable: true
+              description: Message played to the caller while the transfer is being set up. Only used when `type = warm_transfer`.
+              properties:
+                type:
+                  type: string
+                  enum: [prompt, static]
+                prompt:
+                  type: string
+        onHoldMusic:
+          type: string
+          enum: [ringtone, relaxing_sound, uplifting_beats, none]
+          default: ringtone
+          description: "Optional for transfer_call type. Audio played to the caller while the transfer is in progress."
+        transferOnlyIfHuman:
+          type: boolean
+          default: true
+          description: "Optional for transfer_call type. If true, the call is only transferred when a human is detected on the receiving end (voicemail/IVR skipped)."
+        detectionTimeout:
+          type: integer
+          minimum: 5
+          maximum: 60
+          default: 30
+          description: "Optional for transfer_call type. Seconds to wait for human detection before giving up (5–60)."
+        # ── API Call specific fields ──
+        url:
+          type: string
+          format: uri
+          description: "Required for api_call type. The URL to make the HTTP request to."
+          example: "https://api.example.com/orders"
+        method:
+          type: string
+          enum: [GET, POST, PUT, DELETE, PATCH]
+          description: "Required for api_call type. HTTP method to use."
+          example: "GET"
+        timeout:
+          type: integer
+          minimum: 1000
+          maximum: 30000
+          default: 5000
+          description: "Optional for api_call type. Request timeout in milliseconds (1000–30000)."
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: "Optional for api_call type. Static HTTP headers as a key/value map."
+          example:
+            Authorization: "Bearer TOKEN"
+            Content-Type: "application/json"
+        headersArray:
+          type: array
+          description: "Optional for api_call type. Headers as an array of key/value objects (alternative to `headers` map)."
+          items:
+            type: object
+            required: [key, value]
+            properties:
+              key:
+                type: string
+                example: "Authorization"
+              value:
+                type: string
+                example: "Bearer TOKEN"
+        queryParams:
+          type: array
+          description: "Optional for api_call type. Query parameters to include in the request URL. Values support variable templating like `{{order_id}}`."
+          items:
+            type: object
+            required: [key, value]
+            properties:
+              key:
+                type: string
+                example: "id"
+              value:
+                type: string
+                example: "{{order_id}}"
+        requestBody:
+          type: string
+          description: "Optional for api_call type. Raw request body as a JSON string. Supports variable templating."
+          example: '{"customer_id": "{{customer_id}}"}'
+        llmParameters:
+          type: array
+          description: "Optional for api_call type. Parameters the LLM can supply dynamically at runtime."
+          items:
+            type: object
+            required: [name, description, type]
+            properties:
+              name:
+                type: string
+                description: Parameter name
+              description:
+                type: string
+                description: What the parameter represents
+              type:
+                type: string
+                enum: [text, number, boolean, enum]
+              values:
+                type: array
+                items:
+                  type: string
+                description: "Required when type is `enum`. Allowed values."
+              required:
+                type: boolean
+                default: false
+        # ── Client Tool specific fields ──
+        # A client_tool runs in your app over the websocket (webcall/widget) — the agent
+        # emits a function_call event and your app returns function_call.result. It has no
+        # url/method. Its arguments come from the shared `llmParameters` above.
+        timeoutMs:
+          type: integer
+          minimum: 1000
+          maximum: 60000
+          default: 1000
+          description: "Optional for client_tool type. How long the agent waits for `function_call.result` before recovering verbally."
+        expectsResponse:
+          type: boolean
+          default: true
+          description: "Optional for client_tool type. When false, fire-and-forget — the app acts on the event and the agent does not wait for a result."
+        responseVariables:
+          type: array
+          description: "Optional for api_call type. Variables to extract from the API response into the agent's variable store."
+          items:
+            type: object
+            required: [variableName, jsonPath]
+            properties:
+              variableName:
+                type: string
+                description: Name to store the extracted value under
+                example: "orderStatus"
+              jsonPath:
+                type: string
+                description: JSON path to extract the value from the response
+                example: "$.data.status"
+          default: []
+        auth:
+          type: object
+          description: |
+            Optional for `api_call` type. Authentication for the outbound request.
+            Credentials are referenced **by secret name** (from the org Secrets vault,
+            see `POST /secret`), never inline. At call time the platform decrypts the
+            secret, injects it into the request, and strips the `auth` block before the
+            config reaches the runtime, cache, or webhooks. `token`, `value`, and
+            `password` below are secret names, not literal values.
+          required: [type]
+          properties:
+            type:
+              type: string
+              enum: [none, bearer, api_key, basic]
+              description: |
+                Auth scheme. `bearer` sends `Authorization: Bearer <secret>`; `api_key`
+                sends the secret in a header or query param you name; `basic` sends
+                `Authorization: Basic <base64(username:secret)>`.
+            token:
+              type: string
+              description: "For `bearer`: the name of the secret holding the token."
+              example: "ORDER_API_TOKEN"
+            name:
+              type: string
+              description: "For `api_key`: the header or query-param name to send the key under."
+              example: "X-API-Key"
+            location:
+              type: string
+              enum: [header, query]
+              description: "For `api_key`: whether the key is sent as a header or a query parameter."
+            value:
+              type: string
+              description: "For `api_key`: the name of the secret holding the key."
+              example: "SEARCH_API_KEY"
+            username:
+              type: string
+              description: "For `basic`: the name of the secret holding the username."
+            password:
+              type: string
+              description: "For `basic`: the name of the secret holding the password."
+        # ── Dynamic Variable Extraction specific fields ──
+        variablesExtractionSchema:
+          type: array
+          description: "Required for extract_dynamic_variables type. Schema defining variables to extract from the conversation."
+          items:
+            type: object
+            required: [name, description, type]
+            properties:
+              name:
+                type: string
+                description: Name of the variable to extract
+                example: "customer_name"
+              description:
+                type: string
+                description: What this variable represents
+                example: "The customer's full name"
+              type:
+                type: string
+                enum: [text, number, boolean, enum]
+              values:
+                type: array
+                items:
+                  type: string
+                description: "Required when type is `enum`. List of possible values."
+                example: ["satisfied", "unsatisfied", "neutral"]
+          minItems: 1
+        # ── Knowledge Base Search specific fields ──
+        knowledgeBaseId:
+          type: string
+          description: "Required for knowledge_base_search type. ID of the knowledge base to search."
+          example: "60d0fe4f5311236168a109ca"
+        fillerPhrases:
+          type: array
+          description: "Optional for knowledge_base_search and client_tool types. Phrases spoken while the tool runs so the pause is not silent."
+          items:
+            type: string
+          default: []
+          example: ["Let me check that for you", "One moment please"]
+
+    DispositionMetric:
+      type: object
+      description: |
+        A single disposition metric captured after each call. The metric prompt
+        is evaluated against the call transcript post-call, and the result is
+        returned in the call log under `postCallAnalytics.dispositionMetrics`.
+      required: [identifier, dispositionMetricPrompt, dispositionMetricType]
+      properties:
+        identifier:
+          type: string
+          pattern: "^[a-z0-9_]+$"
+          description: Stable machine identifier. Lowercase letters, digits, and underscores only.
+          example: "call_resolved"
+        dispositionMetricPrompt:
+          type: string
+          description: Natural-language question evaluated against the transcript after the call ends.
+          example: "Was the customer issue resolved by the end of the call?"
+        dispositionMetricType:
+          type: string
+          enum: [STRING, BOOLEAN, INTEGER, ENUM, DATETIME]
+          description: Data type returned by the metric.
+          example: "STRING"
+        choices:
+          type: array
+          description: "Required when `dispositionMetricType = ENUM`. Allowed values."
+          items:
+            type: string
+          example: ["resolved", "escalated", "callback_scheduled", "no_action"]
+
+    PostCallAnalyticsConfig:
+      type: object
+      description: |
+        Per-agent post-call analytics configuration. Evaluated after each call ends
+        and surfaced in call logs under the `postCallAnalytics` field.
+      properties:
+        dispositionMetrics:
+          type: array
+          description: Structured metrics extracted from each completed call.
+          items:
+            $ref: "#/components/schemas/DispositionMetric"
+          default: []
+        successMetrics:
+          type: array
+          deprecated: true
+          description: |
+            **Deprecated** — will be removed in a future version. Use
+            `dispositionMetrics` instead. Kept here because the backend still
+            accepts it on writes and returns it on reads.
+          items:
+            type: object
+            required: [identifier, successMetricPrompt, successMetricType]
+            properties:
+              identifier:
+                type: string
+                pattern: "^[a-z0-9_]+$"
+              successMetricPrompt:
+                type: string
+              successMetricType:
+                type: string
+                enum: [NUMERIC_SCALE, PERCENTAGE_SCALE, PASS_FAIL, DESCRIPTIVE_SCALE]
+          default: []
+        summaryPrompt:
+          type: string
+          deprecated: true
+          description: |
+            **Deprecated** — no longer used in post-call analysis and will be
+            removed in a future version. Kept here because the backend still
+            accepts it on writes and returns it on reads.
+          default: ""
+        useInternalAnalyticsModel:
+          type: boolean
+          default: true
+          description: Use the internal analytics model. When false, falls back to the agent's own LLM.
+        useReasoningModel:
+          type: boolean
+          default: false
+          description: Route analytics evaluation through the reasoning model for higher-quality results at a latency/cost tradeoff.
+
+    ComplianceApplication:
+      type: object
+      description: A compliance application for a specific country, number type, and user type
+      properties:
+        _id:
+          type: string
+          description: Unique identifier
+          example: "663f1a2b4c5d6e7f8a9b0c1d"
+        organizationId:
+          type: string
+          description: The organization this application belongs to
+        plivoComplianceId:
+          type: string
+          description: Plivo's compliance application identifier
+        alias:
+          type: string
+          description: Auto-generated alias (orgId-countryIso-env)
+          example: "663f1a2b-IN-production"
+        status:
+          type: string
+          enum: [draft, submitted, accepted, rejected, suspended, expired]
+          description: Current status of the compliance application
+          example: "submitted"
+        countryIso:
+          type: string
+          description: ISO 3166-1 alpha-2 country code
+          example: "IN"
+        numberType:
+          type: string
+          enum: [local, mobile, tollfree]
+          example: "local"
+        userType:
+          type: string
+          enum: [individual, business]
+          example: "business"
+        endUserName:
+          type: string
+          description: Legal business or individual name
+          example: "Acme Corp"
+        endUserLastName:
+          type: string
+          nullable: true
+        endUserEmail:
+          type: string
+          nullable: true
+        endUserCountry:
+          type: string
+          nullable: true
+          example: "IN"
+        documentFileNames:
+          type: array
+          items:
+            type: string
+          description: Names of uploaded document files
+          example: ["certificate_of_incorporation.pdf"]
+        rejectionReason:
+          type: string
+          nullable: true
+          description: Reason for rejection, if applicable
+        createdBy:
+          type: string
+          description: User ID of the person who created this application
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ComplianceRequirement:
+      type: object
+      description: Compliance requirements for a country/numberType/userType combination
+      properties:
+        requirementId:
+          type: string
+          description: Plivo's requirement identifier
+        countryIso:
+          type: string
+          example: "IN"
+        numberType:
+          type: string
+          example: "local"
+        userType:
+          type: string
+          example: "business"
+        documentTypes:
+          type: array
+          description: Required document types. Empty array means no compliance is needed.
+          items:
+            $ref: "#/components/schemas/RequiredDocumentType"
+
+    RequiredDocumentType:
+      type: object
+      description: A document type required for compliance
+      properties:
+        documentTypeId:
+          type: string
+          description: Identifier to use when submitting this document type
+          example: "dt_certificate_of_incorporation"
+        name:
+          type: string
+          description: Human-readable name
+          example: "Certificate of Incorporation"
+        description:
+          type: string
+          description: Description of what this document should contain
+          example: "A government-issued certificate proving business registration"
+        proofRequired:
+          type: boolean
+          description: Whether a file upload is required for this document type
+          example: true
+        requiredFields:
+          type: array
+          description: Data fields that must be provided alongside the document
+          items:
+            type: object
+            properties:
+              fieldName:
+                type: string
+                example: "business_name"
+              friendlyName:
+                type: string
+                example: "Business Name"
+              helpText:
+                type: string
+                example: "Exact name as on the certificate"
+              fieldType:
+                type: string
+                example: "string"
+              required:
+                type: boolean
+                example: true
+
+    BillingBalanceResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [creditBalance, planId, isEnterprise]
+          properties:
+            creditBalance:
+              type: number
+              description: Current credit balance in USD. May be negative if the account has spent past its balance and is on a plan that permits overdraw.
+              example: 15
+            planId:
+              type: string
+              description: Identifier for the plan the organization is on.
+              example: plan_standard
+            isEnterprise:
+              type: boolean
+              description: True when the organization is on an enterprise plan (billed offline).
+              example: false
+
+    BillingLedgerEntry:
+      type: object
+      required: [id, transactionType, amount, balanceAfter, createdAt]
+      properties:
+        id:
+          type: string
+          description: Ledger row identifier.
+        transactionType:
+          type: string
+          enum:
+            - SIGNUP_BONUS
+            - CREDIT_PURCHASE
+            - AUTO_RELOAD
+            - USAGE_DEDUCTION
+            - ADMIN_ADJUSTMENT
+            - COUPON_CREDIT
+            - MIGRATION
+        amount:
+          type: number
+          description: Signed credit delta in USD. Positive for additions (`CREDIT_PURCHASE`, `AUTO_RELOAD`, `COUPON_CREDIT`, `SIGNUP_BONUS`), negative for spend (`USAGE_DEDUCTION`).
+        balanceAfter:
+          type: number
+          description: Balance after this row was applied.
+        featureId:
+          type: string
+          nullable: true
+          description: Product feature that triggered the row (e.g. `tts.generate`, `waves.stt`). Only set on `USAGE_DEDUCTION`.
+        referenceId:
+          type: string
+          nullable: true
+          description: External reference tying this row to a purchase, coupon, or admin action.
+        description:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        callId:
+          type: string
+          nullable: true
+          description: Associated call ID, when the row was produced by a call.
+        agentId:
+          type: string
+          nullable: true
+        requestId:
+          type: string
+          nullable: true
+
+    BillingLedgerResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [transactions, total, hasMore, summary, period]
+          properties:
+            transactions:
+              type: array
+              items:
+                $ref: "#/components/schemas/BillingLedgerEntry"
+            total:
+              type: integer
+              description: Total row count matching the filters (across all pages).
+            hasMore:
+              type: boolean
+              description: True when more rows exist beyond `offset + limit`.
+            summary:
+              type: object
+              required: [totalCreditsConsumed, totalCreditsAdded]
+              properties:
+                totalCreditsConsumed:
+                  type: number
+                  description: Sum of `USAGE_DEDUCTION` magnitudes across the window.
+                totalCreditsAdded:
+                  type: number
+                  description: Sum of positive rows (purchases, auto-reloads, coupon credits, signup bonuses) across the window.
+            period:
+              type: object
+              required: [from, to]
+              properties:
+                from:
+                  type: string
+                  format: date-time
+                  description: Echo of the effective lower bound (defaults to seven days before `to` when not supplied).
+                to:
+                  type: string
+                  format: date-time
+                  description: Echo of the effective upper bound (defaults to server-now when not supplied).
+
+    BillingUsageBreakdownResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [platform, voiceAi, voiceModels]
+          properties:
+            platform:
+              type: number
+              description: Credits spent on Atoms platform features (phone rental, telephony minutes, etc.).
+            voiceAi:
+              type: number
+              description: Credits spent on voice-agent runtime (LLM + TTS combined during voice calls).
+            voiceModels:
+              type: number
+              description: Credits spent on standalone Waves model calls (Lightning TTS, Pulse STT, Electron LLM used outside the voice-agent pipeline).
+
+    BillingInvoiceListResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          description: |
+            Up to 20 recent Stripe `Invoice` objects for the caller's organization. Fields follow the canonical Stripe shape. Keys most callers use: `id`, `status`, `amount_paid`, `amount_due`, `currency`, `created`, `hosted_invoice_url`, `invoice_pdf`, `number`.
+          items:
+            type: object
+            additionalProperties: true
+
+    BillingInvoicePdfResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [pdfUrl]
+          properties:
+            pdfUrl:
+              type: string
+              format: uri
+              description: Stripe-hosted URL to the invoice PDF. Short-lived; refetch when you need to hand it to a user.
+
+  responses:
+    UnauthorizedError:
+      description: Access token is missing or invalid
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiResponse"
+
+    BadRequestError:
+      description: Invalid input
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BadRequestErrorResponse"
+
+    ForbiddenError:
+      description: Forbidden access
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiResponse"
+
+    WorkflowGraphAgentAccessForbiddenError:
+      description: Forbidden. Returned for workflow_graph agents when the organization lacks conversational agents access.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiResponse"
+
+    UnauthorizedErrorResponse:
+      description: Unauthorized access
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/UnauthorizedErrorResponse"
+
+    InternalServerErrorResponse:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/InternalServerErrorResponse"
+
+    BadRequestErrorResponse:
+      description: Bad request — validation failed or required field missing.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BadRequestErrorResponse"
+
+    NotFoundErrorResponse:
+      description: Resource not found. The referenced ID does not exist or does not belong to the caller's organization.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: boolean
+                example: false
+              errors:
+                type: array
+                items:
+                  type: string
+                example: ["Resource not found"]
+
+    ConflictErrorResponse:
+      description: Conflict. The request cannot be completed because of the current state of the resource (name already exists, another publish or restore is in progress, the source draft failed its security scan, or a similar in-flight collision).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ConflictErrorResponse"
+
+    LockedErrorResponse:
+      description: Locked. A configuration freeze is active on this agent, or the resource is temporarily locked for another write. Retry after the freeze window ends.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/LockedErrorResponse"
+
+    VersioningV2MigrationRequired:
+      description: |
+        The v1 versioning endpoint is deprecated on the branch model and will not process this request. The response body carries `error_type: "versioning_v2_migration_required"` and the response includes the `Deprecation: true` header. See the [migration guide](/api-reference/deprecations/agent-versioning-migration) for the v2 equivalent.
+      headers:
+        Deprecation:
+          description: Always `true` for deprecated endpoints.
+          schema:
+            type: string
+            example: "true"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/VersioningV2MigrationRequiredResponse"

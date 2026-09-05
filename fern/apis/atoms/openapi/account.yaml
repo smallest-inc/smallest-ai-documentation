@@ -1,0 +1,728 @@
+openapi: 3.0.0
+info:
+  title: "Voice Agents API: Account, Billing, and Concurrency"
+  version: 1.0.0
+  description: "Part of the Voice Agents (Atoms) API. Shared schemas live in components.yaml."
+servers:
+  - url: https://api.smallest.ai/atoms/v1
+    description: Production server
+paths:
+  /user:
+    get:
+      summary: Get user details
+      tags:
+        - User
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        description: The ID of the user
+                      firstName:
+                        type: string
+                        description: The first name of the user
+                      lastName:
+                        type: string
+                        description: The last name of the user
+                      userEmail:
+                        type: string
+                        description: The email of the user
+                      authProvider:
+                        type: string
+                        description: The authentication provider of the user
+                      isEmailVerified:
+                        type: boolean
+                        description: Whether the user's email is verified
+                      organizationId:
+                        type: string
+                        description: The organization ID of the user
+
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /user/subscription:
+    get:
+      summary: Get subscription and plan limits
+      description: |
+        Returns the organization's current subscription: plan id, credit balance,
+        renewal date, and the per-plan `limits` (agents, campaigns, numbers, daily and
+        concurrent calls, knowledge-base sizes) plus the `features` map that gates
+        capabilities like telephony, campaigns, and webhooks. Use it to check remaining
+        credits or whether a feature is enabled before attempting an action.
+      tags:
+        - User
+      x-fern-sdk-group-name: user
+      x-fern-sdk-method-name: get_subscription
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: The subscription record. Extra fields may be present.
+                    properties:
+                      _id:
+                        type: string
+                      organization:
+                        type: string
+                      planId:
+                        type: string
+                        description: The active plan identifier.
+                      totalCredits:
+                        type: number
+                      currentCredits:
+                        type: number
+                        description: Credits remaining in the current cycle.
+                      renewalDate:
+                        type: string
+                        format: date-time
+                      subscriptionActive:
+                        type: boolean
+                      onPremEnabled:
+                        type: boolean
+                      limits:
+                        type: object
+                        description: Per-plan quotas.
+                        properties:
+                          agents:
+                            type: integer
+                          campaigns:
+                            type: integer
+                          numbers:
+                            type: integer
+                          dailyCalls:
+                            type: integer
+                          concurrentCalls:
+                            type: integer
+                          knowledgeBaseItemLimit:
+                            type: integer
+                          knowledgeBaseLimits:
+                            type: integer
+                      features:
+                        type: object
+                        description: Feature flags gating capabilities for this plan.
+                        additionalProperties:
+                          type: boolean
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /concurrency:
+    get:
+      operationId: getConcurrency
+      summary: Get concurrency limits
+      description: |
+        Returns the organization's overall concurrency limit, how much is reserved across all agents, the remaining unreserved pool, and the per-agent reservation breakdown per call channel.
+      tags:
+        - Concurrency
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Concurrency overview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgLimit:
+                        type: number
+                        description: Total concurrent calls allowed for this organization
+                      totalReserved:
+                        type: number
+                        description: Sum of all agent reservations across all channels
+                      unreservedPool:
+                        type: number
+                        description: orgLimit minus totalReserved — capacity available to any agent
+                      agents:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            agentId:
+                              type: string
+                              description: Agent ObjectId
+                            agentName:
+                              type: string
+                            avatarUrl:
+                              type: string
+                              nullable: true
+                            webcall:
+                              type: number
+                              description: Reserved webcall slots
+                            outbound:
+                              type: number
+                              description: Reserved outbound call slots
+                            inbound:
+                              type: number
+                              description: Reserved inbound call slots
+                            chat:
+                              type: number
+                              description: Reserved chat slots
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /concurrency/reservations:
+    put:
+      operationId: updateConcurrencyReservations
+      summary: Update concurrency reservations
+      description: |
+        Updates concurrency reservations for one or more agents in a single request. Replaces the existing reservation values for each specified agent. **Admin role required.**
+      tags:
+        - Concurrency
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reservations]
+              properties:
+                reservations:
+                  type: array
+                  minItems: 1
+                  description: Array of agent reservations to update
+                  items:
+                    type: object
+                    required: [agentId, webcall, outbound, inbound, chat]
+                    properties:
+                      agentId:
+                        type: string
+                        description: Agent ObjectId
+                      webcall:
+                        type: integer
+                        minimum: 0
+                        description: Reserved webcall slots
+                      outbound:
+                        type: integer
+                        minimum: 0
+                        description: Reserved outbound call slots
+                      inbound:
+                        type: integer
+                        minimum: 0
+                        description: Reserved inbound call slots
+                      chat:
+                        type: integer
+                        minimum: 0
+                        description: Reserved chat slots
+      responses:
+        "200":
+          description: Reservations updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      updated:
+                        type: number
+                        description: Count of agent reservations updated
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/ApiResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /payment/v1/credits/balance:
+    get:
+      summary: Get credit balance
+      operationId: getCreditBalance
+      x-fern-sdk-group-name: billing
+      x-fern-sdk-method-name: get_balance
+      description: |
+        Returns the organization's current credit balance in USD plus the
+        current plan identifier. Organization is resolved from the API key,
+        so no `X-Organization-Id` header is required.
+      tags:
+        - Billing
+      security:
+        - BearerAuth: []
+      servers:
+        - url: https://api.smallest.ai
+          description: Production
+          x-fern-server-name: payment
+      responses:
+        "200":
+          description: Current balance for the caller's organization.
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BillingBalanceResponse"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+  /payment/v1/credits/ledger:
+    get:
+      summary: List credit ledger
+      operationId: getCreditLedger
+      x-fern-sdk-group-name: billing
+      x-fern-sdk-method-name: get_ledger
+      description: |
+        Paginated credit-ledger transaction history. Ledger reads are served
+        from ClickHouse; a rare storage-tier outage returns an empty
+        `transactions` array rather than a 5xx.
+
+        **Window rules**
+
+        - `from` defaults to `to - 7 days`, `to` defaults to now.
+        - The span between `from` and `to` cannot exceed **90 days**. A wider
+          span returns 400. Page through longer periods by making multiple
+          calls with shifted `from`/`to`.
+        - `from` cannot be earlier than **2026-03-02T00:00:00Z**. Older
+          historical data is not available via API; contact support for bulk
+          exports.
+        - `from > to` returns 400.
+
+        **Filters**
+
+        - `type` filters to a single transaction type. `PAYMENTS` is a
+          virtual filter that returns both `CREDIT_PURCHASE` and
+          `AUTO_RELOAD` rows.
+        - `scope` filters `USAGE_DEDUCTION` rows by product category.
+      tags:
+        - Billing
+      security:
+        - BearerAuth: []
+      servers:
+        - url: https://api.smallest.ai
+          description: Production
+          x-fern-server-name: payment
+      parameters:
+        - in: query
+          name: limit
+          description: Page size (1–100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - in: query
+          name: offset
+          description: Offset for pagination.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - in: query
+          name: from
+          description: |
+            Lower bound of the query window (ISO 8601, `Z`-suffixed UTC recommended). Defaults to seven days before `to`. Cannot be earlier than `2026-03-02T00:00:00Z`.
+          schema:
+            type: string
+            format: date-time
+            example: "2026-07-01T00:00:00Z"
+        - in: query
+          name: to
+          description: Upper bound of the query window (ISO 8601, `Z`-suffixed UTC recommended). Defaults to now.
+          schema:
+            type: string
+            format: date-time
+            example: "2026-07-28T00:00:00Z"
+        - in: query
+          name: type
+          description: Filter to a single transaction type. `PAYMENTS` is a virtual filter that returns purchase-related rows (`CREDIT_PURCHASE` + `AUTO_RELOAD`).
+          schema:
+            type: string
+            enum:
+              - SIGNUP_BONUS
+              - CREDIT_PURCHASE
+              - AUTO_RELOAD
+              - USAGE_DEDUCTION
+              - ADMIN_ADJUSTMENT
+              - COUPON_CREDIT
+              - MIGRATION
+              - PAYMENTS
+        - in: query
+          name: scope
+          description: Filter by spend category. Applies only to `USAGE_DEDUCTION` rows.
+          schema:
+            type: string
+            enum:
+              - platform
+              - voice_ai
+              - voice_models
+      responses:
+        "200":
+          description: Paginated ledger with summary + query window echo.
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BillingLedgerResponse"
+        "400":
+          description: |
+            Query-window validation failed. Common cases:
+
+            - `from` earlier than `2026-03-02T00:00:00Z`.
+            - Span between `from` and `to` exceeds 90 days.
+            - `from > to`.
+            - Malformed date string in `from` or `to`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: validation_error
+                      message:
+                        type: string
+              examples:
+                spanTooWide:
+                  summary: Range exceeds 90 days
+                  value:
+                    success: false
+                    error:
+                      code: validation_error
+                      message: "Date range cannot exceed 90 days. Please narrow your range or contact support for bulk exports."
+                beforeCutoff:
+                  summary: Range starts before the data-availability cutoff
+                  value:
+                    success: false
+                    error:
+                      code: validation_error
+                      message: "Date range starts before 2026-03-02. Usage data before this date is not available via API. Please contact support for historical exports."
+                malformedDate:
+                  summary: Unparseable date string
+                  value:
+                    success: false
+                    error:
+                      code: validation_error
+                      message: "from: Invalid date; to: Invalid date"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+  /payment/v1/credits/usage/breakdown:
+    get:
+      summary: Get usage breakdown
+      operationId: getCreditUsageBreakdown
+      x-fern-sdk-group-name: billing
+      x-fern-sdk-method-name: get_usage_breakdown
+      description: |
+        Total credits spent so far, split across the three product scopes.
+        The window is a cumulative snapshot from **2026-03-02T00:00:00Z**
+        (the platform's usage-tracking start date) up to the current
+        instant. Served from ClickHouse. No query parameters.
+      tags:
+        - Billing
+      security:
+        - BearerAuth: []
+      servers:
+        - url: https://api.smallest.ai
+          description: Production
+          x-fern-server-name: payment
+      responses:
+        "200":
+          description: Spend split by scope.
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BillingUsageBreakdownResponse"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+  /payment/v1/invoices:
+    get:
+      summary: List invoices
+      operationId: listInvoices
+      x-fern-sdk-group-name: billing
+      x-fern-sdk-method-name: list_invoices
+      description: |
+        Returns up to 20 of the most recent Stripe invoices for the caller's
+        organization. Each item is the raw Stripe `Invoice` object; use the
+        canonical Stripe reference at
+        [stripe.com/docs/api/invoices/object](https://stripe.com/docs/api/invoices/object)
+        for field-level semantics.
+
+        Organizations that have never been charged (free-tier only) return
+        an empty array.
+      tags:
+        - Billing
+      security:
+        - BearerAuth: []
+      servers:
+        - url: https://api.smallest.ai
+          description: Production
+          x-fern-server-name: payment
+      responses:
+        "200":
+          description: Up to 20 recent Stripe invoices for the caller's organization.
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BillingInvoiceListResponse"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+  /payment/v1/invoices/{invoiceId}/pdf:
+    get:
+      summary: Get invoice PDF URL
+      operationId: getInvoicePdf
+      x-fern-sdk-group-name: billing
+      x-fern-sdk-method-name: get_invoice_pdf
+      description: |
+        Returns a Stripe-hosted PDF URL for the invoice. The URL is
+        short-lived; fetch fresh when you need to hand it to a user.
+
+        Requesting an invoice that does not belong to the caller's
+        organization returns 404 (not 403), so a foreign invoice ID cannot
+        be confirmed to exist.
+      tags:
+        - Billing
+      security:
+        - BearerAuth: []
+      servers:
+        - url: https://api.smallest.ai
+          description: Production
+          x-fern-server-name: payment
+      parameters:
+        - in: path
+          name: invoiceId
+          required: true
+          description: Stripe invoice ID (e.g. `in_1THiCSRwh8g1U6dfOcUtTdq9`).
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stripe-hosted PDF URL for the invoice.
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BillingInvoicePdfResponse"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Invoice not found, or does not belong to the caller's organization.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: not_found
+                      message:
+                        type: string
+                        example: "Invoice not found: in_1THiCSRwh8g1U6dfOcUtTdq9"
+  /account/get-account-details:
+    get:
+      tags:
+        - Account
+      summary: Get account details
+      description: |
+        Returns the calling user's profile (email, name, avatar) along with every organization
+        the user belongs to. Use this to resolve the user's active org list before switching
+        context, or to render user info in a management UI.
+      operationId: getAccountDetails
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Account details retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId:
+                    type: string
+                    description: Unique user ID.
+                    example: "69561896a37fd214b9a8d33a"
+                  email:
+                    type: string
+                    format: email
+                    example: "user@example.com"
+                  firstName:
+                    type: string
+                    example: "Ada"
+                  lastName:
+                    type: string
+                    example: "Lovelace"
+                  phone:
+                    type: string
+                    nullable: true
+                  picture:
+                    type: string
+                    description: URL of the user's avatar image.
+                  hasOnboarded:
+                    type: boolean
+                    description: Whether the user has completed initial onboarding.
+                  organizations:
+                    type: array
+                    description: Organizations the user is a member of. `roleId` is 0 for owner, 1 for member (and higher values for finer-grained roles).
+                    items:
+                      type: object
+                      properties:
+                        orgId:
+                          type: string
+                        name:
+                          type: string
+                        ownerEmail:
+                          type: string
+                          format: email
+                        roleId:
+                          type: integer
+                        onPremEnabled:
+                          type: boolean
+              examples:
+                success:
+                  summary: User in two orgs
+                  value:
+                    userId: "69561896a37fd214b9a8d33a"
+                    email: "ada@example.com"
+                    firstName: "Ada"
+                    lastName: "Lovelace"
+                    phone: null
+                    picture: "https://lh3.googleusercontent.com/a/avatar.jpg"
+                    hasOnboarded: true
+                    organizations:
+                      - orgId: "69561896a37fd214b9a8d33c"
+                        name: "Acme Inc."
+                        ownerEmail: "ada@example.com"
+                        roleId: 0
+                        onPremEnabled: false
+                      - orgId: "698076af5c1b62205ff731b8"
+                        name: "Contoso"
+                        ownerEmail: "grace@example.com"
+                        roleId: 1
+                        onPremEnabled: false
+        '401':
+          description: Missing or invalid API key.
+  /account/update-org-name:
+    put:
+      tags:
+        - Account
+      summary: Update the organization name
+      description: |
+        Renames the organization scoped by the API key. Requires the `owner` role. The `name`
+        is what shows up in dashboards, invoices, and the org switcher.
+      operationId: updateOrganizationName
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 50
+                  description: The new organization name.
+                  example: "Acme Inc."
+            examples:
+              default:
+                summary: Rename the org to "Acme Inc."
+                value:
+                  name: "Acme Inc."
+      responses:
+        '200':
+          description: Organization renamed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  name:
+                    type: string
+                    example: "Acme Inc."
+              examples:
+                success:
+                  summary: Rename accepted
+                  value:
+                    success: true
+                    name: "Acme Inc."
+        '400':
+          description: Missing or empty `name`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Organization name is required"
+              examples:
+                missing-name:
+                  summary: "`name` was empty or missing"
+                  value:
+                    success: false
+                    message: "Organization name is required"
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: API key from the console ApiKey collection, sent as Bearer token. Also accepts session cookies for browser-based auth.
+tags:
+  - name: Concurrency
+    description: Manage organization-wide concurrency limits and per-agent call slot reservations across webcall, outbound, inbound, and chat channels.
+  - name: Billing
+    description: |
+      Read-only access to your organization's credit balance, ledger, usage breakdown, and invoices. Authenticate with your user API key (`Authorization: Bearer <key>`); the organization is resolved from the key itself, no `X-Organization-Id` header is required. Only these read endpoints accept the API key. Purchase, auto-reload, and payment-method routes remain UI-only.
+
+      **Base URL for this section is `https://api.smallest.ai` (not `/atoms/v1`).**
+  - name: Account
+    description: |
+      Read the calling user's profile and the organizations they belong to, and rename the
+      organization scoped by the API key. Owner role required for the rename.

@@ -1,0 +1,1453 @@
+openapi: 3.0.0
+info:
+  title: "Voice Agents API: Analytics"
+  version: 1.0.0
+  description: "Part of the Voice Agents (Atoms) API. Shared schemas live in components.yaml."
+servers:
+  - url: https://api.smallest.ai/atoms/v1
+    description: Production server
+paths:
+  /analytics/call-counts-log:
+    get:
+      operationId: getCallCountsLog
+      summary: List call records
+      description: Paginated listing of call records for the organization, with optional filtering by agent, campaign, call type, and date range.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number (default 1)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Records per page (default 10)
+      responses:
+        "200":
+          description: Paginated call records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      calls:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            orgId:
+                              type: string
+                            callId:
+                              type: string
+                            agentId:
+                              type: string
+                            agentName:
+                              type: string
+                            campaignId:
+                              type: string
+                            campaignName:
+                              type: string
+                            callType:
+                              type: string
+                            timestamp:
+                              type: string
+                              format: date-time
+                            callDurationMs:
+                              type: number
+                            callLatencyMs:
+                              type: number
+                            costSpent:
+                              type: number
+                            disconnectionReason:
+                              type: string
+                            source:
+                              type: string
+                            recordingUrl:
+                              type: string
+                            callStatus:
+                              type: string
+                            fromNumber:
+                              type: string
+                            toNumber:
+                              type: string
+                      totalCalls:
+                        type: number
+                      totalPages:
+                        type: number
+                      currentPage:
+                        type: number
+                      limit:
+                        type: number
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/call-counts-by-day:
+    get:
+      operationId: getCallCountsByDay
+      summary: Call counts by day
+      description: Returns call counts aggregated per calendar day, suitable for bar chart visualizations.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Daily call counts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      callCountsByDay:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            day:
+                              type: string
+                              format: date
+                            count:
+                              type: number
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/conversation-details/{callId}:
+    get:
+      operationId: getConversationDetails
+      summary: Get conversation details
+      description: Returns the full transcript and event stream for a specific call, reconstructed from ClickHouse event data.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: callId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique identifier for the call
+      responses:
+        "200":
+          description: Call transcript and events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      callId:
+                        type: string
+                      agentName:
+                        type: string
+                      workflowType:
+                        type: string
+                      transcript:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            role:
+                              type: string
+                            text:
+                              type: string
+                            timestamp:
+                              type: string
+                              format: date-time
+                      events:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            eventType:
+                              type: string
+                            timestamp:
+                              type: string
+                              format: date-time
+                      fromNumber:
+                        type: string
+                      toNumber:
+                        type: string
+                      callDurationMs:
+                        type: number
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Call log not found or does not belong to the organization
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/usage/timeseries:
+    get:
+      operationId: getUsageTimeseries
+      summary: Credit usage timeseries
+      description: Returns daily credit usage over a date range.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Daily credit usage
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      dateRange:
+                        type: object
+                        properties:
+                          from:
+                            type: string
+                            format: date
+                          to:
+                            type: string
+                            format: date
+                      dayWiseCredits:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            date:
+                              type: string
+                              format: date
+                            credits:
+                              type: number
+                      totalCredits:
+                        type: number
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/dashboard:
+    get:
+      operationId: getDashboard
+      summary: Full dashboard data
+      description: |
+        Batched endpoint that fetches all dashboard panels in a single request by running six sub-queries in parallel. Equivalent to calling `summary`, `call-volume-timeseries`, `call-outcomes-timeseries`, `pickup-rate-by-number`, `hourly-performance`, and `duration-stats` individually. Each field may be absent if that sub-query failed; partial data is still returned.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: All dashboard panel data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      summary:
+                        type: object
+                        description: "See GET /analytics/summary"
+                      callVolumeTimeseries:
+                        type: object
+                        description: "See GET /analytics/call-volume-timeseries"
+                      callOutcomesTimeseries:
+                        type: object
+                        description: "See GET /analytics/call-outcomes-timeseries"
+                      pickupRateByNumber:
+                        type: object
+                        description: "See GET /analytics/pickup-rate-by-number"
+                      hourlyPerformance:
+                        type: object
+                        description: "See GET /analytics/hourly-performance"
+                      durationStats:
+                        type: object
+                        description: "See GET /analytics/duration-stats"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/summary:
+    get:
+      operationId: getAnalyticsSummary
+      summary: Dashboard summary KPIs
+      description: Returns high-level KPI metrics with current period value, previous period value, and percent change for trend comparison.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: KPI summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      totalCalls:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsTrendMetric"
+                      pickupRate:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsTrendMetric"
+                      avgDurationMs:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsTrendMetric"
+                      medianDurationMs:
+                        type: number
+                      totalDurationMs:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsTrendMetric"
+                      uniqueUsersReached:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsTrendMetric"
+                      totalCost:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsTrendMetric"
+                      period:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsDateRange"
+                      previousPeriod:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/call-volume-timeseries:
+    get:
+      operationId: getCallVolumeTimeseries
+      summary: Call volume timeseries
+      description: Returns daily call volume broken down by outcome (answered, no-answer, failed, cancelled) over the selected period.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Daily call volume by outcome
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      dataPoints:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            date:
+                              type: string
+                              format: date
+                            totalCalls:
+                              type: number
+                            answeredCalls:
+                              type: number
+                            noAnswerCalls:
+                              type: number
+                            failedCalls:
+                              type: number
+                            cancelledCalls:
+                              type: number
+                            totalDurationMs:
+                              type: number
+                      period:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/pickup-rate-by-number:
+    get:
+      operationId: getPickupRateByNumber
+      summary: Pickup rate by phone number
+      description: Returns pickup rate and call volume broken down per originating phone number.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Per-number pickup rate and call volume
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      numbers:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            phoneNumber:
+                              type: string
+                            totalCalls:
+                              type: number
+                            answeredCalls:
+                              type: number
+                            pickupRate:
+                              type: number
+                            lastActiveDate:
+                              type: string
+                              format: date
+                      period:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/phone-number-trends:
+    get:
+      operationId: getPhoneNumberTrends
+      summary: Phone number trends
+      description: Returns per-phone-number call volume and pickup rate as a daily timeseries, useful for spotting number-level degradation over time.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Per-number daily timeseries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      trends:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            phoneNumber:
+                              type: string
+                            dataPoints:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  date:
+                                    type: string
+                                    format: date
+                                  totalCalls:
+                                    type: number
+                                  answeredCalls:
+                                    type: number
+                                  pickupRate:
+                                    type: number
+                      period:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/hourly-performance:
+    get:
+      operationId: getHourlyPerformance
+      summary: Hourly performance
+      description: Returns call volume and performance metrics broken down by hour of day (0–23), aggregated across the selected date range.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Hourly performance breakdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      hours:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            hour:
+                              type: integer
+                              minimum: 0
+                              maximum: 23
+                              description: Hour of day (0–23)
+                            totalCalls:
+                              type: number
+                            answeredCalls:
+                              type: number
+                            pickupRate:
+                              type: number
+                            totalDurationMs:
+                              type: number
+                            avgDurationMs:
+                              type: number
+                      period:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/call-outcomes-timeseries:
+    get:
+      operationId: getCallOutcomesTimeseries
+      summary: Call outcomes timeseries
+      description: Returns a daily breakdown of call outcomes (answered, no-answer, failed, cancelled) over time, plus totals for the entire period.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Daily call outcomes and period totals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      dataPoints:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            date:
+                              type: string
+                              format: date
+                            answered:
+                              type: number
+                            noAnswer:
+                              type: number
+                            failed:
+                              type: number
+                            cancelled:
+                              type: number
+                            total:
+                              type: number
+                      totals:
+                        type: object
+                        properties:
+                          answered:
+                            type: number
+                          noAnswer:
+                            type: number
+                          failed:
+                            type: number
+                          cancelled:
+                            type: number
+                          total:
+                            type: number
+                      period:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/duration-stats:
+    get:
+      operationId: getDurationStats
+      summary: Call duration statistics
+      description: Returns call duration statistics including average, median, p90, p95 percentiles, and the proportion of short vs. long calls.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Duration statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      avgDurationMs:
+                        type: number
+                      medianDurationMs:
+                        type: number
+                      p90DurationMs:
+                        type: number
+                      p95DurationMs:
+                        type: number
+                      shortCallsPercent:
+                        type: number
+                      longCallsPercent:
+                        type: number
+                      totalCalls:
+                        type: number
+                      totalDurationMs:
+                        type: number
+                      period:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/weekly-trends:
+    get:
+      operationId: getWeeklyTrends
+      summary: Weekly call trends
+      description: Returns per-week call performance metrics including volume, pickup rate, and duration percentiles (p50, p90). Each week starts on Monday.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Weekly performance metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      weeks:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            weekStart:
+                              type: string
+                              format: date
+                              description: Monday that starts this week
+                            totalCalls:
+                              type: number
+                            answeredCalls:
+                              type: number
+                            pickupRate:
+                              type: number
+                            avgDuration:
+                              type: number
+                              description: Average call duration in seconds
+                            medianDuration:
+                              type: number
+                              description: Median call duration in seconds
+                            p90Duration:
+                              type: number
+                              description: p90 call duration in seconds
+                            shortCallsPercent:
+                              type: number
+                            longCallsPercent:
+                              type: number
+                      period:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/agent-performance:
+    get:
+      operationId: getAgentPerformance
+      summary: Agent performance
+      description: Returns per-agent call performance metrics. Supports sorting and limiting results.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+          description: "Field to sort by (e.g. `totalCalls`, `pickupRate`, `avgDuration`)"
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+          description: Sort direction
+        - name: limit
+          in: query
+          schema:
+            type: integer
+          description: Maximum number of agents to return
+      responses:
+        "200":
+          description: Per-agent performance metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      agents:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            agentId:
+                              type: string
+                            totalCalls:
+                              type: number
+                            answeredCalls:
+                              type: number
+                            pickupRate:
+                              type: number
+                            avgDuration:
+                              type: number
+                              description: Average call duration in seconds
+                            totalCost:
+                              type: number
+                      period:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/concurrency:
+    get:
+      operationId: getAnalyticsConcurrency
+      summary: Concurrent call counts
+      description: Returns minute-by-minute concurrent call counts for a specific day. Optionally broken down per agent.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: "Date to query (YYYY-MM-DD)"
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Filter to a specific agent
+        - name: includeAgents
+          in: query
+          schema:
+            type: string
+            enum: ["true", "false"]
+          description: Pass `true` to include a per-agent breakdown in the response
+      responses:
+        "200":
+          description: Minute-level concurrency data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      date:
+                        type: string
+                        format: date
+                      dataPoints:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            minute:
+                              type: string
+                              description: "Time in HH:MM format"
+                            concurrentCalls:
+                              type: number
+                      peakConcurrent:
+                        type: number
+                      avgConcurrent:
+                        type: number
+                      totalMinutes:
+                        type: number
+                      byAgent:
+                        type: array
+                        description: Only present when `includeAgents=true`
+                        items:
+                          type: object
+                          properties:
+                            agentId:
+                              type: string
+                            peakConcurrent:
+                              type: number
+                            avgConcurrent:
+                              type: number
+                            totalCalls:
+                              type: number
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/call-start-distribution:
+    get:
+      operationId: getCallStartDistribution
+      summary: Call start distribution
+      description: Returns the distribution of call start times as minute-level buckets for a specific day, showing when calls were initiated throughout the day.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: "Date to query (YYYY-MM-DD)"
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Filter to a specific agent
+      responses:
+        "200":
+          description: Minute-level call start distribution
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      date:
+                        type: string
+                        format: date
+                      dataPoints:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            minute:
+                              type: string
+                              description: "Time in HH:MM format"
+                            callCount:
+                              type: number
+                      totalCalls:
+                        type: number
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/daily-call-summary:
+    get:
+      operationId: getDailyCallSummary
+      summary: Daily call summary
+      description: Returns an aggregate call summary for a specific day. Live in-progress and in-queue counts are merged from real-time data on top of the historical data.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: "Date to query (YYYY-MM-DD)"
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Filter to a specific agent
+      responses:
+        "200":
+          description: Daily call summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      date:
+                        type: string
+                        format: date
+                      totalCalls:
+                        type: number
+                      answeredCalls:
+                        type: number
+                      unansweredCalls:
+                        type: number
+                      failedCalls:
+                        type: number
+                      pickupRate:
+                        type: number
+                      inProgressCalls:
+                        type: number
+                      inQueueCalls:
+                        type: number
+                      totalDurationMs:
+                        type: number
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /analytics/attempt-cohort:
+    get:
+      operationId: getAttemptCohort
+      summary: Attempt cohort analysis
+      description: Returns cohort analysis of call attempt numbers, showing how pickup rate changes across the 1st, 2nd, 3rd (etc.) attempts to reach the same number, including cumulative rates and marginal gain per additional attempt.
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Comma-separated agent IDs to filter results
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+          description: Campaign ID to filter results
+        - name: callType
+          in: query
+          schema:
+            type: string
+          description: "Type of call to filter (e.g. `inbound`, `outbound`)"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (ISO 8601)
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (ISO 8601)
+      responses:
+        "200":
+          description: Attempt cohort data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      orgId:
+                        type: string
+                      cohorts:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            attemptNumber:
+                              type: number
+                            totalCalls:
+                              type: number
+                            answeredCalls:
+                              type: number
+                            pickupRate:
+                              type: number
+                            cumulativeAnswered:
+                              type: number
+                            cumulativeRate:
+                              type: number
+                            marginalGain:
+                              type: number
+                      totalUniqueNumbers:
+                        type: number
+                      maxAttemptsSeen:
+                        type: number
+                      avgAttemptsToPickup:
+                        type: number
+                      period:
+                        $ref: "./components.yaml#/components/schemas/AnalyticsDateRange"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: API key from the console ApiKey collection, sent as Bearer token. Also accepts session cookies for browser-based auth.
+tags:
+  - name: Analytics
+    description: Analytics and reporting endpoints for call metrics, trends, usage, and dashboard data.

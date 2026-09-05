@@ -1,0 +1,980 @@
+openapi: 3.0.0
+info:
+  title: "Voice Agents API: Phone Numbers and Compliance"
+  version: 1.0.0
+  description: "Part of the Voice Agents (Atoms) API. Shared schemas live in components.yaml."
+servers:
+  - url: https://api.smallest.ai/atoms/v1
+    description: Production server
+paths:
+  /product/phone-numbers:
+    get:
+      summary: Get acquired phone numbers
+      x-fern-sdk-group-name: phone_numbers
+      x-fern-sdk-method-name: list
+      description: |
+        Retrieve all platform-purchased telephony numbers (Twilio/Plivo) for the organization.
+
+        **Note:** Imported SIP numbers added via `POST /product/import-phone-number` are **not** included
+        in this response — they are stored as a separate product type and returned by a different internal call.
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                          description: The unique identifier for the phone number
+                          example: "6867ca76d0f8f2e0f4201281"
+                        productType:
+                          type: string
+                          enum: [telephony]
+                          description: The product type — always `telephony` for numbers returned by this endpoint
+                        isActive:
+                          type: boolean
+                          description: Whether the phone number is active
+                          example: false
+                        agentId:
+                          type: string
+                          nullable: true
+                          description: ID of the agent currently assigned to this number, or null if unassigned
+                        attributes:
+                          type: object
+                          description: Telephony provider attributes for the phone number
+                          properties:
+                            provider:
+                              type: string
+                              enum: [twilio, plivo]
+                              description: The telephony provider
+                              example: "twilio"
+                            phoneNumber:
+                              type: string
+                              description: The actual phone number in E.164 format
+                              example: "+13412184691"
+                            countryCode:
+                              type: string
+                              description: ISO 3166-1 alpha-2 country code of the number
+                              example: "US"
+                            areaCode:
+                              type: string
+                              description: Area code of the number (if applicable)
+                              example: "341"
+                            complianceApplicationId:
+                              type: string
+                              description: Compliance application ID associated with the number (if applicable)
+                        createdAt:
+                          type: string
+                          format: date-time
+                          description: The date and time when the phone number was created
+                          example: "2025-07-04T12:35:02.821Z"
+                        updatedAt:
+                          type: string
+                          format: date-time
+                          description: The date and time when the phone number was last updated
+                          example: "2025-07-07T08:11:35.327Z"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /product/all-numbers:
+    get:
+      summary: List all phone numbers (platform + SIP)
+      description: |
+        Returns every phone number owned by the organization in one response:
+
+        - `telephonyProducts` — numbers rented via the Atoms platform (Plivo / Twilio).
+        - `customProducts` — numbers imported via [`POST /product/import-phone-number`](#operation/importSipPhoneNumber) with your own SIP trunks.
+
+        Use this when you need a single combined view (e.g. a "Pick a number" dropdown). To list only platform-rented numbers, use [`GET /product/phone-numbers`](#operation/getAcquiredPhoneNumbers).
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      telephonyProducts:
+                        type: array
+                        items:
+                          $ref: "./components.yaml#/components/schemas/Product"
+                      customProducts:
+                        type: array
+                        items:
+                          $ref: "./components.yaml#/components/schemas/Product"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /product/get-available-numbers:
+    get:
+      summary: Search rentable phone numbers in inventory
+      x-fern-sdk-group-name: phone_numbers
+      x-fern-sdk-method-name: search_rentable
+      description: |
+        Searches the telephony provider's inventory for available numbers matching the requested country (and optional area code). Returns up to 5 candidates per call.
+
+        Use the returned `phoneNumber` value in [`POST /product/rent-number`](#operation/rentPhoneNumber) to actually rent it.
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: countryCode
+          required: true
+          schema:
+            type: string
+          example: "US"
+          description: ISO 3166-1 alpha-2 country code (e.g. `US`, `IN`, `GB`).
+        - in: query
+          name: provider
+          required: true
+          schema:
+            type: string
+            enum: [twilio, plivo, custom, whatsapp]
+          description: Telephony provider to search.
+        - in: query
+          name: areaCode
+          required: false
+          schema:
+            type: string
+          description: Optional area-code / region filter — provider-dependent (US area codes for plivo/twilio, etc.).
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        phoneNumber:
+                          type: string
+                          description: E.164-style number without the leading `+`. Pass exactly this value to `POST /product/rent-number`.
+                          example: "13183747513"
+                        countryCode:
+                          type: string
+                          example: "US"
+                        provider:
+                          type: string
+                          enum: [twilio, plivo, custom, whatsapp]
+                          example: "plivo"
+                        areaCode:
+                          type: string
+                          description: Region / state / area-code label returned by the provider.
+                          example: "Louisiana"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /product/proration-amount:
+    get:
+      summary: Preview prorated rental cost for renting a phone number today
+      description: |
+        Returns the immediate prorated charge for renting one phone number from today through the end of the current billing cycle, plus the recurring monthly rate. Use this to show a "you'll be charged $X today" preview before calling [`POST /product/rent-number`](#operation/rentPhoneNumber).
+
+        Returns `400` if the organization doesn't have the phone-numbers feature configured (contact support) or if the org is currently locked (e.g. unpaid invoices — call [`GET /product/unpaid-invoices`](#operation/getUnpaidInvoices) first to check).
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      immediateCharge:
+                        type: number
+                        format: float
+                        description: Amount that will be charged today (USD).
+                        example: 5.3
+                      perNumberRecurringAmount:
+                        type: number
+                        format: float
+                        description: Monthly per-number recurring charge after the prorated first period (USD).
+                        example: 10
+                      monthlyRate:
+                        type: number
+                        format: float
+                        example: 10
+                      prorationAmount:
+                        type: number
+                        format: float
+                        example: 5.3
+                      daysRemaining:
+                        type: integer
+                        example: 16
+                      daysInMonth:
+                        type: integer
+                        example: 30
+                      proratedValue:
+                        type: number
+                        format: float
+                        description: Fraction of the month remaining (`daysRemaining / daysInMonth`).
+                        example: 0.53
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /product/rent-number:
+    post:
+      summary: Rent a phone number from the telephony inventory
+      x-fern-sdk-group-name: phone_numbers
+      x-fern-sdk-method-name: rent
+      description: |
+        Rents an available number returned by [`GET /product/get-available-numbers`](#operation/searchAvailablePhoneNumbers). Charges the organization the prorated amount returned by [`GET /product/proration-amount`](#operation/getProrationAmount) immediately, then the monthly rate on each billing cycle.
+
+        Always call `GET /product/proration-amount` first to surface the immediate charge to your customer. The endpoint may return `200` with a body containing `requiresAction: true` when payment requires customer interaction (3-D Secure, etc.) — handle that branch in your client.
+
+        Released later via [`POST /product/release-number`](#operation/releasePhoneNumber).
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phoneNumber, provider]
+              properties:
+                phoneNumber:
+                  type: string
+                  description: The number to rent — exactly as returned by `GET /product/get-available-numbers` (no leading `+`).
+                  example: "13183747513"
+                provider:
+                  type: string
+                  enum: [twilio, plivo, custom, whatsapp]
+      responses:
+        "200":
+          description: Rental processed. Inspect `data.requiresAction` to determine whether the customer needs to complete a payment-method action.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      requiresAction:
+                        type: boolean
+                        description: If `true`, payment requires further customer action (3-D Secure / SCA). Surface the client-secret flow.
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /product/release-number:
+    post:
+      summary: Release a rented phone number
+      x-fern-sdk-group-name: phone_numbers
+      x-fern-sdk-method-name: release
+      description: |
+        Releases a phone number previously rented via `POST /product/rent-number`. The number goes back into provider inventory and recurring charges stop.
+
+        Returns `400` if the number is still assigned to an agent — detach it from the agent first (`PATCH /agent/{agentId}` with `productId: null`).
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId]
+              properties:
+                productId:
+                  type: string
+                  description: 24-char hex MongoDB ObjectId of the phone-number product to release (the `_id` value returned by `GET /product/phone-numbers`).
+                  example: "6969109c84c74bed175f02a7"
+      responses:
+        "200":
+          description: Number released
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+        "400":
+          description: |
+            Number is still assigned to an agent (detach it first), or invalid product ID format.
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /product/manage-subscription:
+    get:
+      summary: Get Stripe Customer Portal URL
+      description: |
+        Returns a time-limited Stripe Customer Portal URL the user can open to manage their subscription (update payment method, view invoices, etc.). Returns an empty object if the organization isn't on a Stripe-backed plan.
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                        format: uri
+                        description: Time-limited Stripe Customer Portal URL. Empty object if not applicable.
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /product/unpaid-invoices:
+    get:
+      summary: Check whether the organization has unpaid invoices
+      description: |
+        Returns whether the org has unpaid invoices that would block destructive actions (renting numbers, etc.). Call this before any billable mutation to surface the "Pay outstanding balance" flow.
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      paymentRequired:
+                        type: boolean
+                        description: When `true`, the org has at least one unpaid invoice. Surface a "Pay balance" CTA before allowing further billable actions.
+                        example: false
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /product/import-phone-number:
+    post:
+      summary: Import a SIP phone number
+      x-fern-sdk-group-name: phone_numbers
+      x-fern-sdk-method-name: import_sip
+      description: |
+        Bring your own SIP trunk by importing an existing phone number with its SIP termination URL.
+        Atoms creates both inbound and outbound SIP trunks so your number works for making and receiving calls through the platform.
+
+        If `name` is omitted, a name is auto-generated from the phone number and user ID.
+      tags:
+        - Phone Numbers
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phoneNumber
+                - sipTerminationUrl
+              properties:
+                phoneNumber:
+                  type: string
+                  description: Your existing phone number. E.164 format is recommended but not enforced server-side — any non-empty string is accepted.
+                  example: "+14155551234"
+                sipTerminationUrl:
+                  type: string
+                  description: Your SIP provider's termination host — a hostname or IP address, optionally with a port (e.g. "sip.your-provider.com:5060"). Full SIP URIs ("sip:" / "sips:") are also accepted and automatically normalized to the bare host.
+                  example: "trunk.your-provider.com"
+                name:
+                  type: string
+                  description: A friendly display name for this number
+                  example: "Main Support Line"
+                sipUsername:
+                  type: string
+                  description: Username for SIP authentication (if your trunk requires it)
+                  example: "my-sip-user"
+                sipPassword:
+                  type: string
+                  description: Password for SIP authentication (if your trunk requires it)
+                  example: "my-sip-password"
+                cpsLimit:
+                  type: number
+                  minimum: 1
+                  maximum: 50
+                  default: 1
+                  description: |
+                    Calls-per-second cap for this imported trunk. Defaults to 1 CPS (the
+                    safe floor for an unknown trunk). Values above 50 are rejected with
+                    `"CPS limit cannot exceed 50"`; values below 1 are rejected with
+                    `"CPS limit must be at least 1"`. Every imported number is always
+                    paced at this rate.
+                  example: 1
+            example:
+              phoneNumber: "+14155551234"
+              sipTerminationUrl: "trunk.your-provider.com"
+              name: "Main Support Line"
+              sipUsername: ""
+              sipPassword: ""
+      responses:
+        "200":
+          description: Phone number imported successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        description: Unique identifier of the created product
+                        example: "507f1f77bcf86cd799439011"
+                      productType:
+                        type: string
+                        enum: [custom]
+                        description: The type of product created — always `custom` for imported SIP numbers
+                        example: "custom"
+                      isActive:
+                        type: boolean
+                        description: Whether the number is active and ready to use
+                        example: true
+                      attributes:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                            description: Display name for the number
+                            example: "Main Support Line"
+                          phoneNumber:
+                            type: string
+                            description: The imported phone number
+                            example: "+14155551234"
+                          outboundSipTrunkId:
+                            type: string
+                            description: Identifier for the outbound SIP trunk created
+                            example: "ST_xxxxxxxxxxxx"
+                          inboundSipTrunkId:
+                            type: string
+                            description: Identifier for the inbound SIP trunk created
+                            example: "ST_xxxxxxxxxxxx"
+                      agentId:
+                        type: string
+                        nullable: true
+                        description: ID of the agent assigned to this number (null if unassigned)
+                        example: null
+                      createdAt:
+                        type: string
+                        format: date-time
+                        description: Timestamp when the product was created
+                        example: "2026-03-16T12:00:00.000Z"
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        description: Timestamp when the product was last updated
+                        example: "2026-03-16T12:00:00.000Z"
+        "400":
+          description: |
+            Bad request — missing required fields or phone number already imported.
+            Exact error when a duplicate number is submitted: `"Number already present"`
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    description: List of validation error messages
+                    example: ["Phone number is required"]
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /compliance/status:
+    get:
+      summary: Get compliance status
+      description: |
+        Returns the current compliance status for a given country, number type, and user type.
+        This is the single endpoint the frontend uses to determine which step to render
+        (form, submitted, accepted, rejected, expired, or suspended).
+      tags:
+        - Compliance
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: countryIso
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+          description: |
+            ISO 3166-1 alpha-2 country code. Must be exactly 2 characters (e.g. "IN", "US"). Sending 3+ characters returns 400.
+          example: "IN"
+        - name: numberType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [local, mobile, tollfree]
+          description: The type of phone number
+          example: "local"
+        - name: userType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [individual, business]
+          description: The type of end user
+          example: "business"
+      responses:
+        "200":
+          description: Compliance status retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      step:
+                        type: string
+                        enum: [form, submitted, accepted, rejected, expired, suspended]
+                        description: |
+                          The current compliance step:
+                          - `form` — no application exists, user should submit one
+                          - `submitted` — application is under review
+                          - `accepted` — approved, user can rent numbers
+                          - `rejected` — rejected, user can resubmit with corrected documents
+                          - `expired` — compliance expired
+                          - `suspended` — compliance suspended
+                        example: "form"
+                      application:
+                        nullable: true
+                        description: The existing compliance application, or null if none exists
+                        $ref: "./components.yaml#/components/schemas/ComplianceApplication"
+                      requiredDocuments:
+                        type: array
+                        description: Document types required for this country/numberType/userType combination
+                        items:
+                          $ref: "./components.yaml#/components/schemas/RequiredDocumentType"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+        "502":
+          description: Bad gateway — Plivo's compliance API returned an error or is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+  /compliance/requirements:
+    get:
+      summary: Get compliance requirements
+      description: |
+        Discover what documents are required for a given country, number type, and user type.
+        Results are cached for 1 hour. Returns an empty `documentTypes` array if no compliance
+        is needed for the given combination.
+      tags:
+        - Compliance
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: countryIso
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+          description: |
+            ISO 3166-1 alpha-2 country code. Must be exactly 2 characters (e.g. "IN", "US"). Sending 3+ characters returns 400.
+          example: "IN"
+        - name: numberType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [local, mobile, tollfree]
+          description: The type of phone number
+          example: "local"
+        - name: userType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [individual, business]
+          description: The type of end user
+          example: "business"
+      responses:
+        "200":
+          description: Requirements retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "./components.yaml#/components/schemas/ComplianceRequirement"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+        "502":
+          description: Bad gateway — Plivo's compliance API returned an error or is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+  /compliance/applications:
+    post:
+      summary: Submit a compliance application
+      x-fern-sdk-group-name: compliance
+      x-fern-sdk-method-name: submit
+      description: |
+        Submit a new compliance application with end-user details and supporting documents.
+        One application is allowed per organization per country per number type per user type.
+
+        The request uses `multipart/form-data` because documents are uploaded inline.
+        The `endUser` and `documents` fields are JSON strings embedded in the form data.
+      tags:
+        - Compliance
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - countryIso
+                - numberType
+                - userType
+                - endUser
+                - documents
+                - files
+              properties:
+                countryIso:
+                  type: string
+                  minLength: 2
+                  maxLength: 2
+                  description: ISO 3166-1 alpha-2 country code
+                  example: "IN"
+                numberType:
+                  type: string
+                  enum: [local, mobile, tollfree]
+                  description: The type of phone number
+                  example: "local"
+                userType:
+                  type: string
+                  enum: [individual, business]
+                  description: The type of end user
+                  example: "business"
+                endUser:
+                  type: string
+                  description: |
+                    JSON-stringified end-user details. `name` is required; all other fields are optional
+                    but may be required by Plivo depending on country/numberType. Accepted fields:
+
+                    - `name` (required) — full name or business name
+                    - `lastName` — last name
+                    - `email` — email address
+                    - `addressLine1` — street address line 1
+                    - `addressLine2` — street address line 2
+                    - `city` — city
+                    - `state` — state or province
+                    - `postalCode` — postal/ZIP code
+                    - `country` — ISO country code; defaults to `countryIso` if omitted
+                    - `registrationNumber` — business registration number (required for some business applications)
+                  example: '{"name":"Acme Corp","email":"legal@acme.com","addressLine1":"123 Main St","city":"Mumbai","state":"MH","postalCode":"400001","country":"IN"}'
+                documents:
+                  type: string
+                  description: |
+                    JSON string containing an array of document metadata. Each entry must have a
+                    `documentTypeId` (from the requirements endpoint) and optional `dataFields`.
+                    Example:
+                    ```json
+                    [{"documentTypeId": "dt_123", "dataFields": {"business_name": "Acme Corp"}}]
+                    ```
+                  example: '[{"documentTypeId": "dt_123", "dataFields": {"business_name": "Acme Corp"}}]'
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: |
+                    Document files in the same order as the `documents` metadata array.
+                    Accepted formats: PDF, JPEG, PNG. Maximum 5 MB per file, up to 10 files.
+      responses:
+        "201":
+          description: Application submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "./components.yaml#/components/schemas/ComplianceApplication"
+        "400":
+          description: Validation error — invalid JSON, unsupported file type, or file count mismatch (`"Expected X files, got Y"`)
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "409":
+          description: |
+            A compliance application already exists for this country/numberType combination.
+            Exact message: `"A compliance application already exists for {countryIso}/{numberType}. Status: {status}"`
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+        "502":
+          description: Bad gateway — Plivo's compliance API returned an error or is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+  /compliance/applications/{id}:
+    patch:
+      summary: Resubmit a rejected compliance application
+      x-fern-sdk-group-name: compliance
+      x-fern-sdk-method-name: resubmit
+      description: |
+        Resubmit a previously rejected compliance application with corrected documents.
+        Only applications in `rejected` status can be resubmitted. All documents must be
+        re-uploaded — partial updates are not supported.
+
+        File/document count must match exactly. Mismatch returns 400 with message `"Expected X files, got Y"`.
+      tags:
+        - Compliance
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The compliance application ID
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - documents
+                - files
+              properties:
+                documents:
+                  type: string
+                  description: |
+                    JSON string containing an array of document metadata. Same format as
+                    the create endpoint.
+                  example: '[{"documentTypeId": "dt_123", "dataFields": {"business_name": "Acme Corp"}}]'
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: |
+                    Replacement document files. Must match the length of the `documents` array.
+                    Accepted formats: PDF, JPEG, PNG. Maximum 5 MB per file.
+      responses:
+        "200":
+          description: Application resubmitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "./components.yaml#/components/schemas/ComplianceApplication"
+        "400":
+          description: Application is not in rejected status, file count mismatch, or other validation error
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Application not found or does not belong to this organization
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+        "502":
+          description: Bad gateway — Plivo's compliance API returned an error or is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+  /compliance/applications/{id}/refresh:
+    post:
+      summary: Refresh compliance application status
+      description: |
+        Manually poll Plivo for the latest status of a compliance application.
+        Use this as a fallback when webhooks are delayed. The frontend enforces a
+        60-second cooldown between refreshes.
+      tags:
+        - Compliance
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The compliance application ID
+      responses:
+        "200":
+          description: Application status refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "./components.yaml#/components/schemas/ComplianceApplication"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Application not found or does not belong to this organization
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+        "502":
+          description: Bad gateway — Plivo's compliance API returned an error or is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: API key from the console ApiKey collection, sent as Bearer token. Also accepts session cookies for browser-based auth.
+tags:
+  - name: Phone Numbers
+    description: Operations related to phone numbers
+  - name: Compliance
+    description: |
+      Regulatory compliance for phone number rentals. Some countries require identity verification
+      and document submission before numbers can be rented. Use these endpoints to check requirements,
+      submit compliance applications, and track approval status.

@@ -1,0 +1,1916 @@
+openapi: 3.0.0
+info:
+  title: "Voice Agents API: Calls and Conversations"
+  version: 1.0.0
+  description: "Part of the Voice Agents (Atoms) API. Shared schemas live in components.yaml."
+servers:
+  - url: https://api.smallest.ai/atoms/v1
+    description: Production server
+paths:
+  /conversation:
+    get:
+      summary: Get all conversation logs
+      x-fern-sdk-group-name: calls
+      x-fern-sdk-method-name: list
+      description: |
+        Retrieve paginated conversation logs with support for various filters. Returns call logs for agents belonging to the authenticated user's organization.
+
+        **To discover new inbound calls, use webhooks instead of polling this endpoint.** Subscribe an agent to the `pre-conversation` webhook event: it fires the moment an inbound call connects and delivers `callId`, `fromPhone`, and `toPhone`, so you get every new call in real time with no polling load. See the [Webhooks guide](/voice-agents/integrate/webhooks). Poll this endpoint only for backfill or reconciliation.
+
+        **If you do poll, use the default sort.** The default query (no `sortBy`) sorts by `updatedAt` descending and is index-backed, so it stays fast even on large accounts. Request the first page and keep the list small: `page=1&limit=N` (optionally `callTypes=telephony_inbound` for inbound only). This returns in well under a second. To detect new calls between polls, track the conversation IDs you have already seen rather than a single timestamp, since the default order is `updatedAt` (a recently-updated older call can move to the top).
+
+        **Avoid `sortBy=createdAt`, `dateFrom`, and `dateTo` on large accounts.** These sort or range-filter on `createdAt`, which is not index-backed for the organization-wide query and forces a full scan of your conversation history. On accounts with a large history this can exceed the gateway timeout and return a 504. Prefer the default `updatedAt` sort above.
+
+        `agentIds` and `campaignIds` accept comma-separated IDs and narrow the result set, but do not pair them with `sortBy=createdAt` or `dateFrom` on large accounts (the `createdAt` sort/filter is the slow part, not the number of agents).
+      tags:
+        - Logs
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+          example: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 5
+            minimum: 1
+            maximum: 500
+          description: Number of items per page. Server-side cap is 500 — values above 500 are silently clamped.
+          example: 10
+        - in: query
+          name: agentIds
+          schema:
+            type: string
+          description: Comma-separated list of agent IDs to filter by
+          example: "60d0fe4f5311236168a109ca,60d0fe4f5311236168a109cb"
+        - in: query
+          name: campaignIds
+          schema:
+            type: string
+          description: Comma-separated list of campaign IDs to filter by
+          example: "60d0fe4f5311236168a109ca,60d0fe4f5311236168a109cb"
+        - in: query
+          name: callTypes
+          schema:
+            type: string
+            enum:
+              - telephony_inbound
+              - telephony_outbound
+              - webcall
+          description: Comma-separated list of call types to filter by
+          example: "telephony_outbound,telephony_inbound"
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Search query to filter by callId, fromNumber, or toNumber
+          example: "+1234567890"
+        - in: query
+          name: statusFilter
+          schema:
+            type: string
+          description: |
+            Comma-separated list of call statuses to filter by.
+            Available statuses: pending, in_progress, in_queue, processing, active, completed, failed, no_answer, cancelled
+          example: "completed,failed"
+        - in: query
+          name: disconnectReasonFilter
+          schema:
+            type: string
+          description: |
+            Comma-separated list of disconnect reasons to filter by.
+            Available reasons: user_hangup, agent_hangup, connection_error, timeout, system_error, transfer_complete
+          example: "user_hangup,agent_hangup"
+        - in: query
+          name: callAttemptFilter
+          schema:
+            type: string
+          description: |
+            Comma-separated list of call attempt types to filter by.
+            Available filters: initial (first attempt calls), retry (retry attempt calls), all (all calls)
+          example: "initial"
+        - in: query
+          name: durationFilter
+          schema:
+            type: string
+          description: |
+            Comma-separated list of duration ranges to filter by.
+            Available ranges: 0-30 (0-30 seconds), 30-60 (30-60 seconds), 1-5 (1-5 minutes), 5+ (more than 5 minutes)
+          example: "0-30,30-60"
+        - in: query
+          name: sortBy
+          required: false
+          schema:
+            type: string
+            enum:
+              - createdAt
+              - updatedAt
+              - callDuration
+              - avgLatency
+          description: Field to sort results by
+        - in: query
+          name: sortOrder
+          required: false
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+          description: Sort direction
+        - in: query
+          name: dateFrom
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: ISO date — return calls created on or after this date
+          example: "2025-01-01T00:00:00.000Z"
+        - in: query
+          name: dateTo
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: ISO date — return calls created on or before this date
+          example: "2025-01-31T23:59:59.999Z"
+        - in: query
+          name: versionFilter
+          required: false
+          schema:
+            type: string
+          description: Comma-separated version IDs to filter calls by the agent version that handled them
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      logs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                              description: The database ID of the call log
+                              example: "60d0fe4f5311236168a109ca"
+                            callId:
+                              type: string
+                              description: The unique call identifier
+                              example: "CALL-1737000000000-abc123"
+                            status:
+                              type: string
+                              description: The status of the call
+                              enum: [pending, in_progress, in_queue, processing, active, completed, failed, no_answer, cancelled]
+                              example: "completed"
+                            duration:
+                              type: number
+                              description: The duration of the call in seconds
+                              example: 120
+                            from:
+                              type: string
+                              description: The phone number the call was made from
+                              example: "+15551234567"
+                            to:
+                              type: string
+                              description: The phone number the call was made to
+                              example: "+15559876543"
+                            type:
+                              type: string
+                              description: The type of call
+                              enum: [telephony_inbound, telephony_outbound, webcall]
+                              example: "telephony_outbound"
+                            agentId:
+                              type: string
+                              description: The ID of the agent that handled the call
+                              example: "60d0fe4f5311236168a109ca"
+                            recordingUrl:
+                              type: string
+                              description: URL to the call recording (if available)
+                              example: "https://storage.example.com/recordings/call-123.mp3"
+                            recordingDualUrl:
+                              type: string
+                              description: URL to the dual-channel call recording (if available)
+                              example: "https://storage.example.com/recordings/call-123-dual.mp3"
+                            disconnectionReason:
+                              type: string
+                              description: The reason the call was disconnected
+                              example: "user_hangup"
+                            retryCount:
+                              type: integer
+                              description: Number of retry attempts for this call
+                              example: 0
+                            createdAt:
+                              type: string
+                              format: date-time
+                              description: When the call was created
+                              example: "2025-01-15T10:30:00.000Z"
+                            dispositionMetrics:
+                              type: object
+                              description: Custom disposition metrics for the call
+                              additionalProperties:
+                                type: string
+                              example:
+                                interested: "yes"
+                                follow_up_needed: "no"
+                            agentDispositionConfig:
+                              type: array
+                              description: Configuration for disposition metrics
+                              items:
+                                type: object
+                                properties:
+                                  identifier:
+                                    type: string
+                                  type:
+                                    type: string
+                            callFailureReason:
+                              type: string
+                              description: Reason the call failed, if applicable
+                            callCost:
+                              type: number
+                              description: Discounted total cost of the call
+                            versionId:
+                              type: string
+                              description: ID of the agent version that handled this call
+                            versionNumber:
+                              type: number
+                              description: Human-readable version number of the agent version used
+                            isTest:
+                              type: boolean
+                              description: Whether this was a test call
+                            retryCallId:
+                              type: string
+                              description: ID of the retry call if this call was retried
+                            retryAttemptNumber:
+                              type: number
+                              description: Which retry attempt this was (0 = initial, 1 = first retry, etc.)
+                            postCallAnalytics:
+                              type: object
+                              description: |
+                                Post-call analytics results evaluated against the call transcript.
+                                Contains disposition metric values with confidence scores.
+                              properties:
+                                summary:
+                                  type: string
+                                  description: Auto-generated summary of the call
+                                dispositionMetrics:
+                                  type: array
+                                  description: Evaluated disposition metrics for this call
+                                  items:
+                                    type: object
+                                    properties:
+                                      identifier:
+                                        type: string
+                                        description: Metric identifier matching the agent config
+                                      value:
+                                        type: string
+                                        description: The evaluated value for this metric
+                                      confidence:
+                                        type: number
+                                        description: Confidence score for the evaluation (0–1)
+                            turnLatencyMetrics:
+                              type: object
+                              description: Per-turn latency statistics for the call
+                              properties:
+                                avgLatency:
+                                  type: number
+                                  description: Average turn latency in milliseconds
+                                medianLatency:
+                                  type: number
+                                  description: Median turn latency in milliseconds
+                                minLatency:
+                                  type: number
+                                  description: Minimum turn latency in milliseconds
+                                maxLatency:
+                                  type: number
+                                  description: Maximum turn latency in milliseconds
+                                turns:
+                                  type: number
+                                  description: Total number of turns in the call
+                                latencies:
+                                  type: array
+                                  items:
+                                    type: number
+                                  description: Array of individual turn latencies in milliseconds
+                                transitions:
+                                  type: array
+                                  description: Per-turn timing breakdown.
+                                  items:
+                                    type: object
+                                    properties:
+                                      turn:
+                                        type: number
+                                      user_end:
+                                        type: number
+                                        description: Timestamp (ms) when the user finished speaking
+                                      bot_start:
+                                        type: number
+                                        description: Timestamp (ms) when the agent started responding
+                                      latency:
+                                        type: number
+                                        description: Latency for this turn in milliseconds
+                                processedAt:
+                                  type: string
+                                  format: date-time
+                                  description: When the latency metrics were computed.
+                      pagination:
+                        type: object
+                        properties:
+                          total:
+                            type: integer
+                            description: Total number of matching call logs
+                            example: 150
+                          page:
+                            type: integer
+                            description: Current page number
+                            example: 1
+                          limit:
+                            type: integer
+                            description: Number of items per page (page size)
+                            example: 10
+                          hasMore:
+                            type: boolean
+                            description: Whether there are more pages available
+                            example: true
+                          totalPages:
+                            type: integer
+                            description: Total number of pages
+                            example: 15
+                      dispositionMetricsConfig:
+                        type: array
+                        description: Global disposition metrics configuration
+                        items:
+                          type: object
+                          properties:
+                            identifier:
+                              type: string
+                            type:
+                              type: string
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /conversation/search:
+    post:
+      summary: Search conversation logs by call IDs
+      x-fern-sdk-group-name: calls
+      x-fern-sdk-method-name: search
+      description: |
+        Fetch specific conversation logs by their callIds. This endpoint allows you to retrieve up to 100 specific calls at once.
+        Only returns calls that belong to agents in your organization (security check enforced).
+        Unlike the GET /conversation endpoint, this endpoint can also return retry calls (non-root calls).
+
+        **Differences from GET /conversation response:** each log item has the same base structure but
+        the following three fields are **not** included here:
+        - `dispositionMetrics` — not enriched
+        - `agentDispositionConfig` — not enriched
+        - `versionNumber` — not enriched
+      tags:
+        - Logs
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - callIds
+              properties:
+                callIds:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 1
+                  maxItems: 100
+                  description: |
+                    Array of callIds to fetch. Format: `CALL-{13-digit-timestamp}-{6-char-hex}`
+                    (e.g. `CALL-1737000000000-abc123`). Minimum 1, maximum 100 per request.
+                  example: ["CALL-1737000000000-abc123", "CALL-1737000000001-def456"]
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      logs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                              description: The database ID of the call log
+                              example: "60d0fe4f5311236168a109ca"
+                            callId:
+                              type: string
+                              description: The unique call identifier
+                              example: "CALL-1737000000000-abc123"
+                            status:
+                              type: string
+                              description: The status of the call
+                              enum: [pending, in_progress, in_queue, processing, active, completed, failed, no_answer, cancelled]
+                              example: "completed"
+                            duration:
+                              type: number
+                              description: The duration of the call in seconds
+                              example: 120
+                            from:
+                              type: string
+                              description: The phone number the call was made from
+                              example: "+15551234567"
+                            to:
+                              type: string
+                              description: The phone number the call was made to
+                              example: "+15559876543"
+                            type:
+                              type: string
+                              description: The type of call
+                              enum: [telephony_inbound, telephony_outbound, webcall]
+                              example: "telephony_outbound"
+                            agentId:
+                              type: string
+                              description: The ID of the agent that handled the call
+                              example: "60d0fe4f5311236168a109ca"
+                            recordingUrl:
+                              type: string
+                              description: URL to the call recording (if available)
+                            recordingDualUrl:
+                              type: string
+                              description: URL to the dual-channel call recording (if available)
+                            disconnectionReason:
+                              type: string
+                              description: The reason the call was disconnected
+                            retryCount:
+                              type: integer
+                              description: Number of retry attempts for this call
+                            createdAt:
+                              type: string
+                              format: date-time
+                              description: When the call was created
+                            callFailureReason:
+                              type: string
+                              description: Reason the call failed, if applicable
+                            callCost:
+                              type: number
+                              description: Discounted total cost of the call
+                            versionId:
+                              type: string
+                              description: ID of the agent version that handled this call
+                            isTest:
+                              type: boolean
+                              description: Whether this was a test call
+                            retryCallId:
+                              type: string
+                              description: ID of the retry call if this call was retried
+                            retryAttemptNumber:
+                              type: number
+                              description: Which retry attempt this was (0 = initial)
+                            postCallAnalytics:
+                              type: object
+                              description: Post-call analytics results evaluated against the call transcript
+                              properties:
+                                summary:
+                                  type: string
+                                dispositionMetrics:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      identifier:
+                                        type: string
+                                      value:
+                                        type: string
+                                      confidence:
+                                        type: number
+                            turnLatencyMetrics:
+                              type: object
+                              description: Per-turn latency statistics for the call
+                              properties:
+                                avgLatency:
+                                  type: number
+                                medianLatency:
+                                  type: number
+                                minLatency:
+                                  type: number
+                                maxLatency:
+                                  type: number
+                                turns:
+                                  type: number
+                                latencies:
+                                  type: array
+                                  items:
+                                    type: number
+                                transitions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      turn:
+                                        type: number
+                                      user_end:
+                                        type: number
+                                      bot_start:
+                                        type: number
+                                      latency:
+                                        type: number
+                                processedAt:
+                                  type: string
+                                  format: date-time
+                      total:
+                        type: integer
+                        description: Number of logs returned
+                        example: 2
+                      requestedCount:
+                        type: integer
+                        description: Number of callIds requested
+                        example: 3
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /conversation/{id}:
+    get:
+      summary: Get conversation log by ID
+      x-fern-sdk-group-name: calls
+      x-fern-sdk-method-name: get
+      description: Retrieve detailed information about a specific conversation including transcript, events, and latency metrics.
+      tags:
+        - Logs
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: The callId of the conversation (format `CALL-{13-digit-timestamp}-{6-char-hex}`). You can get the callId from the conversation logs endpoint.
+          schema:
+            type: string
+          example: "CALL-1737000000000-abc123"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        description: The database ID of the conversation log
+                        example: "60d0fe4f5311236168a109ca"
+                      callId:
+                        type: string
+                        description: The unique call identifier
+                        example: "CALL-1737000000000-abc123"
+                      agent:
+                        $ref: "./components.yaml#/components/schemas/AgentDTO"
+                      status:
+                        type: string
+                        description: The status of the conversation
+                        enum: [pending, in_progress, in_queue, processing, active, completed, failed, no_answer, cancelled]
+                        example: "completed"
+                      duration:
+                        type: number
+                        description: The duration of the conversation in seconds
+                        example: 300
+                      recordingUrl:
+                        type: string
+                        description: The recording URL of the conversation
+                      recordingDualUrl:
+                        type: string
+                        description: URL to the dual-channel recording of the conversation
+                      from:
+                        type: string
+                        description: The phone number of the caller
+                      to:
+                        type: string
+                        description: The phone number of the callee
+                      type:
+                        type: string
+                        description: The type of the conversation
+                        enum:
+                          - telephony_inbound
+                          - telephony_outbound
+                          - webcall
+                      transcript:
+                        type: array
+                        description: The reconstructed transcript of the conversation
+                        items:
+                          type: object
+                          properties:
+                            role:
+                              type: string
+                              enum: [agent, user]
+                              description: Who spoke this turn
+                            content:
+                              type: string
+                              description: The spoken text for this turn
+                            timestamp:
+                              type: string
+                              description: ISO-8601 timestamp of the turn (e.g. 2026-07-28T15:46:12.472Z)
+                      variables:
+                        type: object
+                        description: Runtime variables resolved and used during the call
+                        additionalProperties: true
+                      events:
+                        type: array
+                        description: Raw event stream from the relay service
+                        items:
+                          type: object
+                          additionalProperties: true
+                      callCost:
+                        type: number
+                        description: Discounted total cost of the call
+                      callFailureReason:
+                        type: string
+                        description: Reason the call failed, if applicable
+                      retryCallId:
+                        type: string
+                        description: ID of the retry call if this call was retried
+                      postCallAnalytics:
+                        type: object
+                        description: Post-call analytics results evaluated against the call transcript
+                        properties:
+                          summary:
+                            type: string
+                            description: Auto-generated summary of the call
+                          dispositionMetrics:
+                            type: array
+                            description: Evaluated disposition metrics for this call
+                            items:
+                              type: object
+                              properties:
+                                identifier:
+                                  type: string
+                                  description: Metric identifier matching the agent config
+                                value:
+                                  type: string
+                                  description: The evaluated value for this metric
+                                confidence:
+                                  type: number
+                                  description: Confidence score for the evaluation (0–1)
+                      turnLatencyMetrics:
+                        type: object
+                        description: Per-turn latency statistics for the call. Replaces the deprecated average_*_latency fields.
+                        properties:
+                          turns:
+                            type: number
+                            description: Total number of turns in the call
+                          avgLatency:
+                            type: number
+                            description: Average turn latency in milliseconds
+                          medianLatency:
+                            type: number
+                            description: Median turn latency in milliseconds
+                          minLatency:
+                            type: number
+                            description: Minimum turn latency in milliseconds
+                          maxLatency:
+                            type: number
+                            description: Maximum turn latency in milliseconds
+                          latencies:
+                            type: array
+                            items:
+                              type: number
+                            description: Array of individual turn latencies in milliseconds
+                          transitions:
+                            type: array
+                            description: Per-turn timing breakdown
+                            items:
+                              type: object
+                              properties:
+                                turn:
+                                  type: number
+                                user_end:
+                                  type: number
+                                  description: Timestamp (ms) when the user finished speaking
+                                bot_start:
+                                  type: number
+                                  description: Timestamp (ms) when the agent started responding
+                                latency:
+                                  type: number
+                                  description: Latency for this turn in milliseconds
+                          processedAt:
+                            type: string
+                            format: date-time
+                            description: When the latency metrics were computed
+                      voiceConfigUsed:
+                        type: object
+                        description: The voice configuration that was actually used for this call
+                        properties:
+                          model:
+                            type: string
+                            description: The TTS model used for the call
+                          voiceId:
+                            type: string
+                            description: The voice ID used for the call
+                          gender:
+                            type: string
+                            description: The gender of the voice used for the call
+                      slmModelUsed:
+                        type: string
+                        description: The SLM/LLM model that was actually used for this call
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Conversation log not found — the callId does not exist or does not belong to the caller's organization
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /conversation/{callId}/recording/download-url:
+    get:
+      summary: Get a time-limited recording download URL
+      description: |
+        Returns a presigned S3 URL for the call's recording. Hand the URL straight to the customer or pull bytes server-side. The presigned URL is **time-limited** — typically usable for a few minutes — so don't cache it; request a fresh one each time you need the recording.
+
+        Returns `404` if the call has no recording (call hasn't started, was cancelled before audio captured, or was deleted by the platform's retention policy). Returns `400 Invalid call ID format` if you pass a Mongo `_id` instead of the `callId` string.
+      tags:
+        - Conversations
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: callId
+          required: true
+          schema:
+            type: string
+            pattern: "^CALL-\\d{13}-[a-fA-F0-9]{6}$"
+            example: CALL-1781127346211-e765f7
+          description: The `callId` string for the conversation (e.g. `CALL-1778226705739-7e4c17`). This is the `callId` field returned by `GET /conversation`, not the internal document id.
+      responses:
+        "200":
+          description: Successful response — presigned URL ready to fetch.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      presignedUrl:
+                        type: string
+                        format: uri
+                        description: Time-limited HTTPS URL pointing at the recording in S3. The URL expires after a short window; request a fresh one if needed.
+        "400":
+          description: Invalid call ID format.
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: No recording found for this call.
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /conversation/{callId}/retries:
+    get:
+      summary: List retry attempts for a call
+      x-fern-sdk-group-name: conversations
+      x-fern-sdk-method-name: list_retry_attempts
+      description: |
+        Returns the **parent call** plus every retry attempt that branched from it, ordered by attempt index. Use this when a customer asks "did the platform retry this call?" — typically driven by an outbound agent's auto-retry configuration (`maxRetries`, `retryDelay`).
+
+        - If the `callId` you pass is the original (parent), the response contains that parent plus all child retries.
+        - If the `callId` you pass is itself a retry, the response still includes the parent and every sibling retry — the API resolves to the family root automatically.
+
+        Returns `404` if no call exists with that ID in your organization.
+      tags:
+        - Conversations
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: callId
+          required: true
+          schema:
+            type: string
+          description: Any `callId` in the retry family (parent or any retry).
+      responses:
+        "200":
+          description: Successful response — full retry family.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      retries:
+                        type: array
+                        description: All calls in the retry family — parent first, then retries in attempt order. Each entry has the same shape as a single call log returned by `GET /conversation`.
+                        items:
+                          type: object
+                          description: A call log entry. Mirrors the per-row shape in `GET /conversation`.
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Access denied — the call belongs to a different organization.
+        "404":
+          description: No call exists with that ID.
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /conversation/cancel:
+    post:
+      summary: Cancel an in-flight call
+      x-fern-sdk-group-name: conversations
+      x-fern-sdk-method-name: cancel
+      description: |
+        Cancels an outbound call that has been queued or is in progress. Use the body form to look the call up by `callId`; the path-param form (`POST /conversation/{callId}/cancel`) is the equivalent for REST conventions, but only handles `IN_QUEUE` calls.
+
+        Returns `404` if no call with that ID exists in your organization. Returns `400` if the call is already in a terminal state (completed / failed / cancelled).
+      tags:
+        - Conversations
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [callId]
+              properties:
+                callId:
+                  type: string
+                  description: The `callId` returned by `POST /conversation/outbound` or visible in `GET /conversation`.
+                  example: "CALL-1778226705739-7e4c17"
+                reason:
+                  type: string
+                  description: Optional free-text reason for cancellation. Logged for support / audit.
+      responses:
+        "200":
+          description: Call cancelled.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      callId:
+                        type: string
+                      status:
+                        type: string
+                        example: "cancelled"
+                      previousStatus:
+                        type: string
+                        description: The call's status immediately before cancellation (e.g. `queued`, `ringing`, `in-progress`).
+        "400":
+          description: Call is already in a terminal state and cannot be cancelled.
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: No call found with that callId in your organization.
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /conversation/{callId}/cancel:
+    post:
+      summary: Cancel a queued call (path-param form)
+      x-fern-sdk-group-name: conversations
+      x-fern-sdk-method-name: cancel_queued
+      description: |
+        REST-conventional path-param variant of [`POST /conversation/cancel`](#operation/cancelCallByBody).
+
+        **Behavior differs from the body form.** This path-param endpoint only cancels calls that are still in the `IN_QUEUE` state — calls that have already started dialing or are in progress return `400 Bad Request` with `errors: ["Conversation with ID ... is not in queue and cannot be cancelled"]`. Use the body form (`POST /conversation/cancel`) if you need to cancel an in-progress call.
+
+        The path param is the `callId` string (e.g. `CALL-1778226705739-7e4c17`), **not** the Mongo `_id`. Passing `_id` returns `404 No conversation found`.
+      tags:
+        - Conversations
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: callId
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            example: CALL-1781127346211-e765f7
+          description: The `callId` string for the conversation to cancel.
+      responses:
+        "200":
+          description: Call cancelled.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      callId:
+                        type: string
+                      status:
+                        type: string
+                        example: "cancelled"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: No call found with that callId in your organization.
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /conversation/outbound:
+    post:
+      summary: Start an outbound call
+      x-fern-sdk-group-name: calls
+      x-fern-sdk-method-name: start_outbound_call
+      description: |
+        Initiates an outbound telephony call with a specified agent and phone number.
+
+        ## Caller-ID resolution
+
+        When `fromProductId` is omitted **and** the agent has no telephony
+        product attached, the call dispatches from a Smallest-managed Plivo
+        trunk using a default caller-ID number (chosen by destination
+        country). The call still places and the response is still
+        `200 + conversationId`, but the recipient sees the default Smallest
+        number rather than your own. For production traffic, either:
+
+        - pass `fromProductId` explicitly (look up your owned numbers via
+          `GET /product/phone-numbers`), or
+        - attach a phone-number product to the agent.
+
+        ## Resolved-config check
+
+        The call uses the agent's currently-active version. If your most
+        recent prompt change went through `PATCH /workflow/{workflowId}` and
+        the agent has versioning enabled, that change may not have
+        propagated to the active version — and the call will play the
+        platform-default greeting instead of your prompt. Before placing a
+        production call, fetch `GET /agent/{agentId}` and confirm
+        `_resolvedConfig.firstMessage` (and related fields) match what you
+        intended. The
+        [Versioning Lifecycle](/voice-agents/developer-guide/build/agent-crews/versioning-lifecycle)
+        guide covers the correct edit flow.
+
+        **400 is returned for:**
+        - Invalid `agentId` format (`"Invalid agent id"`)
+        - Invalid `phoneNumber` format (`"Invalid phone number"`)
+        - Invalid `fromProductId` format (`"Invalid product id"`)
+        - Agent not found or not in the caller's org (`"Agent not found"`)
+        - Agent is archived (`"Agent is archived and cannot initiate calls"`)
+        - `workflow_graph` agent has no workflow configured (`"Workflow not found"`)
+        - Workflow has validation errors (`"Invalid workflow, please fix the errors..."`)
+
+        **403** is returned for `workflow_graph` agents when the org lacks conversational agents access.
+
+        **Test calls:** set the `x-test-call: true` header to mark the resulting call log as a test call
+        (`isTest: true`). Test calls are subject to concurrent slot limits.
+      tags:
+        - Calls
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: x-test-call
+          required: false
+          schema:
+            type: string
+            enum: ["true"]
+          description: |
+            Set to "true" to mark this as a test call. The call log will have isTest=true and counts against concurrent test-call slot limits.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - agentId
+                - phoneNumber
+              properties:
+                agentId:
+                  type: string
+                  description: MongoDB ObjectId of the agent initiating the conversation
+                  example: "60d0fe4f5311236168a109ca"
+                phoneNumber:
+                  type: string
+                  description: The E.164 phone number to call
+                  example: "+1234567890"
+                variables:
+                  type: object
+                  description: |
+                    Variables to inject into the agent's prompt at call time.
+                    Values must be string, number, or boolean — nested objects are not supported.
+                  additionalProperties:
+                    oneOf:
+                      - type: string
+                      - type: number
+                      - type: boolean
+                  example: { "name": "John", "age": 30, "vip": true }
+                fromProductId:
+                  type: string
+                  description: ID of the telephony product (phone number) to call from. Get this from `GET /product/phone-numbers`.
+                  example: "60d0fe4f5311236168a109ca"
+                versionId:
+                  type: string
+                  description: |
+                    ID of a specific published agent version to use for this call.
+                    Useful for test calls — attributes the call log to that version so you can track
+                    which version was tested.
+                operatorId:
+                  type: string
+                  description: |
+                    Integration operator identifier. Pass `"webengage"` to trigger the WebEngage
+                    integration flow.
+                operatorData:
+                  type: object
+                  description: Arbitrary data passed to the operator (e.g. `userId`, `journeyId` for WebEngage).
+                  additionalProperties: true
+      responses:
+        "200":
+          description: Successfully started the outbound conversation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      conversationId:
+                        type: string
+                        description: |
+                          The callId of the initiated call (format `CALL-{13-digit-timestamp}-{6-char-hex}`).
+                          Use this value as the `id` path parameter in `GET /conversation/{id}` and as an
+                          entry in `POST /conversation/search`.
+                        example: "CALL-1737000000000-abc123"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "./components.yaml#/components/responses/ForbiddenError"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /events:
+    get:
+      summary: Subscribe to live call events (SSE)
+      x-fern-sdk-group-name: live_transcripts
+      x-fern-sdk-method-name: subscribe_to_live_events
+      description: |
+        Real-time streaming of user speech (STT) and agent speech (TTS) events for an active call via Server-Sent Events.
+
+        The connection is real-time — events stream directly from the call runtime as they are produced. The SSE connection auto-closes when the call ends (`sse_close` event). Only active calls can be subscribed to; completed calls return a 400 error.
+
+        **Transcript event types:**
+
+        - `user_interim_transcription` — Partial, in-progress transcription as the user speaks. Use for live preview only; will be superseded by `user_transcription`.
+        - `user_transcription` — Final transcription for a completed user speech turn.
+        - `tts_completed` — Fired when the agent finishes speaking a TTS segment. Includes the spoken text and optionally TTS latency.
+
+        **Lifecycle events:**
+
+        - `sse_init` — Sent immediately when the SSE connection is established.
+        - `sse_close` — Sent when the call ends, right before the server closes the connection.
+
+        Other event types (e.g. `tool_call_start`, `pre_call_api`, `agent_log`, metrics) are also sent on this stream.
+
+        - `call_start`
+        - `call_end`
+        - `turn_latency`
+        - `metrics`
+        - `agent_node_state`
+        - `hopping`
+        - `knowledgebase`
+        - `variable_extraction`
+        - `pre_call_api`
+        - `post_call_api`
+        - `agent_error`
+        - `agent_log`
+        - `tool_call_start`
+        - `tool_call_end`
+        - `tool_call_error`
+        - `call_cancelled`
+        - `call_recording`
+      tags:
+        - Live Transcripts
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: X-Organization-Id
+          in: header
+          required: false
+          description: Required when using session-cookie auth. API-token auth may infer the organization from the token.
+          schema:
+            type: string
+        - name: callId
+          in: query
+          required: true
+          description: The call ID to subscribe events for. Missing or invalid values return 400.
+          schema:
+            type: string
+            example: "CALL-1758124225863-80752e"
+      x-codeSamples:
+        - lang: Python
+          label: Python requests stream
+          source: |
+            import requests
+
+            url = "https://api.smallest.ai/atoms/v1/events"
+            headers = {
+                "Authorization": "Bearer YOUR_API_KEY",
+                "Accept": "text/event-stream",
+            }
+            params = {"callId": "CALL-1758124225863-80752e"}
+
+            with requests.get(url, headers=headers, params=params, stream=True) as response:
+                response.raise_for_status()
+                for line in response.iter_lines(decode_unicode=True):
+                    if line:
+                        print(line)
+        - lang: JavaScript
+          label: JavaScript fetch stream
+          source: |
+            const response = await fetch(
+              "https://api.smallest.ai/atoms/v1/events?callId=CALL-1758124225863-80752e",
+              {
+                headers: {
+                  Authorization: "Bearer YOUR_API_KEY",
+                  Accept: "text/event-stream",
+                },
+              },
+            );
+
+            if (!response.ok) {
+              throw new Error(`SSE request failed: ${response.status}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              console.log(decoder.decode(value, { stream: true }));
+            }
+
+            // Browser EventSource cannot set custom Authorization headers directly.
+        - lang: Go
+          label: Go stream reader
+          source: |
+            req, err := http.NewRequest("GET", "https://api.smallest.ai/atoms/v1/events?callId=CALL-1758124225863-80752e", nil)
+            if err != nil {
+                panic(err)
+            }
+            req.Header.Set("Authorization", "Bearer YOUR_API_KEY")
+            req.Header.Set("Accept", "text/event-stream")
+
+            resp, err := http.DefaultClient.Do(req)
+            if err != nil {
+                panic(err)
+            }
+            defer resp.Body.Close()
+
+            scanner := bufio.NewScanner(resp.Body)
+            for scanner.Scan() {
+                line := scanner.Text()
+                if line != "" {
+                    fmt.Println(line)
+                }
+            }
+        - lang: Ruby
+          label: Ruby line stream
+          source: |
+            require "net/http"
+            require "uri"
+
+            uri = URI("https://api.smallest.ai/atoms/v1/events?callId=CALL-1758124225863-80752e")
+            request = Net::HTTP::Get.new(uri)
+            request["Authorization"] = "Bearer YOUR_API_KEY"
+            request["Accept"] = "text/event-stream"
+
+            Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) do |http|
+              http.request(request) do |response|
+                response.read_body do |chunk|
+                  puts chunk
+                end
+              end
+            end
+        - lang: PHP
+          label: PHP stream
+          source: |
+            $ch = curl_init("https://api.smallest.ai/atoms/v1/events?callId=CALL-1758124225863-80752e");
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                "Authorization: Bearer YOUR_API_KEY",
+                "Accept: text/event-stream",
+            ]);
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $chunk) {
+                echo $chunk;
+                return strlen($chunk);
+            });
+            curl_exec($ch);
+            curl_close($ch);
+      responses:
+        "200":
+          description: SSE event stream established successfully
+          content:
+            text/event-stream:
+              schema:
+                type: object
+                description: |
+                  Events are sent as `data: <JSON>\n\n`. Forwarded runtime events commonly include
+                  `event_type`, `event_id`, `timestamp`, and `call_id`. `sse_init` and `sse_close`
+                  include `event_type` and `event_time`.
+                properties:
+                  event_type:
+                    type: string
+                    description: The type of event
+                    enum:
+                      - sse_init
+                      - call_start
+                      - call_end
+                      - turn_latency
+                      - user_interim_transcription
+                      - user_transcription
+                      - tts_completed
+                      - metrics
+                      - agent_node_state
+                      - hopping
+                      - knowledgebase
+                      - variable_extraction
+                      - pre_call_api
+                      - post_call_api
+                      - agent_error
+                      - agent_log
+                      - tool_call_start
+                      - tool_call_end
+                      - tool_call_error
+                      - call_cancelled
+                      - call_recording
+                      - sse_close
+                  event_id:
+                    type: string
+                    description: Unique identifier for the event
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: ISO 8601 timestamp of the event
+                  call_id:
+                    type: string
+                    description: The call ID this event belongs to
+                  event_time:
+                    type: string
+                    format: date-time
+                    description: Timestamp used by `sse_init` and `sse_close`
+                  telephony_id:
+                    type: string
+                    description: Telephony ID for `call_start`
+                  metadata:
+                    type: object
+                    additionalProperties: true
+                    description: Metadata for `call_end`, `agent_error`, or `agent_log`
+                  turn_latency:
+                    type: number
+                    description: Turn latency value for `turn_latency`
+                  stt_api_ms:
+                    type: number
+                    description: STT API latency in milliseconds for `turn_latency`
+                  stt_to_llm_ms:
+                    type: number
+                    description: STT-to-LLM latency in milliseconds for `turn_latency`
+                  smart_turn_ms:
+                    type: number
+                    description: Smart-turn latency in milliseconds for `turn_latency`
+                  llm_api_ms:
+                    type: number
+                    description: LLM API latency in milliseconds for `turn_latency`
+                  llm_to_tts_ms:
+                    type: number
+                    description: LLM-to-TTS latency in milliseconds for `turn_latency`
+                  tts_api_ms:
+                    type: number
+                    description: TTS API latency in milliseconds for `turn_latency`
+                  tts_to_audio_ms:
+                    type: number
+                    description: TTS-to-audio latency in milliseconds for `turn_latency`
+                  total_turn_ms:
+                    type: number
+                    description: Total turn latency in milliseconds for `turn_latency`
+                  turn_index:
+                    type: integer
+                    description: Turn index for `turn_latency`
+                  interrupted:
+                    type: boolean
+                    description: Whether the turn was interrupted for `turn_latency`
+                  smart_turn_enabled:
+                    type: boolean
+                    description: Whether smart turn was enabled for `turn_latency`
+                  interim_transcription_text:
+                    type: string
+                    description: Partial transcription text (only for `user_interim_transcription`)
+                  user_transcription_text:
+                    type: string
+                    description: Final transcription text (only for `user_transcription`)
+                  tts_text:
+                    type: string
+                    description: Text spoken by the agent (only for `tts_completed`)
+                  tts_latency:
+                    type: integer
+                    description: TTS latency in milliseconds (only for `tts_completed`)
+                  metrics:
+                    type: array
+                    description: |
+                      Per-turn metrics payload for `metrics` events. Server emits an
+                      **array** of `{processor, model, value}` entries (one per
+                      pipeline stage), not a single object. The SDK previously
+                      dropped every `metrics` SSE event with a pydantic
+                      ValidationError when this was typed as an object (122
+                      events on a 40s call); typing it as an array of objects
+                      fixes the decode.
+                    items:
+                      type: object
+                      properties:
+                        processor:
+                          type: string
+                          description: Pipeline stage that produced the metric (e.g. `pulse_stt`, `electron_llm`, `lightning_tts`).
+                        model:
+                          type: string
+                          description: Concrete model/version identifier within the processor (e.g. `pulse-large english_v4.1`).
+                        value:
+                          type: number
+                          description: Metric value — typically milliseconds for latency metrics.
+                  node_id:
+                    type: string
+                    description: Node ID for `agent_node_state`
+                  node_name:
+                    type: string
+                    description: Node name for `agent_node_state`
+                  node_type:
+                    type: string
+                    description: Node type for `agent_node_state`
+                  context:
+                    type: object
+                    additionalProperties: true
+                    description: Context payload for agent-node and tool-call events
+                  from_node_id:
+                    type: string
+                    description: Source node ID for `hopping`
+                  to_node_id:
+                    type: string
+                    description: Destination node ID for `hopping`
+                  knowledge_base_id:
+                    type: string
+                    description: Knowledge base ID for `knowledgebase`
+                  user_transcript:
+                    type: string
+                    description: User transcript for `knowledgebase`
+                  response:
+                    nullable: true
+                    description: Response payload for knowledgebase, API, or tool-call events
+                  latency:
+                    type: number
+                    description: Latency for `knowledgebase` or `variable_extraction`
+                  error:
+                    nullable: true
+                    description: Error payload for knowledgebase, variable extraction, API, tool, or agent error events
+                  variables:
+                    type: object
+                    additionalProperties: true
+                    description: Variables extracted by `variable_extraction`
+                  variable_extraction_prompt:
+                    type: string
+                    description: Prompt used for `variable_extraction`
+                  method:
+                    type: string
+                    description: HTTP method for `pre_call_api` or `post_call_api`
+                  headers:
+                    type: object
+                    additionalProperties: true
+                    description: Headers for `pre_call_api` or `post_call_api`
+                  body:
+                    nullable: true
+                    description: Body for `pre_call_api` or `post_call_api`
+                  timeout:
+                    type: number
+                    description: Timeout for `pre_call_api` or `post_call_api`
+                  extracted_variables:
+                    type: object
+                    additionalProperties: true
+                    description: Extracted variables for `pre_call_api` or `post_call_api`
+                  next_node_id:
+                    type: string
+                    description: Next node ID for `pre_call_api` or `post_call_api`
+                  success:
+                    type: boolean
+                    description: Success status for API and tool-call events
+                  turn_id:
+                    type: string
+                    description: Turn ID for tool-call events
+                  tool_call_id:
+                    type: string
+                    description: Tool call ID for tool-call events
+                  function_name:
+                    type: string
+                    description: Function name for tool-call events
+                  latency_ms:
+                    type: number
+                    description: Latency in milliseconds for `tool_call_end`
+                  recording_url:
+                    type: string
+                    description: Recording URL for `call_recording`
+                  status:
+                    type: string
+                    description: Recording status for `call_recording`
+              examples:
+                sse_init:
+                  summary: SSE connection initialized
+                  value:
+                    event_type: sse_init
+                    event_time: "2026-03-02T10:00:00.000Z"
+                call_start:
+                  summary: Call started
+                  value:
+                    event_type: call_start
+                    event_id: evt_call_start
+                    timestamp: "2026-03-02T10:00:00.100Z"
+                    call_id: "CALL-1758124225863-80752e"
+                    telephony_id: tel_abc123
+                user_interim_transcription:
+                  summary: Partial user speech
+                  value:
+                    event_type: user_interim_transcription
+                    event_id: evt_abc123
+                    timestamp: "2026-03-02T10:00:01.123Z"
+                    call_id: "CALL-1758124225863-80752e"
+                    interim_transcription_text: "I wanted to ask about my"
+                user_transcription:
+                  summary: Final user speech
+                  value:
+                    event_type: user_transcription
+                    event_id: evt_abc456
+                    timestamp: "2026-03-02T10:00:02.456Z"
+                    call_id: "CALL-1758124225863-80752e"
+                    user_transcription_text: "I wanted to ask about my recent order"
+                tts_completed:
+                  summary: Agent finished speaking
+                  value:
+                    event_type: tts_completed
+                    event_id: evt_abc789
+                    timestamp: "2026-03-02T10:00:03.789Z"
+                    call_id: "CALL-1758124225863-80752e"
+                    tts_latency: 245
+                    tts_text: "Sure, I can help you with your recent order. Could you provide your order number?"
+                tool_call_end:
+                  summary: Tool call completed
+                  value:
+                    event_type: tool_call_end
+                    event_id: evt_tool_end
+                    timestamp: "2026-03-02T10:00:04.100Z"
+                    call_id: "CALL-1758124225863-80752e"
+                    turn_id: turn_123
+                    tool_call_id: tool_456
+                    function_name: lookup_order
+                    latency_ms: 180
+                    success: true
+                    response:
+                      status: found
+                call_recording:
+                  summary: Recording available
+                  value:
+                    event_type: call_recording
+                    event_id: evt_recording
+                    timestamp: "2026-03-02T10:04:59.000Z"
+                    call_id: "CALL-1758124225863-80752e"
+                    recording_url: "https://example.com/recordings/CALL-1758124225863-80752e.wav"
+                    status: available
+                sse_close:
+                  summary: Stream closed after call_end
+                  value:
+                    event_type: sse_close
+                    event_time: "2026-03-02T10:05:00.000Z"
+        "400":
+          description: Missing or invalid `callId`, missing or invalid organization header, or call is already completed.
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+        "401":
+          description: Missing or invalid bearer token or session.
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/UnauthorizedErrorResponse"
+        "403":
+          description: User is not a member of the organization or does not have member access.
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+        "404":
+          description: Organization not found, call log not found, or agent not found/org mismatch.
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+        "500":
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/InternalServerErrorResponse"
+  /call-actions:
+    post:
+      operationId: createCallAction
+      summary: Create a call action
+      description: |
+        Creates a new call action for an agent. Call actions define automated behaviors that fire at specific points in a call lifecycle.
+
+        - **`trigger`** actions fire to initiate an outbound call and require `config.phoneNumberFieldName`.
+        - **`post-call`** actions fire after a call ends (e.g. to update a CRM record).
+      tags:
+        - Call Actions
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agentId, category, provider, config]
+              properties:
+                agentId:
+                  type: string
+                  description: Agent this action belongs to (ObjectId)
+                category:
+                  type: string
+                  enum: [trigger, post-call]
+                  description: When the action fires
+                provider:
+                  type: string
+                  description: "Integration provider (e.g. `hubspot`, `salesforce`)"
+                action_type:
+                  type: string
+                  enum: [create, update]
+                  description: The operation to perform on the provider object
+                object:
+                  type: string
+                  description: "Provider object type to act on (e.g. `contact`, `deal`)"
+                config:
+                  type: object
+                  required: []
+                  properties:
+                    phoneNumberFieldName:
+                      type: string
+                      description: "Provider field name that contains the phone number. Required when `category` is `trigger`."
+                    conditions:
+                      type: array
+                      description: Filter conditions — action only fires when all conditions match
+                      items:
+                        $ref: "./components.yaml#/components/schemas/CallActionCondition"
+                    body:
+                      type: string
+                      description: Request body template or payload for the provider action
+      responses:
+        "201":
+          description: Call action created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "./components.yaml#/components/schemas/CallAction"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+    get:
+      operationId: listCallActions
+      summary: List call actions
+      description: Returns a paginated list of call actions for the organization, filtered by agent. Optionally filter by category or provider.
+      tags:
+        - Call Actions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Filter by agent (ObjectId)
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number (default 1)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Records per page (default 10)
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [trigger, post-call]
+          description: Filter by category
+        - name: provider
+          in: query
+          schema:
+            type: string
+          description: Filter by provider name
+      responses:
+        "200":
+          description: Paginated list of call actions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      callActions:
+                        type: array
+                        items:
+                          $ref: "./components.yaml#/components/schemas/CallAction"
+                      totalCount:
+                        type: number
+                      page:
+                        type: number
+                      limit:
+                        type: number
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /call-actions/{id}:
+    get:
+      operationId: getCallAction
+      summary: Get a call action
+      description: Returns a single call action by ID. Scoped to the authenticated organization.
+      tags:
+        - Call Actions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Call action ObjectId
+      responses:
+        "200":
+          description: Call action
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "./components.yaml#/components/schemas/CallAction"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Call action not found
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+    put:
+      operationId: updateCallAction
+      summary: Update a call action
+      description: Updates an existing call action. All body fields are optional — only provided fields are updated.
+      tags:
+        - Call Actions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Call action ObjectId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category:
+                  type: string
+                  enum: [trigger, post-call]
+                  description: Change when the action fires
+                provider:
+                  type: string
+                  description: Change the integration provider
+                action_type:
+                  type: string
+                  enum: [create, update]
+                  description: Change the operation type
+                object:
+                  type: string
+                  description: Change the provider object type
+                config:
+                  type: object
+                  properties:
+                    phoneNumberFieldName:
+                      type: string
+                      description: Update the phone number field mapping
+                    conditions:
+                      type: array
+                      description: Replace the full conditions array
+                      items:
+                        $ref: "./components.yaml#/components/schemas/CallActionCondition"
+                    body:
+                      type: string
+                      description: Update the payload body
+      responses:
+        "200":
+          description: Updated call action
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "./components.yaml#/components/schemas/CallAction"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Call action not found
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+    delete:
+      operationId: deleteCallAction
+      summary: Delete a call action
+      description: Permanently deletes a call action. Scoped to the authenticated organization.
+      tags:
+        - Call Actions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Call action ObjectId
+      responses:
+        "200":
+          description: Call action deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Call action deleted successfully
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Call action not found
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /disposition-metric-templates:
+    get:
+      operationId: listDispositionMetricTemplates
+      summary: List disposition metric templates
+      description: |
+        Returns all available disposition metric templates. These reusable definitions are used to populate the post-call analytics metric picker when configuring an agent's `postCallAnalyticsConfig`. Only a user token is required — no organization context needed.
+      tags:
+        - Disposition Metric Templates
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Array of disposition metric templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        identifier:
+                          type: string
+                          description: Unique snake_case key (lowercase letters, digits, and underscores only)
+                          example: call_resolved
+                        dispositionMetricPrompt:
+                          type: string
+                          description: AI prompt used to extract this metric from the call transcript
+                        dispositionMetricType:
+                          type: string
+                          enum: [STRING, BOOLEAN, INTEGER, ENUM, DATETIME]
+                          description: |
+                            How the extracted value is interpreted:
+                            - `STRING` — free-text output
+                            - `BOOLEAN` — true/false outcome
+                            - `INTEGER` — whole number value
+                            - `ENUM` — one of a predefined set of choices
+                            - `DATETIME` — a date/time value
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: API key from the console ApiKey collection, sent as Bearer token. Also accepts session cookies for browser-based auth.
+tags:
+  - name: Logs
+    description: Operations related to conversation logs, call history, and recordings. Supports filtering by agents, campaigns, call IDs, status, duration, and more.
+  - name: Calls
+    description: Operations related to initiating and managing calls
+  - name: Live Transcripts
+    description: Real-time streaming of call transcript events via Server-Sent Events (SSE). Subscribe to an active call to receive user speech, agent speech, and lifecycle events in real time.
+  - name: Call Actions
+    description: Automated behaviors that fire at specific points in the call lifecycle — trigger actions initiate outbound calls, post-call actions update CRM records after a call ends.
+  - name: Disposition Metric Templates
+    description: Reusable post-call analytics metric definitions. Each template specifies an identifier, an AI extraction prompt, and a value type (STRING, BOOLEAN, INTEGER, ENUM, DATETIME).

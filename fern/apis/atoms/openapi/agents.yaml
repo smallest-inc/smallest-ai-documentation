@@ -1,0 +1,1807 @@
+openapi: 3.0.0
+info:
+  title: "Voice Agents API: Agents"
+  version: 1.0.0
+  description: "Part of the Voice Agents (Atoms) API. Shared schemas live in components.yaml."
+servers:
+  - url: https://api.smallest.ai/atoms/v1
+    description: Production server
+paths:
+  /agent/template:
+    get:
+      summary: Get agent templates
+      x-fern-sdk-group-name: agent_templates
+      x-fern-sdk-method-name: list_agent_templates
+      tags:
+        - Agent Templates
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: region
+          in: query
+          required: false
+          description: Filter templates by region. Omit to return all templates.
+          schema:
+            type: string
+            enum:
+              - us
+              - in
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                          description: Stable unique identifier for the template (24-character hex string, e.g. `6942a64ac74fc65e7bc94e47`). Surfaced as `object_id` in the generated SDK to keep it distinct from the human-readable `id` slug.
+                          x-fern-property-name: object_id
+                        id:
+                          type: string
+                          description: Human-readable slug for the agent template (e.g. `sp-medical-centre-receptionist-in`). Distinct from `_id`.
+                        name:
+                          type: string
+                          description: The name of the agent template
+                        description:
+                          type: string
+                          description: The description of the agent template
+                        avatarUrl:
+                          type: string
+                          description: The avatar URL of the agent template
+                        referenceUrl:
+                          type: string
+                          description: The docs URL of the agent template
+                        industry:
+                          type: string
+                          description: The industry the template is designed for (e.g. "Finance", "Healthcare")
+                        useCase:
+                          type: string
+                          description: The use case the template addresses (e.g. "Lead Generation")
+                        callType:
+                          type: string
+                          description: The type of calls the template handles
+                          enum:
+                            - Inbound
+                            - Outbound
+                            - Both
+                        workflowType:
+                          type: string
+                          description: The workflow architecture of the template
+                          enum:
+                            - SINGLE_PROMPT
+                            - WORKFLOW_GRAPH
+                        region:
+                          type: string
+                          description: Human-readable region the template is available in
+                          enum:
+                            - India
+                            - US
+                        trending:
+                          type: boolean
+                          description: Whether the template is featured or trending
+                        defaultLanguage:
+                          type: string
+                          description: The default language configured in the template
+                          enum:
+                            - English
+                            - Hindi
+                            - Marathi
+                            - Gujarati
+                        singlePromptConfig:
+                          type: object
+                          description: Configuration for single-prompt agents
+                          properties:
+                            _id:
+                              type: string
+                              description: Auto-generated unique identifier for the embedded single-prompt config (24-character hex string). Always present when `singlePromptConfig` is set. Surfaced as `object_id` in the generated SDK.
+                              x-fern-property-name: object_id
+                            prompt:
+                              type: string
+                              description: The system prompt used by the agent
+                            tools:
+                              type: array
+                              description: Tools available to the agent
+                              items:
+                                type: object
+                                properties:
+                                  type:
+                                    type: string
+                                    description: The tool type — drives runtime dispatch.
+                                    enum:
+                                      - end_call
+                                      - transfer_call
+                                      - api_call
+                                      - extract_dynamic_variables
+                                      - knowledge_base_search
+                                  name:
+                                    type: string
+                                    description: The name of the tool
+                                  description:
+                                    type: string
+                                    description: What the tool does
+                                  input_schema:
+                                    type: object
+                                    description: JSON Schema describing the tool's input parameters
+
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /agent/from-template:
+    post:
+      summary: Create agent from template
+      tags:
+        - Agent Templates
+      security:
+        - BearerAuth: []
+      description: We have created templates for some common use cases. You can use these templates to create an agent. For getting list of templates, you can use the /agent/template endpoint. It will give you the list of templates with their description and id. You can pass the id of the template in the request body to create an agent from the template.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./components.yaml#/components/schemas/CreateAgentFromTemplateRequest"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: string
+                    example: "60d0fe4f5311236168a109ca"
+                    description: The ID of the created agent
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /agent:
+    post:
+      summary: Create a new agent
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: create_agent
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      description: |
+        Create a new agent by passing the agent name in the request body.
+
+        New agents have versioning enabled by default. To set the prompt,
+        `firstMessage`, tools, or any runtime config, fork a draft from the
+        auto-created initial version, edit it, publish, and activate — see
+        the [Versioning Lifecycle](/voice-agents/developer-guide/build/agent-crews/versioning-lifecycle)
+        guide for the full flow.
+
+        The legacy `PATCH /workflow/{workflowId}` endpoint writes directly to
+        the underlying workflow document and bypasses the version lifecycle;
+        edits made that way are not captured as a version and may not
+        propagate to live calls. Use the drafts flow above.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./components.yaml#/components/schemas/CreateAgentRequest"
+      responses:
+        "201":
+          description: Agent created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: string
+                    example: "60d0fe4f5311236168a109ca"
+                    description: The ID of the created agent
+
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "./components.yaml#/components/responses/ForbiddenError"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+
+    get:
+      summary: Get all agents
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: list_agents
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      description: Agents are the main entities in the system. Agents are used to create conversations. You can create workflow for an agent and configure it for different use cases. You can also create custom workflows for an agent. This API will give you the list of agents created by organization you are a part of.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+            description: Page number
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 10
+            description: Number of items to return per page
+        - in: query
+          name: search
+          schema:
+            type: string
+            description: Search query
+        - in: query
+          name: type
+          required: false
+          schema:
+            type: string
+            enum:
+              - single_prompt
+              - workflow_graph
+          description: Filter agents by workflow type
+        - in: query
+          name: sortField
+          required: false
+          schema:
+            type: string
+            default: createdAt
+            enum:
+              - createdAt
+              - updatedAt
+              - totalCalls
+              - name
+              - workflowType
+          description: Field to sort results by
+        - in: query
+          name: sortOrder
+          required: false
+          schema:
+            type: string
+            default: desc
+            enum:
+              - asc
+              - desc
+          description: Sort direction
+        - in: query
+          name: archived
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: When true, returns only archived agents. Omit or set to false to return active agents.
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      agents:
+                        type: array
+                        items:
+                          $ref: "./components.yaml#/components/schemas/AgentDTO"
+                      total:
+                        type: number
+                        description: Total number of agents
+
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "./components.yaml#/components/responses/ForbiddenError"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /agent/with-ai:
+    post:
+      operationId: createAgentWithAi
+      summary: Create agent with AI
+      x-fern-ignore: true
+      description: |
+        Creates a new agent using AI generation. Accepts either a guided questionnaire (array of Q&A pairs) or a free-text description. The AI generates the agent's prompt and configuration. A security check is run on the generated prompt before the agent is persisted. Deducts credits on success.
+
+        **Rules:**
+        - Either `questions` (non-empty array) or `description` must be provided — not both.
+        - `emotiveToggle`, `voiceId`, and `voiceModel` must either all be present or all be absent.
+        - When `emotiveToggle=true`, `voiceModel` must be `GPT_REALTIME`.
+        - When `emotiveToggle=false`, `voiceModel` cannot be `GPT_REALTIME`.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 50
+                  description: Agent name. Auto-generated if omitted.
+                description:
+                  type: string
+                  maxLength: 15000
+                  description: Free-text description. Required if `questions` not given.
+                questions:
+                  type: array
+                  description: Guided Q&A pairs. Required if `description` not given.
+                  items:
+                    type: object
+                    required: [question, answer]
+                    properties:
+                      question:
+                        type: string
+                        minLength: 1
+                        maxLength: 2000
+                      answer:
+                        type: string
+                        minLength: 50
+                        maxLength: 15000
+                type:
+                  type: string
+                  enum: [single_prompt]
+                  description: Workflow type. Only `single_prompt` is supported.
+                emotiveToggle:
+                  type: boolean
+                  description: Enable emotive (GPT Realtime) mode. Must be given with `voiceId` and `voiceModel`.
+                voiceId:
+                  type: string
+                  description: Voice ID. Must be given together with `emotiveToggle` and `voiceModel`.
+                voiceModel:
+                  type: string
+                  description: Voice model. Must be given together with `emotiveToggle` and `voiceId`.
+                knowledgeBaseId:
+                  type: string
+                  description: Knowledge base to attach (must belong to the organization).
+      responses:
+        "201":
+          description: Agent created — returns the new agent's ObjectId
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: string
+                    description: MongoDB ObjectId of the created agent
+        "400":
+          description: Invalid request body, or the generated prompt failed the security check
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Organization lacks access to the requested workflow type or model (WORKFLOW_GRAPH, GPT 5.2, Electron Kogta)
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/ApiResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+        "503":
+          description: Security check service temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/ApiResponse"
+  /agent/{id}/duplicate:
+    post:
+      summary: Duplicate agent to another organization
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: duplicate_agent
+      description: |
+        Duplicates a SINGLE_PROMPT agent's live active version into a target organization
+        (can also be the same organization). Copies all versioned configuration but strips
+        organization-specific resources: knowledge base tools are removed, default variable
+        values are blanked, and a new avatar is generated. The duplicate starts with a
+        published V1 as its active version.
+
+        **400 is returned when:**
+        - The source agent is archived (`"Cannot duplicate an archived agent"`)
+        - The agent has no `activeVersionId` (`"This agent has no active version and cannot be duplicated"`)
+        - The active version exists but is not published/active (`"This agent has no active published version and cannot be duplicated"`)
+        - The agent is not `SINGLE_PROMPT` workflow type
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The ID of the source agent to duplicate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - targetOrganizationId
+              properties:
+                targetOrganizationId:
+                  type: string
+                  pattern: "^[a-fA-F0-9]{24}$"
+                  description: |
+                    MongoDB ObjectId of the target organization. Must be a 24-character hex string.
+                    The authenticated user must be a member of this organization.
+                  example: "60d0fe4f5311236168a109ca"
+      responses:
+        "201":
+          description: Agent duplicated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        example: "60d0fe4f5311236168a109cb"
+                        description: The ID of the newly created agent
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Forbidden — authenticated user is not a member of the target organization
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+        "404":
+          description: |
+            Not found. Possible messages:
+            - `"Agent not found"` — source agent doesn't exist or doesn't belong to the caller's org
+            - `"Target organization not found"` — the `targetOrganizationId` doesn't exist
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+
+  # ── Deprecated: Workflow endpoints (still live) ────────────────────────
+  # Both still work in production and are actively used by customers, but
+  # they bypass the versioning system. Prefer PATCH /agent/{id}/drafts/{draftId}/config
+  # for writes and GET /agent/{id} for reads.
+  /agent/{id}:
+    get:
+      summary: Get agent by ID
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: get_agent
+      description: |
+        Returns the agent document merged with the resolved config of the active version
+        under `_resolvedConfig`. Non-versioned fields (name, telephonyProductId, allowInboundCall,
+        etc.) sit at the top level; versioned fields (prompt, tools, language, synthesizer,
+        post-call analytics, …) are resolved from the target version and exposed under `_resolvedConfig`.
+
+        **Previewing a draft or specific version**
+
+        Pass `?draftId=<id>` to resolve config from a specific draft instead of the active version.
+        Pass `?versionId=<id>` to resolve config from a specific published version.
+        When either param is used, the response includes `_configSource: "draft" | "version" | "active"`
+        indicating which config was resolved.
+
+        Notable resolved fields in `_resolvedConfig`:
+
+        - `prompt` — active version's single-prompt text
+        - `tools` — configured tools on the resolved version
+        - `postCallAnalyticsConfig` — disposition metrics + analytics model flags
+        - `modelName` — LLM model name on the resolved version
+        - `defaultLanguage`, `supportedLanguages` — active language config
+        - `firstMessage`, `globalPrompt` — active messaging config
+        - `workflowGraph` — full node graph for `workflow_graph` agents
+
+        To read prompt + tools alone, use `GET /agent/{id}/workflow` (deprecated for
+        new integrations but still live). To inspect a specific non-active version,
+        use `GET /agent/{id}/versions/{versionId}`.
+
+        **400 — also used for "not found":** if the agent ID does not exist in the
+        organization, the API returns 400 with `errors: ["No agent found"]` rather than 404.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            description: |
+              Agent identifier (Mongo ObjectId string). Must be non-empty.
+              An empty `id` would resolve to `GET /agent/`, which is the list
+              endpoint — Fern adds the `minLength: 1` guard so the generated
+              SDK raises locally rather than silently calling the wrong route.
+        - in: query
+          name: draftId
+          required: false
+          schema:
+            type: string
+          description: Resolve `_resolvedConfig` from this draft instead of the active version. Sets `_configSource` to `"draft"` in the response.
+        - in: query
+          name: versionId
+          required: false
+          schema:
+            type: string
+          description: Resolve `_resolvedConfig` from this published version instead of the active version. Sets `_configSource` to `"version"` in the response.
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "./components.yaml#/components/schemas/AgentDTO"
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "./components.yaml#/components/responses/ForbiddenError"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+    patch:
+      summary: Update agent metadata
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: update_agent
+      description: |
+        Update agent fields. Behavior depends on whether the agent has versioning enabled:
+
+        **Versioned agents** (have an active published version): only metadata fields are accepted —
+        `name`, `description`, `avatarUrl`, `telephonyProductId`, `allowInboundCall`, `visibleToEveryone`.
+        Submitting any config-level field returns 400 with
+        `"Agent has versioning enabled. Config changes must be made through drafts."`.
+        Use `PATCH /agent/{id}/drafts/{draftId}/config` instead.
+
+        **Non-versioned agents** (no active version): all configuration fields are accepted,
+        the same full set as `POST /agent`.
+
+        **400 is also returned when a cross-field constraint is violated** (for example, `north_indic` language requires `transcriberType: pulse`).
+
+        **403** is returned when selecting a gated model (`gpt-5.2`, `electron-kogta`, `electron-kogta-v2`)
+        without org-level access.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./components.yaml#/components/schemas/UpdateAgentRequest"
+      responses:
+        "200":
+          description: Agent updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: string
+                    example: "60d0fe4f5311236168a109ca"
+                    description: The ID of the updated agent
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "./components.yaml#/components/responses/ForbiddenError"
+        "404":
+          description: Agent not found
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /agent/prompt-config:
+    get:
+      operationId: getAgentPromptConfig
+      summary: Get AI creation questionnaire config
+      x-fern-ignore: true
+      description: |
+        Returns the questionnaire configuration used by the "Create with AI" flow — the list of guided questions, their types, available options, and pre-filled example answers per label. Only a user token is required; no organization auth needed.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Questionnaire configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      questions:
+                        type: array
+                        description: Ordered list of questions shown in the agent creation wizard
+                        items:
+                          type: object
+                          properties:
+                            text:
+                              type: string
+                            type:
+                              type: string
+                              description: "Question input type (e.g. `text`, `select`)"
+                            options:
+                              type: array
+                              items:
+                                type: string
+                            examples:
+                              type: object
+                              description: Pre-filled sample answers keyed by label. `"default"` is always present.
+                              additionalProperties:
+                                type: string
+                      exampleLabels:
+                        type: array
+                        description: Labels other than `"default"` that example answer sets exist for
+                        items:
+                          type: string
+                      defaultLabel:
+                        type: string
+                        example: default
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /agent/{id}/widget-config:
+    get:
+      operationId: getAgentWidgetConfig
+      summary: Get widget configuration
+      description: Returns the current web widget configuration for the agent. Also includes `assistantId` (same as the agent ID) as a convenience field for the widget embed code.
+      tags:
+        - Widget
+      deprecated: true
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Agent ObjectId
+      responses:
+        "200":
+          description: Widget configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: All fields may be absent if not yet configured
+                    properties:
+                      assistantId:
+                        type: string
+                        description: Same as the agent ID. Convenience field for the widget embed code
+                      position:
+                        type: string
+                        enum: [bottom-right, bottom-left, top-right, top-left]
+                      size:
+                        type: string
+                        enum: [tiny, compact, full]
+                      borderRadius:
+                        type: number
+                      mode:
+                        type: string
+                        enum: [chat, voice]
+                      theme:
+                        type: string
+                        enum: [light, dark]
+                      baseColor:
+                        type: string
+                      accentColor:
+                        type: string
+                      title:
+                        type: string
+                      startButtonText:
+                        type: string
+                      endButtonText:
+                        type: string
+                      avatarUrl:
+                        type: string
+                        nullable: true
+                      voiceShowTranscript:
+                        type: boolean
+                      consentRequired:
+                        type: boolean
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Agent not found
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+    patch:
+      operationId: updateAgentWidgetConfig
+      summary: Update widget configuration
+      description: |
+        Updates the web widget configuration for the agent. Only provided fields are updated (partial update). When `avatarUrl` is changed, the old CDN avatar is automatically deleted from S3. The `avatarUrl` must be a URL from the platform's CDN domain. Use `POST /agent/{id}/avatar/presigned-url` to upload first.
+      tags:
+        - Widget
+      deprecated: true
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Agent ObjectId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                widgetConfig:
+                  type: object
+                  description: All fields are optional (only provided fields are updated)
+                  properties:
+                    position:
+                      type: string
+                      enum: [bottom-right, bottom-left, top-right, top-left]
+                    size:
+                      type: string
+                      enum: [tiny, compact, full]
+                    borderRadius:
+                      type: number
+                      minimum: 0
+                      maximum: 50
+                    mode:
+                      type: string
+                      enum: [chat, voice]
+                    theme:
+                      type: string
+                      enum: [light, dark]
+                    baseColor:
+                      type: string
+                    accentColor:
+                      type: string
+                    agentBubbleColor:
+                      type: string
+                    textOnAccentColor:
+                      type: string
+                    secondaryTextColor:
+                      type: string
+                    primaryTextColor:
+                      type: string
+                    title:
+                      type: string
+                    startButtonText:
+                      type: string
+                    endButtonText:
+                      type: string
+                    ctaTitle:
+                      type: string
+                      nullable: true
+                    ctaSubtitle:
+                      type: string
+                      nullable: true
+                    ctaName:
+                      type: string
+                      nullable: true
+                    widgetName:
+                      type: string
+                      nullable: true
+                    avatarUrl:
+                      type: string
+                      nullable: true
+                      description: Must be a platform CDN URL. Use `POST /agent/{id}/avatar/presigned-url` to obtain one.
+                    voiceEmptyMessage:
+                      type: string
+                      nullable: true
+                    voiceActiveEmptyMessage:
+                      type: string
+                      nullable: true
+                    chatEmptyMessage:
+                      type: string
+                      nullable: true
+                    chatFirstMessage:
+                      type: string
+                      nullable: true
+                    chatPlaceholder:
+                      type: string
+                    voiceShowTranscript:
+                      type: boolean
+                    consentRequired:
+                      type: boolean
+                    consentTitle:
+                      type: string
+                    consentContent:
+                      type: string
+                    consentStorageKey:
+                      type: string
+                      nullable: true
+                    publicKey:
+                      type: string
+                    allowlist:
+                      type: array
+                      items:
+                        type: string
+      responses:
+        "200":
+          description: Updated widget configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: The updated widgetConfig object
+        "400":
+          description: Invalid agent ID or `avatarUrl` is not a valid CDN URL
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Agent not found
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /agent/{id}/avatar/presigned-url:
+    post:
+      operationId: getAgentAvatarPresignedUrl
+      summary: Get avatar upload URL
+      description: |
+        Generates a pre-signed S3 upload URL for the agent's widget avatar image. Upload the image directly to S3 using the returned `presignedUrl`, then save `cdnUrl` as the agent's avatar via `PATCH /agent/{id}/widget-config`.
+      tags:
+        - Widget
+      deprecated: true
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Agent ObjectId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, contentType, fileSize]
+              properties:
+                fileName:
+                  type: string
+                  description: Original file name (used to construct the S3 key)
+                contentType:
+                  type: string
+                  description: "MIME type. Must start with `image/`"
+                fileSize:
+                  type: number
+                  description: File size in bytes. Must be greater than 0 and at most 2 MB (2,097,152 bytes)
+      responses:
+        "200":
+          description: Pre-signed upload URL and CDN URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      presignedUrl:
+                        type: string
+                        description: S3 pre-signed PUT URL (expires in 300 s)
+                      cdnUrl:
+                        type: string
+                        description: Final public CDN URL to save on the agent after upload
+                      key:
+                        type: string
+                        description: S3 object key
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Agent not found
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /agent/{id}/workflow:
+    get:
+      x-fern-ignore: true
+      summary: Get agent workflow
+      deprecated: true
+      x-fern-availability: deprecated
+      description: |
+        **Deprecated** — prefer `GET /agent/{id}` (config is resolved into `_resolvedConfig`
+        including prompt, tools, and post-call analytics).
+
+        Returns the active version's prompt and tools for single-prompt agents, or the
+        workflow graph data for workflow_graph agents. Customers still rely on this to
+        fetch their current prompt + tools — endpoint is kept live for now.
+
+        **Caveat:** the `versionId` query param (if passed) is silently ignored.
+        The response always reflects the currently-active version. To inspect a
+        non-active version, use `GET /agent/{id}/versions/{versionId}`.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: The ID of the agent
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: The active version's workflow.
+                    properties:
+                      prompt:
+                        type: string
+                        description: Active prompt (single-prompt agents only).
+                      tools:
+                        type: array
+                        items:
+                          $ref: "./components.yaml#/components/schemas/Tool"
+                        description: Active tool list (single-prompt agents only).
+                      type:
+                        $ref: "./components.yaml#/components/schemas/WorkflowType"
+                        description: Workflow type. Present for workflow_graph agents.
+                      data:
+                        oneOf:
+                          - $ref: "./components.yaml#/components/schemas/WorkflowGraphData"
+                          - $ref: "./components.yaml#/components/schemas/SinglePromptData"
+                        description: Graph data for workflow_graph agents.
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Agent not found
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /workflow/{id}:
+    patch:
+      x-fern-ignore: true
+      summary: Update workflow configuration
+      deprecated: true
+      x-fern-availability: deprecated
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: update_workflow_configuration
+      description: |
+        **Deprecated** — use `PATCH /agent/{id}/drafts/{draftId}/config` instead.
+
+        Directly mutates the legacy workflow document for an agent. This write path
+        bypasses the versioning system entirely: the change is not captured as a
+        new version, and future version activations may overwrite the legacy doc
+        back to whatever the version snapshot contains.
+
+        ⚠ **Writing here on a versioned agent can silently wipe tools, prompt, or
+        other fields that were missing from the PATCH payload.** Only use this if
+        you know the agent is not using versioning, or if you are intentionally
+        hot-patching the legacy doc.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: The workflow ID (found at `agent.workflowId` on the agent document).
+          schema:
+            type: string
+            example: "60d0fe4f5311236168a109ca"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  $ref: "./components.yaml#/components/schemas/WorkflowType"
+                workflowGraph:
+                  type: object
+                  description: Required when `type = workflow_graph`. Exactly one of `workflowGraph` or `singlePromptConfig` must be provided.
+                  properties:
+                    nodes:
+                      type: array
+                      items:
+                        type: object
+                    edges:
+                      type: array
+                      items:
+                        type: object
+                singlePromptConfig:
+                  $ref: "./components.yaml#/components/schemas/SinglePromptConfig"
+      responses:
+        "200":
+          description: Workflow updated successfully.
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          description: Workflow not found.
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /agent/{id}/call-logs:
+    get:
+      operationId: getAgentCallLogs
+      summary: Get agent call logs
+      description: Returns paginated call logs for a specific agent.
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Agent ObjectId
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number (default 1)
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Records per page (default 10)
+      responses:
+        "200":
+          description: Paginated call logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      callLogs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            callId:
+                              type: string
+                            callStatus:
+                              type: string
+                            callType:
+                              type: string
+                            fromNumber:
+                              type: string
+                            toNumber:
+                              type: string
+                            createdAt:
+                              type: string
+                              format: date-time
+                            callDuration:
+                              type: number
+                              description: Call duration in milliseconds
+                      totalCount:
+                        type: number
+                      page:
+                        type: number
+                      offset:
+                        type: number
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /agent/{id}/archive:
+    delete:
+      operationId: deleteAgent
+      summary: Archive or unarchive an agent
+      x-fern-sdk-group-name: agents
+      x-fern-sdk-method-name: archive_agent
+      description: |
+        Soft-archives the agent — it is excluded from listings and stops accepting calls,
+        but all data is preserved and the operation is fully reversible.
+
+        Pass `?on=false` to unarchive (restore) a previously archived agent.
+
+        **409 is returned when:**
+        - The agent is already in the requested state (`"Agent is already archived"` / `"Agent is already active"`)
+        - The agent is linked to an active campaign (`"Agent is associated with the [status] campaign "[name]". Complete or remove the campaign before archiving."`)
+      tags:
+        - Agents
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: on
+          required: false
+          schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+            default: "true"
+          description: |
+            `"true"` (default) — archive the agent.
+            `"false"` — unarchive (restore) a previously archived agent.
+      responses:
+        "200":
+          description: Agent archived or unarchived successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        description: Human-readable outcome message
+                        enum:
+                          - Agent archived
+                          - Agent unarchived
+        "400":
+          $ref: "./components.yaml#/components/responses/BadRequestError"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          $ref: "./components.yaml#/components/responses/ForbiddenError"
+        "404":
+          description: Agent not found
+        "409":
+          description: |
+            Conflict — agent is already in the requested state, or is linked to an active campaign.
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /conversation/register-call:
+    post:
+      summary: Register a realtime agent call
+      x-fern-sdk-group-name: realtime
+      x-fern-sdk-method-name: register_call
+      description: |
+        Mint a **short-lived, single-use access token** for opening a realtime
+        [Agent WebSocket](/atoms/api-reference/realtime-agent/realtime-agent)
+        connection. This is the **recommended** way to start a session from a
+        browser or other client-side app: your API key stays server-side, and
+        the browser only ever sees the short-lived token. (Server-side or
+        trusted clients may instead connect to the WebSocket with a raw API key
+        directly.)
+
+        Flow:
+        1. Call this endpoint with your API key and the `agent_id` (plus optional
+           `mode` and per-call `variables`). All session configuration is fixed
+           here — it is baked into the returned token.
+        2. Open a WebSocket to `wss://api.smallest.ai/atoms/v1/agent/connect?token=<access_token>`.
+           No `agent_id`, `mode`, or `variables` query params are needed on the
+           WebSocket — they come from the token.
+
+        The token is valid for `expires_in` seconds (30) and can be used for a
+        single connection. Request a fresh token for each connection.
+      tags:
+        - Realtime Agent
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id]
+              properties:
+                agent_id:
+                  type: string
+                  description: The Atoms agent to connect to.
+                  example: "69da0b4c20c0e03cfa4ee258"
+                mode:
+                  type: string
+                  enum: [webcall, chat]
+                  default: webcall
+                  description: |
+                    Session mode. `webcall` = full voice pipeline (audio in +
+                    audio out). `chat` = text-only pipeline. Defaults to `webcall`.
+                sample_rate:
+                  type: integer
+                  enum: [8000, 16000, 24000, 44100]
+                  default: 24000
+                  deprecated: true
+                  description: |
+                    **Deprecated. Use `output_audio_format` instead.** Still
+                    accepted, and will keep being accepted - existing
+                    integrations do not need to change.
+
+                    A bare rate meaning PCM at that rate, so `sample_rate: 24000`
+                    and `output_audio_format: "pcm_24000"` are the same request.
+                    It predates the one-token-per-direction contract and is the
+                    reason two fields exist for one thing. `44100` is only rendered by the
+                    `lightning-v3.1` and `lightning-v3.1-pro` voices; asking for a
+                    rate the agent's voice cannot render is refused here rather
+                    than failing mid-call. This does **not** set the rate of the
+                    audio you send - use `input_audio_format`.
+                  example: 24000
+                input_audio_format:
+                  type: string
+                  enum:
+                    - pcm_8000
+                    - pcm_16000
+                    - pcm_22050
+                    - pcm_24000
+                    - pcm_44100
+                    - pcm_48000
+                    - mulaw_8000
+                    - alaw_8000
+                    - opus_8000
+                    - opus_16000
+                    - opus_24000
+                    - opus_48000
+                  description: |
+                    The format you will **send**, as one `<encoding>_<rate>` token
+                    naming both the encoding and the rate. Defaults to PCM at the
+                    output rate, so a client sending only `sample_rate` needs
+                    nothing else.
+
+                    The recogniser is configured at this rate and your audio is
+                    not resampled, so the token must match the bytes you send: a
+                    mismatch produces wrong transcripts and no error. G.711 exists
+                    only at 8000. Opus is raw packets, one per WebSocket message;
+                    Ogg-framed Opus is a different format and is refused.
+
+                    A browser client can also declare this later, on the connect
+                    URL, once its `AudioContext` reports the rate it actually got.
+                  example: pcm_24000
+                output_audio_format:
+                  type: string
+                  enum: [pcm_8000, pcm_16000, pcm_24000, pcm_44100]
+                  default: pcm_24000
+                  description: |
+                    The format the agent sends back. Same token shape as
+                    `input_audio_format`. Sending this together with `sample_rate`
+                    is allowed only if they agree; disagreeing values are refused
+                    rather than resolved by a precedence rule.
+                  example: pcm_24000
+                variables:
+                  type: object
+                  additionalProperties:
+                    oneOf:
+                      - type: string
+                      - type: number
+                      - type: boolean
+                  description: |
+                    Per-call prompt variables that override the agent's
+                    `defaultVariables` for this session only. Values must be
+                    `string`, `number`, or `boolean`. Reserved system-variable
+                    keys (`call_id`, `conversation_type`, `agent_number`,
+                    `user_number`, `current_date`, `current_time`, `current_day`,
+                    `agent_gender`, `default_language`, `supported_languages`,
+                    `timezone`) are populated by the server and stripped if
+                    supplied.
+                  example:
+                    customer_name: "Tanay"
+                    account_tier: "gold"
+      responses:
+        "201":
+          description: Access token created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      access_token:
+                        type: string
+                        description: |
+                          Short-lived, single-use token (prefixed `wct_`). Pass it
+                          as the `token` query param when opening the Agent
+                          WebSocket.
+                        example: "wct_9f8c2b1e-4d5a-4e6f-a7b8-c9d0e1f2a3b4"
+                      expires_in:
+                        type: integer
+                        description: Token lifetime in seconds.
+                        example: 30
+                      sample_rate:
+                        type: integer
+                        description: |
+                          Negotiated audio sample rate (Hz) for the session. Echoed
+                          back in the WebSocket `session.created` event.
+                        example: 24000
+                      input_audio_format:
+                        type: string
+                        description: |
+                          The input format resolved for this session. Read it back
+                          to confirm the server understood what you meant before
+                          you send any audio.
+                        example: pcm_24000
+                      output_audio_format:
+                        type: string
+                        description: The output format resolved for this session.
+                        example: pcm_24000
+        "400":
+          description: |
+            Validation failed (e.g. missing `agent_id`), or the organization has
+            no remaining credits.
+          content:
+            application/json:
+              schema:
+                $ref: "./components.yaml#/components/schemas/BadRequestErrorResponse"
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "404":
+          $ref: "./components.yaml#/components/responses/NotFoundErrorResponse"
+        "500":
+          $ref: "./components.yaml#/components/responses/InternalServerErrorResponse"
+  /prompt-scoring/score:
+    post:
+      summary: Score a prompt
+      description: |
+        Scores an agent's prompt across 11 quality dimensions using Gemini-based analysis. Requires the prompt to have changed since the last scoring.
+
+        **Input:** Provide exactly one of `versionId` (published agent version) or `draftId` (agent draft). Providing both or neither returns a 400.
+
+        **Credit usage:** 1 credit is deducted per successful call.
+
+        **Idempotency:** Re-submitting the same prompt without changes returns a 400 — retrieve the cached score via the GET agent endpoint instead.
+
+        **Supported agent types:** Only `single_prompt` agents are supported. Workflow-graph agents return a 400.
+
+        **Scoring model:** Two sequential Gemini calls — a Platform Analyst pass followed by a Rubric Judge pass.
+
+        ### Scored Dimensions
+
+        | Tier | Dimension | Notes |
+        |------|-----------|-------|
+        | 1 | Role & Objective | |
+        | 1 | Personality & Voice | |
+        | 1 | Conversation Structure | |
+        | 1 | Tool Integration | |
+        | 1 | Constraints & Safety | |
+        | 2 | Conversational Naturalness | |
+        | 2 | Failure-Mode Coverage | |
+        | 3 | Information Integrity | Gating — if Weak/Missing, score capped at 70 |
+        | 3 | Variable & Tool Hygiene | Gating — if Weak/Missing, score capped at 50 |
+        | 3 | Internal Consistency | |
+        | 3 | Density | Computed from token analysis |
+      tags:
+        - Prompt Scoring
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Exactly one of `versionId` or `draftId` must be provided.
+              oneOf:
+                - required: [versionId]
+                  properties:
+                    versionId:
+                      type: string
+                      description: Published agent version ID (MongoDB ObjectId).
+                      example: "6a1589b75e048394eb37bc47"
+                - required: [draftId]
+                  properties:
+                    draftId:
+                      type: string
+                      description: Agent draft ID (MongoDB ObjectId).
+                      example: "6a1589b75e048394eb37bc48"
+      responses:
+        "200":
+          description: Prompt scored successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      overall_score:
+                        type: integer
+                        description: 0–100 quality score.
+                        example: 82
+                      overall_grade:
+                        type: string
+                        description: Human-readable grade.
+                        enum: ["Excellent", "Good", "Needs Work", "Poor"]
+                        example: "Good"
+                      band:
+                        type: string
+                        description: |
+                          Token density band based on prompt length:
+                          - `lean` — fewer than 4K tokens
+                          - `normal` — 4K–9.9K tokens
+                          - `heavy` — 10K–14.9K tokens
+                          - `overweight` — 15K or more tokens
+                        enum: ["lean", "normal", "heavy", "overweight"]
+                        example: "normal"
+                      estimated_ttft_overhead_ms:
+                        type: number
+                        description: Estimated first-token latency overhead in milliseconds introduced by the prompt length.
+                        example: 420
+                      dimensions:
+                        type: array
+                        description: Per-dimension scoring results across 11 quality dimensions.
+                        items:
+                          type: object
+                          properties:
+                            tier:
+                              type: integer
+                              description: "Priority tier: 1 (highest), 2, or 3."
+                              enum: [1, 2, 3]
+                              example: 1
+                            level:
+                              type: string
+                              description: Quality level for this dimension.
+                              enum: ["Strong", "Adequate", "Weak", "Missing", "Not Applicable"]
+                              example: "Strong"
+                            evidence_span:
+                              type: string
+                              description: Quote from the prompt supporting the assessment. Empty string if no relevant content was found.
+                              example: "You are a helpful support agent..."
+                            title:
+                              type: string
+                              description: Short dimension name.
+                              example: "Role & Objective"
+                            description:
+                              type: string
+                              description: Explanation of the score for this dimension.
+                              example: "Prompt clearly defines the agent's role and primary objective."
+              example:
+                status: true
+                data:
+                  overall_score: 56
+                  overall_grade: "Needs Work"
+                  band: "lean"
+                  estimated_ttft_overhead_ms: 12.9
+                  dimensions:
+                    - tier: 1
+                      level: "Adequate"
+                      evidence_span: "You are a friendly and helpful weather assistant. Your role is to provide accurate, real-time weather information to users."
+                      title: "Clear but basic role definition"
+                      description: "The role is clearly defined but lacks specific success criteria or scope boundaries."
+                    - tier: 1
+                      level: "Weak"
+                      evidence_span: "Use the get_weather function to fetch real-time data"
+                      title: "Undeclared tool reference"
+                      description: "The 'get_weather' tool is referenced but not defined, and failure paths are missing."
+                    - tier: 2
+                      level: "Missing"
+                      evidence_span: "no relevant content found"
+                      title: "No failure mode coverage"
+                      description: "The prompt contains no instructions for handling errors, tool failures, or unclear user input."
+        "400":
+          description: |
+            Bad request. Possible reasons:
+            - Neither or both of `versionId`/`draftId` provided
+            - Organization has no credits available
+            - Agent is a conversational/workflow-graph type (not supported)
+            - Prompt unchanged since last scoring — retrieve the existing score via GET agent
+            - No prompt found on the version or draft
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Prompt has not changed since last scoring — retrieve the existing score via GET agent"]
+        "401":
+          $ref: "./components.yaml#/components/responses/UnauthorizedErrorResponse"
+        "403":
+          description: Not a member of the organization or insufficient role (minimum Member required).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["You are not a member of this organization"]
+        "404":
+          description: Version or draft not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Version not found"]
+        "429":
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Rate limit exceeded"
+                  rateLimit:
+                    type: object
+                    properties:
+                      routeClass:
+                        type: string
+                        example: "prompt-scoring"
+                      limit:
+                        type: integer
+                        example: 10
+                      retryAfterSec:
+                        type: integer
+                        description: Seconds to wait before retrying.
+                        example: 60
+        "500":
+          description: Gemini scoring failed after retries.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Prompt scoring failed"]
+  /conversation/chat:
+    post:
+      tags:
+        - Web Call
+      summary: Start a web chat session
+      description: |
+        Mints a short-lived LiveKit access token and creates a room the browser client can
+        join to have a text-first chat with the agent. The response includes the room name,
+        the LiveKit host to connect to, a `conversationId` for correlation, and a `callId`
+        that shows up in call logs. Pair with the [Web SDK](/voice-agents/developer-guide/client-libraries)
+        to render the session in-browser.
+      operationId: startWebChatConversation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './components.yaml#/components/schemas/WebSessionRequest'
+            examples:
+              default:
+                summary: Start a chat session with an agent
+                value:
+                  agentId: "6a75935452c6e5eceaa16edf"
+      responses:
+        '200':
+          description: Session minted. Use `token` + `host` on the browser client to join `roomName`.
+          content:
+            application/json:
+              schema:
+                $ref: './components.yaml#/components/schemas/WebSessionResponse'
+              examples:
+                success:
+                  summary: LiveKit session ready for the browser client
+                  value:
+                    status: true
+                    data:
+                      token: "eyJhbGciOiJIUzI1NiJ9.eyJtZXRhZGF0YSI6IntcIm9yZ2FuaXphdGlvbklkXCI6XCI2OTU2MTg5NmEzN2ZkMjE0YjlhOGQzM2NcIn0iLCJ2aWRlbyI6eyJyb29tSm9pbiI6dHJ1ZSwicm9vbSI6ImRlZTkyMjNhLTQ3NTEtNDlhOS1iY2JjLWNiMzVjNWE4MzcxZCJ9LCJleHAiOjE3ODYxNTk1NjR9.Tn9KCxhnmnjAFQPRWP6XMkjKYnhBiISI6VqUOIqOsRQ"
+                      roomName: "dee9223a-4751-49a9-bcbc-cb35c5a8371d"
+                      host: "wss://rtc.example-provider.com"
+                      conversationId: "IyF-GCRiprATI5rx4lIdvg"
+                      callId: "CALL-1786159503332-8387f2"
+        '400':
+          description: Missing or invalid `agentId`.
+          content:
+            application/json:
+              schema:
+                $ref: './components.yaml#/components/schemas/WebSessionErrorResponse'
+              examples:
+                missing-agent-id:
+                  summary: Missing agentId
+                  value:
+                    status: false
+                    errors: ["agentId: Required"]
+  /conversation/webcall:
+    post:
+      tags:
+        - Web Call
+      summary: Start a web call session
+      description: |
+        Mints a short-lived LiveKit access token and creates a room the browser client can
+        join to have a voice-first call with the agent. Same response shape as `/conversation/chat`;
+        the difference is the audio track defaults on the client side. Pair with the
+        [Web SDK](/voice-agents/developer-guide/client-libraries) to open the room in-browser.
+      operationId: startWebCallConversation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './components.yaml#/components/schemas/WebSessionRequest'
+            examples:
+              default:
+                summary: Start a voice call session with an agent
+                value:
+                  agentId: "6a75935452c6e5eceaa16edf"
+      responses:
+        '200':
+          description: Session minted. Use `token` + `host` on the browser client to join `roomName`.
+          content:
+            application/json:
+              schema:
+                $ref: './components.yaml#/components/schemas/WebSessionResponse'
+              examples:
+                success:
+                  summary: LiveKit session ready for the browser client
+                  value:
+                    status: true
+                    data:
+                      token: "eyJhbGciOiJIUzI1NiJ9.eyJtZXRhZGF0YSI6IntcIm9yZ2FuaXphdGlvbklkXCI6XCI2OTU2MTg5NmEzN2ZkMjE0YjlhOGQzM2NcIn0iLCJ2aWRlbyI6eyJyb29tSm9pbiI6dHJ1ZSwicm9vbSI6IjIwOWNkOGM3LTdmZjQtNGFmYy1iNWQ1LWY3MDQ0OGI1Y2UwNyJ9LCJleHAiOjE3ODYxNTk1ODl9.jf5NM4fH79_d6iBb2xTvX5JIo_PmVpjeXWOugoDLQVc"
+                      roomName: "209cd8c7-7ff4-4afc-b5d5-f70448b5ce07"
+                      host: "wss://rtc.example-provider.com"
+                      conversationId: "w3fmaal3fKnzNQJ_CHfosw"
+                      callId: "CALL-1786159527700-838803"
+        '400':
+          description: Missing or invalid `agentId`.
+          content:
+            application/json:
+              schema:
+                $ref: './components.yaml#/components/schemas/WebSessionErrorResponse'
+              examples:
+                missing-agent-id:
+                  summary: Missing agentId
+                  value:
+                    status: false
+                    errors: ["agentId: Required"]
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: API key from the console ApiKey collection, sent as Bearer token. Also accepts session cookies for browser-based auth.
+tags:
+  - name: Agent Templates
+    description: Operations related to agent templates
+  - name: Agents
+    description: Operations related to agents
+  # - name: Workflows  # DEPRECATED — workflow agents are being sunset
+  - name: Realtime Agent
+    description: Start a realtime voice or chat session with an agent over a WebSocket. Use `POST /conversation/register-call` to mint a short-lived access token, then open the Agent WebSocket with it.
+  - name: Prompt Scoring
+    description: Score and analyse agent prompts across quality dimensions
+  - name: Web Call
+    description: |
+      Mint a short-lived LiveKit access token and pre-provision a room the browser client can
+      join to have a chat or a voice call with an agent. Pair with the Web SDK to render the
+      session in-browser. `/conversation/chat` and `/conversation/webcall` share the same
+      request and response shapes; they differ in the default media track on the client.

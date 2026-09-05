@@ -4,8 +4,27 @@
 
 api:
   specs:
-    - openapi: openapi/openapi.yaml
-      overrides: openapi/openapi-overrides.yaml
+    # One file per domain, listed in the order the domains first appeared in
+    # the original single file so Fern's first-seen rules (shared error
+    # bodies, examples) resolve the same way. Shared schemas live in
+    # openapi/components.yaml
+    # and are pulled in through external $refs. Fern merges every file
+    # into the single `atoms` API. See scripts/ia/split_atoms_openapi.py.
+    - openapi: openapi/account.yaml
+    - openapi: openapi/agents.yaml
+    - openapi: openapi/calls.yaml
+    - openapi: openapi/campaigns.yaml
+      overrides: openapi/campaigns-overrides.yaml
+    - openapi: openapi/knowledge-base.yaml
+    - openapi: openapi/phone-numbers.yaml
+    - openapi: openapi/webhooks.yaml
+    - openapi: openapi/agent-versioning.yaml
+    - openapi: openapi/analytics.yaml
+    - openapi: openapi/tools.yaml
+    # Shared components, registered so schemas that no endpoint references
+    # (widget config, webhook event, version metrics) still ship as SDK types,
+    # exactly as they did in the single-file spec.
+    - openapi: openapi/components.yaml
     # AsyncAPI for the realtime agent WebSocket endpoint
     # (wss://api.smallest.ai/atoms/v1/agent/connect)
     - asyncapi: asyncapi/agent-ws.yaml
