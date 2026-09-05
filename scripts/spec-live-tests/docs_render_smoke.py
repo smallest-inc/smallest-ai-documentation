@@ -56,7 +56,7 @@ PAGES = [
     {
         # TTS word-timestamps how-to — mirror of the above from the
         # documentation nav path, since users often land here first.
-        "path": "/models/documentation/text-to-speech-lightning/word-timestamps",
+        "path": "/models/text-to-speech/word-timestamps",
         "name": "TTS word-timestamps how-to",
         "markers": [
             "word_timestamps",
@@ -64,7 +64,7 @@ PAGES = [
         ],
     },
     {
-        "path": "/models/documentation/speech-to-text-pulse/realtime-web-socket/response-format",
+        "path": "/models/speech-to-text/realtime-web-socket/response-format",
         "name": "Pulse STT response-format page",
         "markers": [
             "is_final",
@@ -73,7 +73,7 @@ PAGES = [
         ],
     },
     {
-        "path": "/models/documentation/speech-to-text-pulse/features/inverse-text-normalization",
+        "path": "/models/speech-to-text/features/inverse-text-normalization",
         "name": "Pulse STT ITN feature page",
         "markers": [
             "itn_normalize",

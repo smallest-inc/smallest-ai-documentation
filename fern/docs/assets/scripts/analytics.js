@@ -100,10 +100,14 @@
   // ============================================================
 
   function getProduct() {
-    var path = window.location.pathname;
-    if (path.startsWith("/waves")) return "waves";
-    if (path.startsWith("/atoms")) return "atoms";
-    return "unknown";
+    // First URL segment is the header tab since the single-site
+    // restructure: overview, voice-agents, models, api-reference,
+    // integrations, self-host, changelog. API reference pages carry the
+    // product as the second segment (/api-reference/voice-agents/...).
+    var parts = window.location.pathname.split("/").filter(Boolean);
+    if (!parts.length) return "overview";
+    if (parts[0] === "api-reference" && parts[1]) return parts[1];
+    return parts[0];
   }
 
   function getSection() {
@@ -778,7 +782,7 @@
     else if (/speech-to-text|pulse|stt/.test(path)) apiType = "stt";
     else if (/voice-cloning|voice-clone/.test(path)) apiType = "voice-cloning";
     else if (/pronunciation/.test(path)) apiType = "pronunciation";
-    else if (path.indexOf("/atoms/") !== -1) apiType = "atoms";
+    else if (path.indexOf("/api-reference/voice-agents") !== -1 || path.indexOf("/atoms/") !== -1) apiType = "atoms";
 
     var apiVariant = null;
     if (/lightning[-_]?v[-_]?3[-_.]1|lightning-v-?31|lightning-v-3-1/.test(path)) apiVariant = "lightning-v3.1";
